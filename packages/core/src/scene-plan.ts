@@ -1,0 +1,260 @@
+import { z } from "zod";
+
+/**
+ * Scene-plan schema v0 — the single source of truth for a Dalang video.
+ *
+ * Follows PRD §5.1. Deviations from the PRD draft are documented in
+ * docs/decisions/0003-scene-plan-v0-deviations.md:
+ *  - `meta.tokens`     design tokens so presets can be personalized (§8.3)
+ *  - `visual.pinned`   set when an asset was explicitly chosen; the pipeline
+ *                      must never auto-replace a pinned asset
+ *  - `visual.variant`  layout variant for `template-anim` scenes ("title", "outro", …)
+ *  - `renderState` entry shapes are fully specified (they were `...` in the PRD)
+ *
+ * All sizes/positions are normalized (0–1) so aspect ratio changes never
+ * break layout (PRD §5.1 rules).
+ */
+
+export const SCHEMA_VERSION = 1;
+
+export const ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
+export const aspectRatioSchema = z.enum(ASPECT_RATIOS);
+export type AspectRatio = z.infer<typeof aspectRatioSchema>;
+
+export const VISUAL_TYPES = [
+  "stock",
+  "image",
+  "generated",
+  "screenshot",
+  "solid",
+  "template-anim",
+] as const;
+export const visualTypeSchema = z.enum(VISUAL_TYPES);
+export type VisualType = z.infer<typeof visualTypeSchema>;
+
+export const MOTIONS = [
+  "none",
+  "kenburns-in",
+  "kenburns-out",
+  "pan-left",
+  "pan-right",
+] as const;
+export const motionSchema = z.enum(MOTIONS);
+export type Motion = z.infer<typeof motionSchema>;
+
+const finitePositive = z.number().positive().finite();
+const normalized01 = z.number().min(0).max(1);
+
+// ---------------------------------------------------------------------------
+// Annotations (executed by presets in tutorial mode, PRD §9)
+// ---------------------------------------------------------------------------
+
+export const annotationSchema = z.strictObject({
+  type: z.enum(["zoom", "highlight", "arrow", "blur"]),
+  /** Normalized rect (0–1) relative to the scene frame. */
+  target: z.strictObject({
+    x: normalized01,
+    y: normalized01,
+    w: normalized01,
+    h: normalized01,
+  }),
+  /** Seconds relative to the start of the scene. */
+  timing: z.strictObject({
+    startSec: z.number().min(0).finite(),
+    endSec: finitePositive.optional(),
+  }),
+});
+export type Annotation = z.infer<typeof annotationSchema>;
+
+// ---------------------------------------------------------------------------
+// Scene
+// ---------------------------------------------------------------------------
+
+export const visualSchema = z.strictObject({
+  type: visualTypeSchema,
+  /** Search query (stock) or generation prompt (generated). */
+  query: z.string().optional(),
+  /**
+   * Reference into the asset store; resolved to a file by the pipeline via
+   * renderState.resolvedAssets. `null` = not chosen yet.
+   */
+  assetId: z.string().nullable().default(null),
+  motion: motionSchema.default("none"),
+  /**
+   * True when the asset was explicitly chosen (by the user via the asset grid,
+   * or by an explicit replaceAsset op). The pipeline's auto-resolve stage must
+   * never overwrite a pinned asset.
+   */
+  pinned: z.boolean().default(false),
+  /** Layout variant for `template-anim` scenes; preset-defined (e.g. "title", "outro"). */
+  variant: z.string().optional(),
+});
+export type Visual = z.infer<typeof visualSchema>;
+
+export const captionSchema = z.strictObject({
+  enabled: z.boolean().default(true),
+  style: z.string().default("inherit"),
+});
+export type Caption = z.infer<typeof captionSchema>;
+
+export const sceneSchema = z.strictObject({
+  id: z.string().min(1),
+  /** Hard contract: agents are rejected at the code level when touching a locked scene. */
+  locked: z.boolean().default(false),
+  narration: z.string().default(""),
+  visual: visualSchema,
+  caption: captionSchema.default({ enabled: true, style: "inherit" }),
+  /** "auto" = narration length + padding; number = fixed seconds. */
+  duration: z.union([z.literal("auto"), finitePositive]).default("auto"),
+  annotations: z.array(annotationSchema).default([]),
+});
+export type Scene = z.infer<typeof sceneSchema>;
+export type SceneInput = z.input<typeof sceneSchema>;
+
+// ---------------------------------------------------------------------------
+// Meta & audio
+// ---------------------------------------------------------------------------
+
+export const designTokensSchema = z.strictObject({
+  /** Primary brand color (CSS color). */
+  primary: z.string().optional(),
+  /** Accent color used for highlights/captions (CSS color). */
+  accent: z.string().optional(),
+  fontDisplay: z.string().optional(),
+  fontBody: z.string().optional(),
+});
+export type DesignTokens = z.infer<typeof designTokensSchema>;
+
+export const metaSchema = z.strictObject({
+  title: z.string().min(1),
+  aspectRatio: aspectRatioSchema.default("9:16"),
+  /** Seconds; "auto" = follow the narration. A number is a *target* for the agent, not a hard constraint. */
+  targetDuration: z.union([z.literal("auto"), finitePositive]).default("auto"),
+  language: z.string().default("id"),
+  /** References a curated Remotion template (PRD §8.3). */
+  stylePreset: z.string().default("documentary-01"),
+  tokens: designTokensSchema.optional(),
+});
+export type Meta = z.infer<typeof metaSchema>;
+
+export const voiceSchema = z.strictObject({
+  provider: z.string().min(1),
+  voiceId: z.string().min(1),
+  speed: finitePositive.default(1),
+});
+export type Voice = z.infer<typeof voiceSchema>;
+
+export const musicSchema = z.strictObject({
+  assetId: z.string().min(1),
+  volume: normalized01.default(0.15),
+  ducking: z.boolean().default(true),
+});
+export type Music = z.infer<typeof musicSchema>;
+
+export const audioSchema = z.strictObject({
+  voice: voiceSchema.optional(),
+  music: musicSchema.optional(),
+});
+export type Audio = z.infer<typeof audioSchema>;
+
+// ---------------------------------------------------------------------------
+// renderState — derived data produced by the pipeline, never authored by the
+// agent or the user (PRD §5.1). Kept in the same document for portability but
+// mutated only through pipeline helpers, never through patch ops.
+// ---------------------------------------------------------------------------
+
+export const wordTimestampSchema = z.strictObject({
+  word: z.string(),
+  startSec: z.number().min(0).finite(),
+  endSec: z.number().min(0).finite(),
+});
+export type WordTimestamp = z.infer<typeof wordTimestampSchema>;
+
+export const narrationAudioSchema = z.strictObject({
+  /** Path relative to the render public dir. */
+  file: z.string().min(1),
+  durationSec: finitePositive,
+  wordTimestamps: z.array(wordTimestampSchema).optional(),
+  /** Set when a fallback TTS provider was used; surfaced in the UI per scene. */
+  fallbackQuality: z.boolean().optional(),
+});
+export type NarrationAudio = z.infer<typeof narrationAudioSchema>;
+
+export const resolvedAssetSchema = z.strictObject({
+  /** Path relative to the render public dir. */
+  file: z.string().min(1),
+  kind: z.enum(["image", "video", "audio"]),
+  /** Provider id: "pexels" | "pixabay" | "local" | … */
+  source: z.string().min(1),
+  sourceUrl: z.string().optional(),
+  author: z.string().optional(),
+  /** License string kept verbatim for audit (PRD §10). */
+  license: z.string().optional(),
+  width: finitePositive.optional(),
+  height: finitePositive.optional(),
+});
+export type ResolvedAsset = z.infer<typeof resolvedAssetSchema>;
+
+export const renderStateSchema = z.strictObject({
+  narrationAudio: z.record(z.string(), narrationAudioSchema).default({}),
+  resolvedAssets: z.record(z.string(), resolvedAssetSchema).default({}),
+});
+export type RenderState = z.infer<typeof renderStateSchema>;
+
+// ---------------------------------------------------------------------------
+// Scene-plan root
+// ---------------------------------------------------------------------------
+
+export const scenePlanSchema = z
+  .strictObject({
+    version: z.literal(SCHEMA_VERSION),
+    projectId: z.string().min(1),
+    meta: metaSchema,
+    audio: audioSchema.default({}),
+    scenes: z.array(sceneSchema).min(1),
+    renderState: renderStateSchema.default({
+      narrationAudio: {},
+      resolvedAssets: {},
+    }),
+  })
+  .superRefine((plan, ctx) => {
+    const seen = new Set<string>();
+    plan.scenes.forEach((scene, index) => {
+      if (seen.has(scene.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["scenes", index, "id"],
+          message: `Duplicate scene id "${scene.id}"`,
+        });
+      }
+      seen.add(scene.id);
+    });
+  });
+
+export type ScenePlan = z.infer<typeof scenePlanSchema>;
+export type ScenePlanInput = z.input<typeof scenePlanSchema>;
+
+/** Parse and validate; throws with a readable message on invalid input. */
+export const parseScenePlan = (input: unknown): ScenePlan => {
+  const result = scenePlanSchema.safeParse(input);
+  if (!result.success) {
+    throw new Error(`Scene-plan tidak valid:\n${z.prettifyError(result.error)}`);
+  }
+  return result.data;
+};
+
+export const safeParseScenePlan = (input: unknown) =>
+  scenePlanSchema.safeParse(input);
+
+export const getScene = (plan: ScenePlan, id: string): Scene | undefined =>
+  plan.scenes.find((scene) => scene.id === id);
+
+export const getSceneIndex = (plan: ScenePlan, id: string): number =>
+  plan.scenes.findIndex((scene) => scene.id === id);
+
+/** Resolution per aspect ratio. Develop & test at 1080p (PRD §4.2 note). */
+export const DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
+  "16:9": { width: 1920, height: 1080 },
+  "9:16": { width: 1080, height: 1920 },
+  "1:1": { width: 1080, height: 1080 },
+};

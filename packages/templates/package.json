@@ -1,0 +1,34 @@
+{
+  "name": "@dalang/templates",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Curated Remotion style presets — the visual language of Dalang videos",
+  "exports": {
+    ".": "./src/index.ts",
+    "./paths": "./src/paths.ts",
+    "./layout": "./src/layout.ts"
+  },
+  "scripts": {
+    "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",
+    "stage-demo": "node scripts/stage-demo.mjs",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@dalang/core": "workspace:*",
+    "@remotion/captions": "4.0.518",
+    "@remotion/fonts": "4.0.518",
+    "@remotion/layout-utils": "4.0.518",
+    "@remotion/media": "4.0.518",
+    "@remotion/transitions": "4.0.518",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "remotion": "4.0.518"
+  },
+  "devDependencies": {
+    "@remotion/cli": "4.0.518",
+    "@types/node": "26.4.0",
+    "@types/react": "19.2.18",
+    "typescript": "5.9.3"
+  }
+}

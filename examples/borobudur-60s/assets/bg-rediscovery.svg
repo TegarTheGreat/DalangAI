@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#E3D3AC"/>
+      <stop offset="0.5" stop-color="#D9C9A6"/>
+      <stop offset="1" stop-color="#C4B189"/>
+    </linearGradient>
+    <radialGradient id="age1" cx="0.15" cy="0.1" r="0.5">
+      <stop offset="0" stop-color="#A98F5F" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#A98F5F" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="age2" cx="0.9" cy="0.85" r="0.6">
+      <stop offset="0" stop-color="#9C7F4E" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#9C7F4E" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vign" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0.62" stop-color="#3A2B18" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3A2B18" stop-opacity="0.5"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#paper)"/>
+  <rect width="1080" height="1920" fill="url(#age1)"/>
+  <rect width="1080" height="1920" fill="url(#age2)"/>
+
+  <!-- topographic contours -->
+  <g fill="none" stroke="#B29A6C" stroke-width="4" opacity="0.85">
+    <path d="M-60 420 Q200 330 420 430 Q650 540 900 440 Q1010 400 1140 430"/>
+    <path d="M-60 520 Q210 420 430 520 Q660 630 910 530 Q1020 490 1140 520"/>
+    <path d="M-60 620 Q220 515 445 615 Q670 720 915 625 Q1025 585 1140 615"/>
+    <path d="M-60 1380 Q240 1300 480 1390 Q720 1480 960 1390 Q1050 1360 1140 1385"/>
+    <path d="M-60 1480 Q250 1395 490 1485 Q725 1572 965 1487 Q1055 1455 1140 1480"/>
+  </g>
+
+  <!-- river -->
+  <path d="M-40 940 Q220 900 380 990 Q560 1090 760 1030 Q940 980 1130 1060"
+        fill="none" stroke="#7E9AA6" stroke-width="26" opacity="0.75" stroke-linecap="round"/>
+  <path d="M-40 940 Q220 900 380 990 Q560 1090 760 1030 Q940 980 1130 1060"
+        fill="none" stroke="#5E7C8A" stroke-width="6" opacity="0.6"/>
+
+  <!-- palm groves (map hatching) -->
+  <g stroke="#6E5A38" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.9">
+    <g transform="translate(180 700)">
+      <path d="M0 46 V14 M0 14 q-26 -20 -46 -8 M0 14 q26 -20 46 -8 M0 14 q-14 -28 -34 -30 M0 14 q14 -28 34 -30"/>
+    </g>
+    <g transform="translate(300 780)">
+      <path d="M0 46 V14 M0 14 q-26 -20 -46 -8 M0 14 q26 -20 46 -8 M0 14 q-14 -28 -34 -30 M0 14 q14 -28 34 -30"/>
+    </g>
+    <g transform="translate(860 640)">
+      <path d="M0 46 V14 M0 14 q-26 -20 -46 -8 M0 14 q26 -20 46 -8 M0 14 q-14 -28 -34 -30 M0 14 q14 -28 34 -30"/>
+    </g>
+    <g transform="translate(760 1560)">
+      <path d="M0 46 V14 M0 14 q-26 -20 -46 -8 M0 14 q26 -20 46 -8 M0 14 q-14 -28 -34 -30 M0 14 q14 -28 34 -30"/>
+    </g>
+    <g transform="translate(200 1620)">
+      <path d="M0 46 V14 M0 14 q-26 -20 -46 -8 M0 14 q26 -20 46 -8 M0 14 q-14 -28 -34 -30 M0 14 q14 -28 34 -30"/>
+    </g>
+  </g>
+
+  <!-- expedition route -->
+  <path d="M120 1780 Q260 1620 300 1440 Q340 1260 520 1200 Q700 1140 660 980 Q630 870 540 800"
+        fill="none" stroke="#8A4A2B" stroke-width="9" stroke-dasharray="2 34" stroke-linecap="round"/>
+  <circle cx="120" cy="1780" r="16" fill="#8A4A2B"/>
+
+  <!-- X marks the temple: half-buried stupa sketch -->
+  <g transform="translate(540 700)">
+    <circle r="120" fill="none" stroke="#8A4A2B" stroke-width="7" opacity="0.85"/>
+    <g fill="none" stroke="#4A3B2A" stroke-width="9" stroke-linecap="round">
+      <path d="M-84 44 q84 -128 168 0" />
+      <path d="M-24 -58 h48 M-14 -58 v-26 h28 v26 M0 -100 v-18"/>
+      <path d="M-110 44 h220"/>
+      <path d="M-70 76 q70 26 140 0" opacity="0.7"/>
+    </g>
+    <!-- burial hatching -->
+    <g stroke="#6E5A38" stroke-width="5" opacity="0.8">
+      <path d="M-100 60 l30 -18 M-60 66 l30 -18 M-20 70 l30 -18 M20 70 l30 -18 M60 64 l30 -18"/>
+    </g>
+  </g>
+
+  <!-- compass rose -->
+  <g transform="translate(880 1700)">
+    <circle r="86" fill="none" stroke="#4A3B2A" stroke-width="6"/>
+    <circle r="60" fill="none" stroke="#4A3B2A" stroke-width="3" opacity="0.7"/>
+    <path d="M0 -80 L18 0 L0 80 L-18 0 Z" fill="#4A3B2A"/>
+    <path d="M-80 0 L0 18 L80 0 L0 -18 Z" fill="#8A4A2B"/>
+    <circle r="12" fill="#D9C9A6" stroke="#4A3B2A" stroke-width="5"/>
+  </g>
+
+  <!-- annotation year -->
+  <g transform="translate(150 260) rotate(-4)" fill="#4A3B2A">
+    <rect x="-24" y="-30" width="330" height="120" fill="none" stroke="#4A3B2A" stroke-width="5"/>
+    <text x="20" y="52" font-family="Georgia, serif" font-size="72" font-style="italic" letter-spacing="6">1814</text>
+  </g>
+
+  <!-- fold lines & wear -->
+  <g stroke="#8F7748" opacity="0.5">
+    <path d="M0 1180 H1080" stroke-width="4"/>
+    <path d="M540 0 V1920" stroke-width="3" opacity="0.6"/>
+  </g>
+  <rect width="1080" height="1920" fill="url(#vign)"/>
+</svg>

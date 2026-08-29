@@ -1,0 +1,23 @@
+{
+  "name": "@dalang/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "dalang CLI: validate and render scene-plans locally",
+  "exports": {
+    ".": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@dalang/core": "workspace:*",
+    "@dalang/renderer": "workspace:*",
+    "@dalang/templates": "workspace:*",
+    "commander": "15.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "5.9.3"
+  }
+}

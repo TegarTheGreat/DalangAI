@@ -1,0 +1,16 @@
+# deps
+node_modules/
+
+# build & render output
+out/
+dist/
+.cache/
+*.tsbuildinfo
+
+# Remotion
+.remotion/
+packages/templates/public/assets/
+
+# misc
+.DS_Store
+*.log

@@ -1,0 +1,25 @@
+{
+  "name": "dalang",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dalang AI — platform video editor berpilot agent (agent-piloted video editor)",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dalang": "tsx packages/cli/src/main.ts",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "studio": "pnpm --filter @dalang/templates studio"
+  },
+  "devDependencies": {
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
