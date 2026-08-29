@@ -28,6 +28,8 @@ export interface TtsStageOptions {
   /** Fallback chain, primary first. */
   providers: TtsProvider[];
   db: PipelineDb;
+  /** Limit to these scene ids (partial runs, PRD §6.2 generateVoiceover). */
+  sceneIds?: string[];
   force?: boolean;
   log?: StageLogger;
 }
@@ -42,12 +44,29 @@ export const runTtsStage = async ({
   plan,
   providers,
   db,
+  sceneIds,
   force = false,
   log = consoleLogger,
 }: TtsStageOptions): Promise<TtsStageOutcome> => {
   const voice = plan.audio.voice;
-  const narrated = plan.scenes.filter((scene) => scene.narration.trim() !== "");
   const results: SceneStageResult[] = [];
+
+  const targetIds = sceneIds ? new Set(sceneIds) : null;
+  if (targetIds) {
+    const known = new Set(plan.scenes.map((scene) => scene.id));
+    for (const id of targetIds) {
+      if (!known.has(id)) {
+        results.push({
+          sceneId: id,
+          status: "error",
+          detail: "scene tidak ditemukan di plan",
+        });
+      }
+    }
+  }
+  const narrated = plan.scenes.filter(
+    (scene) => scene.narration.trim() !== "" && (!targetIds || targetIds.has(scene.id)),
+  );
 
   if (!voice) {
     if (narrated.length > 0) {
@@ -57,11 +76,16 @@ export const runTtsStage = async ({
     }
     return {
       plan,
-      results: narrated.map((scene) => ({
-        sceneId: scene.id,
-        status: "skipped",
-        detail: "audio.voice belum diset",
-      })),
+      results: [
+        ...results,
+        ...narrated.map(
+          (scene): SceneStageResult => ({
+            sceneId: scene.id,
+            status: "skipped",
+            detail: "audio.voice belum diset",
+          }),
+        ),
+      ],
     };
   }
   if (providers.length === 0) {

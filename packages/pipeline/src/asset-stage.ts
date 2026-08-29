@@ -45,6 +45,8 @@ export interface AssetStageOptions {
   /** Fallback chain, primary first. May be empty (every scene errors clearly). */
   providers: StockProvider[];
   db: PipelineDb;
+  /** Limit to these scene ids (partial runs). */
+  sceneIds?: string[];
   force?: boolean;
   log?: StageLogger;
 }
@@ -59,13 +61,29 @@ export const runAssetStage = async ({
   plan,
   providers,
   db,
+  sceneIds,
   force = false,
   log = consoleLogger,
 }: AssetStageOptions): Promise<AssetStageOutcome> => {
   const results: SceneStageResult[] = [];
   let current = plan;
 
-  const stockScenes = plan.scenes.filter((scene) => scene.visual.type === "stock");
+  const targetIds = sceneIds ? new Set(sceneIds) : null;
+  if (targetIds) {
+    const known = new Set(plan.scenes.map((scene) => scene.id));
+    for (const id of targetIds) {
+      if (!known.has(id)) {
+        results.push({
+          sceneId: id,
+          status: "error",
+          detail: "scene tidak ditemukan di plan",
+        });
+      }
+    }
+  }
+  const stockScenes = plan.scenes.filter(
+    (scene) => scene.visual.type === "stock" && (!targetIds || targetIds.has(scene.id)),
+  );
   const orientation = orientationForAspect(plan.meta.aspectRatio);
 
   for (const scene of stockScenes) {

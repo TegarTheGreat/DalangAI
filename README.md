@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 📄 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 1 selesai ✅ (pipeline deterministik) · Fase 0 ✅
+## Status: Fase 2 selesai ✅ (agent) · Fase 1 ✅ · Fase 0 ✅
 
 > *Gate Fase 0: apakah hasil render terlihat premium?*
 
@@ -50,7 +50,20 @@ Yang sudah berjalan:
     memulihkan renderState yang hilang.
   - Scene `pinned`/`locked` tidak pernah disentuh otomatisasi (ditegakkan di
     core).
-- **Kualitas terjaga otomatis**: 146 unit test (kontrak lock/pin/undo, timing
+- **Agent runtime (Fase 2)** — `dalang chat`:
+  - Chat dengan agent "dalang" di atas proyek: brief → riset (tier-volume) →
+    `writeScenePlan` → TTS/aset → preview; revisi lewat **patch kecil**
+    (`applyPatch` memakai kontrak §5.2 apa adanya — lock ditegakkan core).
+  - **Model-agnostic** (Vercel AI SDK v7 + registry models.dev dengan cache
+    harian & snapshot offline): default `anthropic/claude-opus-5` +
+    `anthropic/claude-haiku-4-5` (dua tingkat, §6.4), override `--model`.
+  - **Guardrails di kode** (§6.3): step cap 15, budget per giliran & per
+    proyek, approval gate utk renderFinal/TTS massal (non-interaktif =
+    tolak default), semua tool call ter-log (`dalang log`).
+  - **Sadar editan manual**: file plan yang diubah di luar chat terdeteksi
+    per giliran dan disuntikkan ke konteks agent (PRD §5.2); riwayat +
+    undo/redo (`/undo`, `/redo`) bertahan lintas restart.
+- **Kualitas terjaga otomatis**: 181 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -63,15 +76,17 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 91 unit test (core, templates, renderer) — tanpa browser
+pnpm test                 # 181 unit test (6 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
+pnpm dalang chat proyekku/            # chat agent (buat/revisi video) — Fase 2
 pnpm dalang validate examples/borobudur-60s/plan.json
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
 pnpm dalang still    examples/borobudur-60s/plan.json -t 8 -t 29 -t 44 -o out
+pnpm dalang log      proyekku/        # garis waktu pipeline + agent + biaya
 
 pnpm studio               # Remotion Studio (preview + scrub timeline)
 ```
@@ -94,9 +109,10 @@ packages/
   core/       skema scene-plan + patch ops + patch log + resolusi durasi (zod saja)
   pipeline/   stages deterministik + ledger SQLite + content-hash + ports provider
   providers/  adapter TTS (ElevenLabs/Edge/silence) & stock (Pexels/Pixabay)
+  agent/      runtime agent: AI SDK v7, registry models.dev, tools §6.2, guardrails
   templates/  preset Remotion terkurasi (documentary-01) + font vendored
   renderer/   RenderTarget lokal: staging, bundling, profil draft|final
-  cli/        dalang validate | generate | still | render
+  cli/        dalang chat | validate | generate | still | render | log
 examples/
   borobudur-60s/   plan.json demo + aset ilustrasi lokal (lisensi tercatat)
 docs/
@@ -126,10 +142,11 @@ Kontrak-kontrak penting yang SUDAH ditegakkan kode (bukan prompt):
       content-hash + resumability per scene di SQLite (ADR-0006),
       `dalang generate`. *Catatan: skor kualitas TTS ID (R-2) menunggu API
       key — kerangka evalnya siap; R-5/R-6 butuh perangkat keras nyata.*
-- [ ] **Fase 2 — Agent**: Vercel AI SDK + registry models.dev, tools §6.2
-      (`applyPatch` tool = `patchOpSchema` yang sudah ada;
-      `generateVoiceover` = panggilan tipis ke stage TTS), guardrails §6.3,
-      loop chat di CLI.
+- [x] **Fase 2 — Agent**: Vercel AI SDK v7 + registry models.dev (ADR-0009),
+      tools §6.2 lengkap, guardrails §6.3 (step/budget/approval/log),
+      `dalang chat` dengan kesadaran editan manual & undo/redo. *Catatan:
+      perilaku live dengan model nyata butuh API key pemilik repo — loop
+      teruji penuh dengan mock terskrip.*
 - [ ] **Fase 3 — UI hybrid**: 3 panel, @remotion/player, timeline manual,
       diff & undo, status pipeline.
 - [ ] **Fase 4 — Mode tutorial** (annotations sudah tervalidasi di skema),

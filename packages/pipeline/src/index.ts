@@ -4,6 +4,7 @@ export * from "./fs-utils";
 export * from "./generate";
 export * from "./hash";
 export * from "./load-plan";
+export * from "./materialize";
 export * from "./ports";
 export * from "./project-paths";
 export * from "./stage-types";

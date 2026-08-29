@@ -36,6 +36,20 @@ const installSqliteWarningFilter = (): void => {
 installSqliteWarningFilter();
 const { DatabaseSync } = await import("node:sqlite");
 
+export type SqliteDatabase = InstanceType<typeof DatabaseSync>;
+
+/**
+ * Open a SQLite database with the shared warning filter applied. Consumers
+ * outside the pipeline (e.g. the agent's event log) build their own tables on
+ * the same project database through this single entry point.
+ */
+export const openSqlite = (path: string): SqliteDatabase => {
+  if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
+  const db = new DatabaseSync(path);
+  db.exec("PRAGMA journal_mode = WAL;");
+  return db;
+};
+
 export type StageName = "tts" | "assets";
 export type RunStatus = "running" | "done" | "error";
 
@@ -108,15 +122,13 @@ const toRun = (row: Row): StageRun => ({
 });
 
 export class PipelineDb {
-  private readonly db: InstanceType<typeof DatabaseSync>;
+  private readonly db: SqliteDatabase;
 
   constructor(
     path: string,
     private readonly now: () => Date = () => new Date(),
   ) {
-    if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
-    this.db = new DatabaseSync(path);
-    this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db = openSqlite(path);
     this.db.exec(MIGRATION);
   }
 

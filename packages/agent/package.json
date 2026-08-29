@@ -1,0 +1,31 @@
+{
+  "name": "@dalang/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent runtime: orchestrator LLM (Vercel AI SDK) + tools §6.2 + guardrails §6.3 + models.dev registry",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.45",
+    "@ai-sdk/google": "4.0.57",
+    "@ai-sdk/openai": "4.0.51",
+    "@ai-sdk/openai-compatible": "3.0.40",
+    "@dalang/core": "workspace:*",
+    "@dalang/pipeline": "workspace:*",
+    "@dalang/providers": "workspace:*",
+    "@dalang/renderer": "workspace:*",
+    "ai": "7.0.84",
+    "zod": "4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

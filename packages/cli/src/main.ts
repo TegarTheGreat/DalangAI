@@ -17,6 +17,7 @@ import {
 } from "@dalang/renderer";
 import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
 import { Command, InvalidArgumentError, Option } from "commander";
+import { registerChatCommand, registerLogCommand } from "./chat";
 
 /**
  * `dalang` — CLI: validate, generate (deterministic pipeline, Fase 1), and
@@ -336,6 +337,9 @@ program
       }
     },
   );
+
+registerChatCommand(program);
+registerLogCommand(program);
 
 program.parseAsync().catch((error: unknown) => {
   console.error(`\n✗ ${error instanceof Error ? error.message : String(error)}`);
