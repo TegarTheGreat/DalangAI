@@ -3,10 +3,18 @@ import {
   type ResolvedAsset,
   type Scene,
   type ScenePlan,
+  type TransitionType,
 } from "@dalang/core";
 import { Audio } from "@remotion/media";
-import { linearTiming, TransitionSeries } from "@remotion/transitions";
+import {
+  linearTiming,
+  type TransitionPresentation,
+  TransitionSeries,
+} from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
+import { none } from "@remotion/transitions/none";
+import { slide } from "@remotion/transitions/slide";
+import { wipe } from "@remotion/transitions/wipe";
 import type { ReactNode } from "react";
 import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
 import { ensureFontsLoaded } from "../../fonts";
@@ -21,8 +29,30 @@ import { BodyScene } from "./BodyScene";
 import { Chrome } from "./Chrome";
 import { OutroScene } from "./OutroScene";
 import { FilmGrain, ReadabilityGradients, Vignette } from "./Overlays";
+import { TextsOverlay } from "./TextsOverlay";
 import { TitleScene } from "./TitleScene";
 import { type DocTheme, themeFromPlan } from "./theme";
+
+/** ADR-0011: peta transisi keluar scene → presentation @remotion/transitions. */
+type AnyPresentation = TransitionPresentation<Record<string, unknown>>;
+const presentationFor = (type: TransitionType): AnyPresentation => {
+  switch (type) {
+    case "slide-left":
+      return slide({ direction: "from-right" }) as AnyPresentation;
+    case "slide-right":
+      return slide({ direction: "from-left" }) as AnyPresentation;
+    case "slide-up":
+      return slide({ direction: "from-bottom" }) as AnyPresentation;
+    case "wipe-right":
+      return wipe({ direction: "from-left" }) as AnyPresentation;
+    case "wipe-down":
+      return wipe({ direction: "from-top" }) as AnyPresentation;
+    case "none":
+      return none() as AnyPresentation;
+    case "cross-fade":
+      return fade() as AnyPresentation;
+  }
+};
 
 /**
  * documentary-01 — the first curated style preset (PRD Fase 0 gate).
@@ -54,6 +84,12 @@ const SceneRouter: React.FC<{
   return (
     <AbsoluteFill>
       {content}
+      <TextsOverlay
+        scene={scene}
+        metrics={props.metrics}
+        theme={props.theme}
+        durationInFrames={props.durationInFrames}
+      />
       {narrationAudio ? (
         // Narration starts at the lead-in; captions-model shifts word
         // timestamps by the same constant, keeping audio & karaoke in sync.
@@ -78,10 +114,12 @@ export const DocumentaryPreset: React.FC<{
   const series: ReactNode[] = [];
   plan.scenes.forEach((scene, index) => {
     if (index > 0) {
+      // Jenis transisi milik scene SEBELUMNYA (transisi keluar, ADR-0011).
+      const type = plan.scenes[index - 1]?.transition.type ?? "cross-fade";
       series.push(
         <TransitionSeries.Transition
           key={`transition-${index}`}
-          presentation={fade()}
+          presentation={presentationFor(type)}
           timing={linearTiming({ durationInFrames: TRANSITION_FRAMES })}
         />,
       );

@@ -65,6 +65,11 @@ export interface ProjectStatePayload {
     registrySource: string;
     /** Alasan chat nonaktif (mis. API key belum diset), atau null. */
     chatDisabled: string | null;
+    /**
+     * Autodeteksi multimodal dari registry: true = model menerima gambar,
+     * false = tidak, null = metadata tak diketahui (boleh dicoba).
+     */
+    vision: boolean | null;
   };
   /** Estimasi TTS seluruh scene bernarasi (null = provider tanpa biaya diketahui). */
   ttsEstimate: { scenes: number; chars: number; usd: number | null } | null;
@@ -171,6 +176,8 @@ export type StudioEvent =
 
 export interface ChatRequest {
   text: string;
+  /** Data URL gambar (maks 3, masing-masing <= 4MB) — butuh model vision. */
+  images?: string[];
 }
 
 export interface ChatTurnResultLite {

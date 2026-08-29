@@ -52,6 +52,7 @@ export const registerProjectRoutes = (app: Hono, ctx: StudioContext): void => {
         chatDisabled: deps.orchestrator
           ? null
           : (deps.chatDisabledReason ?? "model orkestrator tidak tersedia"),
+        vision: deps.orchestrator?.info ? deps.orchestrator.info.imageInput : null,
       }),
     ),
   );

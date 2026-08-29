@@ -1,15 +1,134 @@
-import type { PatchOpInput, Scene, ScenePlan } from "@dalang/core";
-import { MOTIONS, VISUAL_TYPES } from "@dalang/core";
+import type {
+  PatchOpInput,
+  Scene,
+  ScenePlan,
+  TransitionType,
+  VisualFilter,
+} from "@dalang/core";
+import {
+  FILTER_PRESETS,
+  MOTIONS,
+  TEXT_POSITIONS,
+  TEXT_ROLES,
+  TRANSITION_TYPES,
+  VISUAL_TYPES,
+  visualFilterSchema,
+} from "@dalang/core";
 import { useEffect, useState } from "react";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
 
 /**
- * Panel properti (kanan): semua yang bisa diubah dari scene terpilih,
- * dikelompokkan jelas — Naskah, Visual, Aset, Susunan. Setiap perubahan =
- * patch user yang tercatat dan bisa di-undo.
+ * Panel properti bertab (pola editor: CapCut/Premiere) untuk scene terpilih:
+ *   Scene  - naskah, suara, durasi, susunan
+ *   Visual - tipe/gerak, FILTER (preset + slider), aset
+ *   Teks   - hingga 3 overlay (headline/subline/kicker/quote)
+ *   Transisi - kartu jenis transisi keluar scene
+ * Semua perubahan = patch user (tercatat, bisa di-undo, terlihat agent).
  */
+
+type Tab = "scene" | "visual" | "teks" | "transisi";
+
+const TRANSITION_LABEL: Record<TransitionType, string> = {
+  "cross-fade": "Larut",
+  "slide-left": "Geser kiri",
+  "slide-right": "Geser kanan",
+  "slide-up": "Geser naik",
+  "wipe-right": "Sapu kanan",
+  "wipe-down": "Sapu turun",
+  none: "Potong",
+};
+
+const FILTER_LABEL: Record<string, string> = {
+  none: "Asli",
+  warm: "Hangat",
+  cool: "Sejuk",
+  mono: "Mono",
+  vivid: "Vivid",
+  film: "Film",
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  headline: "Judul",
+  subline: "Subjudul",
+  kicker: "Label",
+  quote: "Kutipan",
+};
+
+const POSITION_LABEL: Record<string, string> = {
+  top: "Atas",
+  center: "Tengah",
+  bottom: "Bawah",
+};
+
+const Segmented = <T extends string>({
+  options,
+  value,
+  label,
+  onChange,
+  disabled,
+}: {
+  options: readonly T[];
+  value: T;
+  label: (option: T) => string;
+  onChange: (option: T) => void;
+  disabled?: boolean;
+}) => (
+  <div className="segmented">
+    {options.map((option) => (
+      <button
+        key={option}
+        type="button"
+        className={option === value ? "seg active" : "seg"}
+        disabled={disabled}
+        onClick={() => onChange(option)}
+      >
+        {label(option)}
+      </button>
+    ))}
+  </div>
+);
+
+/** Slider dengan label nilai; commit patch saat dilepas (bukan tiap piksel). */
+const SliderRow: React.FC<{
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  neutral: number;
+  format?: (value: number) => string;
+  onCommit: (value: number) => void;
+}> = ({ label, min, max, step, value, neutral, format, onCommit }) => {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const shown = format ? format(draft) : draft.toFixed(2);
+  return (
+    <div className="slider-row">
+      <span className="slider-label">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={draft}
+        onChange={(event) => setDraft(Number(event.target.value))}
+        onPointerUp={() => {
+          if (draft !== value) onCommit(draft);
+        }}
+        onKeyUp={(event) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            if (draft !== value) onCommit(draft);
+          }
+        }}
+      />
+      <span className={draft === neutral ? "slider-value" : "slider-value changed"}>
+        {shown}
+      </span>
+    </div>
+  );
+};
 
 const AssetGrid: React.FC = () => {
   const { assetSearch } = useStudio();
@@ -30,7 +149,7 @@ const AssetGrid: React.FC = () => {
         </button>
       </div>
       {assetSearch.loading ? (
-        <div className="asset-grid-note">Mencari kandidat…</div>
+        <div className="asset-grid-note">Mencari kandidat...</div>
       ) : null}
       {assetSearch.error ? (
         <div className="asset-grid-note error">Gagal: {assetSearch.error}</div>
@@ -64,7 +183,7 @@ const AssetGrid: React.FC = () => {
   );
 };
 
-const SceneForm: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
+const SceneTab: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
   plan,
   scene,
   index,
@@ -72,24 +191,18 @@ const SceneForm: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
   const { project } = useStudio();
   const busy = project?.busy.mutation !== null;
   const [narration, setNarration] = useState(scene.narration);
-  const [query, setQuery] = useState(scene.visual.query ?? "");
   const [duration, setDuration] = useState(
     scene.duration === "auto" ? "" : String(scene.duration),
   );
-
-  // Sinkron ulang draft form saat pindah scene / plan berubah dari luar.
   useEffect(() => {
     setNarration(scene.narration);
-    setQuery(scene.visual.query ?? "");
     setDuration(scene.duration === "auto" ? "" : String(scene.duration));
   }, [scene]);
 
   const patch = (ops: PatchOpInput[], label?: string) =>
     void studioClient.applyPatch(ops, label);
-
   const dirty =
     narration !== scene.narration ||
-    query !== (scene.visual.query ?? "") ||
     duration !== (scene.duration === "auto" ? "" : String(scene.duration));
 
   const save = () => {
@@ -103,9 +216,6 @@ const SceneForm: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
     }
     const update: Record<string, unknown> = {};
     if (narration !== scene.narration) update.narration = narration;
-    if (query !== (scene.visual.query ?? "")) {
-      update.visual = { query: query.trim() === "" ? null : query };
-    }
     if (durationValue !== scene.duration) update.duration = durationValue;
     patch([{ op: "updateScene", id: scene.id, patch: update }], "Scene disimpan.");
   };
@@ -121,39 +231,13 @@ const SceneForm: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
   };
 
   return (
-    <div className="inspector-scroll">
-      <div className="inspector-title">
-        <div>
-          <span className="inspector-scene-no">Scene {index + 1}</span>
-          <span className="inspector-scene-id">{scene.id}</span>
-        </div>
-        <label
-          className={`lock-switch ${scene.locked ? "on" : ""}`}
-          title="Scene terkunci tidak akan disentuh agent"
-        >
-          <input
-            type="checkbox"
-            checked={scene.locked}
-            onChange={(event) =>
-              patch(
-                [{ op: "lockScene", id: scene.id, locked: event.target.checked }],
-                event.target.checked
-                  ? `${scene.id} dikunci dari agent`
-                  : `Kunci ${scene.id} dibuka`,
-              )
-            }
-          />
-          <span className="lock-switch-track" aria-hidden />
-          Kunci dari agent
-        </label>
-      </div>
-
+    <>
       <section className="prop-group">
         <h4>Naskah</h4>
         <textarea
           rows={4}
           value={narration}
-          placeholder="Narasi scene ini…"
+          placeholder="Narasi scene ini..."
           onChange={(event) => setNarration(event.target.value)}
         />
         <button
@@ -161,104 +245,10 @@ const SceneForm: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
           className="ghost with-icon"
           disabled={busy || scene.narration.trim() === ""}
           onClick={() => void studioClient.runTts([scene.id])}
-          title="Sintesis ulang suara scene ini"
         >
           <IconMic />
           Buat suara scene ini
         </button>
-      </section>
-
-      <section className="prop-group">
-        <h4>Visual</h4>
-        <div className="field-row">
-          <label className="field">
-            <span>Tipe</span>
-            <select
-              value={scene.visual.type}
-              onChange={(event) =>
-                patch([
-                  {
-                    op: "updateScene",
-                    id: scene.id,
-                    patch: { visual: { type: event.target.value as never } },
-                  },
-                ])
-              }
-            >
-              {VISUAL_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Gerak kamera</span>
-            <select
-              value={scene.visual.motion ?? "none"}
-              onChange={(event) =>
-                patch([
-                  {
-                    op: "updateScene",
-                    id: scene.id,
-                    patch: { visual: { motion: event.target.value as never } },
-                  },
-                ])
-              }
-            >
-              {MOTIONS.map((motion) => (
-                <option key={motion} value={motion}>
-                  {motion}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className="field">
-          <span>Kata kunci pencarian aset (bahasa Inggris)</span>
-          <input
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="mis. borobudur temple aerial sunrise"
-          />
-        </label>
-        <div className="btn-row">
-          <button
-            type="button"
-            className="ghost with-icon"
-            disabled={busy}
-            onClick={() =>
-              void studioClient.searchAssets(
-                scene.id,
-                (
-                  scene.visual.query ?? scene.narration.split(/\s+/).slice(0, 8).join(" ")
-                ).trim(),
-                "video",
-              )
-            }
-          >
-            <IconSearch />
-            Cari aset
-          </button>
-          {scene.visual.pinned ? (
-            <button
-              type="button"
-              className="ghost with-icon"
-              disabled={busy}
-              onClick={() =>
-                patch(
-                  [{ op: "replaceAsset", sceneId: scene.id, assetId: null }],
-                  "Pin aset dilepas",
-                )
-              }
-            >
-              <IconPin />
-              Lepas pin
-            </button>
-          ) : null}
-        </div>
-        <AssetGrid />
       </section>
 
       <section className="prop-group">
@@ -336,12 +326,370 @@ const SceneForm: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
           </button>
         </div>
       </section>
-    </div>
+    </>
+  );
+};
+
+const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
+  const { project } = useStudio();
+  const busy = project?.busy.mutation !== null;
+  const [query, setQuery] = useState(scene.visual.query ?? "");
+  useEffect(() => setQuery(scene.visual.query ?? ""), [scene]);
+
+  const patch = (ops: PatchOpInput[], label?: string) =>
+    void studioClient.applyPatch(ops, label);
+  // Nilai efektif = filter tersimpan ATAU netral (untuk slider).
+  const filter: VisualFilter = scene.visual.filter ?? visualFilterSchema.parse({});
+
+  const commitFilter = (partial: Partial<VisualFilter>, label?: string) =>
+    patch(
+      [
+        {
+          op: "updateScene",
+          id: scene.id,
+          patch: { visual: { filter: { ...filter, ...partial } } },
+        },
+      ],
+      label,
+    );
+
+  return (
+    <>
+      <section className="prop-group">
+        <h4>Sumber</h4>
+        <label className="field">
+          <span>Tipe visual</span>
+          <select
+            value={scene.visual.type}
+            onChange={(event) =>
+              patch([
+                {
+                  op: "updateScene",
+                  id: scene.id,
+                  patch: { visual: { type: event.target.value as never } },
+                },
+              ])
+            }
+          >
+            {VISUAL_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Kata kunci pencarian aset (bahasa Inggris)</span>
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onBlur={() => {
+              if (query !== (scene.visual.query ?? "")) {
+                patch([
+                  {
+                    op: "updateScene",
+                    id: scene.id,
+                    patch: { visual: { query: query.trim() === "" ? null : query } },
+                  },
+                ]);
+              }
+            }}
+            placeholder="mis. borobudur temple aerial sunrise"
+          />
+        </label>
+        <div className="btn-row">
+          <button
+            type="button"
+            className="ghost with-icon"
+            disabled={busy}
+            onClick={() =>
+              void studioClient.searchAssets(
+                scene.id,
+                (
+                  scene.visual.query ?? scene.narration.split(/\s+/).slice(0, 8).join(" ")
+                ).trim(),
+                "video",
+              )
+            }
+          >
+            <IconSearch />
+            Cari aset
+          </button>
+          {scene.visual.pinned ? (
+            <button
+              type="button"
+              className="ghost with-icon"
+              disabled={busy}
+              onClick={() =>
+                patch(
+                  [{ op: "replaceAsset", sceneId: scene.id, assetId: null }],
+                  "Pin aset dilepas",
+                )
+              }
+            >
+              <IconPin />
+              Lepas pin
+            </button>
+          ) : null}
+        </div>
+        <AssetGrid />
+      </section>
+
+      <section className="prop-group">
+        <h4>Gerak kamera</h4>
+        <Segmented
+          options={MOTIONS}
+          value={scene.visual.motion}
+          disabled={busy}
+          label={(motion) =>
+            motion === "none"
+              ? "Diam"
+              : motion === "kenburns-in"
+                ? "Zoom masuk"
+                : motion === "kenburns-out"
+                  ? "Zoom keluar"
+                  : motion === "pan-left"
+                    ? "Pan kiri"
+                    : "Pan kanan"
+          }
+          onChange={(motion) =>
+            patch([{ op: "updateScene", id: scene.id, patch: { visual: { motion } } }])
+          }
+        />
+      </section>
+
+      <section className="prop-group">
+        <div className="group-head">
+          <h4>Filter</h4>
+          {scene.visual.filter ? (
+            <button
+              type="button"
+              className="mini"
+              disabled={busy}
+              onClick={() =>
+                patch(
+                  [
+                    {
+                      op: "updateScene",
+                      id: scene.id,
+                      patch: { visual: { filter: null } },
+                    },
+                  ],
+                  "Filter direset",
+                )
+              }
+            >
+              Reset
+            </button>
+          ) : null}
+        </div>
+        <div className="chip-row">
+          {FILTER_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className={filter.preset === preset ? "chip active" : "chip"}
+              disabled={busy}
+              onClick={() => commitFilter({ preset }, `Filter ${FILTER_LABEL[preset]}`)}
+            >
+              {FILTER_LABEL[preset]}
+            </button>
+          ))}
+        </div>
+        <SliderRow
+          label="Cerah"
+          min={0.25}
+          max={2}
+          step={0.05}
+          neutral={1}
+          value={filter.brightness}
+          onCommit={(brightness) => commitFilter({ brightness })}
+        />
+        <SliderRow
+          label="Kontras"
+          min={0.25}
+          max={2}
+          step={0.05}
+          neutral={1}
+          value={filter.contrast}
+          onCommit={(contrast) => commitFilter({ contrast })}
+        />
+        <SliderRow
+          label="Saturasi"
+          min={0}
+          max={2}
+          step={0.05}
+          neutral={1}
+          value={filter.saturation}
+          onCommit={(saturation) => commitFilter({ saturation })}
+        />
+        <SliderRow
+          label="Opacity"
+          min={0}
+          max={1}
+          step={0.05}
+          neutral={1}
+          value={filter.opacity}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(opacity) => commitFilter({ opacity })}
+        />
+      </section>
+    </>
+  );
+};
+
+const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
+  const { project } = useStudio();
+  const busy = project?.busy.mutation !== null;
+  const patchTexts = (texts: Scene["texts"], label?: string) =>
+    void studioClient.applyPatch(
+      [{ op: "updateScene", id: scene.id, patch: { texts } }],
+      label,
+    );
+
+  return (
+    <section className="prop-group">
+      <div className="group-head">
+        <h4>Teks di atas visual</h4>
+        <button
+          type="button"
+          className="mini"
+          disabled={busy || scene.texts.length >= 3}
+          onClick={() =>
+            patchTexts(
+              [
+                ...scene.texts,
+                {
+                  id: `tx-${Date.now().toString(36)}`,
+                  content: "Teks baru",
+                  role: "headline",
+                  position: "center",
+                  startFrac: 0,
+                  endFrac: 1,
+                },
+              ],
+              "Teks ditambahkan",
+            )
+          }
+        >
+          Tambah
+        </button>
+      </div>
+      {scene.texts.length === 0 ? (
+        <p className="group-hint">
+          Judul besar, label kecil, atau kutipan yang tampil di atas visual — untuk angka
+          kunci dan penekanan, bukan duplikat narasi.
+        </p>
+      ) : null}
+      {scene.texts.map((text, index) => (
+        <div key={text.id} className="text-item">
+          <textarea
+            rows={2}
+            defaultValue={text.content}
+            onBlur={(event) => {
+              const content = event.target.value.trim();
+              if (content !== "" && content !== text.content) {
+                patchTexts(
+                  scene.texts.map((entry, i) =>
+                    i === index ? { ...entry, content } : entry,
+                  ),
+                );
+              }
+            }}
+          />
+          <div className="text-item-controls">
+            <Segmented
+              options={TEXT_ROLES}
+              value={text.role}
+              disabled={busy}
+              label={(role) => ROLE_LABEL[role] ?? role}
+              onChange={(role) =>
+                patchTexts(
+                  scene.texts.map((entry, i) =>
+                    i === index ? { ...entry, role } : entry,
+                  ),
+                )
+              }
+            />
+            <Segmented
+              options={TEXT_POSITIONS}
+              value={text.position}
+              disabled={busy}
+              label={(position) => POSITION_LABEL[position] ?? position}
+              onChange={(position) =>
+                patchTexts(
+                  scene.texts.map((entry, i) =>
+                    i === index ? { ...entry, position } : entry,
+                  ),
+                )
+              }
+            />
+            <button
+              type="button"
+              className="ghost danger with-icon"
+              disabled={busy}
+              onClick={() =>
+                patchTexts(
+                  scene.texts.filter((_, i) => i !== index),
+                  "Teks dihapus",
+                )
+              }
+            >
+              <IconTrash />
+              Hapus
+            </button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+};
+
+const TransisiTab: React.FC<{ scene: Scene; isLast: boolean }> = ({ scene, isLast }) => {
+  const { project } = useStudio();
+  const busy = project?.busy.mutation !== null;
+  return (
+    <section className="prop-group">
+      <h4>Transisi keluar scene</h4>
+      {isLast ? (
+        <p className="group-hint">
+          Ini scene terakhir — transisinya tidak dipakai (tidak ada scene berikutnya).
+        </p>
+      ) : null}
+      <div className="transition-grid">
+        {TRANSITION_TYPES.map((type) => (
+          <button
+            key={type}
+            type="button"
+            className={
+              scene.transition.type === type
+                ? "transition-card active"
+                : "transition-card"
+            }
+            disabled={busy}
+            onClick={() =>
+              void studioClient.applyPatch(
+                [{ op: "updateScene", id: scene.id, patch: { transition: { type } } }],
+                `Transisi: ${TRANSITION_LABEL[type]}`,
+              )
+            }
+          >
+            <span className={`transition-glyph ${type}`} aria-hidden>
+              <span className="ga" />
+              <span className="gb" />
+            </span>
+            {TRANSITION_LABEL[type]}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 };
 
 export const InspectorPanel: React.FC = () => {
   const { project, selectedSceneId } = useStudio();
+  const [tab, setTab] = useState<Tab>("scene");
   const plan = project?.plan ?? null;
   const index = plan?.scenes.findIndex((scene) => scene.id === selectedSceneId) ?? -1;
   const scene = index >= 0 ? plan?.scenes[index] : undefined;
@@ -350,7 +698,11 @@ export const InspectorPanel: React.FC = () => {
     <aside className="panel inspector-panel">
       <div className="panel-head">
         <h2>Properti</h2>
-        {scene ? <span className="meta-line">{scene.visual.type}</span> : null}
+        {scene ? (
+          <span className="meta-line">
+            Scene {index + 1} | {scene.id}
+          </span>
+        ) : null}
         <button
           type="button"
           className="mini drawer-close"
@@ -360,11 +712,67 @@ export const InspectorPanel: React.FC = () => {
         </button>
       </div>
       {plan && scene ? (
-        <SceneForm plan={plan} scene={scene} index={index} />
+        <>
+          <div className="inspector-tools">
+            <label
+              className={`lock-switch ${scene.locked ? "on" : ""}`}
+              title="Scene terkunci tidak akan disentuh agent"
+            >
+              <input
+                type="checkbox"
+                checked={scene.locked}
+                onChange={(event) =>
+                  void studioClient.applyPatch(
+                    [{ op: "lockScene", id: scene.id, locked: event.target.checked }],
+                    event.target.checked
+                      ? `${scene.id} dikunci dari agent`
+                      : `Kunci ${scene.id} dibuka`,
+                  )
+                }
+              />
+              <span className="lock-switch-track" aria-hidden />
+              Kunci dari agent
+            </label>
+          </div>
+          <div className="tab-bar">
+            {(
+              [
+                ["scene", "Scene"],
+                ["visual", "Visual"],
+                ["teks", "Teks"],
+                ["transisi", "Transisi"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={tab === key ? "tab active" : "tab"}
+                onClick={() => setTab(key)}
+              >
+                {label}
+                {key === "teks" && scene.texts.length > 0 ? (
+                  <span className="tab-count">{scene.texts.length}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <div className="inspector-scroll">
+            {tab === "scene" ? (
+              <SceneTab plan={plan} scene={scene} index={index} />
+            ) : null}
+            {tab === "visual" ? <VisualTab scene={scene} /> : null}
+            {tab === "teks" ? <TeksTab scene={scene} /> : null}
+            {tab === "transisi" ? (
+              <TransisiTab scene={scene} isLast={index === plan.scenes.length - 1} />
+            ) : null}
+          </div>
+        </>
       ) : (
         <div className="panel-empty">
           <IconImage />
-          <p>Pilih scene di timeline untuk mengubah naskah, visual, dan durasinya.</p>
+          <p>
+            Pilih scene di timeline untuk mengubah naskah, visual, teks, dan transisinya.
+          </p>
         </div>
       )}
     </aside>

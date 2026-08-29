@@ -23,6 +23,8 @@ export interface ChatMessage {
   id: number;
   role: "user" | "agent" | "system";
   text: string;
+  /** Data URL gambar yang dilampirkan user (thumbnail di bubble). */
+  images: string[];
   activities: ActivityLine[];
   result: ChatTurnResultLite | null;
   pending: boolean;
@@ -68,6 +70,8 @@ export interface StudioState {
   chatBusy: boolean;
   approval: PendingApproval | null;
   confirm: PendingConfirm | null;
+  /** Lampiran gambar menunggu dikirim bersama pesan berikutnya. */
+  pendingImages: string[];
   assetSearch: AssetSearchState | null;
   renderProgress: RenderProgress | null;
   toast: string | null;
@@ -84,6 +88,7 @@ const emptyState: StudioState = {
   chatBusy: false,
   approval: null,
   confirm: null,
+  pendingImages: [],
   assetSearch: null,
   renderProgress: null,
   toast: null,
@@ -353,12 +358,33 @@ export class StudioClient {
 
   // -- chat ------------------------------------------------------------------
 
+  /** Lampirkan gambar (data URL) untuk pesan berikutnya. */
+  attachImage(dataUrl: string): void {
+    if (this.state.pendingImages.length >= 3) {
+      this.toast("Maksimal 3 gambar per pesan");
+      return;
+    }
+    if (dataUrl.length * 0.75 > 4 * 1024 * 1024) {
+      this.toast("Gambar terlalu besar (maks 4MB)");
+      return;
+    }
+    this.set({ pendingImages: [...this.state.pendingImages, dataUrl] });
+  }
+
+  removeImage(index: number): void {
+    this.set({
+      pendingImages: this.state.pendingImages.filter((_, i) => i !== index),
+    });
+  }
+
   async sendChat(text: string): Promise<void> {
     if (this.state.chatBusy || text.trim() === "") return;
+    const images = this.state.pendingImages;
     const userMessage: ChatMessage = {
       id: this.nextMessageId++,
       role: "user",
       text: text.trim(),
+      images,
       activities: [],
       result: null,
       pending: false,
@@ -367,11 +393,16 @@ export class StudioClient {
       id: this.nextMessageId++,
       role: "agent",
       text: "",
+      images: [],
       activities: [],
       result: null,
       pending: true,
     };
-    this.set({ chat: [...this.state.chat, userMessage, agentMessage], chatBusy: true });
+    this.set({
+      chat: [...this.state.chat, userMessage, agentMessage],
+      chatBusy: true,
+      pendingImages: [],
+    });
 
     const patchAgent = (patch: Partial<ChatMessage>) => {
       this.set({
@@ -382,7 +413,7 @@ export class StudioClient {
     };
 
     try {
-      await api.chat(userMessage.text, (event) => {
+      await api.chat(userMessage.text, images, (event) => {
         switch (event.type) {
           case "activity": {
             const current = this.state.chat.find((m) => m.id === agentMessage.id);

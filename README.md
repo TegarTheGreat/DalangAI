@@ -76,9 +76,20 @@ Yang sudah berjalan:
     per giliran dan disuntikkan ke konteks agent (PRD §5.2); riwayat +
     undo/redo (`/undo`, `/redo`) bertahan lintas restart.
 - **UI hybrid (Fase 3)** — `dalang studio`:
+  - **Perangkat sinematik lewat kontrak data (ADR-0011)**: filter per scene
+    (6 preset + cerah/kontras/saturasi/opacity), transisi per scene
+    (larut/geser/sapu/potong), hingga 3 teks overlay
+    (judul/subjudul/label/kutipan, posisi & timing), switcher rasio
+    16:9/9:16/1:1 — semuanya patch ops §5.2, jadi agent dan manusia sama
+    kuatnya, dan semuanya bisa di-undo.
+  - **Chat multimodal dengan autodeteksi**: lampirkan gambar sebagai
+    referensi visual; tombolnya aktif hanya bila registry models.dev
+    menyatakan model orkestrator mendukung input gambar.
   - **Satu state, tata letak editor** (PRD §8): chat agent · preview
     `@remotion/player` (komponen video yang sama dengan renderer — patch →
-    preview < 1 dtk, tanpa render) · panel properti · **timeline NLE**:
+    preview < 1 dtk, tanpa render) · panel properti BERTAB
+    (Scene/Visual/Teks/Transisi: segmented, chip filter, slider, kartu
+    transisi) · **timeline NLE**:
     ruler waktu yang bisa di-scrub, playhead tersinkron dua arah, klip
     filmstrip selebar durasi (drag untuk susun ulang), track suara per
     scene, transport play/jeda + zoom. Mobile-friendly (laci penuh layar,

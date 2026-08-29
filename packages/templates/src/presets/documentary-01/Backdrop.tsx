@@ -8,6 +8,7 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
+import { filterToCss } from "./filters";
 import type { DocTheme } from "./theme";
 
 /**
@@ -56,6 +57,8 @@ const AssetLayer: React.FC<{
     height: "100%",
     objectFit: "cover",
     ...motionStyle(scene.visual.motion, frame, durationInFrames),
+    // ADR-0011: filter/opacity scene diterapkan di lapisan media.
+    ...filterToCss(scene.visual.filter),
   };
 
   if (asset.kind === "video") {
@@ -87,7 +90,9 @@ export const ProceduralBackdrop: React.FC<{
   const by = 64 + seedA * 26;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: theme.bg }}>
+    <AbsoluteFill
+      style={{ backgroundColor: theme.bg, ...filterToCss(scene.visual.filter) }}
+    >
       <AbsoluteFill
         style={{
           scale: String(

@@ -12,6 +12,9 @@ import {
   type ScenePlan,
   scenePlanSchema,
   sceneSchema,
+  textOverlaySchema,
+  transitionSchema,
+  visualFilterSchema,
   visualTypeSchema,
   voiceSchema,
 } from "./scene-plan";
@@ -52,6 +55,8 @@ export const sceneUpdateSchema = z.strictObject({
       query: z.string().nullable().optional(),
       motion: motionSchema.optional(),
       variant: z.string().nullable().optional(),
+      /** `null` menghapus filter (kembali netral). */
+      filter: visualFilterSchema.nullable().optional(),
     })
     .optional(),
   caption: z
@@ -60,6 +65,10 @@ export const sceneUpdateSchema = z.strictObject({
       style: z.string().optional(),
     })
     .optional(),
+  /** Transisi keluar scene (ADR-0011). */
+  transition: transitionSchema.optional(),
+  /** Replaces the whole array (ADR-0011). */
+  texts: z.array(textOverlaySchema).max(3).optional(),
   /** Replaces the whole array. */
   annotations: z.array(annotationSchema).optional(),
 });

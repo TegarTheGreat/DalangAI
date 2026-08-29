@@ -1,3 +1,4 @@
+import { ASPECT_RATIOS } from "@dalang/core";
 import {
   IconChat,
   IconExport,
@@ -48,6 +49,26 @@ const Header: React.FC = () => {
         <span className="brand-mark">Dalang</span>
         <span className="brand-sub">Studio</span>
         {plan ? <span className="project-title">{plan.meta.title}</span> : null}
+        {plan ? (
+          <div className="segmented ratio-switch" title="Rasio video">
+            {ASPECT_RATIOS.map((ratio) => (
+              <button
+                key={ratio}
+                type="button"
+                className={plan.meta.aspectRatio === ratio ? "seg active" : "seg"}
+                disabled={project?.busy.mutation !== null}
+                onClick={() =>
+                  void studioClient.applyPatch(
+                    [{ op: "setMeta", patch: { aspectRatio: ratio } }],
+                    `Rasio ${ratio}`,
+                  )
+                }
+              >
+                {ratio}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {busyLabel ? (
           <span className="busy-chip">
             <IconSpinner />

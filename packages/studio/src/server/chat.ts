@@ -1,4 +1,4 @@
-import { runAgentTurn } from "@dalang/agent";
+import { type ImageAttachment, runAgentTurn } from "@dalang/agent";
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -20,7 +20,24 @@ import { StudioBusyError } from "./store";
  * giliran tetap diselesaikan server-side agar state konsisten.
  */
 
-const chatBody = z.object({ text: z.string().min(1) });
+const DATA_URL_RE = /^data:(image\/(?:png|jpe?g|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const chatBody = z.object({
+  text: z.string().min(1),
+  images: z.array(z.string().regex(DATA_URL_RE)).max(3).optional(),
+});
+
+/** Data URL → lampiran; menegakkan batas ukuran per gambar. */
+const parseImages = (dataUrls: string[]): ImageAttachment[] =>
+  dataUrls.map((url) => {
+    const match = DATA_URL_RE.exec(url);
+    if (!match) throw new Error("Format gambar tidak dikenali");
+    const [, mediaType, base64] = match as unknown as [string, string, string];
+    if ((base64.length * 3) / 4 > MAX_IMAGE_BYTES) {
+      throw new Error("Gambar terlalu besar (maks 4MB per gambar)");
+    }
+    return { base64, mediaType };
+  });
 const approvalBody = z.object({ approved: z.boolean() });
 
 export const registerChatRoutes = (app: Hono, ctx: StudioContext): void => {
@@ -55,6 +72,28 @@ export const registerChatRoutes = (app: Hono, ctx: StudioContext): void => {
     }
     if (store.busy.mutation) {
       return c.json({ error: new StudioBusyError(store.busy.mutation).message }, 409);
+    }
+    // Autodeteksi multimodal (ADR-0011): metadata registry menentukan.
+    if (
+      (body.data.images?.length ?? 0) > 0 &&
+      deps.orchestrator?.info &&
+      !deps.orchestrator.info.imageInput
+    ) {
+      return c.json(
+        {
+          error: `Model ${deps.orchestrator.key} tidak menerima input gambar — pilih model vision (DALANG_MODEL) atau kirim tanpa lampiran`,
+        },
+        400,
+      );
+    }
+    let images: ImageAttachment[];
+    try {
+      images = parseImages(body.data.images ?? []);
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : String(error) },
+        400,
+      );
     }
 
     return streamSSE(c, async (stream) => {
@@ -102,6 +141,7 @@ export const registerChatRoutes = (app: Hono, ctx: StudioContext): void => {
               deps: ctx.agentDeps,
               model: orchestrator,
               userText: body.data.text,
+              images,
             });
             planPulse();
             const patches = store

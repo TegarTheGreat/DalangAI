@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { IconImage } from "../icons";
 import type { ChatMessage } from "../store";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
@@ -34,6 +35,17 @@ const Bubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
           ))}
         </div>
       ) : null}
+      {message.images.length > 0 ? (
+        <div className="bubble-images">
+          {message.images.map((src, index) => (
+            <img
+              key={`${message.id}-img-${index === 0 ? "a" : index === 1 ? "b" : "c"}`}
+              src={src}
+              alt="lampiran"
+            />
+          ))}
+        </div>
+      ) : null}
       {message.pending && message.text === "" ? (
         <div className="thinking">berpikir…</div>
       ) : (
@@ -66,10 +78,25 @@ const Bubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
 };
 
 export const ChatPanel: React.FC = () => {
-  const { chat, chatBusy, project } = useStudio();
+  const { chat, chatBusy, project, pendingImages } = useStudio();
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const chatDisabled = project?.models.chatDisabled ?? null;
+  // Autodeteksi multimodal dari registry: false = model dipastikan non-vision.
+  const vision = project?.models.vision ?? null;
+
+  const pickFiles = (files: FileList | null) => {
+    for (const file of Array.from(files ?? [])) {
+      if (!file.type.startsWith("image/")) continue;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") studioClient.attachImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
   // Tanpa daftar dependensi: gulir ke bawah setiap render (panel kecil, murah).
   useEffect(() => {
@@ -121,7 +148,45 @@ export const ChatPanel: React.FC = () => {
           chat.map((message) => <Bubble key={message.id} message={message} />)
         )}
       </div>
+      {pendingImages.length > 0 ? (
+        <div className="attach-row">
+          {pendingImages.map((src, index) => (
+            <span key={src.slice(-24)} className="attach-chip">
+              <img src={src} alt="lampiran" />
+              <button
+                type="button"
+                className="attach-remove"
+                onClick={() => studioClient.removeImage(index)}
+                title="Hapus lampiran"
+              >
+                x
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="chat-compose">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          hidden
+          onChange={(event) => pickFiles(event.target.files)}
+        />
+        <button
+          type="button"
+          className="ghost attach-btn"
+          disabled={chatBusy || chatDisabled !== null || vision === false}
+          onClick={() => fileRef.current?.click()}
+          title={
+            vision === false
+              ? "Model aktif tidak menerima gambar — pilih model vision lewat DALANG_MODEL"
+              : "Lampirkan gambar (referensi visual untuk agent)"
+          }
+        >
+          <IconImage />
+        </button>
         <textarea
           value={draft}
           placeholder={

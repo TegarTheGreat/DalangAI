@@ -67,6 +67,60 @@ export const annotationSchema = z.strictObject({
 export type Annotation = z.infer<typeof annotationSchema>;
 
 // ---------------------------------------------------------------------------
+// Filter, transisi, dan teks overlay (ADR-0011 — Fase 3 pengayaan editor)
+// ---------------------------------------------------------------------------
+
+export const FILTER_PRESETS = ["none", "warm", "cool", "mono", "vivid", "film"] as const;
+export const filterPresetSchema = z.enum(FILTER_PRESETS);
+export type FilterPreset = z.infer<typeof filterPresetSchema>;
+
+/** Penyesuaian tampilan visual scene; semua default = netral (tanpa efek). */
+export const visualFilterSchema = z.strictObject({
+  preset: filterPresetSchema.default("none"),
+  /** Pengali; 1 = asli. */
+  brightness: z.number().min(0.25).max(2).default(1),
+  contrast: z.number().min(0.25).max(2).default(1),
+  saturation: z.number().min(0).max(2).default(1),
+  opacity: normalized01.default(1),
+});
+export type VisualFilter = z.infer<typeof visualFilterSchema>;
+
+export const TRANSITION_TYPES = [
+  "cross-fade",
+  "slide-left",
+  "slide-right",
+  "slide-up",
+  "wipe-right",
+  "wipe-down",
+  "none",
+] as const;
+export const transitionTypeSchema = z.enum(TRANSITION_TYPES);
+export type TransitionType = z.infer<typeof transitionTypeSchema>;
+
+/** Transisi KELUAR dari scene ini (batas ke scene berikutnya). */
+export const transitionSchema = z.strictObject({
+  type: transitionTypeSchema.default("cross-fade"),
+});
+export type Transition = z.infer<typeof transitionSchema>;
+
+export const TEXT_ROLES = ["headline", "subline", "kicker", "quote"] as const;
+export const textRoleSchema = z.enum(TEXT_ROLES);
+export const TEXT_POSITIONS = ["top", "center", "bottom"] as const;
+export const textPositionSchema = z.enum(TEXT_POSITIONS);
+
+/** Teks overlay di atas visual (di bawah caption); gaya dari theme preset. */
+export const textOverlaySchema = z.strictObject({
+  id: z.string().min(1),
+  content: z.string().min(1),
+  role: textRoleSchema.default("headline"),
+  position: textPositionSchema.default("center"),
+  /** Jendela tampil, fraksi 0–1 dari durasi scene. */
+  startFrac: normalized01.default(0),
+  endFrac: normalized01.default(1),
+});
+export type TextOverlay = z.infer<typeof textOverlaySchema>;
+
+// ---------------------------------------------------------------------------
 // Scene
 // ---------------------------------------------------------------------------
 
@@ -88,6 +142,8 @@ export const visualSchema = z.strictObject({
   pinned: z.boolean().default(false),
   /** Layout variant for `template-anim` scenes; preset-defined (e.g. "title", "outro"). */
   variant: z.string().optional(),
+  /** Filter/penyesuaian tampilan (ADR-0011); tidak ada = netral. */
+  filter: visualFilterSchema.optional(),
 });
 export type Visual = z.infer<typeof visualSchema>;
 
@@ -106,6 +162,10 @@ export const sceneSchema = z.strictObject({
   caption: captionSchema.default({ enabled: true, style: "inherit" }),
   /** "auto" = narration length + padding; number = fixed seconds. */
   duration: z.union([z.literal("auto"), finitePositive]).default("auto"),
+  /** Transisi keluar ke scene berikutnya (ADR-0011). */
+  transition: transitionSchema.default({ type: "cross-fade" }),
+  /** Teks overlay (maks 3) di atas visual (ADR-0011). */
+  texts: z.array(textOverlaySchema).max(3).default([]),
   annotations: z.array(annotationSchema).default([]),
 });
 export type Scene = z.infer<typeof sceneSchema>;

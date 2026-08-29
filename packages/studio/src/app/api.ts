@@ -105,12 +105,13 @@ export const api = {
   /** Satu giliran chat; event stream diteruskan ke onEvent. */
   chat: async (
     text: string,
+    images: string[],
     onEvent: (event: ChatStreamEvent) => void,
   ): Promise<void> => {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, ...(images.length > 0 ? { images } : {}) }),
     });
     if (!response.ok || !response.body) {
       const payload = (await response.json().catch(() => ({}))) as { error?: string };

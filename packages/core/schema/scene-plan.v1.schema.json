@@ -186,6 +186,48 @@
               },
               "variant": {
                 "type": "string"
+              },
+              "filter": {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "default": "none",
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "warm",
+                      "cool",
+                      "mono",
+                      "vivid",
+                      "film"
+                    ]
+                  },
+                  "brightness": {
+                    "default": 1,
+                    "type": "number",
+                    "minimum": 0.25,
+                    "maximum": 2
+                  },
+                  "contrast": {
+                    "default": 1,
+                    "type": "number",
+                    "minimum": 0.25,
+                    "maximum": 2
+                  },
+                  "saturation": {
+                    "default": 1,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 2
+                  },
+                  "opacity": {
+                    "default": 1,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "required": [
@@ -223,6 +265,82 @@
                 "exclusiveMinimum": 0
               }
             ]
+          },
+          "transition": {
+            "default": {
+              "type": "cross-fade"
+            },
+            "type": "object",
+            "properties": {
+              "type": {
+                "default": "cross-fade",
+                "type": "string",
+                "enum": [
+                  "cross-fade",
+                  "slide-left",
+                  "slide-right",
+                  "slide-up",
+                  "wipe-right",
+                  "wipe-down",
+                  "none"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "texts": {
+            "default": [],
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "role": {
+                  "default": "headline",
+                  "type": "string",
+                  "enum": [
+                    "headline",
+                    "subline",
+                    "kicker",
+                    "quote"
+                  ]
+                },
+                "position": {
+                  "default": "center",
+                  "type": "string",
+                  "enum": [
+                    "top",
+                    "center",
+                    "bottom"
+                  ]
+                },
+                "startFrac": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "endFrac": {
+                  "default": 1,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "id",
+                "content"
+              ],
+              "additionalProperties": false
+            }
           },
           "annotations": {
             "default": [],

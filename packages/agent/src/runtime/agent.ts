@@ -21,16 +21,51 @@ export interface AgentTurnResult {
   costIsPartial: boolean;
 }
 
+/** Lampiran gambar dari user (chat multimodal, ADR-0011). */
+export interface ImageAttachment {
+  /** Base64 TANPA prefix data URL. */
+  base64: string;
+  mediaType: string;
+}
+
+/**
+ * Susun pesan user: blok konteks + teks (+ gambar bila ada). Diekspor murni
+ * agar bentuk multimodalnya bisa diuji unit tanpa model.
+ */
+export const buildUserMessage = (
+  contextBlock: string,
+  userText: string,
+  images: ImageAttachment[] = [],
+): ModelMessage => {
+  const text = `${contextBlock}\n\n[PESAN USER]\n${userText}`;
+  if (images.length === 0) {
+    return { role: "user", content: text };
+  }
+  return {
+    role: "user",
+    content: [
+      ...images.map((image) => ({
+        type: "image" as const,
+        image: image.base64,
+        mediaType: image.mediaType,
+      })),
+      { type: "text" as const, text },
+    ],
+  };
+};
+
 export const runAgentTurn = async ({
   session,
   deps,
   model,
   userText,
+  images = [],
 }: {
   session: ProjectSession;
   deps: AgentDeps;
   model: ResolvedModel;
   userText: string;
+  images?: ImageAttachment[];
 }): Promise<AgentTurnResult> => {
   const { guards } = deps;
   session.turn += 1;
@@ -43,10 +78,7 @@ export const runAgentTurn = async ({
     session.summary(),
   ].join("\n");
 
-  const userMessage: ModelMessage = {
-    role: "user",
-    content: `${contextBlock}\n\n[PESAN USER]\n${userText}`,
-  };
+  const userMessage = buildUserMessage(contextBlock, userText, images);
 
   const result = await generateText({
     model: model.model,
@@ -71,7 +103,19 @@ export const runAgentTurn = async ({
     costUsd: guards.turnCostIsPartial ? null : Number(guards.llmCostTurn.toFixed(6)),
   });
 
-  session.history.push(userMessage, ...(result.responseMessages as ModelMessage[]));
+  // Riwayat dipersist tanpa byte gambar (hemat; konteks giliran depan cukup
+  // tahu bahwa ada lampiran).
+  const persistedUserMessage: ModelMessage =
+    images.length === 0
+      ? userMessage
+      : {
+          role: "user",
+          content: `${contextBlock}\n\n[PESAN USER — dengan ${images.length} gambar terlampir]\n${userText}`,
+        };
+  session.history.push(
+    persistedUserMessage,
+    ...(result.responseMessages as ModelMessage[]),
+  );
   session.persist();
 
   const stop = guards.classifyStop(result.steps.length);
