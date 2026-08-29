@@ -11,6 +11,12 @@ dist/
 .remotion/
 packages/templates/public/assets/
 
+# pipeline output (media + ledger hidup di samping plan)
+.dalang/
+
+# secrets
+.env
+
 # misc
 .DS_Store
 *.log

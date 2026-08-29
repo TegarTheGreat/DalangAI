@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 📄 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 0 selesai ✅ (fondasi visual)
+## Status: Fase 1 selesai ✅ (pipeline deterministik) · Fase 0 ✅
 
 > *Gate Fase 0: apakah hasil render terlihat premium?*
 
@@ -37,11 +37,26 @@ Yang sudah berjalan:
   deteksi Chromium terpasang, profil `draft`/`final`, render video & stills.
 - **CLI `dalang`**: `validate`, `still`, `render` — opsi tervalidasi, pesan
   error ramah, `--no-cache`, `--concurrency`.
-- **Kualitas terjaga otomatis**: 91 unit test (kontrak lock/pin/undo, timing
-  caption, snapshot timeline demo, keamanan staging path), Biome lint+format,
-  dan CI GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
+- **Pipeline deterministik (Fase 1)** — `dalang generate`:
+  - **TTS per scene** dengan chain fallback (ElevenLabs → Edge TTS → silence
+    offline) dan **word-timestamps native** → caption karaoke sinkron; setiap
+    degradasi ditandai `⚠ fallback` per scene.
+  - **Asset resolve** Pexels/Pixabay (foto+video, orientasi ikut aspect
+    ratio, seleksi rendisi deterministik) + **metadata lisensi per aset**
+    (audit-ready, R-10).
+  - **Cache content-hash + resumable** di ledger SQLite (`.dalang/` di samping
+    plan): ganti narasi satu scene → hanya scene itu yang disintesis ulang;
+    run ulang = no-op; crash → lanjut, bukan mengulang; cache hit bahkan
+    memulihkan renderState yang hilang.
+  - Scene `pinned`/`locked` tidak pernah disentuh otomatisasi (ditegakkan di
+    core).
+- **Kualitas terjaga otomatis**: 146 unit test (kontrak lock/pin/undo, timing
+  caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
+  provider via fixture, keamanan staging path), Biome lint+format, dan CI
+  GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
 - Hasil ukur di container CPU-only: draft 540p **85 dtk**, final 1080p
-  **4m38s** untuk video 51 dtk (8 scene) — lihat ADR-0004.
+  **4m38s** untuk video 51 dtk (8 scene) — lihat ADR-0004. E2E pipeline:
+  MP4 hasil `generate --render` terverifikasi ber-stream audio AAC.
 
 ## Menjalankan
 
@@ -53,11 +68,18 @@ pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
 pnpm dalang validate examples/borobudur-60s/plan.json
+pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
+pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
 pnpm dalang still    examples/borobudur-60s/plan.json -t 8 -t 29 -t 44 -o out
 
 pnpm studio               # Remotion Studio (preview + scrub timeline)
 ```
+
+API key provider (opsional — semuanya punya jalur offline/fallback): salin
+`.env.example` → `.env`. Tanpa key, TTS memakai provider `silence`
+(placeholder, ditandai jelas) dan scene stock yang belum resolved gagal dengan
+pesan env var yang dibutuhkan.
 
 Alur kontribusi & konvensi: [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -70,9 +92,11 @@ shell sekali.
 ```
 packages/
   core/       skema scene-plan + patch ops + patch log + resolusi durasi (zod saja)
+  pipeline/   stages deterministik + ledger SQLite + content-hash + ports provider
+  providers/  adapter TTS (ElevenLabs/Edge/silence) & stock (Pexels/Pixabay)
   templates/  preset Remotion terkurasi (documentary-01) + font vendored
   renderer/   RenderTarget lokal: staging, bundling, profil draft|final
-  cli/        dalang validate | still | render
+  cli/        dalang validate | generate | still | render
 examples/
   borobudur-60s/   plan.json demo + aset ilustrasi lokal (lisensi tercatat)
 docs/
@@ -97,11 +121,14 @@ Kontrak-kontrak penting yang SUDAH ditegakkan kode (bukan prompt):
 
 - [x] **Fase 0 — Fondasi visual**: skema v0, preset `documentary-01`, render
       lokal dari JSON hardcoded, gate kualitas.
-- [ ] **Fase 1 — Pipeline deterministik**: TTS + word timestamps (R-2/R-3),
-      asset fetch Pexels, caching content-hash + resumability per scene
-      (SQLite), `dalang generate`.
+- [x] **Fase 1 — Pipeline deterministik**: TTS + word timestamps native
+      (ADR-0007), asset fetch Pexels/Pixabay + lisensi (ADR-0008), caching
+      content-hash + resumability per scene di SQLite (ADR-0006),
+      `dalang generate`. *Catatan: skor kualitas TTS ID (R-2) menunggu API
+      key — kerangka evalnya siap; R-5/R-6 butuh perangkat keras nyata.*
 - [ ] **Fase 2 — Agent**: Vercel AI SDK + registry models.dev, tools §6.2
-      (`applyPatch` tool = `patchOpSchema` yang sudah ada), guardrails §6.3,
+      (`applyPatch` tool = `patchOpSchema` yang sudah ada;
+      `generateVoiceover` = panggilan tipis ke stage TTS), guardrails §6.3,
       loop chat di CLI.
 - [ ] **Fase 3 — UI hybrid**: 3 panel, @remotion/player, timeline manual,
       diff & undo, status pipeline.

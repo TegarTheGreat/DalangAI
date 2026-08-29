@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@dalang/core": "workspace:*",
+    "@dalang/pipeline": "workspace:*",
+    "@dalang/providers": "workspace:*",
     "@dalang/renderer": "workspace:*",
     "@dalang/templates": "workspace:*",
     "commander": "15.0.0"

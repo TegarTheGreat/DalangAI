@@ -6,6 +6,8 @@ import {
   resolveSceneDurationSec,
   type ScenePlan,
 } from "@dalang/core";
+import { generatePlan, readPlanFile, type SceneStageResult } from "@dalang/pipeline";
+import { buildStockChain, buildTtsChain } from "@dalang/providers";
 import {
   loadPlan,
   type ProgressEvent,
@@ -17,9 +19,16 @@ import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/la
 import { Command, InvalidArgumentError, Option } from "commander";
 
 /**
- * `dalang` — Fase 0 CLI: validate a scene-plan and render it locally.
- * (Fase 1 adds `dalang generate` on top of the deterministic pipeline.)
+ * `dalang` — CLI: validate, generate (deterministic pipeline, Fase 1), and
+ * render a scene-plan locally.
  */
+
+// API keys (ELEVENLABS_API_KEY, PEXELS_API_KEY, …) may live in a local .env.
+try {
+  process.loadEnvFile();
+} catch {
+  // .env is optional
+}
 
 const program = new Command();
 program
@@ -71,19 +80,29 @@ const printPlanSummary = (plan: ScenePlan): void => {
   console.log(
     `  ${plan.meta.aspectRatio} · preset ${plan.meta.stylePreset} · bahasa ${plan.meta.language}\n`,
   );
-  const rows = plan.scenes.map((scene, index) => ({
-    "#": index + 1,
-    id: scene.id,
-    tipe: scene.visual.type,
-    kata: countWords(scene.narration),
-    durasi: formatSec(resolveSceneDurationSec(scene, plan)),
-    aset:
-      plan.renderState.resolvedAssets[scene.id]?.file ??
-      (scene.visual.type === "template-anim" || scene.visual.type === "solid"
-        ? "(template)"
-        : "(belum di-resolve)"),
-    lock: scene.locked ? "🔒" : "",
-  }));
+  const rows = plan.scenes.map((scene, index) => {
+    const audio = plan.renderState.narrationAudio[scene.id];
+    return {
+      "#": index + 1,
+      id: scene.id,
+      tipe: scene.visual.type,
+      kata: countWords(scene.narration),
+      durasi: formatSec(resolveSceneDurationSec(scene, plan)),
+      suara: audio
+        ? audio.fallbackQuality
+          ? "⚠ fallback"
+          : "✓"
+        : scene.narration.trim()
+          ? "—"
+          : "",
+      aset:
+        plan.renderState.resolvedAssets[scene.id]?.file ??
+        (scene.visual.type === "template-anim" || scene.visual.type === "solid"
+          ? "(template)"
+          : "(belum di-resolve)"),
+      lock: scene.locked ? "🔒" : "",
+    };
+  });
   console.table(rows);
   console.log(
     `  Total: ${timings.length} scene · ${formatSec(totalSec)} materi · ` +
@@ -219,6 +238,102 @@ program
           `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec(elapsed)}` +
           `${result.bundleFromCache ? " · bundle cache: hit" : ""}`,
       );
+    },
+  );
+
+const STATUS_ICON: Record<SceneStageResult["status"], string> = {
+  done: "✓",
+  cached: "•",
+  skipped: "–",
+  error: "✗",
+};
+
+const printStageResults = (title: string, results: SceneStageResult[]): void => {
+  if (results.length === 0) {
+    console.log(`  ${title}: tidak ada scene yang perlu diproses`);
+    return;
+  }
+  console.log(`  ${title}:`);
+  for (const result of results) {
+    const cost =
+      result.costUsd && result.costUsd > 0 ? ` · ~$${result.costUsd.toFixed(4)}` : "";
+    console.log(
+      `    ${STATUS_ICON[result.status]} ${result.sceneId.padEnd(10)} ${result.detail}${cost}`,
+    );
+  }
+};
+
+program
+  .command("generate")
+  .argument("<plan>", "path ke scene-plan JSON")
+  .option("--force", "abaikan cache — jalankan ulang semua stage")
+  .addOption(
+    new Option("--render <profile>", "langsung render setelah pipeline selesai").choices([
+      "draft",
+      "final",
+    ]),
+  )
+  .description(
+    "Jalankan pipeline deterministik (TTS + resolve aset) dan tulis renderState ke plan",
+  )
+  .action(
+    async (planPath: string, options: { force?: boolean; render?: RenderProfile }) => {
+      const absPlan = resolve(planPath);
+      const peek = readPlanFile(absPlan);
+
+      const ttsProviders = peek.audio.voice
+        ? buildTtsChain({ provider: peek.audio.voice.provider })
+        : [];
+      const stockProviders = buildStockChain();
+
+      const summary = await generatePlan({
+        planPath: absPlan,
+        ttsProviders,
+        stockProviders,
+        force: options.force,
+        log: {
+          info: (message) => console.log(message),
+          warn: (message) => console.warn(message),
+        },
+      });
+
+      console.log("");
+      printStageResults("TTS", summary.tts);
+      printStageResults("Aset", summary.assets);
+      console.log(
+        `\n  ${summary.planChanged ? "renderState ditulis ke" : "Tidak ada perubahan pada"} ${summary.planPath}` +
+          (summary.totalCostUsd > 0
+            ? ` · perkiraan biaya ~$${summary.totalCostUsd.toFixed(4)}`
+            : ""),
+      );
+      printPlanSummary(summary.plan);
+
+      if (summary.errorCount > 0) {
+        process.exitCode = 1;
+        console.error(
+          `✗ ${summary.errorCount} scene gagal — lihat detail di atas (ledger: .dalang/pipeline.db)`,
+        );
+        return;
+      }
+
+      if (options.render) {
+        const name = basename(dirname(absPlan));
+        const outPath = resolve(join("out", `${name}-${options.render}.mp4`));
+        mkdirSync(dirname(outPath), { recursive: true });
+        const startedAt = Date.now();
+        const result = await renderPlanToVideo({
+          planPath: absPlan,
+          outputLocation: outPath,
+          profile: options.render,
+          onProgress: progressPrinter(),
+        });
+        process.stdout.write("\n");
+        console.log(
+          `✓ ${result.outputLocation}\n` +
+            `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
+            `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec((Date.now() - startedAt) / 1000)}`,
+        );
+      }
     },
   );
 

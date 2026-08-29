@@ -35,6 +35,33 @@ export const setResolvedAsset = (
   return next;
 };
 
+/**
+ * Pipeline auto-resolve write path: records the chosen asset in
+ * renderState AND fills `visual.assetId` (PRD §5.1: "diisi pipeline setelah
+ * fetch") — WITHOUT pinning, so the user/agent can still replace it.
+ * Refuses pinned scenes: an explicitly chosen asset is never auto-replaced.
+ */
+export const assignResolvedAsset = (
+  plan: ScenePlan,
+  sceneId: string,
+  assetId: string,
+  asset: ResolvedAsset,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  const scene = next.scenes.find((candidate) => candidate.id === sceneId);
+  if (!scene) {
+    throw new Error(`assignResolvedAsset: scene "${sceneId}" tidak ditemukan`);
+  }
+  if (scene.visual.pinned) {
+    throw new Error(
+      `assignResolvedAsset: aset scene "${sceneId}" ter-pin — auto-resolve tidak boleh menimpanya`,
+    );
+  }
+  scene.visual.assetId = assetId;
+  next.renderState.resolvedAssets[sceneId] = resolvedAssetSchema.parse(asset);
+  return next;
+};
+
 /** Drop derived entries for scenes that no longer exist (housekeeping). */
 export const pruneRenderState = (plan: ScenePlan): ScenePlan => {
   const next = structuredClone(plan);

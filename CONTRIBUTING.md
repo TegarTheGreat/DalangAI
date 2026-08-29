@@ -19,14 +19,14 @@ pnpm install
 | `pnpm test` | Unit test semua paket (tanpa browser, <5 dtk) |
 | `pnpm typecheck` | `tsc --noEmit` semua paket |
 | `pnpm lint` / `pnpm lint:fix` | Biome (lint + format + organize imports) |
-| `pnpm dalang validate\|still\|render …` | CLI (lihat README) |
+| `pnpm dalang validate\|generate\|still\|render …` | CLI (lihat README) |
 | `pnpm studio` | Remotion Studio dengan demo ter-stage |
 | `pnpm schema:gen` | Regenerasi artefak JSON Schema setelah mengubah skema |
 
 CI menjalankan lint → typecheck → test → validate → **render smoke** (2 frame
 nyata). Semuanya harus hijau sebelum merge.
 
-## Boundary paket (ADR-0001)
+## Boundary paket (ADR-0001, ADR-0006)
 
 - `core` hanya bergantung pada zod. Tidak boleh mengimpor paket lain.
 - Komponen React hanya hidup di `templates` (kelak `ui`). Logika yang bisa
@@ -34,8 +34,16 @@ nyata). Semuanya harus hijau sebelum merge.
   ber-unit-test; komponen tinggal me-render.
 - Renderer/CLI tidak pernah mengimpor komponen — hanya
   `@dalang/templates/paths` dan `/layout` (bebas-remotion).
-- `providers/*` (Fase 1) mengimplementasikan interface milik `pipeline`,
-  bukan sebaliknya.
+- `pipeline` mendeklarasikan ports (`TtsProvider`, `StockProvider`) dan TIDAK
+  mengimpor provider konkret; `providers` mengimplementasikan ports; CLI
+  (kelak agent runtime) yang merakit chain. Fetch/WebSocket selalu
+  injectable agar provider teruji tanpa jaringan.
+
+## Env & rahasia
+
+Salin `.env.example` → `.env` (gitignored; dimuat otomatis oleh CLI). Jangan
+pernah menaruh key di kode/fixture. Output pipeline (`.dalang/` di samping
+plan) juga gitignored.
 
 ## Konvensi kode
 
