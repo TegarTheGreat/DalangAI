@@ -2,6 +2,7 @@ import type { PatchOpInput, Scene, ScenePlan } from "@dalang/core";
 import { MOTIONS, VISUAL_TYPES } from "@dalang/core";
 import { useEffect, useState } from "react";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
+import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
 
 /**
@@ -350,6 +351,13 @@ export const InspectorPanel: React.FC = () => {
       <div className="panel-head">
         <h2>Properti</h2>
         {scene ? <span className="meta-line">{scene.visual.type}</span> : null}
+        <button
+          type="button"
+          className="mini drawer-close"
+          onClick={() => uiStore.closeInspector()}
+        >
+          Tutup
+        </button>
       </div>
       {plan && scene ? (
         <SceneForm plan={plan} scene={scene} index={index} />

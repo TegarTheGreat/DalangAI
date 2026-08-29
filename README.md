@@ -14,9 +14,10 @@ Keputusan teknis: [docs/decisions/](docs/decisions/)
 
 *Dalang Studio (`pnpm dalang studio proyekku/`), tata letak kelas editor:
 chat agent (kiri, bisa dilipat), preview instan `@remotion/player` (tengah),
-panel properti (kanan), dan timeline horizontal di dasar — klip selebar
-durasinya, playhead tersinkron dengan Player, klik klip untuk memilih dan
-melompat. Semua panel membaca-menulis scene-plan yang sama, sinkron via SSE.*
+panel properti (kanan), dan timeline NLE di dasar — ruler ber-scrub, klip
+filmstrip selebar durasinya, track suara, playhead tersinkron dua arah
+dengan Player. Semua panel membaca-menulis scene-plan yang sama, sinkron
+via SSE.*
 
 > *Gate Fase 0: apakah hasil render terlihat premium?*
 
@@ -77,10 +78,11 @@ Yang sudah berjalan:
 - **UI hybrid (Fase 3)** — `dalang studio`:
   - **Satu state, tata letak editor** (PRD §8): chat agent · preview
     `@remotion/player` (komponen video yang sama dengan renderer — patch →
-    preview < 1 dtk, tanpa render) · panel properti · **timeline horizontal**
-    ber-thumbnail dengan playhead tersinkron (klik klip = pilih + seek);
-    responsif (panel samping menjadi laci di layar sempit), ikon SVG tanpa
-    emoji.
+    preview < 1 dtk, tanpa render) · panel properti · **timeline NLE**:
+    ruler waktu yang bisa di-scrub, playhead tersinkron dua arah, klip
+    filmstrip selebar durasi (drag untuk susun ulang), track suara per
+    scene, transport play/jeda + zoom. Mobile-friendly (laci penuh layar,
+    Ekspor selalu terlihat, target sentuh besar); ikon SVG tanpa emoji.
   - **Edit manual = patch user**: narasi/durasi/visual/reorder/hapus/tambah,
     tombol kunci per scene — masuk patch log yang sama, bisa di-undo, dan
     terlihat agent di giliran berikutnya (§5.2 dua arah; edit file di luar

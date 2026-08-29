@@ -105,6 +105,18 @@ Dua koreksi arah pada hari yang sama, keduanya dari umpan balik langsung:
    (`pickDefaultModels`): environment user yang menentukan, bukan preferensi
    bawaan; UI menampilkan alasan apa adanya saat tidak ada/ambigu.
 
+3. **Timeline naik kelas jadi NLE mini + pass mobile** (iterasi umpan balik
+   kedua): ruler waktu ber-tick dengan SCRUB (pointer capture, jeda saat
+   digosok), playhead garis penuh menembus track, track VIDEO berupa klip
+   filmstrip (deretan `<Thumbnail>` nyata, lebar = durasi, pemetaan
+   piecewise-linear frame<->px di `timeline-scale.ts` yang diuji unit),
+   track SUARA per scene (blok bergaya gelombang: hijau ada, kuning
+   fallback, putus-putus belum), transport play/jeda + waktu + zoom slider,
+   drag-and-drop menyusun ulang klip (desktop; mobile pakai tombol Geser).
+   Mobile diverifikasi screenshot 390x844: panel samping jadi laci penuh
+   layar dengan tombol Tutup, toolbar header dapat digulir dengan tombol
+   Ekspor sticky, target sentuh diperbesar.
+
 ## Konsekuensi
 
 - (+) Fase 4 (tutorial) & preset baru otomatis muncul di studio — Player

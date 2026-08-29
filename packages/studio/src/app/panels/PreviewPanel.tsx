@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { IconDownload } from "../icons";
 import { planMeta } from "../model/plan-meta";
 import { playback } from "../playback";
+import { uiStore } from "../ui-state";
 import { useStudio } from "../use-studio";
 
 /**
@@ -33,11 +34,21 @@ export const PreviewPanel: React.FC = () => {
     const onFrame: CallbackListener<"frameupdate"> = (event) => {
       playback.setFrame(event.detail.frame);
     };
+    const onPlay = () => playback.setPlaying(true);
+    const onPause = () => playback.setPlaying(false);
     player.addEventListener("frameupdate", onFrame);
+    player.addEventListener("play", onPlay);
+    player.addEventListener("pause", onPause);
     const offSeek = playback.onSeek((frame) => player.seekTo(frame));
+    const offToggle = playback.onToggle(() => player.toggle());
+    const offPause = playback.onPause(() => player.pause());
     return () => {
       player.removeEventListener("frameupdate", onFrame);
+      player.removeEventListener("play", onPlay);
+      player.removeEventListener("pause", onPause);
       offSeek();
+      offToggle();
+      offPause();
     };
   }, [player]);
 
@@ -47,9 +58,23 @@ export const PreviewPanel: React.FC = () => {
         <div className="preview-empty">
           <p className="empty-title">Belum ada video.</p>
           <p>
-            Ceritakan brief videomu di panel chat — agent menyusun draft scene-plan
-            pertama, lalu semua bisa kamu ubah manual di sini.
+            Ceritakan brief videomu — agent menyusun draft scene-plan pertama, lalu semua
+            bisa kamu ubah manual di sini.
           </p>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              uiStore.openChat();
+              window.setTimeout(() => {
+                document
+                  .querySelector<HTMLTextAreaElement>(".chat-compose textarea")
+                  ?.focus();
+              }, 50);
+            }}
+          >
+            Mulai dari brief
+          </button>
         </div>
       </section>
     );

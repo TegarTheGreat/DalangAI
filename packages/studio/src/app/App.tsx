@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   IconChat,
   IconExport,
@@ -14,6 +13,7 @@ import { ChatPanel } from "./panels/ChatPanel";
 import { InspectorPanel } from "./panels/InspectorPanel";
 import { PreviewPanel } from "./panels/PreviewPanel";
 import { TimelineStrip } from "./panels/TimelineStrip";
+import { uiStore, useUi } from "./ui-state";
 import { studioClient, useStudio } from "./use-studio";
 
 /**
@@ -25,16 +25,19 @@ import { studioClient, useStudio } from "./use-studio";
 
 const formatUsd = (value: number): string => `$${value.toFixed(value < 0.1 ? 4 : 2)}`;
 
-const Header: React.FC<{
-  chatOpen: boolean;
-  inspectorOpen: boolean;
-  onToggleChat: () => void;
-  onToggleInspector: () => void;
-}> = ({ chatOpen, inspectorOpen, onToggleChat, onToggleInspector }) => {
+const BUSY_LABEL: Record<string, string> = {
+  chat: "Agent sedang bekerja",
+  tts: "Membuat suara",
+  assets: "Mengambil aset",
+  pick: "Memasang aset",
+};
+
+const Header: React.FC = () => {
   const { project } = useStudio();
+  const { chatOpen, inspectorOpen } = useUi();
   const plan = project?.plan ?? null;
   const busyLabel = project?.busy.mutation
-    ? `Sedang ${project.busy.mutation}…`
+    ? `${BUSY_LABEL[project.busy.mutation] ?? "Memproses"}…`
     : project?.busy.render
       ? `Merender ${project.busy.render}…`
       : null;
@@ -57,7 +60,7 @@ const Header: React.FC<{
         <button
           type="button"
           className={chatOpen ? "tool active" : "tool"}
-          onClick={onToggleChat}
+          onClick={() => uiStore.toggleChat()}
           title="Buka/tutup panel chat"
         >
           <IconChat />
@@ -66,7 +69,7 @@ const Header: React.FC<{
         <button
           type="button"
           className={inspectorOpen ? "tool active" : "tool"}
-          onClick={onToggleInspector}
+          onClick={() => uiStore.toggleInspector()}
           title="Buka/tutup panel properti"
         >
           <IconSliders />
@@ -213,8 +216,7 @@ const ConfirmDialog: React.FC = () => {
 
 export const App: React.FC = () => {
   const state = useStudio();
-  const [chatOpen, setChatOpen] = useState(true);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const { chatOpen, inspectorOpen } = useUi();
 
   if (state.fatal) {
     return (
@@ -234,12 +236,7 @@ export const App: React.FC = () => {
 
   return (
     <div className={shellClass}>
-      <Header
-        chatOpen={chatOpen}
-        inspectorOpen={inspectorOpen}
-        onToggleChat={() => setChatOpen((open) => !open)}
-        onToggleInspector={() => setInspectorOpen((open) => !open)}
-      />
+      <Header />
       <main className="workspace">
         <ChatPanel />
         <PreviewPanel />

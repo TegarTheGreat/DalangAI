@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../store";
+import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
 
 /**
@@ -95,6 +96,13 @@ export const ChatPanel: React.FC = () => {
             {project.models.orchestrator ?? "chat nonaktif"}
           </span>
         ) : null}
+        <button
+          type="button"
+          className="mini drawer-close"
+          onClick={() => uiStore.closeChat()}
+        >
+          Tutup
+        </button>
       </div>
       {chatDisabled ? (
         <div className="chat-disabled">
