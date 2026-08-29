@@ -76,7 +76,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         durationMs: Date.now() - startedAt,
         costUsd,
       });
-      activity(`  ⚙ ${name} ✓${costUsd > 0 ? ` (~$${costUsd.toFixed(4)})` : ""}`);
+      activity(`  · ${name} — ok${costUsd > 0 ? ` (~$${costUsd.toFixed(4)})` : ""}`);
       return output;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -88,7 +88,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         error: message,
         durationMs: Date.now() - startedAt,
       });
-      activity(`  ⚙ ${name} ✗ ${message}`);
+      activity(`  · ${name} — gagal: ${message}`);
       return { ok: false, error: message };
     }
   };

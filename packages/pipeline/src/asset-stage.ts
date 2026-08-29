@@ -224,7 +224,7 @@ export const runAssetStage = async ({
       durationMs,
     });
     if (usedFallback) {
-      log.warn(`  ⚠ ${scene.id}: aset dari provider fallback (${candidate.providerId})`);
+      log.warn(`  ! ${scene.id}: aset dari provider fallback (${candidate.providerId})`);
     }
     results.push({
       sceneId: scene.id,

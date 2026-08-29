@@ -36,6 +36,9 @@ jobs:
       - name: Unit tests (incl. JSON Schema up-to-date check)
         run: pnpm test
 
+      - name: Build app studio (Vite)
+        run: pnpm --filter @dalang/studio build
+
       - name: Validate demo scene-plan
         run: pnpm dalang validate examples/borobudur-60s/plan.json
 

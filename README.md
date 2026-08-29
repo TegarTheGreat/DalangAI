@@ -5,10 +5,16 @@ memilih visual, menyusun timeline, dan me-render; manusia sebagai co-pilot yang
 bisa mengarahkan dan mengambil alih elemen mana pun. "Cursor untuk video",
 bukan "Midjourney untuk video".
 
-📄 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
+Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 2 selesai ✅ (agent) · Fase 1 ✅ · Fase 0 ✅
+## Status: Fase 3 (UI hybrid) selesai · Fase 2, 1, 0 selesai
+
+![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
+
+*Dalang Studio (`pnpm dalang studio proyekku/`): chat agent di kiri, preview
+instan `@remotion/player` di tengah, timeline + inspector edit manual di
+kanan — semuanya membaca-menulis scene-plan yang sama, sinkron via SSE.*
 
 > *Gate Fase 0: apakah hasil render terlihat premium?*
 
@@ -40,7 +46,7 @@ Yang sudah berjalan:
 - **Pipeline deterministik (Fase 1)** — `dalang generate`:
   - **TTS per scene** dengan chain fallback (ElevenLabs → Edge TTS → silence
     offline) dan **word-timestamps native** → caption karaoke sinkron; setiap
-    degradasi ditandai `⚠ fallback` per scene.
+    degradasi ditandai `fallback` per scene.
   - **Asset resolve** Pexels/Pixabay (foto+video, orientasi ikut aspect
     ratio, seleksi rendisi deterministik) + **metadata lisensi per aset**
     (audit-ready, R-10).
@@ -63,7 +69,23 @@ Yang sudah berjalan:
   - **Sadar editan manual**: file plan yang diubah di luar chat terdeteksi
     per giliran dan disuntikkan ke konteks agent (PRD §5.2); riwayat +
     undo/redo (`/undo`, `/redo`) bertahan lintas restart.
-- **Kualitas terjaga otomatis**: 181 unit test (kontrak lock/pin/undo, timing
+- **UI hybrid (Fase 3)** — `dalang studio`:
+  - **3 panel satu state** (PRD §8): chat agent · preview `@remotion/player`
+    (komponen video yang sama dengan renderer — patch → preview < 1 dtk,
+    tanpa render) · timeline ber-thumbnail + inspector.
+  - **Edit manual = patch user**: narasi/durasi/visual/reorder/hapus/tambah,
+    tombol kunci per scene — masuk patch log yang sama, bisa di-undo, dan
+    terlihat agent di giliran berikutnya (§5.2 dua arah; edit file di luar
+    UI pun terdeteksi).
+  - **Grid kandidat aset** → pilih manual = aset terpasang & **ter-pin**;
+    status pipeline per scene (belum/proses/ok/fallback/error) live di
+    timeline; **estimasi biaya sebelum aksi mahal** + dialog konfirmasi
+    (pola 428) dan approval gate agent yang dijembatani ke dialog UI.
+  - Server single-writer (Hono + SSE) memakai ulang sesi/guardrails/stage
+    yang sama dengan CLI; media tersaji traversal-safe + Range 206
+    (ADR-0010). Tanpa API key, chat nonaktif dengan alasan jelas — panel
+    manual tetap berfungsi penuh.
+- **Kualitas terjaga otomatis**: 204 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -76,11 +98,12 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 181 unit test (6 paket) — tanpa browser & jaringan
+pnpm test                 # 204 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
-pnpm dalang chat proyekku/            # chat agent (buat/revisi video) — Fase 2
+pnpm dalang studio proyekku/          # UI hybrid 3 panel di browser — Fase 3
+pnpm dalang chat proyekku/            # chat agent di terminal — Fase 2
 pnpm dalang validate examples/borobudur-60s/plan.json
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
@@ -88,8 +111,13 @@ pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
 pnpm dalang still    examples/borobudur-60s/plan.json -t 8 -t 29 -t 44 -o out
 pnpm dalang log      proyekku/        # garis waktu pipeline + agent + biaya
 
-pnpm studio               # Remotion Studio (preview + scrub timeline)
+pnpm studio:remotion      # Remotion Studio (alat pengembang preset/template)
 ```
+
+`dalang studio` menyajikan app yang sudah ter-build
+(`pnpm --filter @dalang/studio build`, otomatis tersedia setelah clone +
+build sekali). Untuk pengembangan UI dengan HMR: jalankan `dalang studio` di
+satu terminal dan `pnpm --filter @dalang/studio dev` di terminal lain.
 
 API key provider (opsional — semuanya punya jalur offline/fallback): salin
 `.env.example` → `.env`. Tanpa key, TTS memakai provider `silence`
@@ -110,9 +138,10 @@ packages/
   pipeline/   stages deterministik + ledger SQLite + content-hash + ports provider
   providers/  adapter TTS (ElevenLabs/Edge/silence) & stock (Pexels/Pixabay)
   agent/      runtime agent: AI SDK v7, registry models.dev, tools §6.2, guardrails
+  studio/     UI hybrid 3 panel (Vite+React+Player) + server Hono/SSE single-writer
   templates/  preset Remotion terkurasi (documentary-01) + font vendored
   renderer/   RenderTarget lokal: staging, bundling, profil draft|final
-  cli/        dalang chat | validate | generate | still | render | log
+  cli/        dalang studio | chat | validate | generate | still | render | log
 examples/
   borobudur-60s/   plan.json demo + aset ilustrasi lokal (lisensi tercatat)
 docs/
@@ -147,8 +176,12 @@ Kontrak-kontrak penting yang SUDAH ditegakkan kode (bukan prompt):
       `dalang chat` dengan kesadaran editan manual & undo/redo. *Catatan:
       perilaku live dengan model nyata butuh API key pemilik repo — loop
       teruji penuh dengan mock terskrip.*
-- [ ] **Fase 3 — UI hybrid**: 3 panel, @remotion/player, timeline manual,
-      diff & undo, status pipeline.
+- [x] **Fase 3 — UI hybrid**: `dalang studio` — 3 panel, @remotion/player,
+      edit manual + lock + reorder, diff & undo, status pipeline per scene,
+      grid aset ter-pin, approval & estimasi biaya di UI (ADR-0010).
+      *Catatan: giliran agent live di UI & grid aset dengan provider nyata
+      menunggu API key pemilik repo — jalur HTTP-nya teruji penuh dengan
+      mock/fake.*
 - [ ] **Fase 4 — Mode tutorial** (annotations sudah tervalidasi di skema),
       preset tambahan.
 - [ ] **Fase 5 — RenderTarget cloud**, publish integrations.

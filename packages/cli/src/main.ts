@@ -18,6 +18,7 @@ import {
 import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
+import { registerStudioCommand } from "./studio";
 
 /**
  * `dalang` — CLI: validate, generate (deterministic pipeline, Fase 1), and
@@ -91,8 +92,8 @@ const printPlanSummary = (plan: ScenePlan): void => {
       durasi: formatSec(resolveSceneDurationSec(scene, plan)),
       suara: audio
         ? audio.fallbackQuality
-          ? "⚠ fallback"
-          : "✓"
+          ? "fallback"
+          : "ok"
         : scene.narration.trim()
           ? "—"
           : "",
@@ -101,7 +102,7 @@ const printPlanSummary = (plan: ScenePlan): void => {
         (scene.visual.type === "template-anim" || scene.visual.type === "solid"
           ? "(template)"
           : "(belum di-resolve)"),
-      lock: scene.locked ? "🔒" : "",
+      lock: scene.locked ? "terkunci" : "",
     };
   });
   console.table(rows);
@@ -129,7 +130,7 @@ program
   .description("Validasi scene-plan terhadap skema v0 dan tampilkan ringkasan")
   .action((planPath: string) => {
     const plan = loadPlan(resolve(planPath));
-    console.log("✓ Scene-plan valid (skema v0).");
+    console.log("Scene-plan valid (skema v0).");
     printPlanSummary(plan);
   });
 
@@ -184,7 +185,7 @@ program
       process.stdout.write("\n");
       if (bundleFromCache) console.log("  (bundle cache: hit)");
       for (const output of outputs) {
-        console.log(`✓ frame ${output.frame} → ${output.outputLocation}`);
+        console.log(`frame ${output.frame} → ${output.outputLocation}`);
       }
     },
   );
@@ -234,7 +235,7 @@ program
 
       const elapsed = (Date.now() - startedAt) / 1000;
       console.log(
-        `✓ ${result.outputLocation}\n` +
+        `selesai: ${result.outputLocation}\n` +
           `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
           `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec(elapsed)}` +
           `${result.bundleFromCache ? " · bundle cache: hit" : ""}`,
@@ -243,10 +244,10 @@ program
   );
 
 const STATUS_ICON: Record<SceneStageResult["status"], string> = {
-  done: "✓",
-  cached: "•",
-  skipped: "–",
-  error: "✗",
+  done: "ok",
+  cached: "cache",
+  skipped: "lewat",
+  error: "GAGAL",
 };
 
 const printStageResults = (title: string, results: SceneStageResult[]): void => {
@@ -312,7 +313,7 @@ program
       if (summary.errorCount > 0) {
         process.exitCode = 1;
         console.error(
-          `✗ ${summary.errorCount} scene gagal — lihat detail di atas (ledger: .dalang/pipeline.db)`,
+          `GAGAL: ${summary.errorCount} scene bermasalah — lihat detail di atas (ledger: .dalang/pipeline.db)`,
         );
         return;
       }
@@ -330,7 +331,7 @@ program
         });
         process.stdout.write("\n");
         console.log(
-          `✓ ${result.outputLocation}\n` +
+          `selesai: ${result.outputLocation}\n` +
             `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
             `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec((Date.now() - startedAt) / 1000)}`,
         );
@@ -340,8 +341,9 @@ program
 
 registerChatCommand(program);
 registerLogCommand(program);
+registerStudioCommand(program);
 
 program.parseAsync().catch((error: unknown) => {
-  console.error(`\n✗ ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`\nGAGAL: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });

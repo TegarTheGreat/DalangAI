@@ -14,7 +14,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "schema:gen": "tsx packages/core/scripts/generate-schema.ts",
-    "studio": "pnpm --filter @dalang/templates studio"
+    "studio:remotion": "pnpm --filter @dalang/templates studio"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.11",

@@ -122,13 +122,13 @@ export const registerChatCommand = (program: Command): void => {
           }`;
           if (!rl) {
             if (options.yes) {
-              console.log(`  ⚠ ${detail} — disetujui otomatis (--yes)`);
+              console.log(`  [izin] ${detail} — disetujui otomatis (--yes)`);
               return true;
             }
-            console.log(`  ⚠ ${detail} — DITOLAK (mode --once tanpa --yes)`);
+            console.log(`  [izin] ${detail} — DITOLAK (mode --once tanpa --yes)`);
             return false;
           }
-          const answer = await rl.question(`  ⚠ ${detail}. Lanjutkan? (y/T) `);
+          const answer = await rl.question(`  [izin] ${detail}. Lanjutkan? (y/T) `);
           return answer.trim().toLowerCase().startsWith("y");
         };
 
@@ -190,16 +190,12 @@ export const registerChatCommand = (program: Command): void => {
             }
             if (line === "/undo") {
               const undone = session.undo();
-              console.log(
-                undone ? `↶ dibatalkan: ${undone}` : "Tidak ada yang bisa di-undo.",
-              );
+              console.log(undone ? `undo: ${undone}` : "Tidak ada yang bisa di-undo.");
               continue;
             }
             if (line === "/redo") {
               const redone = session.redo();
-              console.log(
-                redone ? `↷ diulang: ${redone}` : "Tidak ada yang bisa di-redo.",
-              );
+              console.log(redone ? `redo: ${redone}` : "Tidak ada yang bisa di-redo.");
               continue;
             }
             if (line === "/biaya") {
@@ -249,7 +245,7 @@ export const registerLogCommand = (program: Command): void => {
                 stage: run.stage,
                 status: run.status,
                 provider: run.provider ?? "",
-                fallback: run.fallback ? "⚠" : "",
+                fallback: run.fallback ? "ya" : "",
                 biayaUsd: run.costUsd ?? "",
                 error: run.error ? run.error.slice(0, 40) : "",
               })),

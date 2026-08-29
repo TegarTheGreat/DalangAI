@@ -8,4 +8,4 @@ const out = fileURLToPath(
 );
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(scenePlanJsonSchema(), null, 2)}\n`);
-console.log(`✓ JSON Schema ditulis ke ${out}`);
+console.log(`JSON Schema ditulis ke ${out}`);

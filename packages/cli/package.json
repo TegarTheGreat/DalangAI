@@ -16,6 +16,7 @@
     "@dalang/pipeline": "workspace:*",
     "@dalang/providers": "workspace:*",
     "@dalang/renderer": "workspace:*",
+    "@dalang/studio": "workspace:*",
     "@dalang/templates": "workspace:*",
     "commander": "15.0.0"
   },

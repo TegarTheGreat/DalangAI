@@ -39,7 +39,7 @@ export const runAgentTurn = async ({
   const externalNote = session.detectExternalEdit();
   const contextBlock = [
     "[KEADAAN PROYEK — disusun otomatis oleh sistem, bukan ditulis user]",
-    ...(externalNote ? [`⚠ ${externalNote}`] : []),
+    ...(externalNote ? [`PERHATIAN: ${externalNote}`] : []),
     session.summary(),
   ].join("\n");
 

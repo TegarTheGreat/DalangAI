@@ -141,6 +141,18 @@ export class ProjectSession {
     return { summary: applied.summary };
   }
 
+  /** Terapkan patch USER (dari UI/Fase 3) — lock tidak menghalangi user. */
+  applyUserPatch(ops: PatchOpInput[]): { summary: string } {
+    if (!this.plan) {
+      throw new Error("Belum ada scene-plan — proyek masih kosong");
+    }
+    const { plan, applied } = applyPatch(this.plan, ops, { origin: "user" });
+    this.plan = plan;
+    this.patchLog.record(applied);
+    this.persist();
+    return { summary: applied.summary };
+  }
+
   /** Inisialisasi plan baru dari draft agent (hanya saat proyek kosong). */
   initializePlan(input: ScenePlanInput): ScenePlan {
     if (this.plan) {

@@ -4,6 +4,7 @@ import {
   getScene,
   type ResolvedAsset,
   type ScenePlan,
+  setResolvedAsset,
 } from "@dalang/core";
 import type { PipelineDb } from "./db";
 import { atomicWriteFile } from "./fs-utils";
@@ -18,7 +19,10 @@ import type { ProjectPaths } from "./project-paths";
  * R-4) di luar jalur auto-resolve stage.
  *
  * Invarian yang sama tetap berlaku: scene terkunci ditolak di sini; scene
- * pinned ditolak oleh core.assignResolvedAsset.
+ * pinned ditolak oleh core.assignResolvedAsset — KECUALI `allowPinned`
+ * (pilihan user dari UI boleh mengganti pilihannya sendiri; renderState
+ * ditulis langsung dan `visual.assetId`/`pinned` diserahkan ke patch user
+ * `replaceAsset` milik pemanggil, PRD §8.2).
  */
 export const materializeCandidate = async ({
   paths,
@@ -27,6 +31,7 @@ export const materializeCandidate = async ({
   sceneId,
   provider,
   candidate,
+  allowPinned = false,
 }: {
   paths: ProjectPaths;
   plan: ScenePlan;
@@ -34,6 +39,7 @@ export const materializeCandidate = async ({
   sceneId: string;
   provider: StockProvider;
   candidate: StockCandidate;
+  allowPinned?: boolean;
 }): Promise<{ plan: ScenePlan; asset: ResolvedAsset }> => {
   const scene = getScene(plan, sceneId);
   if (!scene) throw new Error(`Scene "${sceneId}" tidak ditemukan`);
@@ -63,7 +69,9 @@ export const materializeCandidate = async ({
       width: candidate.width,
       height: candidate.height,
     };
-    const next = assignResolvedAsset(plan, sceneId, candidate.assetId, asset);
+    const next = allowPinned
+      ? setResolvedAsset(plan, sceneId, asset)
+      : assignResolvedAsset(plan, sceneId, candidate.assetId, asset);
 
     db.finishRun(plan.projectId, sceneId, "assets", {
       provider: candidate.providerId,

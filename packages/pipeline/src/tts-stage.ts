@@ -160,7 +160,7 @@ export const runTtsStage = async ({
         });
         if (fallback) {
           log.warn(
-            `  ⚠ ${scene.id}: suara memakai ${provider.label}` +
+            `  ! ${scene.id}: suara memakai ${provider.label}` +
               `${index > 0 ? ` (fallback dari ${providers[0]!.label})` : ""} — ditandai fallbackQuality`,
           );
         }
