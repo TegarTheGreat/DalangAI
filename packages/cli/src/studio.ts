@@ -1,9 +1,8 @@
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
-  DEFAULT_ORCHESTRATOR_MODEL,
-  DEFAULT_VOLUME_MODEL,
   loadModelRegistry,
+  pickDefaultModels,
   type ResolvedModel,
   resolveModel,
 } from "@dalang/agent";
@@ -44,24 +43,30 @@ export const registerStudioCommand = (program: Command): void => {
           existsSync(abs) && statSync(abs).isDirectory() ? join(abs, "plan.json") : abs;
 
         const registry = await loadModelRegistry();
-        const orchestratorKey =
-          options.model ?? process.env.DALANG_MODEL ?? DEFAULT_ORCHESTRATOR_MODEL;
-        const volumeKey =
-          options.modelVolume ?? process.env.DALANG_MODEL_VOLUME ?? DEFAULT_VOLUME_MODEL;
-        // Chat butuh model; panel manual tidak. Tanpa API key, studio tetap
-        // hidup dengan chat nonaktif + alasan yang tampil di UI.
+        // Netral vendor: environment user yang menentukan (API key terpasang /
+        // DALANG_MODEL). Chat butuh model; panel manual tidak — tanpa pilihan
+        // yang sah, studio tetap hidup dengan chat nonaktif + alasannya.
+        const defaults = pickDefaultModels(process.env, registry);
+        const orchestratorKey = options.model ?? defaults.orchestrator;
+        const volumeKey = options.modelVolume ?? defaults.volume;
         let orchestrator: ResolvedModel | undefined;
         let chatDisabledReason: string | undefined;
-        try {
-          orchestrator = resolveModel(orchestratorKey, { registry });
-        } catch (error) {
-          chatDisabledReason = error instanceof Error ? error.message : String(error);
+        if (!orchestratorKey) {
+          chatDisabledReason = defaults.reason;
+        } else {
+          try {
+            orchestrator = resolveModel(orchestratorKey, { registry });
+          } catch (error) {
+            chatDisabledReason = error instanceof Error ? error.message : String(error);
+          }
         }
         let volumeModel: ResolvedModel | undefined;
-        try {
-          volumeModel = resolveModel(volumeKey, { registry });
-        } catch {
-          // tier-volume opsional — researchTopic/analyzeImage akan menolak rapi
+        if (volumeKey) {
+          try {
+            volumeModel = resolveModel(volumeKey, { registry });
+          } catch {
+            // tier-volume opsional — researchTopic/analyzeImage akan menolak rapi
+          }
         }
 
         const studio = await startStudioServer({

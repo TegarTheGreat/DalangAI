@@ -12,9 +12,11 @@ Keputusan teknis: [docs/decisions/](docs/decisions/)
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
-*Dalang Studio (`pnpm dalang studio proyekku/`): chat agent di kiri, preview
-instan `@remotion/player` di tengah, timeline + inspector edit manual di
-kanan — semuanya membaca-menulis scene-plan yang sama, sinkron via SSE.*
+*Dalang Studio (`pnpm dalang studio proyekku/`), tata letak kelas editor:
+chat agent (kiri, bisa dilipat), preview instan `@remotion/player` (tengah),
+panel properti (kanan), dan timeline horizontal di dasar — klip selebar
+durasinya, playhead tersinkron dengan Player, klik klip untuk memilih dan
+melompat. Semua panel membaca-menulis scene-plan yang sama, sinkron via SSE.*
 
 > *Gate Fase 0: apakah hasil render terlihat premium?*
 
@@ -60,9 +62,12 @@ Yang sudah berjalan:
   - Chat dengan agent "dalang" di atas proyek: brief → riset (tier-volume) →
     `writeScenePlan` → TTS/aset → preview; revisi lewat **patch kecil**
     (`applyPatch` memakai kontrak §5.2 apa adanya — lock ditegakkan core).
-  - **Model-agnostic** (Vercel AI SDK v7 + registry models.dev dengan cache
-    harian & snapshot offline): default `anthropic/claude-opus-5` +
-    `anthropic/claude-haiku-4-5` (dua tingkat, §6.4), override `--model`.
+  - **Model-agnostic & netral vendor** (Vercel AI SDK v7 + registry
+    models.dev): default TIDAK memihak provider — mengikuti API key yang
+    terpasang di environment-mu (anthropic / google / openai /
+    openai-compatible); model dipilih dari data registry, override
+    `--model` / `DALANG_MODEL`. Lebih dari satu key = wajib memilih
+    eksplisit (dua tingkat, §6.4).
   - **Guardrails di kode** (§6.3): step cap 15, budget per giliran & per
     proyek, approval gate utk renderFinal/TTS massal (non-interaktif =
     tolak default), semua tool call ter-log (`dalang log`).
@@ -70,9 +75,12 @@ Yang sudah berjalan:
     per giliran dan disuntikkan ke konteks agent (PRD §5.2); riwayat +
     undo/redo (`/undo`, `/redo`) bertahan lintas restart.
 - **UI hybrid (Fase 3)** — `dalang studio`:
-  - **3 panel satu state** (PRD §8): chat agent · preview `@remotion/player`
-    (komponen video yang sama dengan renderer — patch → preview < 1 dtk,
-    tanpa render) · timeline ber-thumbnail + inspector.
+  - **Satu state, tata letak editor** (PRD §8): chat agent · preview
+    `@remotion/player` (komponen video yang sama dengan renderer — patch →
+    preview < 1 dtk, tanpa render) · panel properti · **timeline horizontal**
+    ber-thumbnail dengan playhead tersinkron (klik klip = pilih + seek);
+    responsif (panel samping menjadi laci di layar sempit), ikon SVG tanpa
+    emoji.
   - **Edit manual = patch user**: narasi/durasi/visual/reorder/hapus/tambah,
     tombol kunci per scene — masuk patch log yang sama, bisa di-undo, dan
     terlihat agent di giliran berikutnya (§5.2 dua arah; edit file di luar

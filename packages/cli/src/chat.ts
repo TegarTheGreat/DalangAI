@@ -5,11 +5,10 @@ import {
   type AgentDeps,
   AgentEventLog,
   type ApprovalFn,
-  DEFAULT_ORCHESTRATOR_MODEL,
-  DEFAULT_VOLUME_MODEL,
   Guardrails,
   loadModelRegistry,
   ProjectSession,
+  pickDefaultModels,
   type ResolvedModel,
   resolveModel,
   runAgentTurn,
@@ -89,19 +88,25 @@ export const registerChatCommand = (program: Command): void => {
       ) => {
         const planPath = resolvePlanPath(proyek);
         const registry = await loadModelRegistry();
-        const orchestratorKey =
-          options.model ?? process.env.DALANG_MODEL ?? DEFAULT_ORCHESTRATOR_MODEL;
-        const volumeKey =
-          options.modelVolume ?? process.env.DALANG_MODEL_VOLUME ?? DEFAULT_VOLUME_MODEL;
+        // Netral vendor: environment user yang menentukan (API key terpasang /
+        // DALANG_MODEL) — bukan preferensi bawaan provider mana pun.
+        const defaults = pickDefaultModels(process.env, registry);
+        const orchestratorKey = options.model ?? defaults.orchestrator;
+        if (!orchestratorKey) {
+          throw new Error(defaults.reason);
+        }
+        const volumeKey = options.modelVolume ?? defaults.volume;
 
         const orchestrator = resolveModel(orchestratorKey, { registry });
         let volumeModel: ResolvedModel | undefined;
-        try {
-          volumeModel = resolveModel(volumeKey, { registry });
-        } catch (error) {
-          console.warn(
-            `  (model volume tidak tersedia: ${error instanceof Error ? error.message : error})`,
-          );
+        if (volumeKey) {
+          try {
+            volumeModel = resolveModel(volumeKey, { registry });
+          } catch (error) {
+            console.warn(
+              `  (model volume tidak tersedia: ${error instanceof Error ? error.message : error})`,
+            );
+          }
         }
         if (orchestrator.info && !orchestrator.info.toolCall) {
           throw new Error(

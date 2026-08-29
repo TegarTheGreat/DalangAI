@@ -1,3 +1,4 @@
+export * from "./models/defaults";
 export * from "./models/registry";
 export * from "./models/resolve";
 export * from "./models/snapshot";

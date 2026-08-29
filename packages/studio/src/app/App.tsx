@@ -1,99 +1,149 @@
+import { useState } from "react";
+import {
+  IconChat,
+  IconExport,
+  IconImage,
+  IconMic,
+  IconPlay,
+  IconRedo,
+  IconSliders,
+  IconSpinner,
+  IconUndo,
+} from "./icons";
 import { ChatPanel } from "./panels/ChatPanel";
+import { InspectorPanel } from "./panels/InspectorPanel";
 import { PreviewPanel } from "./panels/PreviewPanel";
-import { ScenesPanel } from "./panels/ScenesPanel";
+import { TimelineStrip } from "./panels/TimelineStrip";
 import { studioClient, useStudio } from "./use-studio";
 
 /**
- * Kerangka 3 panel (PRD §8.1): Chat — Preview — Timeline/Inspector.
- * Header membawa aksi global: undo/redo, generate, render, biaya proyek.
+ * Tata letak kelas editor video (pola CapCut/Premiere): header aksi global,
+ * chat kiri (bisa dilipat), panggung preview di tengah, panel properti kanan,
+ * timeline horizontal di dasar. Semua panel membaca-menulis satu project
+ * state (PRD §8.1).
  */
 
 const formatUsd = (value: number): string => `$${value.toFixed(value < 0.1 ? 4 : 2)}`;
 
-const Header: React.FC = () => {
-  const state = useStudio();
-  const project = state.project;
+const Header: React.FC<{
+  chatOpen: boolean;
+  inspectorOpen: boolean;
+  onToggleChat: () => void;
+  onToggleInspector: () => void;
+}> = ({ chatOpen, inspectorOpen, onToggleChat, onToggleInspector }) => {
+  const { project } = useStudio();
   const plan = project?.plan ?? null;
   const busyLabel = project?.busy.mutation
-    ? `sedang bekerja: ${project.busy.mutation}`
+    ? `Sedang ${project.busy.mutation}…`
     : project?.busy.render
-      ? `merender ${project.busy.render}`
+      ? `Merender ${project.busy.render}…`
       : null;
 
   return (
     <header className="topbar">
-      <div className="brand">
+      <div className="topbar-left">
         <span className="brand-mark">Dalang</span>
         <span className="brand-sub">Studio</span>
         {plan ? <span className="project-title">{plan.meta.title}</span> : null}
-        {busyLabel ? <span className="busy-chip">{busyLabel}</span> : null}
+        {busyLabel ? (
+          <span className="busy-chip">
+            <IconSpinner />
+            {busyLabel}
+          </span>
+        ) : null}
       </div>
+
       <div className="topbar-actions">
         <button
           type="button"
-          className="ghost"
-          disabled={!project?.patchLog.canUndo}
-          onClick={() => void studioClient.undo()}
-          title="Undo perubahan terakhir"
+          className={chatOpen ? "tool active" : "tool"}
+          onClick={onToggleChat}
+          title="Buka/tutup panel chat"
         >
-          Undo
+          <IconChat />
+          <span>Chat</span>
         </button>
         <button
           type="button"
-          className="ghost"
-          disabled={!project?.patchLog.canRedo}
-          onClick={() => void studioClient.redo()}
-          title="Redo"
+          className={inspectorOpen ? "tool active" : "tool"}
+          onClick={onToggleInspector}
+          title="Buka/tutup panel properti"
         >
-          Redo
+          <IconSliders />
+          <span>Properti</span>
         </button>
         <span className="divider" />
         <button
           type="button"
-          className="ghost"
+          className="tool"
+          disabled={!project?.patchLog.canUndo}
+          onClick={() => void studioClient.undo()}
+          title="Batalkan perubahan terakhir"
+        >
+          <IconUndo />
+          <span>Undo</span>
+        </button>
+        <button
+          type="button"
+          className="tool"
+          disabled={!project?.patchLog.canRedo}
+          onClick={() => void studioClient.redo()}
+          title="Ulangi perubahan"
+        >
+          <IconRedo />
+          <span>Redo</span>
+        </button>
+        <span className="divider" />
+        <button
+          type="button"
+          className="tool"
           disabled={!plan || project?.busy.mutation !== null}
           onClick={() => void studioClient.runTts()}
           title={
             project?.ttsEstimate
-              ? `TTS ${project.ttsEstimate.scenes} scene · ${project.ttsEstimate.chars} karakter${project.ttsEstimate.usd ? ` · ~${formatUsd(project.ttsEstimate.usd)}` : ""}`
+              ? `Buat suara ${project.ttsEstimate.scenes} scene (${project.ttsEstimate.chars} karakter)${project.ttsEstimate.usd ? ` | ~${formatUsd(project.ttsEstimate.usd)}` : ""}`
               : "Sintesis voiceover semua scene"
           }
         >
-          Voiceover
+          <IconMic />
+          <span>Suara</span>
         </button>
         <button
           type="button"
-          className="ghost"
+          className="tool"
           disabled={!plan || project?.busy.mutation !== null}
           onClick={() => void studioClient.runAssets()}
-          title="Resolve aset stock yang belum terisi"
+          title="Isi otomatis aset stock yang masih kosong"
         >
-          Aset
+          <IconImage />
+          <span>Aset</span>
         </button>
         <span className="divider" />
-        <button
-          type="button"
-          className="ghost"
-          disabled={!plan || project?.busy.render !== null}
-          onClick={() => void studioClient.startRender("draft")}
-          title="Render draft 540p (cepat)"
-        >
-          Render draft
-        </button>
-        <button
-          type="button"
-          className="primary"
-          disabled={!plan || project?.busy.render !== null}
-          onClick={() => void studioClient.startRender("final")}
-          title="Render final 1080p — butuh konfirmasi"
-        >
-          Render final
-        </button>
         {project ? (
           <span className="cost-chip" title="Total biaya tercatat proyek (LLM + TTS)">
             {formatUsd(project.totalCostUsd)}
           </span>
         ) : null}
+        <button
+          type="button"
+          className="secondary with-icon"
+          disabled={!plan || project?.busy.render !== null}
+          onClick={() => void studioClient.startRender("draft")}
+          title="Render cepat 540p untuk dicek"
+        >
+          <IconPlay />
+          Draft
+        </button>
+        <button
+          type="button"
+          className="primary with-icon"
+          disabled={!plan || project?.busy.render !== null}
+          onClick={() => void studioClient.startRender("final")}
+          title="Render final 1080p (butuh konfirmasi)"
+        >
+          <IconExport />
+          Ekspor
+        </button>
       </div>
     </header>
   );
@@ -105,11 +155,11 @@ const ApprovalDialog: React.FC = () => {
   return (
     <div className="dialog-backdrop">
       <div className="dialog">
-        <h3>Agent minta izin</h3>
+        <h3>Agent meminta izin</h3>
         <p>{approval.detail}</p>
         {approval.estimatedUsd !== null ? (
           <p className="dialog-cost">
-            Estimasi biaya: ~{formatUsd(approval.estimatedUsd)}
+            Estimasi biaya ~{formatUsd(approval.estimatedUsd)}
           </p>
         ) : null}
         <div className="dialog-actions">
@@ -142,9 +192,7 @@ const ConfirmDialog: React.FC = () => {
         <h3>Konfirmasi aksi</h3>
         <p>{confirm.detail}</p>
         {confirm.estimatedUsd !== null ? (
-          <p className="dialog-cost">
-            Estimasi biaya: ~{formatUsd(confirm.estimatedUsd)}
-          </p>
+          <p className="dialog-cost">Estimasi biaya ~{formatUsd(confirm.estimatedUsd)}</p>
         ) : null}
         <div className="dialog-actions">
           <button
@@ -165,25 +213,39 @@ const ConfirmDialog: React.FC = () => {
 
 export const App: React.FC = () => {
   const state = useStudio();
+  const [chatOpen, setChatOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   if (state.fatal) {
     return (
       <div className="boot-error">
         <h2>Studio tidak bisa memuat proyek</h2>
         <p>{state.fatal}</p>
-        <p>Pastikan server berjalan: `pnpm dalang studio &lt;folder-proyek&gt;`</p>
+        <p>Pastikan server berjalan: pnpm dalang studio &lt;folder-proyek&gt;</p>
       </div>
     );
   }
 
+  const shellClass = [
+    "shell",
+    chatOpen ? "chat-open" : "chat-closed",
+    inspectorOpen ? "inspector-open" : "inspector-closed",
+  ].join(" ");
+
   return (
-    <div className="shell">
-      <Header />
-      <main className="panels">
+    <div className={shellClass}>
+      <Header
+        chatOpen={chatOpen}
+        inspectorOpen={inspectorOpen}
+        onToggleChat={() => setChatOpen((open) => !open)}
+        onToggleInspector={() => setInspectorOpen((open) => !open)}
+      />
+      <main className="workspace">
         <ChatPanel />
         <PreviewPanel />
-        <ScenesPanel />
+        <InspectorPanel />
       </main>
+      <TimelineStrip />
       <ApprovalDialog />
       <ConfirmDialog />
       {state.toast ? <div className="toast">{state.toast}</div> : null}

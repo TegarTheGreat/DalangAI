@@ -149,6 +149,4 @@ export const resolveModel = (
   }
 };
 
-/** Default dua tingkat (PRD §6.4); override via env/flag. */
-export const DEFAULT_ORCHESTRATOR_MODEL = "anthropic/claude-opus-5";
-export const DEFAULT_VOLUME_MODEL = "anthropic/claude-haiku-4-5";
+// Default dua tingkat (PRD §6.4) dipilih netral-vendor — lihat defaults.ts.

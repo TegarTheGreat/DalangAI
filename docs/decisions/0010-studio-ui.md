@@ -89,6 +89,22 @@ panel tampil, kunci scene dari inspector muncul seketika di timeline
 (chip terkunci + toast), thumbnail per scene ter-render. *Belum dicoba: giliran agent
 live (butuh API key), grid aset dengan provider nyata (egress terblokir).*
 
+## Revisi (2026-08-29, umpan balik owner)
+
+Dua koreksi arah pada hari yang sama, keduanya dari umpan balik langsung:
+
+1. **Tanpa emoji, dan tampilan harus kelas editor** — layout dirombak dari
+   "3 kolom kartu" ke pola editor video (CapCut/Premiere-like): timeline
+   HORIZONTAL di dasar (lebar klip = durasi, thumbnail nyata, dot status),
+   panggung preview di tengah, panel properti tergrup di kanan, chat kiri
+   yang bisa dilipat, ikon SVG + label (tanpa satu pun emoji — kini konvensi
+   proyek). Playhead dua arah: `frameupdate` Player → bus playback → sorot
+   klip aktif; klik klip → `seekTo` awal scene. Bus playback terpisah dari
+   store agar denyut 30x/dtk hanya me-render timeline.
+2. **Default model netral vendor** — lihat revisi ADR-0009
+   (`pickDefaultModels`): environment user yang menentukan, bukan preferensi
+   bawaan; UI menampilkan alasan apa adanya saat tidak ada/ambigu.
+
 ## Konsekuensi
 
 - (+) Fase 4 (tutorial) & preset baru otomatis muncul di studio — Player

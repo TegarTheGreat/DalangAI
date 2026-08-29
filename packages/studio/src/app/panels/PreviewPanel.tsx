@@ -1,20 +1,22 @@
 import { parseScenePlan } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
-import { Player } from "@remotion/player";
-import { useMemo } from "react";
+import { type CallbackListener, Player, type PlayerRef } from "@remotion/player";
+import { useEffect, useMemo, useState } from "react";
+import { IconDownload } from "../icons";
 import { planMeta } from "../model/plan-meta";
+import { playback } from "../playback";
 import { useStudio } from "../use-studio";
 
 /**
- * Panel tengah: preview instan via @remotion/player — komponen video yang
- * SAMA dengan renderer (satu sumber kebenaran visual). Perubahan plan dari
- * panel mana pun langsung terlihat (<1 dtk, NFR §10): cukup inputProps baru,
- * tanpa render.
+ * Panggung tengah: preview instan via @remotion/player — komponen video yang
+ * SAMA dengan renderer. Playhead dipublikasikan ke bus playback (timeline
+ * menyorot scene aktif) dan permintaan seek dari timeline dieksekusi di sini.
  */
 
 export const PreviewPanel: React.FC = () => {
   const { project, renderProgress } = useStudio();
   const rawPlan = project?.plan ?? null;
+  const [player, setPlayer] = useState<PlayerRef | null>(null);
 
   const parsed = useMemo(() => {
     if (!rawPlan) return null;
@@ -26,15 +28,28 @@ export const PreviewPanel: React.FC = () => {
     }
   }, [rawPlan]);
 
+  useEffect(() => {
+    if (!player) return;
+    const onFrame: CallbackListener<"frameupdate"> = (event) => {
+      playback.setFrame(event.detail.frame);
+    };
+    player.addEventListener("frameupdate", onFrame);
+    const offSeek = playback.onSeek((frame) => player.seekTo(frame));
+    return () => {
+      player.removeEventListener("frameupdate", onFrame);
+      offSeek();
+    };
+  }, [player]);
+
   if (!parsed) {
     return (
       <section className="panel preview-panel">
-        <div className="panel-head">
-          <h2>Preview</h2>
-        </div>
         <div className="preview-empty">
-          <p className="empty-title">Belum ada scene-plan.</p>
-          <p>Ceritakan brief videomu di panel chat — agent akan menyusun draft.</p>
+          <p className="empty-title">Belum ada video.</p>
+          <p>
+            Ceritakan brief videomu di panel chat — agent menyusun draft scene-plan
+            pertama, lalu semua bisa kamu ubah manual di sini.
+          </p>
         </div>
       </section>
     );
@@ -45,19 +60,13 @@ export const PreviewPanel: React.FC = () => {
 
   return (
     <section className="panel preview-panel">
-      <div className="panel-head">
-        <h2>Preview</h2>
-        <span className="meta-line">
-          {plan.meta.aspectRatio} · {Math.round(meta.totalSec)}s · {plan.scenes.length}{" "}
-          scene · preset {plan.meta.stylePreset}
-        </span>
-      </div>
-      <div className="player-wrap">
+      <div className="stage">
         <div
           className={portrait ? "player-box portrait" : "player-box landscape"}
           style={{ aspectRatio: `${meta.width} / ${meta.height}` }}
         >
           <Player
+            ref={setPlayer}
             component={DalangVideo}
             inputProps={{ plan, debug: false }}
             durationInFrames={meta.durationInFrames}
@@ -73,26 +82,33 @@ export const PreviewPanel: React.FC = () => {
           />
         </div>
       </div>
-      <div className="render-strip">
-        {renderProgress && renderProgress.status === "started" ? (
-          <span className="render-note">Merender {renderProgress.profile}…</span>
-        ) : null}
-        {renderProgress?.status === "error" ? (
-          <span className="render-note error">Render gagal: {renderProgress.error}</span>
-        ) : null}
-        {(project?.renders ?? []).map((render) => (
-          <a
-            key={render.url}
-            className="render-link"
-            href={render.url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Unduh {render.profile === "final" ? "final.mp4" : "preview.mp4"} (
-            {(render.sizeBytes / 1024 / 1024).toFixed(1)} MB)
-          </a>
-        ))}
-      </div>
+      {renderProgress?.status === "started" ||
+      renderProgress?.status === "error" ||
+      (project?.renders.length ?? 0) > 0 ? (
+        <div className="render-strip">
+          {renderProgress?.status === "started" ? (
+            <span className="render-note">Merender {renderProgress.profile}…</span>
+          ) : null}
+          {renderProgress?.status === "error" ? (
+            <span className="render-note error">
+              Render gagal: {renderProgress.error}
+            </span>
+          ) : null}
+          {(project?.renders ?? []).map((render) => (
+            <a
+              key={render.url}
+              className="render-link"
+              href={render.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <IconDownload />
+              {render.profile === "final" ? "final.mp4" : "preview.mp4"} (
+              {(render.sizeBytes / 1024 / 1024).toFixed(1)} MB)
+            </a>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 };
