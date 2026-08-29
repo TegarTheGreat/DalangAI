@@ -15,6 +15,7 @@ import {
   visualFilterSchema,
 } from "@dalang/core";
 import { useEffect, useState } from "react";
+import { Segmented, Switch } from "../components/controls";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
@@ -61,34 +62,6 @@ const POSITION_LABEL: Record<string, string> = {
   center: "Tengah",
   bottom: "Bawah",
 };
-
-const Segmented = <T extends string>({
-  options,
-  value,
-  label,
-  onChange,
-  disabled,
-}: {
-  options: readonly T[];
-  value: T;
-  label: (option: T) => string;
-  onChange: (option: T) => void;
-  disabled?: boolean;
-}) => (
-  <div className="segmented">
-    {options.map((option) => (
-      <button
-        key={option}
-        type="button"
-        className={option === value ? "seg active" : "seg"}
-        disabled={disabled}
-        onClick={() => onChange(option)}
-      >
-        {label(option)}
-      </button>
-    ))}
-  </div>
-);
 
 /** Slider dengan label nilai; commit patch saat dilepas (bukan tiap piksel). */
 const SliderRow: React.FC<{
@@ -714,25 +687,17 @@ export const InspectorPanel: React.FC = () => {
       {plan && scene ? (
         <>
           <div className="inspector-tools">
-            <label
-              className={`lock-switch ${scene.locked ? "on" : ""}`}
+            <Switch
+              checked={scene.locked}
+              label="Kunci dari agent"
               title="Scene terkunci tidak akan disentuh agent"
-            >
-              <input
-                type="checkbox"
-                checked={scene.locked}
-                onChange={(event) =>
-                  void studioClient.applyPatch(
-                    [{ op: "lockScene", id: scene.id, locked: event.target.checked }],
-                    event.target.checked
-                      ? `${scene.id} dikunci dari agent`
-                      : `Kunci ${scene.id} dibuka`,
-                  )
-                }
-              />
-              <span className="lock-switch-track" aria-hidden />
-              Kunci dari agent
-            </label>
+              onChange={(locked) =>
+                void studioClient.applyPatch(
+                  [{ op: "lockScene", id: scene.id, locked }],
+                  locked ? `${scene.id} dikunci dari agent` : `Kunci ${scene.id} dibuka`,
+                )
+              }
+            />
           </div>
           <div className="tab-bar">
             {(

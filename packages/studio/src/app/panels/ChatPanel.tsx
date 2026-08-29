@@ -1,5 +1,7 @@
+import { ASPECT_RATIOS } from "@dalang/core";
 import { useEffect, useRef, useState } from "react";
-import { IconImage } from "../icons";
+import { Popover, Segmented, Switch } from "../components/controls";
+import { IconImage, IconWand } from "../icons";
 import type { ChatMessage } from "../store";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
@@ -21,6 +23,169 @@ const costLine = (message: ChatMessage): string | null => {
   const tool = result.toolCostUsd > 0 ? ` · tool ~$${result.toolCostUsd.toFixed(4)}` : "";
   const stop = result.stop !== "selesai" ? ` · berhenti: ${result.stop}` : "";
   return `${result.steps} langkah · ${llm}${tool}${result.costIsPartial ? " (parsial)" : ""}${stop}`;
+};
+
+/** Aksi rutin sekali-klik — chip mengirim instruksi utuh ke agent. */
+const QUICK_ACTIONS: readonly { chip: string; prompt: string }[] = [
+  {
+    chip: "Buat suara semua scene",
+    prompt: "Buat voiceover untuk semua scene yang belum punya suara.",
+  },
+  {
+    chip: "Isi aset kosong",
+    prompt: "Isi aset stock untuk semua scene yang asetnya masih kosong.",
+  },
+  {
+    chip: "Rapikan narasi",
+    prompt:
+      "Rapikan narasi semua scene yang tidak terkunci agar lebih lisan dan mengalir, tanpa mengubah substansinya.",
+  },
+  { chip: "Render draft", prompt: "Render draft sekarang." },
+];
+
+const BRIEF_STYLES = ["dokumenter", "berita", "edukasi", "cerita"] as const;
+const BRIEF_DURATIONS = ["30", "60", "90"] as const;
+const BRIEF_VOICES = [
+  ["auto", "Otomatis — agent memilih"],
+  ["silence", "Tanpa suara (senyap)"],
+  ["elevenlabs", "ElevenLabs"],
+  ["edge", "Edge TTS (gratis)"],
+] as const;
+
+/**
+ * Perancang brief: form terstruktur (topik, gaya, durasi, rasio, suara) yang
+ * dikompilasi jadi satu instruksi utuh untuk agent — jalan tercepat dari
+ * proyek kosong ke scene-plan pertama. Form tetap bisa dijelajahi saat chat
+ * nonaktif; hanya tombol kirimnya yang terkunci (dengan alasan).
+ */
+const BriefBuilder: React.FC<{ busy: boolean; chatDisabled: string | null }> = ({
+  busy,
+  chatDisabled,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [topic, setTopic] = useState("");
+  const [style, setStyle] = useState<(typeof BRIEF_STYLES)[number]>("dokumenter");
+  const [duration, setDuration] = useState<(typeof BRIEF_DURATIONS)[number]>("60");
+  const [ratio, setRatio] = useState<(typeof ASPECT_RATIOS)[number]>("16:9");
+  const [voice, setVoice] = useState("auto");
+  const [autoRun, setAutoRun] = useState(false);
+
+  const submit = () => {
+    const voiceLine =
+      voice === "auto"
+        ? "Suara: pilih provider TTS yang paling masuk akal untuk proyek ini"
+        : voice === "silence"
+          ? "Suara: tanpa voiceover (provider silence)"
+          : `Suara: pakai provider ${voice}`;
+    const lines = [
+      "Susun scene-plan baru dari brief ini:",
+      `- Topik: ${topic.trim()}`,
+      `- Gaya: ${style}`,
+      `- Durasi target: sekitar ${duration} detik`,
+      `- Rasio: ${ratio}`,
+      `- ${voiceLine}`,
+      autoRun
+        ? "Setelah plan tersimpan, langsung buat voiceover semua scene dan isi aset stock yang kosong."
+        : "Cukup susun plan-nya dulu; suara dan aset akan saya jalankan sendiri.",
+    ];
+    setOpen(false);
+    setTopic("");
+    void studioClient.sendChat(lines.join("\n"));
+  };
+
+  return (
+    <Popover
+      open={open}
+      onClose={() => setOpen(false)}
+      trigger={
+        <button
+          type="button"
+          className="ghost attach-btn"
+          disabled={busy}
+          onClick={() => setOpen(!open)}
+          data-tip="Rancang brief video (form terstruktur)"
+        >
+          <IconWand />
+        </button>
+      }
+    >
+      <div className="brief-form">
+        <h5>Brief video baru</h5>
+        <label className="field">
+          <span>Topik</span>
+          <input
+            value={topic}
+            onChange={(event) => setTopic(event.target.value)}
+            placeholder="mis. Sejarah Candi Borobudur"
+          />
+        </label>
+        <div className="field">
+          <span>Gaya</span>
+          <Segmented
+            options={BRIEF_STYLES}
+            value={style}
+            label={(option) => option.charAt(0).toUpperCase() + option.slice(1)}
+            onChange={setStyle}
+          />
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <span>Durasi</span>
+            <Segmented
+              options={BRIEF_DURATIONS}
+              value={duration}
+              label={(option) => `${option}s`}
+              onChange={setDuration}
+            />
+          </div>
+          <div className="field">
+            <span>Rasio</span>
+            <Segmented
+              options={ASPECT_RATIOS}
+              value={ratio}
+              label={(option) => option}
+              onChange={setRatio}
+            />
+          </div>
+        </div>
+        <label className="field">
+          <span>Suara</span>
+          <select value={voice} onChange={(event) => setVoice(event.target.value)}>
+            {BRIEF_VOICES.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="field">
+          <Switch
+            checked={autoRun}
+            onChange={setAutoRun}
+            label="Langsung buat suara & isi aset"
+          />
+        </div>
+        {chatDisabled !== null ? (
+          <p className="brief-note">
+            Chat nonaktif ({chatDisabled}) — form bisa diisi, tapi kirim butuh API key.
+          </p>
+        ) : null}
+        <div className="popover-footer">
+          <button type="button" className="ghost" onClick={() => setOpen(false)}>
+            Batal
+          </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={topic.trim() === "" || chatDisabled !== null}
+            onClick={submit}
+          >
+            Susun plan
+          </button>
+        </div>
+      </div>
+    </Popover>
+  );
 };
 
 const Bubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
@@ -165,6 +330,21 @@ export const ChatPanel: React.FC = () => {
           ))}
         </div>
       ) : null}
+      {project?.plan && chatDisabled === null ? (
+        <div className="quick-row">
+          {QUICK_ACTIONS.map((action) => (
+            <button
+              key={action.chip}
+              type="button"
+              className="quick-chip"
+              disabled={chatBusy}
+              onClick={() => void studioClient.sendChat(action.prompt)}
+            >
+              {action.chip}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="chat-compose">
         <input
           ref={fileRef}
@@ -174,12 +354,13 @@ export const ChatPanel: React.FC = () => {
           hidden
           onChange={(event) => pickFiles(event.target.files)}
         />
+        <BriefBuilder busy={chatBusy} chatDisabled={chatDisabled} />
         <button
           type="button"
           className="ghost attach-btn"
           disabled={chatBusy || chatDisabled !== null || vision === false}
           onClick={() => fileRef.current?.click()}
-          title={
+          data-tip={
             vision === false
               ? "Model aktif tidak menerima gambar — pilih model vision lewat DALANG_MODEL"
               : "Lampirkan gambar (referensi visual untuk agent)"

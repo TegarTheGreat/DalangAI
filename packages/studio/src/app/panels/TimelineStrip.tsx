@@ -1,4 +1,4 @@
-import type { Scene, ScenePlan } from "@dalang/core";
+import { MIN_SCENE_SEC, type Scene, type ScenePlan } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { Thumbnail } from "@remotion/player";
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -55,6 +55,7 @@ const Clip: React.FC<{
   index: number;
   box: ClipBox;
   clipHeight: number;
+  pxPerSec: number;
   selected: boolean;
   active: boolean;
   dropSide: "before" | "after" | null;
@@ -68,6 +69,7 @@ const Clip: React.FC<{
   index,
   box,
   clipHeight,
+  pxPerSec,
   selected,
   active,
   dropSide,
@@ -76,16 +78,34 @@ const Clip: React.FC<{
   onDrop,
 }) => {
   const { project } = useStudio();
+  // Trim (mekanika CapCut): seret tepi kanan = ubah durasi scene. Selama
+  // seretan hanya state lokal + label; patch updateScene dikirim saat lepas.
+  const [trimSec, setTrimSec] = useState<number | null>(null);
+  const trimFrom = useRef<{ x: number; sec: number } | null>(null);
   const status = deriveSceneStatus(
     plan,
     scene,
     project?.stageRuns ?? [],
     project?.busy ?? { mutation: null, render: null },
   );
+  const width = trimSec === null ? box.w : Math.max(56, Math.round(trimSec * pxPerSec));
   const thumbW = Math.max(24, Math.round(clipHeight * (meta.width / meta.height)));
-  const count = Math.min(6, Math.max(1, Math.ceil(box.w / thumbW)));
+  const count = Math.min(6, Math.max(1, Math.ceil(width / thumbW)));
   const frames = filmstripFrames(meta, index, count);
   const busy = project?.busy.mutation !== null;
+  const durSec = (meta.sceneFrames[index] ?? 1) / meta.fps;
+
+  const endTrim = () => {
+    const from = trimFrom.current;
+    const sec = trimSec;
+    trimFrom.current = null;
+    setTrimSec(null);
+    if (!from || sec === null || Math.abs(sec - from.sec) < 0.05) return;
+    void studioClient.applyPatch(
+      [{ op: "updateScene", id: scene.id, patch: { duration: sec } }],
+      `Durasi ${scene.id} jadi ${sec.toFixed(1)}s`,
+    );
+  };
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: drag-n-drop klip timeline
@@ -94,13 +114,18 @@ const Clip: React.FC<{
         "clip",
         selected ? "selected" : "",
         active ? "active" : "",
+        trimSec !== null ? "trimming" : "",
         dropSide ? `drop-${dropSide}` : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      style={{ left: box.x, width: box.w }}
+      style={{ left: box.x, width }}
       draggable={!busy}
       onDragStart={(event) => {
+        if (trimFrom.current) {
+          event.preventDefault();
+          return;
+        }
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/plain", scene.id);
         onDragState(scene.id);
@@ -159,6 +184,32 @@ const Clip: React.FC<{
         </span>
         <span className="clip-active-bar" />
       </button>
+      {trimSec !== null ? (
+        <span className="trim-label">{trimSec.toFixed(1)}s</span>
+      ) : null}
+      <div
+        className="clip-trim"
+        data-testid={`trim-${scene.id}`}
+        onPointerDown={(event) => {
+          if (busy) return;
+          event.preventDefault();
+          event.stopPropagation();
+          trimFrom.current = { x: event.clientX, sec: durSec };
+          setTrimSec(Math.max(MIN_SCENE_SEC, Math.round(durSec * 10) / 10));
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const from = trimFrom.current;
+          if (!from) return;
+          const raw = from.sec + (event.clientX - from.x) / pxPerSec;
+          setTrimSec(Math.max(MIN_SCENE_SEC, Math.round(raw * 10) / 10));
+        }}
+        onPointerUp={endTrim}
+        onPointerCancel={() => {
+          trimFrom.current = null;
+          setTrimSec(null);
+        }}
+      />
     </div>
   );
 };
@@ -236,7 +287,7 @@ export const TimelineStrip: React.FC = () => {
           type="button"
           className="transport-play"
           onClick={() => playback.requestToggle()}
-          title={playing ? "Jeda (spasi)" : "Putar (spasi)"}
+          data-tip={playing ? "Jeda (Spasi)" : "Putar (Spasi)"}
         >
           {playing ? <IconPause /> : <IconPlay />}
         </button>
@@ -254,7 +305,7 @@ export const TimelineStrip: React.FC = () => {
             className="mini"
             onClick={() => setPxPerSec((z) => Math.max(MIN_ZOOM, z - 8))}
             disabled={pxPerSec <= MIN_ZOOM}
-            title="Perkecil timeline"
+            data-tip="Perkecil timeline"
           >
             -
           </button>
@@ -271,7 +322,7 @@ export const TimelineStrip: React.FC = () => {
             className="mini"
             onClick={() => setPxPerSec((z) => Math.min(MAX_ZOOM, z + 8))}
             disabled={pxPerSec >= MAX_ZOOM}
-            title="Perbesar timeline"
+            data-tip="Perbesar timeline"
           >
             +
           </button>
@@ -323,6 +374,7 @@ export const TimelineStrip: React.FC = () => {
                   index={index}
                   box={boxes[index] as ClipBox}
                   clipHeight={54}
+                  pxPerSec={pxPerSec}
                   selected={scene.id === selectedSceneId}
                   active={
                     frame >= (meta.sceneStarts[index] ?? 0) &&
@@ -341,7 +393,7 @@ export const TimelineStrip: React.FC = () => {
                 style={{ left: width + 8 }}
                 onClick={addAtEnd}
                 disabled={busy}
-                title="Tambah scene di akhir"
+                data-tip="Tambah scene di akhir"
               >
                 <IconPlus />
               </button>

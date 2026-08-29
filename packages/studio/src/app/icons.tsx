@@ -129,6 +129,15 @@ export const IconDownload: React.FC = () => (
   </Icon>
 );
 
+export const IconWand: React.FC = () => (
+  <Icon>
+    <path d="m3 21 12.5-12.5" />
+    <path d="m14 5 5 5" />
+    <path d="M12.5 8.5 15.5 11.5" />
+    <path d="M19 2v3M22 6h-3M6 2v2M3 5h2" />
+  </Icon>
+);
+
 export const IconSpinner: React.FC = () => (
   <Icon className="spin">
     <path d="M12 3a9 9 0 1 0 9 9" />

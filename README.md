@@ -91,9 +91,14 @@ Yang sudah berjalan:
     (Scene/Visual/Teks/Transisi: segmented, chip filter, slider, kartu
     transisi) · **timeline NLE**:
     ruler waktu yang bisa di-scrub, playhead tersinkron dua arah, klip
-    filmstrip selebar durasi (drag untuk susun ulang), track suara per
-    scene, transport play/jeda + zoom. Mobile-friendly (laci penuh layar,
-    Ekspor selalu terlihat, target sentuh besar); ikon SVG tanpa emoji.
+    filmstrip selebar durasi (drag untuk susun ulang, **trim handle** di
+    tepi kanan mengubah durasi — snap 0.1s, bisa di-undo), track suara per
+    scene, transport play/jeda + zoom, pintasan Spasi. **Dialog Ekspor
+    beropsi** (Draft 540p / Final 1080p), **perancang brief** + chip aksi
+    cepat di chat. Sistem kontrol buatan sendiri tanpa dependensi UI
+    (switch/popover/kartu radio/tooltip CSS, ring fokus konsisten).
+    Mobile-friendly (laci penuh layar, Ekspor selalu terlihat, target
+    sentuh besar); ikon SVG tanpa emoji.
   - **Edit manual = patch user**: narasi/durasi/visual/reorder/hapus/tambah,
     tombol kunci per scene — masuk patch log yang sama, bisa di-undo, dan
     terlihat agent di giliran berikutnya (§5.2 dua arah; edit file di luar

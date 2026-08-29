@@ -297,6 +297,15 @@ export class StudioClient {
     });
   }
 
+  /** Dipanggil dari dialog Ekspor — pilihan di dialog ADALAH konfirmasinya. */
+  async startRenderConfirmed(profile: "draft" | "final"): Promise<void> {
+    try {
+      await api.render(profile, true);
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
   // -- grid aset (search → pick = patch user ter-pin) ------------------------
 
   async searchAssets(sceneId: string, query: string, kind: "video" | "image") {

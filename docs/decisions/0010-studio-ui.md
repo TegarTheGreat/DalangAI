@@ -117,6 +117,29 @@ Dua koreksi arah pada hari yang sama, keduanya dari umpan balik langsung:
    layar dengan tombol Tutup, toolbar header dapat digulir dengan tombol
    Ekspor sticky, target sentuh diperbesar.
 
+4. **Sistem kontrol buatan sendiri, bukan adopsi kit** (iterasi umpan balik
+   ketiga; owner eksplisit menolak adopsi shadcn — "wajib lebih bagus dan
+   lebih solid"). `components/controls.tsx` + CSS token menjadi satu sumber
+   kontrol tanpa dependensi UI eksternal: `Switch`, `Popover` (Esc +
+   klik-luar), `RadioCard`, `Segmented` (dipakai lintas panel), tooltip CSS
+   murni `[data-tip]` (jeda 250ms, varian bawah untuk header), ring fokus
+   konsisten `--ring` di semua kontrol, select ber-chevron sendiri, animasi
+   masuk dialog/popover/toast. Di atasnya: **dialog Ekspor beropsi**
+   (RadioCard Draft 540p / Final 1080p dengan estimasi jujur; memilih =
+   mengonfirmasi, tanpa dialog kedua), **perancang brief** di chat (form
+   topik/gaya/durasi/rasio/suara + saklar "langsung suara & aset" yang
+   dikompilasi jadi satu instruksi agent; tetap bisa dijelajahi saat chat
+   nonaktif, hanya kirim yang terkunci beralasan), **chip aksi cepat**
+   (suara semua/isi aset/rapikan narasi/render draft), **trim handle** di
+   tepi kanan klip timeline (mekanika CapCut: seret = pratinjau lebar +
+   label detik snap 0.1s, lepas = patch `updateScene{duration}` — tercatat,
+   bisa di-undo, klem MIN_SCENE_SEC), dan pintasan **Spasi** putar/jeda
+   (diabaikan saat fokus di input/tombol). Verifikasi Playwright 18/18:
+   trim 5s -> 8.0s tepat sesuai piksel dan masuk patch log; perbaikan nyata
+   yang ketahuan dari gate visual: lapisan overlay dinaikkan di atas kontrol
+   Player dan `white-space: normal` pada RadioCard (teks kini membungkus di
+   390px).
+
 ## Konsekuensi
 
 - (+) Fase 4 (tutorial) & preset baru otomatis muncul di studio — Player
