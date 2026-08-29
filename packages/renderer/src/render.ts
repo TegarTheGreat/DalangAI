@@ -1,21 +1,23 @@
-import { readFileSync, statSync } from "node:fs";
-import { bundle } from "@remotion/bundler";
+import { cpSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parseScenePlan, type ScenePlan } from "@dalang/core";
+import { COMPOSITION_ID, FPS } from "@dalang/templates/layout";
 import {
+  type LogLevel,
   renderMedia,
   renderStill,
   selectComposition,
-  type LogLevel,
 } from "@remotion/renderer";
-import { parseScenePlan, type ScenePlan } from "@dalang/core";
-import { templatesEntry } from "@dalang/templates/paths";
-import { COMPOSITION_ID, FPS } from "@dalang/templates/layout";
 import { findBrowserExecutable } from "./browser";
-import { stagePublicDir } from "./stage";
+import { getBundle } from "./bundle-cache";
+import { copyPlanAssets } from "./stage";
 
 /**
  * Local RenderTarget (PRD §7.3). The interface stays small on purpose so a
  * cloud implementation (Remotion Lambda) can slot in later without touching
- * the pipeline: load plan → stage inputs → bundle → render.
+ * the pipeline: load plan → resolve bundle (cached) → overlay plan assets →
+ * render.
  *
  * Encoding uses Remotion's bundled FFmpeg with libx264 for now; hardware
  * encoder detection (NVENC/AMF/QSV/VideoToolbox) is R-6, Fase 1.
@@ -37,13 +39,40 @@ export const PROFILES: Record<RenderProfile, ProfileConfig> = {
   final: { scale: 1, crf: 17, x264Preset: "medium", jpegQuality: 90, debug: false },
 };
 
-export const loadPlan = (planPath: string): ScenePlan =>
-  parseScenePlan(JSON.parse(readFileSync(planPath, "utf8")));
+export const loadPlan = (planPath: string): ScenePlan => {
+  let raw: string;
+  try {
+    raw = readFileSync(planPath, "utf8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? "";
+    throw new Error(
+      `Tidak bisa membaca scene-plan "${planPath}"${code ? ` (${code})` : ""}`,
+    );
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `Scene-plan bukan JSON yang valid: ${planPath}\n${(error as Error).message}`,
+    );
+  }
+  return parseScenePlan(json);
+};
 
 export interface ProgressEvent {
   stage: "bundling" | "rendering" | "encoding";
   /** 0..1 */
   progress: number;
+}
+
+export interface RenderBehaviorOptions {
+  /** Skip the persistent bundle cache (always rebundle). */
+  disableBundleCache?: boolean;
+  /** Remotion render concurrency; null lets Remotion pick per machine. */
+  concurrency?: number | null;
+  logLevel?: LogLevel;
+  onProgress?: (event: ProgressEvent) => void;
 }
 
 interface PreparedRender {
@@ -52,29 +81,36 @@ interface PreparedRender {
   inputProps: Record<string, unknown>;
   composition: Awaited<ReturnType<typeof selectComposition>>;
   browserExecutable: string | undefined;
+  bundleFromCache: boolean;
   cleanup: () => void;
 }
 
 const prepare = async (
   planPath: string,
   profile: RenderProfile,
-  logLevel: LogLevel,
-  onProgress?: (event: ProgressEvent) => void,
+  options: RenderBehaviorOptions,
 ): Promise<PreparedRender> => {
+  const logLevel = options.logLevel ?? "warn";
   const plan = loadPlan(planPath);
-  const staged = stagePublicDir(planPath, plan);
   const browserExecutable = findBrowserExecutable();
 
-  const serveUrl = await bundle({
-    entryPoint: templatesEntry,
-    publicDir: staged.dir,
+  const bundleResult = await getBundle({
+    disableCache: options.disableBundleCache,
     onProgress: (progress) =>
-      onProgress?.({ stage: "bundling", progress: progress / 100 }),
+      options.onProgress?.({ stage: "bundling", progress: progress / 100 }),
   });
+
+  // Work on a throwaway copy so per-plan assets never pollute the cache.
+  const renderDir = mkdtempSync(join(tmpdir(), "dalang-render-"));
+  cpSync(bundleResult.bundleDir, renderDir, { recursive: true });
+  if (bundleResult.ephemeral) {
+    rmSync(bundleResult.bundleDir, { recursive: true, force: true });
+  }
+  copyPlanAssets(planPath, plan, join(renderDir, "public"));
 
   const inputProps = { plan, debug: PROFILES[profile].debug };
   const composition = await selectComposition({
-    serveUrl,
+    serveUrl: renderDir,
     id: COMPOSITION_ID,
     inputProps,
     browserExecutable,
@@ -83,11 +119,12 @@ const prepare = async (
 
   return {
     plan,
-    serveUrl,
+    serveUrl: renderDir,
     inputProps,
     composition,
     browserExecutable,
-    cleanup: staged.cleanup,
+    bundleFromCache: bundleResult.fromCache,
+    cleanup: () => rmSync(renderDir, { recursive: true, force: true }),
   };
 };
 
@@ -98,25 +135,21 @@ export interface RenderVideoResult {
   sizeBytes: number;
   width: number;
   height: number;
+  bundleFromCache: boolean;
 }
 
-export const renderPlanToVideo = async (options: {
-  planPath: string;
-  outputLocation: string;
-  profile?: RenderProfile;
-  logLevel?: LogLevel;
-  onProgress?: (event: ProgressEvent) => void;
-}): Promise<RenderVideoResult> => {
+export const renderPlanToVideo = async (
+  options: {
+    planPath: string;
+    outputLocation: string;
+    profile?: RenderProfile;
+  } & RenderBehaviorOptions,
+): Promise<RenderVideoResult> => {
   const profile = options.profile ?? "draft";
   const config = PROFILES[profile];
   const logLevel = options.logLevel ?? "warn";
 
-  const prepared = await prepare(
-    options.planPath,
-    profile,
-    logLevel,
-    options.onProgress,
-  );
+  const prepared = await prepare(options.planPath, profile, options);
   try {
     await renderMedia({
       composition: prepared.composition,
@@ -130,6 +163,7 @@ export const renderPlanToVideo = async (options: {
       scale: config.scale,
       imageFormat: "jpeg",
       jpegQuality: config.jpegQuality,
+      concurrency: options.concurrency ?? null,
       logLevel,
       onProgress: ({ progress, stitchStage }) =>
         options.onProgress?.({
@@ -145,6 +179,7 @@ export const renderPlanToVideo = async (options: {
       sizeBytes: statSync(options.outputLocation).size,
       width: Math.round(prepared.composition.width * config.scale),
       height: Math.round(prepared.composition.height * config.scale),
+      bundleFromCache: prepared.bundleFromCache,
     };
   } finally {
     prepared.cleanup();
@@ -154,29 +189,25 @@ export const renderPlanToVideo = async (options: {
 export interface RenderStillsResult {
   outputs: Array<{ frame: number; outputLocation: string }>;
   durationInFrames: number;
+  bundleFromCache: boolean;
 }
 
-/** Render one or more PNG stills; bundles once for the whole batch. */
-export const renderPlanStills = async (options: {
-  planPath: string;
-  /** Frame indexes; negative values count from the end (like Array.at). */
-  frames: number[];
-  outputLocationFor: (frame: number) => string;
-  profile?: RenderProfile;
-  scale?: number;
-  imageFormat?: "png" | "jpeg";
-  logLevel?: LogLevel;
-  onProgress?: (event: ProgressEvent) => void;
-}): Promise<RenderStillsResult> => {
+/** Render one or more stills; bundles once for the whole batch. */
+export const renderPlanStills = async (
+  options: {
+    planPath: string;
+    /** Frame indexes; negative values count from the end (like Array.at). */
+    frames: number[];
+    outputLocationFor: (frame: number) => string;
+    profile?: RenderProfile;
+    scale?: number;
+    imageFormat?: "png" | "jpeg";
+  } & RenderBehaviorOptions,
+): Promise<RenderStillsResult> => {
   const profile = options.profile ?? "final";
   const logLevel = options.logLevel ?? "warn";
 
-  const prepared = await prepare(
-    options.planPath,
-    profile,
-    logLevel,
-    options.onProgress,
-  );
+  const prepared = await prepare(options.planPath, profile, options);
   try {
     const total = prepared.composition.durationInFrames;
     const outputs: RenderStillsResult["outputs"] = [];
@@ -203,7 +234,11 @@ export const renderPlanStills = async (options: {
       });
       outputs.push({ frame, outputLocation });
     }
-    return { outputs, durationInFrames: total };
+    return {
+      outputs,
+      durationInFrames: total,
+      bundleFromCache: prepared.bundleFromCache,
+    };
   } finally {
     prepared.cleanup();
   }

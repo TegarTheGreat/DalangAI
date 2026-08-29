@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  DIMENSIONS,
-  parseScenePlan,
-  safeParseScenePlan,
-} from "../src/index";
+import { DIMENSIONS, parseScenePlan, safeParseScenePlan } from "../src/index";
 import { basePlanInput, makePlan } from "./fixtures";
 
 describe("scene-plan schema v0", () => {
@@ -70,15 +66,26 @@ describe("scene-plan schema v0", () => {
       },
     };
     const plan = parseScenePlan(input);
-    expect(plan.renderState.resolvedAssets["sc-001"]?.license).toBe(
-      "Pexels License",
-    );
+    expect(plan.renderState.resolvedAssets["sc-001"]?.license).toBe("Pexels License");
   });
 
   it("throws a readable error message on invalid plans", () => {
+    expect(() => parseScenePlan({ version: 1 })).toThrowError(/Scene-plan tidak valid/);
+  });
+
+  it("names unsupported schema versions explicitly", () => {
     expect(() => parseScenePlan({ version: 2 })).toThrowError(
-      /Scene-plan tidak valid/,
+      /Versi scene-plan 2 tidak didukung/,
     );
+  });
+
+  it("accepts an editor $schema field without leaking it into strictness", () => {
+    const input = {
+      ...basePlanInput(),
+      $schema: "../../packages/core/schema/scene-plan.v1.schema.json",
+    };
+    const plan = parseScenePlan(input);
+    expect(plan.$schema).toContain("scene-plan.v1");
   });
 
   it("exposes 1080p dimensions per aspect ratio", () => {

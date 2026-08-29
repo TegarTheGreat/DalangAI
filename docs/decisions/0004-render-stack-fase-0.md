@@ -52,8 +52,8 @@ ruang aman lebih jauh.
 
 - (+) Satu jalur kode untuk still/draft/final; profil = data, bukan cabang logika.
 - (+) `renderPlanStills` mem-bundle sekali untuk banyak frame — dipakai untuk
-  gate visual & kelak smoke-test template (R-8).
-- (−) Bundling webpack (~15–30 dtk) terjadi tiap invokasi CLI; cache bundle
-  persisten adalah optimisasi Fase 1 (bersama pipeline compose).
+  gate visual & smoke-test template di CI (prekursor R-8).
+- (+) *(Amandemen, ADR-0005 §3)* Bundling kini di-cache persisten dengan kunci
+  fingerprint konten; invokasi berikutnya mulai ~2 dtk, `--no-cache` tersedia.
 - (−) Belum ada worker process terpisah (R-5); CLI = proses render. UI Fase 3
   wajib memindahkan ini ke worker sesuai PRD §7.3.

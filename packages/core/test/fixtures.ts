@@ -30,9 +30,7 @@ export const basePlanInput = (): ScenePlanInput => ({
   ],
 });
 
-export const makePlan = (
-  mutate?: (input: ScenePlanInput) => void,
-): ScenePlan => {
+export const makePlan = (mutate?: (input: ScenePlanInput) => void): ScenePlan => {
   const input = basePlanInput();
   mutate?.(input);
   return parseScenePlan(input);

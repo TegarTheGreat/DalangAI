@@ -2,19 +2,18 @@ import { z } from "zod";
 import {
   annotationSchema,
   aspectRatioSchema,
-  captionSchema,
   designTokensSchema,
   getSceneIndex,
+  type Meta,
   metaSchema,
   motionSchema,
   musicSchema,
-  sceneSchema,
-  scenePlanSchema,
-  visualTypeSchema,
-  voiceSchema,
-  type Meta,
   type Scene,
   type ScenePlan,
+  scenePlanSchema,
+  sceneSchema,
+  visualTypeSchema,
+  voiceSchema,
 } from "./scene-plan";
 
 /**
@@ -184,11 +183,7 @@ const requireScene = (
   const index = getSceneIndex(plan, id);
   const scene = plan.scenes[index];
   if (index < 0 || !scene) {
-    throw new PatchError(
-      "SCENE_NOT_FOUND",
-      `Scene "${id}" tidak ditemukan`,
-      opIndex,
-    );
+    throw new PatchError("SCENE_NOT_FOUND", `Scene "${id}" tidak ditemukan`, opIndex);
   }
   return { scene, index };
 };
@@ -250,11 +245,7 @@ const applyOne = (
   switch (op.op) {
     case "addScene": {
       if (getSceneIndex(plan, op.scene.id) >= 0) {
-        throw new PatchError(
-          "SCENE_EXISTS",
-          `Scene "${op.scene.id}" sudah ada`,
-          opIndex,
-        );
+        throw new PatchError("SCENE_EXISTS", `Scene "${op.scene.id}" sudah ada`, opIndex);
       }
       let insertAt = 0;
       if (op.afterId !== null) {
@@ -288,9 +279,7 @@ const applyOne = (
 
       for (const [key, value] of Object.entries(rest)) {
         if (value === undefined) continue;
-        inversePatch[key] = clone(
-          (scene as unknown as Record<string, unknown>)[key],
-        );
+        inversePatch[key] = clone((scene as unknown as Record<string, unknown>)[key]);
         (scene as unknown as Record<string, unknown>)[key] = clone(value);
       }
       if (visual) {
@@ -305,10 +294,7 @@ const applyOne = (
           scene.caption as unknown as Record<string, unknown>,
           caption,
         );
-        mergeDefined(
-          scene.caption as unknown as Record<string, unknown>,
-          caption,
-        );
+        mergeDefined(scene.caption as unknown as Record<string, unknown>, caption);
       }
       return {
         op: "updateScene",
@@ -350,10 +336,7 @@ const applyOne = (
     }
 
     case "setMeta": {
-      const prior = priorOf(
-        plan.meta as unknown as Record<string, unknown>,
-        op.patch,
-      );
+      const prior = priorOf(plan.meta as unknown as Record<string, unknown>, op.patch);
       mergeDefined(plan.meta as unknown as Record<string, unknown>, op.patch);
       // Required meta keys can never be cleared; re-validate to be safe.
       const check = metaSchema.safeParse(plan.meta);
@@ -369,10 +352,7 @@ const applyOne = (
     }
 
     case "setAudio": {
-      const prior = priorOf(
-        plan.audio as unknown as Record<string, unknown>,
-        op.patch,
-      );
+      const prior = priorOf(plan.audio as unknown as Record<string, unknown>, op.patch);
       mergeDefined(plan.audio as unknown as Record<string, unknown>, op.patch);
       return { op: "setAudio", patch: prior as AudioUpdate };
     }
@@ -501,9 +481,7 @@ const describeOp = (op: PatchOp): string => {
       return `mengubah audio (${fields.join(", ")})`;
     }
     case "lockScene":
-      return op.locked
-        ? `mengunci scene ${op.id}`
-        : `membuka kunci scene ${op.id}`;
+      return op.locked ? `mengunci scene ${op.id}` : `membuka kunci scene ${op.id}`;
     case "replaceAsset":
       return op.assetId === null
         ? `melepas aset scene ${op.sceneId}`

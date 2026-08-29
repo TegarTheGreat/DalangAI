@@ -1,7 +1,7 @@
 import {
+  type AspectRatio,
   computeTimeline,
   DIMENSIONS,
-  type AspectRatio,
   type ScenePlan,
 } from "@dalang/core";
 
@@ -89,9 +89,9 @@ export const aspectMetrics = (aspect: AspectRatio): AspectMetrics => {
       return {
         width,
         height,
-        marginX: 112,
-        marginTop: 84,
-        captionBottom: 118,
+        marginX: 144,
+        marginTop: 96,
+        captionBottom: 124,
         captionFontSize: 52,
         captionMaxWidth: width * 0.62,
         titleFontSize: 132,

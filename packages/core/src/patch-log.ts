@@ -1,8 +1,4 @@
-import {
-  applyPatch,
-  type AppliedPatch,
-  type PatchOrigin,
-} from "./patch";
+import { type AppliedPatch, applyPatch, type PatchOrigin } from "./patch";
 import type { ScenePlan } from "./scene-plan";
 
 /**

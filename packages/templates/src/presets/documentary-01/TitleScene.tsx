@@ -1,8 +1,10 @@
-import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
+import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import type { AspectMetrics } from "../../layout";
 import { Backdrop } from "./Backdrop";
 import type { DocTheme } from "./theme";
+
+import { titleFontSize } from "./typography";
 
 /**
  * Opening title card (`template-anim` / variant "title").
@@ -10,12 +12,6 @@ import type { DocTheme } from "./theme";
  */
 
 const ease = Easing.bezier(0.16, 1, 0.3, 1);
-
-const titleFontSize = (title: string, base: number): number => {
-  const chars = title.length;
-  if (chars <= 18) return base;
-  return Math.max(Math.round(base * Math.sqrt(18 / chars)), 62);
-};
 
 export const TitleScene: React.FC<{
   scene: Scene;
@@ -153,16 +149,11 @@ export const TitleScene: React.FC<{
               color: theme.inkSoft,
               maxWidth: "84%",
               textWrap: "balance",
-              opacity: interpolate(
-                frame,
-                [wordsDone + 8, wordsDone + 26],
-                [0, 1],
-                {
-                  extrapolateLeft: "clamp",
-                  extrapolateRight: "clamp",
-                  easing: ease,
-                },
-              ),
+              opacity: interpolate(frame, [wordsDone + 8, wordsDone + 26], [0, 1], {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+                easing: ease,
+              }),
             }}
           >
             {scene.narration}

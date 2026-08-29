@@ -1,25 +1,18 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import type { ScenePlan } from "@dalang/core";
-import { templatesPublicDir } from "@dalang/templates/paths";
 
 /**
- * Assemble the public dir served to the composition for one render:
- *  1. the templates' own static assets (fonts), then
- *  2. every file renderState references, copied relative to the plan file.
+ * Render-input staging.
  *
  * renderState file paths are the contract: they are interpreted relative to
  * the plan's directory on disk and served under the same relative path via
- * staticFile(). Absolute paths and `..` escapes are rejected.
+ * staticFile(). Absolute paths and `..` escapes are rejected so a plan can
+ * never read outside its own folder.
  */
 
-export interface StagedPublicDir {
-  dir: string;
-  cleanup: () => void;
-}
-
-const assertSafeRelative = (file: string): void => {
+export const assertSafeRelative = (file: string): void => {
   if (isAbsolute(file) || normalize(file).split(/[\\/]/)[0] === "..") {
     throw new Error(
       `Path aset di renderState harus relatif terhadap folder plan (tanpa ".."): "${file}"`,
@@ -27,34 +20,51 @@ const assertSafeRelative = (file: string): void => {
   }
 };
 
-export const stagePublicDir = (
+/**
+ * Copy every file the plan's renderState references into the target public
+ * dir, preserving relative paths. Returns the copied relative paths.
+ */
+export const copyPlanAssets = (
   planPath: string,
   plan: ScenePlan,
-): StagedPublicDir => {
-  const dir = mkdtempSync(join(tmpdir(), "dalang-stage-"));
-  cpSync(templatesPublicDir, dir, { recursive: true });
-
+  targetPublicDir: string,
+): string[] => {
   const planDir = dirname(resolve(planPath));
   const files = [
-    ...Object.values(plan.renderState.resolvedAssets).map((a) => a.file),
-    ...Object.values(plan.renderState.narrationAudio).map((a) => a.file),
+    ...Object.values(plan.renderState.resolvedAssets).map((asset) => asset.file),
+    ...Object.values(plan.renderState.narrationAudio).map((audio) => audio.file),
   ];
 
   for (const file of files) {
     assertSafeRelative(file);
     const source = join(planDir, file);
     if (!existsSync(source)) {
-      throw new Error(
-        `Aset yang direferensikan renderState tidak ditemukan: ${source}`,
-      );
+      throw new Error(`Aset yang direferensikan renderState tidak ditemukan: ${source}`);
     }
-    const target = join(dir, file);
+    const target = join(targetPublicDir, file);
     mkdirSync(dirname(target), { recursive: true });
     cpSync(source, target);
   }
+  return files;
+};
 
-  return {
-    dir,
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
-  };
+export interface StagedDir {
+  dir: string;
+  cleanup: () => void;
+}
+
+/**
+ * A clean copy of the templates' public dir for bundling: static template
+ * files (fonts) only — the gitignored `assets/` staging area for Studio demos
+ * is excluded so demo content can never leak into the bundle cache.
+ */
+export const stageTemplatesPublic = (templatesPublicDir: string): StagedDir => {
+  const dir = mkdtempSync(join(tmpdir(), "dalang-public-"));
+  for (const entry of readdirSync(templatesPublicDir)) {
+    if (entry === "assets") continue;
+    cpSync(join(templatesPublicDir, entry), join(dir, entry), {
+      recursive: true,
+    });
+  }
+  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 };

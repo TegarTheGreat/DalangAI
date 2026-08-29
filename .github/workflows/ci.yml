@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint · Typecheck · Test · Render smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests (incl. JSON Schema up-to-date check)
+        run: pnpm test
+
+      - name: Validate demo scene-plan
+        run: pnpm dalang validate examples/borobudur-60s/plan.json
+
+      # Real still render through the full stack (bundle → Chromium → PNG):
+      # the template-regression safety net (R-8 precursor). Uses the runner's
+      # preinstalled Chrome via the renderer's browser detection.
+      - name: Render smoke test
+        run: |
+          pnpm dalang still examples/borobudur-60s/plan.json -t 8 29 -s 0.25 -o /tmp/smoke
+          test -s /tmp/smoke/borobudur-60s-f240.png
+          test -s /tmp/smoke/borobudur-60s-f870.png
+
+      - name: Upload smoke frames
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-smoke
+          path: /tmp/smoke
+          retention-days: 14

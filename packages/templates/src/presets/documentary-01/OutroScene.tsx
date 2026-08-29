@@ -1,5 +1,5 @@
-import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
+import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import type { AspectMetrics } from "../../layout";
 import { Backdrop } from "./Backdrop";
 import type { DocTheme } from "./theme";

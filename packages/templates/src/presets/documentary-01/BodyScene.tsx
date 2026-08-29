@@ -1,5 +1,5 @@
-import { AbsoluteFill } from "remotion";
 import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
+import { AbsoluteFill } from "remotion";
 import type { AspectMetrics } from "../../layout";
 import { Backdrop } from "./Backdrop";
 import { CaptionsOverlay } from "./CaptionsOverlay";
@@ -15,19 +15,13 @@ export const BodyScene: React.FC<{
   theme: DocTheme;
   durationInFrames: number;
   debug: boolean;
-}> = ({
-  scene,
-  sceneIndex,
-  plan,
-  asset,
-  metrics,
-  theme,
-  durationInFrames,
-  debug,
-}) => {
+}> = ({ scene, sceneIndex, plan, asset, metrics, theme, durationInFrames, debug }) => {
   const unresolved =
-    !asset && (scene.visual.type === "stock" || scene.visual.type === "image" ||
-      scene.visual.type === "generated" || scene.visual.type === "screenshot");
+    !asset &&
+    (scene.visual.type === "stock" ||
+      scene.visual.type === "image" ||
+      scene.visual.type === "generated" ||
+      scene.visual.type === "screenshot");
 
   return (
     <AbsoluteFill>

@@ -1,3 +1,4 @@
+import type { Scene, ScenePlan } from "@dalang/core";
 import { useMemo } from "react";
 import {
   AbsoluteFill,
@@ -7,50 +8,23 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import {
-  createTikTokStyleCaptions,
-  type Caption as RemotionCaption,
-  type TikTokPage,
-} from "@remotion/captions";
-import {
-  estimateWordTimestamps,
-  type Scene,
-  type ScenePlan,
-  type WordTimestamp,
-} from "@dalang/core";
+import { buildCaptionPages, type CaptionPageModel } from "../../captions-model";
 import type { AspectMetrics } from "../../layout";
 import type { DocTheme } from "./theme";
 
 /**
- * Karaoke-style captions synced to the narration.
- *
- * Timing source, in order of fidelity:
- *  1. Real word timestamps from TTS (renderState.narrationAudio) — Fase 1+.
- *  2. Deterministic estimate from the narration text (char-proportional) so
- *     Fase 0 previews already read naturally.
+ * Karaoke-style captions synced to the narration. All timing math lives in
+ * captions-model.ts (pure, unit-tested); this component only renders.
  */
 
-const PAGE_COMBINE_MS = 1100;
-/** How long the last page lingers after the narration ends. */
-const LAST_PAGE_HOLD_FRAMES = 14;
-
-const toRemotionCaptions = (words: WordTimestamp[]): RemotionCaption[] =>
-  words.map((word, index) => ({
-    text: `${index === 0 ? "" : " "}${word.word}`,
-    startMs: word.startSec * 1000,
-    endMs: word.endSec * 1000,
-    timestampMs: ((word.startSec + word.endSec) / 2) * 1000,
-    confidence: null,
-  }));
-
 const CaptionPage: React.FC<{
-  page: TikTokPage;
+  page: CaptionPageModel;
   metrics: AspectMetrics;
   theme: DocTheme;
 }> = ({ page, metrics, theme }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const absoluteTimeMs = page.startMs + (frame / fps) * 1000;
+  const sceneTimeMs = page.startMs + (frame / fps) * 1000;
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
@@ -84,8 +58,8 @@ const CaptionPage: React.FC<{
         }}
       >
         {page.tokens.map((token, tokenIndex) => {
-          const started = token.fromMs <= absoluteTimeMs;
-          const active = started && token.toMs > absoluteTimeMs;
+          const started = token.fromMs <= sceneTimeMs;
+          const active = started && token.toMs > sceneTimeMs;
           return (
             <span
               key={`${token.fromMs}-${tokenIndex}`}
@@ -116,47 +90,26 @@ export const CaptionsOverlay: React.FC<{
 }> = ({ scene, plan, sceneDurationFrames, metrics, theme }) => {
   const { fps } = useVideoConfig();
 
-  const pages = useMemo(() => {
-    if (!scene.caption.enabled || scene.narration.trim() === "") return [];
-    const real = plan.renderState.narrationAudio[scene.id]?.wordTimestamps;
-    const words =
-      real && real.length > 0
-        ? real
-        : estimateWordTimestamps(scene.narration, sceneDurationFrames / fps);
-    return createTikTokStyleCaptions({
-      captions: toRemotionCaptions(words),
-      combineTokensWithinMilliseconds: PAGE_COMBINE_MS,
-    }).pages;
-  }, [scene, plan, sceneDurationFrames, fps]);
+  const pages = useMemo(
+    () => buildCaptionPages({ scene, plan, sceneDurationFrames, fps }),
+    [scene, plan, sceneDurationFrames, fps],
+  );
 
   if (pages.length === 0) return null;
 
   return (
     <AbsoluteFill>
-      {pages.map((page, index) => {
-        const next = pages[index + 1];
-        const startFrame = Math.round((page.startMs / 1000) * fps);
-        const endFrame = next
-          ? Math.round((next.startMs / 1000) * fps)
-          : Math.min(
-              Math.round((page.startMs + page.durationMs) / 1000 * fps) +
-                LAST_PAGE_HOLD_FRAMES,
-              sceneDurationFrames,
-            );
-        const durationInFrames = endFrame - startFrame;
-        if (durationInFrames <= 0) return null;
-        return (
-          <Sequence
-            key={index}
-            from={startFrame}
-            durationInFrames={durationInFrames}
-            layout="none"
-            name={`caption-${index + 1}`}
-          >
-            <CaptionPage page={page} metrics={metrics} theme={theme} />
-          </Sequence>
-        );
-      })}
+      {pages.map((page, index) => (
+        <Sequence
+          key={index}
+          from={page.startFrame}
+          durationInFrames={page.durationInFrames}
+          layout="none"
+          name={`caption-${index + 1}`}
+        >
+          <CaptionPage page={page} metrics={metrics} theme={theme} />
+        </Sequence>
+      ))}
     </AbsoluteFill>
   );
 };

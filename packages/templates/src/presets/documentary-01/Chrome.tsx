@@ -1,7 +1,7 @@
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { ScenePlan } from "@dalang/core";
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { AspectMetrics } from "../../layout";
-import { activeSceneIndex, TRANSITION_FRAMES, type FrameLayout } from "../../layout";
+import { activeSceneIndex, type FrameLayout, TRANSITION_FRAMES } from "../../layout";
 import type { DocTheme } from "./theme";
 
 /**
@@ -9,16 +9,11 @@ import type { DocTheme } from "./theme";
  * The kicker/counter stay hidden on title & outro scenes so those breathe.
  */
 
-const isTemplateVariant = (
-  plan: ScenePlan,
-  index: number,
-  variant: string,
-): boolean => {
+const isTemplateVariant = (plan: ScenePlan, index: number, variant: string): boolean => {
   const scene = plan.scenes[index];
   if (!scene) return false;
   return (
-    scene.visual.type === "template-anim" &&
-    (scene.visual.variant ?? "title") === variant
+    scene.visual.type === "template-anim" && (scene.visual.variant ?? "title") === variant
   );
 };
 

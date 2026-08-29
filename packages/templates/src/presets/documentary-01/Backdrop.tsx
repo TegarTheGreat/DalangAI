@@ -1,7 +1,13 @@
-import { random, staticFile, useCurrentFrame } from "remotion";
-import { AbsoluteFill, Img, interpolate } from "remotion";
-import { Video } from "@remotion/media";
 import type { ResolvedAsset, Scene } from "@dalang/core";
+import { Video } from "@remotion/media";
+import {
+  AbsoluteFill,
+  Img,
+  interpolate,
+  random,
+  staticFile,
+  useCurrentFrame,
+} from "remotion";
 import type { DocTheme } from "./theme";
 
 /**
@@ -53,13 +59,7 @@ const AssetLayer: React.FC<{
   };
 
   if (asset.kind === "video") {
-    return (
-      <Video
-        src={staticFile(asset.file)}
-        muted
-        style={style}
-      />
-    );
+    return <Video src={staticFile(asset.file)} muted style={style} />;
   }
   return <Img src={staticFile(asset.file)} style={style} />;
 };
@@ -136,12 +136,10 @@ export const Backdrop: React.FC<{
   return (
     <AbsoluteFill style={{ backgroundColor: theme.bg }}>
       {asset ? (
-        <AbsoluteFill style={{ filter: "saturate(1.04) contrast(1.05) brightness(0.96)" }}>
-          <AssetLayer
-            asset={asset}
-            scene={scene}
-            durationInFrames={durationInFrames}
-          />
+        <AbsoluteFill
+          style={{ filter: "saturate(1.04) contrast(1.05) brightness(0.96)" }}
+        >
+          <AssetLayer asset={asset} scene={scene} durationInFrames={durationInFrames} />
         </AbsoluteFill>
       ) : (
         <ProceduralBackdrop

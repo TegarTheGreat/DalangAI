@@ -1,24 +1,20 @@
 import { mkdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { Command } from "commander";
 import {
   computeTimeline,
-  resolveSceneDurationSec,
   countWords,
+  resolveSceneDurationSec,
   type ScenePlan,
 } from "@dalang/core";
 import {
-  computeFrameLayout,
-  FPS,
-  TRANSITION_FRAMES,
-} from "@dalang/templates/layout";
-import {
   loadPlan,
-  renderPlanStills,
-  renderPlanToVideo,
   type ProgressEvent,
   type RenderProfile,
+  renderPlanStills,
+  renderPlanToVideo,
 } from "@dalang/renderer";
+import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
+import { Command, InvalidArgumentError, Option } from "commander";
 
 /**
  * `dalang` — Fase 0 CLI: validate a scene-plan and render it locally.
@@ -32,6 +28,38 @@ program
     "Dalang AI — render video dari scene-plan JSON (agent-piloted video editor)",
   )
   .version("0.1.0");
+
+const profileOption = () =>
+  new Option("--profile <profile>", "profil render").choices(["draft", "final"]);
+
+const parseSeconds = (value: string): number => {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    throw new InvalidArgumentError(`"${value}" bukan detik yang valid (angka ≥ 0)`);
+  }
+  return seconds;
+};
+
+const parsePositiveInt = (value: string): number => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new InvalidArgumentError(`"${value}" bukan bilangan bulat ≥ 1`);
+  }
+  return parsed;
+};
+
+const parseScale = (value: string): number => {
+  const scale = Number(value);
+  if (!Number.isFinite(scale) || scale <= 0 || scale > 1) {
+    throw new InvalidArgumentError(`"${value}" bukan skala valid (0 < s ≤ 1)`);
+  }
+  return scale;
+};
+
+const collectSeconds = (value: string, previous: number[]): number[] => [
+  ...previous,
+  parseSeconds(value),
+];
 
 const formatSec = (sec: number): string => `${sec.toFixed(1)}s`;
 
@@ -88,39 +116,53 @@ program
 program
   .command("still")
   .argument("<plan>", "path ke scene-plan JSON")
-  .option("-t, --time <detik...>", "waktu (detik) yang di-render", ["1"])
+  .option(
+    "-t, --time <detik...>",
+    "waktu (detik) yang di-render; bisa lebih dari satu",
+    collectSeconds,
+    [] as number[],
+  )
   .option("-o, --out-dir <dir>", "folder output", "out")
-  .option("-s, --scale <scale>", "skala render (1 = 1080p)", "1")
-  .option("--profile <profile>", "draft | final", "final")
-  .option("--format <format>", "png | jpeg", "png")
+  .option("-s, --scale <scale>", "skala render (1 = 1080p)", parseScale, 1)
+  .addOption(profileOption().default("final"))
+  .addOption(
+    new Option("--format <format>", "format gambar")
+      .choices(["png", "jpeg"])
+      .default("png"),
+  )
+  .option("--no-cache", "jangan pakai bundle cache (selalu bundling ulang)")
   .description("Render satu atau beberapa frame (PNG/JPEG) untuk cek visual")
   .action(
     async (
       planPath: string,
       options: {
-        time: string[];
+        time: number[];
         outDir: string;
-        scale: string;
+        scale: number;
         profile: RenderProfile;
         format: "png" | "jpeg";
+        cache: boolean;
       },
     ) => {
       const absPlan = resolve(planPath);
       const name = basename(dirname(absPlan));
       mkdirSync(resolve(options.outDir), { recursive: true });
-      const frames = options.time.map((t) => Math.round(Number(t) * FPS));
+      const times = options.time.length > 0 ? options.time : [1];
+      const frames = times.map((t) => Math.round(t * FPS));
       const extension = options.format === "jpeg" ? "jpg" : "png";
-      const { outputs } = await renderPlanStills({
+      const { outputs, bundleFromCache } = await renderPlanStills({
         planPath: absPlan,
         frames,
-        scale: Number(options.scale),
+        scale: options.scale,
         profile: options.profile,
         imageFormat: options.format,
+        disableBundleCache: !options.cache,
         outputLocationFor: (frame) =>
           join(resolve(options.outDir), `${name}-f${frame}.${extension}`),
         onProgress: progressPrinter(),
       });
       process.stdout.write("\n");
+      if (bundleFromCache) console.log("  (bundle cache: hit)");
       for (const output of outputs) {
         console.log(`✓ frame ${output.frame} → ${output.outputLocation}`);
       }
@@ -131,12 +173,23 @@ program
   .command("render")
   .argument("<plan>", "path ke scene-plan JSON")
   .option("-o, --out <file>", "file output .mp4")
-  .option("--profile <profile>", "draft | final", "draft")
+  .addOption(profileOption().default("draft"))
+  .option(
+    "--concurrency <n>",
+    "jumlah tab render paralel (default: otomatis)",
+    parsePositiveInt,
+  )
+  .option("--no-cache", "jangan pakai bundle cache (selalu bundling ulang)")
   .description("Render scene-plan menjadi MP4 (H.264) secara lokal")
   .action(
     async (
       planPath: string,
-      options: { out?: string; profile: RenderProfile },
+      options: {
+        out?: string;
+        profile: RenderProfile;
+        concurrency?: number;
+        cache: boolean;
+      },
     ) => {
       const absPlan = resolve(planPath);
       const plan = loadPlan(absPlan);
@@ -153,6 +206,8 @@ program
         planPath: absPlan,
         outputLocation: outPath,
         profile: options.profile,
+        concurrency: options.concurrency ?? null,
+        disableBundleCache: !options.cache,
         onProgress: progressPrinter(),
       });
       process.stdout.write("\n");
@@ -161,14 +216,13 @@ program
       console.log(
         `✓ ${result.outputLocation}\n` +
           `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
-          `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec(elapsed)}`,
+          `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec(elapsed)}` +
+          `${result.bundleFromCache ? " · bundle cache: hit" : ""}`,
       );
     },
   );
 
 program.parseAsync().catch((error: unknown) => {
-  console.error(
-    `\n✗ ${error instanceof Error ? error.message : String(error)}`,
-  );
+  console.error(`\n✗ ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });

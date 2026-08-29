@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  applyPatch,
-  PatchError,
-  type PatchOpInput,
-  type ScenePlan,
-} from "../src/index";
+import { applyPatch, PatchError, type PatchOpInput, type ScenePlan } from "../src/index";
 import { makePlan } from "./fixtures";
 
 const apply = (
@@ -13,10 +8,7 @@ const apply = (
   origin: "user" | "agent" = "agent",
 ) => applyPatch(plan, ops, { origin, now: () => new Date("2026-08-29T00:00:00Z") });
 
-const expectPatchError = (
-  fn: () => unknown,
-  code: string,
-): void => {
+const expectPatchError = (fn: () => unknown, code: string): void => {
   try {
     fn();
     expect.unreachable("expected PatchError");
@@ -133,11 +125,7 @@ describe("applyPatch — basic ops", () => {
     const { plan: next } = apply(plan, [
       { op: "reorderScenes", order: ["sc-003", "sc-001", "sc-002"] },
     ]);
-    expect(next.scenes.map((scene) => scene.id)).toEqual([
-      "sc-003",
-      "sc-001",
-      "sc-002",
-    ]);
+    expect(next.scenes.map((scene) => scene.id)).toEqual(["sc-003", "sc-001", "sc-002"]);
   });
 
   it("rejects partial or duplicated reorder lists", () => {
@@ -147,10 +135,7 @@ describe("applyPatch — basic ops", () => {
       "BAD_REORDER",
     );
     expectPatchError(
-      () =>
-        apply(plan, [
-          { op: "reorderScenes", order: ["sc-001", "sc-001", "sc-002"] },
-        ]),
+      () => apply(plan, [{ op: "reorderScenes", order: ["sc-001", "sc-001", "sc-002"] }]),
       "BAD_REORDER",
     );
   });
@@ -206,9 +191,7 @@ describe("applyPatch — basic ops", () => {
         ]),
       "SCENE_NOT_FOUND",
     );
-    expect(plan.scenes[0]?.narration).toBe(
-      "Borobudur dibangun pada abad ke-9.",
-    );
+    expect(plan.scenes[0]?.narration).toBe("Borobudur dibangun pada abad ke-9.");
   });
 
   it("rejects an empty batch", () => {
@@ -243,9 +226,7 @@ describe("applyPatch — lock enforcement (hard contract, PRD §6.3)", () => {
   it("agent cannot replace the asset of a locked scene", () => {
     expectPatchError(
       () =>
-        apply(lockedPlan(), [
-          { op: "replaceAsset", sceneId: "sc-001", assetId: "px-1" },
-        ]),
+        apply(lockedPlan(), [{ op: "replaceAsset", sceneId: "sc-001", assetId: "px-1" }]),
       "SCENE_LOCKED",
     );
   });
@@ -264,11 +245,7 @@ describe("applyPatch — lock enforcement (hard contract, PRD §6.3)", () => {
     const { plan: next } = apply(lockedPlan(), [
       { op: "reorderScenes", order: ["sc-001", "sc-003", "sc-002"] },
     ]);
-    expect(next.scenes.map((scene) => scene.id)).toEqual([
-      "sc-001",
-      "sc-003",
-      "sc-002",
-    ]);
+    expect(next.scenes.map((scene) => scene.id)).toEqual(["sc-001", "sc-003", "sc-002"]);
   });
 
   it("agent cannot lock or unlock scenes", () => {

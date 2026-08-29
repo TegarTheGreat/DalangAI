@@ -26,19 +26,13 @@ export const SILENT_SCENE_SEC = 3;
 export const countWords = (text: string): number =>
   text.trim().split(/\s+/).filter(Boolean).length;
 
-export const estimateNarrationSeconds = (
-  narration: string,
-  speed = 1,
-): number => {
+export const estimateNarrationSeconds = (narration: string, speed = 1): number => {
   const words = countWords(narration);
   if (words === 0) return 0;
   return words / (WORDS_PER_SECOND * speed);
 };
 
-export const resolveSceneDurationSec = (
-  scene: Scene,
-  plan: ScenePlan,
-): number => {
+export const resolveSceneDurationSec = (scene: Scene, plan: ScenePlan): number => {
   if (typeof scene.duration === "number") return scene.duration;
 
   const audio = plan.renderState.narrationAudio[scene.id];
@@ -87,33 +81,40 @@ export const computeTimeline = (plan: ScenePlan): Timeline => {
 };
 
 /**
+ * The narration window inside a scene: how many seconds of speech fit between
+ * the lead-in and the closing padding. Presets use this both to place real TTS
+ * audio and to size estimated timestamps, so the two paths stay in sync.
+ */
+export const narrationWindowSec = (sceneDurationSec: number): number =>
+  Math.max(0.5, sceneDurationSec - NARRATION_LEAD_IN_SEC - SCENE_PADDING_SEC * 0.5);
+
+/**
  * Synthetic word timestamps for caption sync before real TTS timestamps exist
  * (or when a provider has none — see R-3). Words are allocated proportionally
- * to their character length across the narration window of the scene.
- * Timestamps are relative to the scene start.
+ * to their character length across `availableSec`.
+ *
+ * CONTRACT: timestamps are relative to the start of the narration itself
+ * (0-based) — the same frame of reference as real TTS word timestamps, which
+ * are relative to the audio file. Placement inside the scene (the lead-in
+ * offset) is the preset's responsibility, so real and estimated timestamps are
+ * interchangeable.
  */
 export const estimateWordTimestamps = (
   narration: string,
-  sceneDurationSec: number,
+  availableSec: number,
 ): WordTimestamp[] => {
   const words = narration.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
 
-  const windowStart = NARRATION_LEAD_IN_SEC;
-  const windowEnd = Math.max(
-    windowStart + 0.5,
-    sceneDurationSec - SCENE_PADDING_SEC * 0.5,
-  );
-  const windowSec = windowEnd - windowStart;
-
+  const windowSec = Math.max(availableSec, 0.5);
   const weights = words.map((word) => word.length + 1);
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
-  let cursor = windowStart;
+  let cursor = 0;
   return words.map((word, index) => {
     const share = (weights[index] ?? 1) / totalWeight;
     const startSec = cursor;
-    const endSec = index === words.length - 1 ? windowEnd : cursor + share * windowSec;
+    const endSec = index === words.length - 1 ? windowSec : cursor + share * windowSec;
     cursor = endSec;
     return {
       word,

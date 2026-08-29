@@ -59,9 +59,7 @@ describe("PatchLog", () => {
       { origin: "user" },
     );
     const undone = log.undo(v2);
-    expect(undone?.plan.scenes[0]?.narration).toBe(
-      "Borobudur dibangun pada abad ke-9.",
-    );
+    expect(undone?.plan.scenes[0]?.narration).toBe("Borobudur dibangun pada abad ke-9.");
   });
 
   it("summarize reports recent changes, filterable by origin", () => {

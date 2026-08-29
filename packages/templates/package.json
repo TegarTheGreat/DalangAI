@@ -12,6 +12,7 @@
   "scripts": {
     "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",
     "stage-demo": "node scripts/stage-demo.mjs",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "@remotion/cli": "4.0.518",
     "@types/node": "26.4.0",
     "@types/react": "19.2.18",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
   }
 }

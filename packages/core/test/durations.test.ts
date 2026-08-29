@@ -5,6 +5,7 @@ import {
   estimateWordTimestamps,
   MIN_SCENE_SEC,
   NARRATION_LEAD_IN_SEC,
+  narrationWindowSec,
   resolveSceneDurationSec,
   SCENE_PADDING_SEC,
   SILENT_SCENE_SEC,
@@ -39,10 +40,7 @@ describe("duration resolution (deterministic)", () => {
     const estimated = estimateNarrationSeconds(scene.narration);
     expect(estimated).toBeCloseTo(5 / 2.4, 5);
     expect(resolveSceneDurationSec(scene, plan)).toBeCloseTo(
-      Math.max(
-        MIN_SCENE_SEC,
-        NARRATION_LEAD_IN_SEC + estimated + SCENE_PADDING_SEC,
-      ),
+      Math.max(MIN_SCENE_SEC, NARRATION_LEAD_IN_SEC + estimated + SCENE_PADDING_SEC),
       5,
     );
   });
@@ -58,9 +56,7 @@ describe("duration resolution (deterministic)", () => {
     const plan = makePlan((input) => {
       input.scenes[0]!.narration = "";
     });
-    expect(resolveSceneDurationSec(plan.scenes[0]!, plan)).toBe(
-      SILENT_SCENE_SEC,
-    );
+    expect(resolveSceneDurationSec(plan.scenes[0]!, plan)).toBe(SILENT_SCENE_SEC);
   });
 
   it("voice speed shortens the estimate", () => {
@@ -92,18 +88,18 @@ describe("duration resolution (deterministic)", () => {
   });
 });
 
-describe("estimateWordTimestamps", () => {
+describe("estimateWordTimestamps (audio-relative contract)", () => {
   it("returns empty for empty narration", () => {
     expect(estimateWordTimestamps("", 5)).toEqual([]);
   });
 
-  it("covers the narration window monotonically", () => {
+  it("starts at 0 and covers the available window monotonically", () => {
     const words = estimateWordTimestamps(
       "Borobudur dibangun pada abad ke-9 oleh dinasti Syailendra",
       6,
     );
-    expect(words[0]?.startSec).toBeCloseTo(NARRATION_LEAD_IN_SEC, 3);
-    expect(words.at(-1)?.endSec).toBeCloseTo(6 - SCENE_PADDING_SEC * 0.5, 3);
+    expect(words[0]?.startSec).toBe(0);
+    expect(words.at(-1)?.endSec).toBeCloseTo(6, 3);
     for (let i = 1; i < words.length; i++) {
       expect(words[i]!.startSec).toBeGreaterThanOrEqual(words[i - 1]!.endSec - 1e-9);
     }
@@ -113,5 +109,18 @@ describe("estimateWordTimestamps", () => {
     expect(borobudur.endSec - borobudur.startSec).toBeGreaterThan(
       pada.endSec - pada.startSec,
     );
+  });
+
+  it("clamps degenerate windows to a sane minimum", () => {
+    const words = estimateWordTimestamps("Satu dua", 0.1);
+    expect(words.at(-1)?.endSec).toBeCloseTo(0.5, 3);
+  });
+
+  it("narrationWindowSec removes lead-in and half the padding", () => {
+    expect(narrationWindowSec(6)).toBeCloseTo(
+      6 - NARRATION_LEAD_IN_SEC - SCENE_PADDING_SEC * 0.5,
+      6,
+    );
+    expect(narrationWindowSec(0.2)).toBe(0.5); // floor
   });
 });

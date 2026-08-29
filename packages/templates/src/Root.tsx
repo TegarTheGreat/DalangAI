@@ -1,5 +1,5 @@
-import { Composition, type CalculateMetadataFunction } from "remotion";
 import { DIMENSIONS, parseScenePlan } from "@dalang/core";
+import { type CalculateMetadataFunction, Composition } from "remotion";
 import demoPlan from "../../../examples/borobudur-60s/plan.json";
 import { DalangVideo, type DalangVideoProps } from "./DalangVideo";
 import { computeFrameLayout, FPS } from "./layout";
@@ -10,9 +10,9 @@ import { computeFrameLayout, FPS } from "./layout";
  * the Studio never hardcode timing.
  */
 
-export const calculateDalangMetadata: CalculateMetadataFunction<
-  DalangVideoProps
-> = ({ props }) => {
+export const calculateDalangMetadata: CalculateMetadataFunction<DalangVideoProps> = ({
+  props,
+}) => {
   const plan = parseScenePlan(props.plan);
   const layout = computeFrameLayout(plan);
   const { width, height } = DIMENSIONS[plan.meta.aspectRatio];

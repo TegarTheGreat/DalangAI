@@ -25,15 +25,21 @@ Yang sudah berjalan:
 
 - **Skema scene-plan v0** (zod, strict, versioned) + **patch operations** dengan
   lock enforcement di level kode, batch atomik, dan inverse ops → undo/redo.
-  51 unit test.
+  Artefak [JSON Schema](packages/core/schema/scene-plan.v1.schema.json) untuk
+  autocomplete editor, selalu sinkron via unit test.
 - **Preset `documentary-01`**: tipografi editorial (Fraunces + Inter,
   di-vendor, render offline), caption karaoke tersinkron (timestamps TTS asli
   ATAU estimasi deterministik), Ken Burns / pan, film grain + vignette +
   gradien keterbacaan, chrome global (progress, running head, penghitung
   scene), crossfade antar scene, title & outro card.
-- **Renderer lokal** (RenderTarget `local`): staging aset + font ke publicDir,
+- **Renderer lokal** (RenderTarget `local`): **bundle cache persisten**
+  (content-fingerprint; start render ~2 dtk saat hit), overlay aset per plan,
   deteksi Chromium terpasang, profil `draft`/`final`, render video & stills.
-- **CLI `dalang`**: `validate`, `still`, `render`.
+- **CLI `dalang`**: `validate`, `still`, `render` — opsi tervalidasi, pesan
+  error ramah, `--no-cache`, `--concurrency`.
+- **Kualitas terjaga otomatis**: 91 unit test (kontrak lock/pin/undo, timing
+  caption, snapshot timeline demo, keamanan staging path), Biome lint+format,
+  dan CI GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
 - Hasil ukur di container CPU-only: draft 540p **85 dtk**, final 1080p
   **4m38s** untuk video 51 dtk (8 scene) — lihat ADR-0004.
 
@@ -42,15 +48,18 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # unit test @dalang/core (skema, patch, lock, durasi)
+pnpm test                 # 91 unit test (core, templates, renderer) — tanpa browser
 pnpm typecheck            # semua paket
+pnpm lint                 # Biome
 
 pnpm dalang validate examples/borobudur-60s/plan.json
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
-pnpm dalang still    examples/borobudur-60s/plan.json -t 8 29 44 -o out
+pnpm dalang still    examples/borobudur-60s/plan.json -t 8 -t 29 -t 44 -o out
 
 pnpm studio               # Remotion Studio (preview + scrub timeline)
 ```
+
+Alur kontribusi & konvensi: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Butuh Node ≥ 20 dan pnpm. Renderer otomatis memakai Chromium/Chrome yang sudah
 terpasang (Playwright/sistem); kalau tidak ada, Remotion mengunduh headless
@@ -68,7 +77,8 @@ examples/
   borobudur-60s/   plan.json demo + aset ilustrasi lokal (lisensi tercatat)
 docs/
   PRD.md           dokumen produk (sumber kebenaran)
-  decisions/       ADR (R-1 patch-log vs CRDT, R-7 monorepo, deviasi skema, render stack)
+  decisions/       ADR (R-1 patch-log vs CRDT, R-7 monorepo, deviasi skema,
+                   render stack, pengerasan fondasi)
   media/           frame hasil render untuk review gate
 ```
 

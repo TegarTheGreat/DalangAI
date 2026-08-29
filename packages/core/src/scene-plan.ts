@@ -163,6 +163,12 @@ export type Audio = z.infer<typeof audioSchema>;
 // mutated only through pipeline helpers, never through patch ops.
 // ---------------------------------------------------------------------------
 
+/**
+ * CONTRACT: word timestamps are relative to the start of the narration audio
+ * file (0-based), exactly as TTS providers/forced alignment emit them. The
+ * preset decides where the narration sits inside the scene and offsets audio
+ * and captions together (see `NARRATION_LEAD_IN_SEC`).
+ */
 export const wordTimestampSchema = z.strictObject({
   word: z.string(),
   startSec: z.number().min(0).finite(),
@@ -174,6 +180,7 @@ export const narrationAudioSchema = z.strictObject({
   /** Path relative to the render public dir. */
   file: z.string().min(1),
   durationSec: finitePositive,
+  /** Relative to the audio file start — see wordTimestampSchema contract. */
   wordTimestamps: z.array(wordTimestampSchema).optional(),
   /** Set when a fallback TTS provider was used; surfaced in the UI per scene. */
   fallbackQuality: z.boolean().optional(),
@@ -207,6 +214,8 @@ export type RenderState = z.infer<typeof renderStateSchema>;
 
 export const scenePlanSchema = z
   .strictObject({
+    /** Editor tooling hook (JSON Schema); ignored by the runtime. */
+    $schema: z.string().optional(),
     version: z.literal(SCHEMA_VERSION),
     projectId: z.string().min(1),
     meta: metaSchema,
@@ -236,6 +245,15 @@ export type ScenePlanInput = z.input<typeof scenePlanSchema>;
 
 /** Parse and validate; throws with a readable message on invalid input. */
 export const parseScenePlan = (input: unknown): ScenePlan => {
+  if (typeof input === "object" && input !== null && "version" in input) {
+    const version = (input as { version: unknown }).version;
+    if (version !== SCHEMA_VERSION) {
+      throw new Error(
+        `Versi scene-plan ${JSON.stringify(version)} tidak didukung — versi yang didukung: ${SCHEMA_VERSION}. ` +
+          `Bump versi skema membutuhkan fungsi migrasi (lihat ADR-0003).`,
+      );
+    }
+  }
   const result = scenePlanSchema.safeParse(input);
   if (!result.success) {
     throw new Error(`Scene-plan tidak valid:\n${z.prettifyError(result.error)}`);
@@ -243,8 +261,7 @@ export const parseScenePlan = (input: unknown): ScenePlan => {
   return result.data;
 };
 
-export const safeParseScenePlan = (input: unknown) =>
-  scenePlanSchema.safeParse(input);
+export const safeParseScenePlan = (input: unknown) => scenePlanSchema.safeParse(input);
 
 export const getScene = (plan: ScenePlan, id: string): Scene | undefined =>
   plan.scenes.find((scene) => scene.id === id);

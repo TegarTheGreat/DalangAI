@@ -30,9 +30,7 @@ export const findBrowserExecutable = (): string | undefined => {
   const candidates = [
     process.env.REMOTION_BROWSER_EXECUTABLE,
     process.env.PUPPETEER_EXECUTABLE_PATH,
-    ...playwrightCandidates(
-      process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers",
-    ),
+    ...playwrightCandidates(process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers"),
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
     "/usr/bin/google-chrome",

@@ -29,6 +29,9 @@ draft tersebut; dokumen ini mencatat setiap penambahan/presisi dan alasannya.
    - `narrationAudio[sceneId]`: `{file, durationSec, wordTimestamps?
      [{word, startSec, endSec}], fallbackQuality?}` — `fallbackQuality`
      mengikuti PRD §7.2 (degradasi provider harus terlihat di UI).
+   - **Kontrak timestamps: relatif terhadap awal file audio (0-based)** —
+     bentuk natural keluaran TTS/forced-alignment. Preset yang menggeser
+     audio + caption bersama-sama sebesar lead-in (ADR-0005 §1).
    - `resolvedAssets[sceneId]`: `{file, kind: image|video|audio, source,
      sourceUrl?, author?, license?, width?, height?}` — metadata lisensi
      audit-ready (PRD §10, menyiapkan R-10).
@@ -62,9 +65,13 @@ draft tersebut; dokumen ini mencatat setiap penambahan/presisi dan alasannya.
 8. **`meta.targetDuration` numerik = target untuk agent**, bukan constraint
    compose-time; compose selalu mengikuti narasi (di-dokumentasikan di skema).
 
+9. **`$schema` opsional di root** — hook untuk editor (autocomplete via
+   artefak JSON Schema, ADR-0005 §5); diabaikan runtime.
+
 ## Konsekuensi
 
 - Skema tetap superset yang kompatibel dengan draft PRD — contoh §5.1 valid
   tanpa perubahan.
 - `strictObject` menolak field tak dikenal → typo agent terdeteksi dini;
-  penambahan field masa depan wajib lewat ADR + bump `version`.
+  penambahan field masa depan wajib lewat ADR + bump `version` + fungsi
+  migrasi (`parseScenePlan` sudah menolak versi lain dengan pesan eksplisit).

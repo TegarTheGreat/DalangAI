@@ -25,14 +25,12 @@ export const Vignette: React.FC = () => (
   />
 );
 
-export const FilmGrain: React.FC<{ opacity?: number }> = ({
-  opacity = 0.055,
-}) => {
+export const FilmGrain: React.FC<{ opacity?: number }> = ({ opacity = 0.055 }) => {
   const frame = useCurrentFrame();
   const seed = 2 + (Math.floor(frame / 2) % 500);
   return (
     <AbsoluteFill style={{ opacity, mixBlendMode: "overlay" }}>
-      <svg width="100%" height="100%">
+      <svg width="100%" height="100%" role="presentation" aria-hidden="true">
         <filter id="dalang-grain">
           <feTurbulence
             type="fractalNoise"

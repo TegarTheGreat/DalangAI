@@ -1,23 +1,28 @@
-import type { ReactNode } from "react";
-import { AbsoluteFill, staticFile } from "remotion";
+import {
+  NARRATION_LEAD_IN_SEC,
+  type ResolvedAsset,
+  type Scene,
+  type ScenePlan,
+} from "@dalang/core";
 import { Audio } from "@remotion/media";
-import { TransitionSeries, linearTiming } from "@remotion/transitions";
+import { linearTiming, TransitionSeries } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
-import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
+import type { ReactNode } from "react";
+import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
 import { ensureFontsLoaded } from "../../fonts";
 import {
+  type AspectMetrics,
   aspectMetrics,
   computeFrameLayout,
   TRANSITION_FRAMES,
-  type AspectMetrics,
 } from "../../layout";
 import { Backdrop } from "./Backdrop";
 import { BodyScene } from "./BodyScene";
 import { Chrome } from "./Chrome";
-import { FilmGrain, ReadabilityGradients, Vignette } from "./Overlays";
 import { OutroScene } from "./OutroScene";
-import { themeFromPlan, type DocTheme } from "./theme";
+import { FilmGrain, ReadabilityGradients, Vignette } from "./Overlays";
 import { TitleScene } from "./TitleScene";
+import { type DocTheme, themeFromPlan } from "./theme";
 
 /**
  * documentary-01 — the first curated style preset (PRD Fase 0 gate).
@@ -35,13 +40,13 @@ const SceneRouter: React.FC<{
   debug: boolean;
 }> = (props) => {
   const { scene, plan } = props;
+  const { fps } = useVideoConfig();
   const narrationAudio = plan.renderState.narrationAudio[scene.id];
 
   let content: ReactNode;
   if (scene.visual.type === "template-anim") {
     const variant = scene.visual.variant ?? "title";
-    content =
-      variant === "outro" ? <OutroScene {...props} /> : <TitleScene {...props} />;
+    content = variant === "outro" ? <OutroScene {...props} /> : <TitleScene {...props} />;
   } else {
     content = <BodyScene {...props} />;
   }
@@ -50,7 +55,12 @@ const SceneRouter: React.FC<{
     <AbsoluteFill>
       {content}
       {narrationAudio ? (
-        <Audio src={staticFile(narrationAudio.file)} />
+        // Narration starts at the lead-in; captions-model shifts word
+        // timestamps by the same constant, keeping audio & karaoke in sync.
+        <Audio
+          src={staticFile(narrationAudio.file)}
+          from={Math.round(NARRATION_LEAD_IN_SEC * fps)}
+        />
       ) : null}
     </AbsoluteFill>
   );
@@ -98,9 +108,7 @@ export const DocumentaryPreset: React.FC<{
   });
 
   return (
-    <AbsoluteFill
-      style={{ backgroundColor: theme.bg, fontFamily: theme.fontBody }}
-    >
+    <AbsoluteFill style={{ backgroundColor: theme.bg, fontFamily: theme.fontBody }}>
       <TransitionSeries>{series}</TransitionSeries>
       <ReadabilityGradients />
       <Vignette />

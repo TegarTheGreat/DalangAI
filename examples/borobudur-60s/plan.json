@@ -1,4 +1,5 @@
 {
+  "$schema": "../../packages/core/schema/scene-plan.v1.schema.json",
   "version": 1,
   "projectId": "demo-borobudur-60s",
   "meta": {
