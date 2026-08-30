@@ -1,3 +1,4 @@
+import { SITE_ASSET_DIRS } from "@dalang/templates/paths";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Hono } from "hono";
 
@@ -6,7 +7,7 @@ import type { Hono } from "hono";
  * `staticFile("x")` mengembalikan path root `/x` (diverifikasi dari source
  * remotion 4.0.518) — jadi cukup mount:
  *
- *   /fonts/*                    → templates/public (font vendored)
+ *   /fonts/*, /music/*          → templates/public (aset situs: font, bed musik)
  *   /assets/*                   → folder plan (aset lokal proyek)
  *   /.dalang/{tts,assets,renders}/* → keluaran pipeline & render
  *
@@ -22,7 +23,12 @@ export const registerMedia = (
   app: Hono,
   options: { templatesPublicDir: string; planDir: string },
 ): void => {
-  app.use("/fonts/*", serveStatic({ root: options.templatesPublicDir }));
+  // Setiap ASET SITUS dipasang dari daftar yang sama dengan yang dipakai
+  // renderer. Sebelumnya hanya /fonts/* yang dipasang, sehingga bed musik
+  // pustaka 404 di preview padahal berbunyi di hasil render.
+  for (const dir of SITE_ASSET_DIRS) {
+    app.use(`/${dir}/*`, serveStatic({ root: options.templatesPublicDir }));
+  }
   app.use("/assets/*", serveStatic({ root: options.planDir }));
   app.use("/.dalang/*", async (c, next) => {
     if (!DALANG_PUBLIC.test(c.req.path)) {

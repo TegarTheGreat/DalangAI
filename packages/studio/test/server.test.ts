@@ -116,6 +116,19 @@ describe("state & patch", () => {
 });
 
 describe("media", () => {
+  /**
+   * Regresi: bed musik pustaka adalah ASET SITUS, sama seperti font. Dulu
+   * hanya /fonts/* yang dipasang, sehingga musik latar berbunyi di hasil
+   * render tetapi 404 di preview Player.
+   */
+  it("menyajikan SEMUA aset situs, bukan hanya font", async () => {
+    const { studio } = boot();
+    for (const path of ["/fonts/Inter-var.woff2", "/music/tenang.wav"]) {
+      const response = await call(studio, path);
+      expect(response.status, `${path} harus tersaji`).toBe(200);
+    }
+  });
+
   it("menyajikan file plan dan menolak traversal & file privat .dalang", async () => {
     const { studio } = boot();
     // tulis aset lokal di folder plan

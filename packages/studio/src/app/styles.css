@@ -1009,12 +1009,19 @@ input[type="color"]::-webkit-color-swatch {
   display: flex;
   align-items: center;
   padding: 0 8px;
+  /* Satu baris: label yang membungkus di gutter sempit menabrak label track
+     di bawahnya dan keduanya jadi tak terbaca. */
+  white-space: nowrap;
+  overflow: hidden;
 }
 .tl-gutter-label:nth-of-type(2) {
   height: 64px;
 }
 .tl-gutter-label:nth-of-type(3) {
   height: 26px;
+}
+.tl-gutter-label:nth-of-type(4) {
+  height: 24px;
 }
 
 .tl-scroll {
@@ -1076,6 +1083,63 @@ input[type="color"]::-webkit-color-swatch {
 .tl-track.audio {
   height: 24px;
   margin-bottom: 2px;
+}
+/*
+ * Track campuran: musik latar sepanjang video + pin cue efek suara.
+ * Sengaja track TERPISAH dari narasi — keduanya lapisan yang berbeda, dan
+ * menumpuknya di satu baris membuat cue tak bisa dibedakan dari narasinya.
+ */
+.tl-track.audio.mix {
+  height: 22px;
+}
+.music-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  border: 1px solid rgba(90, 169, 242, 0.4);
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(90, 169, 242, 0.14) 0 6px,
+    rgba(90, 169, 242, 0.06) 6px 12px
+  );
+  pointer-events: none;
+}
+.music-label {
+  padding: 0 8px;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--info);
+}
+.sfx-pin {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 14px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  transform: translateX(-7px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sfx-pin-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  rotate: 45deg;
+  background: var(--accent);
+  border: 1px solid var(--bg-deep);
+  transition: scale 120ms ease;
+}
+.sfx-pin:hover .sfx-pin-dot {
+  scale: 1.35;
 }
 
 .clip {
@@ -1509,6 +1573,12 @@ input[type="color"]::-webkit-color-swatch {
   .tl-gutter-label:nth-of-type(3) {
     height: 18px;
   }
+  .tl-track.audio.mix {
+    height: 16px;
+  }
+  .tl-gutter-label:nth-of-type(4) {
+    height: 16px;
+  }
   .zoom-group input[type="range"] {
     width: 70px;
   }
@@ -1531,7 +1601,7 @@ input[type="color"]::-webkit-color-swatch {
 }
 .tab-bar {
   display: flex;
-  gap: 2px;
+  gap: 0;
   padding: 8px 12px 0;
   border-bottom: 1px solid var(--line);
   /* Enam tab tidak selalu muat di panel sempit; menggulir jauh lebih baik
@@ -1549,7 +1619,10 @@ input[type="color"]::-webkit-color-swatch {
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 7px 10px 8px;
+  /* Padding dirapatkan supaya KEENAM tab muat di lebar panel bawaan; kalau
+     tidak, tab terakhir terpotong tanpa isyarat apa pun bahwa ia bisa
+     digulir. Gulir tetap ada sebagai cadangan di panel sempit. */
+  padding: 7px 7px 8px;
   font-size: 12px;
   color: var(--text-dim);
 }

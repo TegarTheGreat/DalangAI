@@ -2,6 +2,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { orphanMediaAssetIds, type ScenePlan } from "@dalang/core";
+import { PUBLIC_STAGING_DIR } from "@dalang/templates/paths";
 
 /**
  * Render-input staging.
@@ -107,7 +108,7 @@ export interface StagedDir {
 export const stageTemplatesPublic = (templatesPublicDir: string): StagedDir => {
   const dir = mkdtempSync(join(tmpdir(), "dalang-public-"));
   for (const entry of readdirSync(templatesPublicDir)) {
-    if (entry === "assets") continue;
+    if (entry === PUBLIC_STAGING_DIR) continue;
     cpSync(join(templatesPublicDir, entry), join(dir, entry), {
       recursive: true,
     });

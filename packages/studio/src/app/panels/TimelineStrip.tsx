@@ -1,7 +1,7 @@
 import { MIN_SCENE_SEC, type Scene, type ScenePlan } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { Thumbnail } from "@remotion/player";
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { IconLock, IconPause, IconPlay, IconPlus, IconSplit } from "../icons";
 import { type PlanMeta, planMeta } from "../model/plan-meta";
 import { deriveSceneStatus } from "../model/scene-status";
@@ -26,6 +26,8 @@ import { studioClient, useStudio } from "../use-studio";
 
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 64;
+/** Batas atas bingkai filmstrip per klip — penjaga biaya render thumbnail. */
+const MAX_FILMSTRIP_FRAMES = 40;
 
 const formatTime = (frame: number, fps: number): string => {
   const totalSec = frame / fps;
@@ -76,7 +78,11 @@ const Clip: React.FC<{
   );
   const width = trimSec === null ? box.w : Math.max(56, Math.round(trimSec * pxPerSec));
   const thumbW = Math.max(24, Math.round(clipHeight * (meta.width / meta.height)));
-  const count = Math.min(6, Math.max(1, Math.ceil(width / thumbW)));
+  // Filmstrip menutupi SELURUH lebar klip. Batas 6 bingkai yang lama membuat
+  // klip pada zoom tinggi jadi sebagian besar hitam — persis pada zoom yang
+  // dipakai untuk kerja presisi. Batas atas tetap ada supaya klip yang sangat
+  // panjang tidak melahirkan ratusan Thumbnail sekaligus.
+  const count = Math.max(1, Math.min(MAX_FILMSTRIP_FRAMES, Math.ceil(width / thumbW)));
   const frames = filmstripFrames(meta, index, count);
   const busy = project?.busy.mutation !== null;
   const durSec = (meta.sceneFrames[index] ?? 1) / meta.fps;
@@ -211,6 +217,37 @@ const Clip: React.FC<{
   );
 };
 
+/**
+ * Gulir timeline mengikuti playhead.
+ *
+ * Tanpa ini, memutar timeline yang di-zoom membuat playhead keluar dari
+ * pandangan dan penyunting kehilangan tempatnya — perilaku yang tidak ada di
+ * satu pun NLE. Digulir hanya saat playhead mendekati tepi, bukan tiap frame,
+ * supaya scroll manual pengguna tidak terus-menerus direbut kembali.
+ */
+const useFollowPlayhead = (
+  scrollRef: React.RefObject<HTMLDivElement | null>,
+  playheadX: number,
+  playing: boolean,
+  scrubbing: React.RefObject<boolean>,
+): void => {
+  useEffect(() => {
+    const box = scrollRef.current;
+    if (!box || scrubbing.current) return;
+    const margin = Math.min(160, box.clientWidth * 0.2);
+    const left = box.scrollLeft;
+    const right = left + box.clientWidth;
+    if (playheadX < left + margin) {
+      box.scrollTo({ left: Math.max(0, playheadX - margin), behavior: "auto" });
+    } else if (playheadX > right - margin) {
+      box.scrollTo({
+        left: playheadX - box.clientWidth + margin,
+        behavior: playing ? "auto" : "smooth",
+      });
+    }
+  }, [scrollRef, playheadX, playing, scrubbing]);
+};
+
 export const TimelineStrip: React.FC = () => {
   const { project, selectedSceneId } = useStudio();
   const plan = project?.plan ?? null;
@@ -223,10 +260,15 @@ export const TimelineStrip: React.FC = () => {
     side: "before" | "after";
   } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const scrubbing = useRef(false);
 
   const meta = useMemo(() => (plan ? planMeta(plan) : null), [plan]);
   const boxes = useMemo(() => (meta ? clipBoxes(meta, pxPerSec) : []), [meta, pxPerSec]);
+  // Dihitung sebelum early return karena hook di bawahnya tidak boleh
+  // dipanggil bersyarat.
+  const playheadX = meta ? frameToX(frame, meta, boxes) : 0;
+  useFollowPlayhead(scrollRef, playheadX, playing, scrubbing);
 
   if (!plan || !meta) {
     return (
@@ -241,7 +283,6 @@ export const TimelineStrip: React.FC = () => {
   }
 
   const width = timelineWidth(boxes);
-  const playheadX = frameToX(frame, meta, boxes);
   const ticks = rulerTicks(meta, boxes);
   const busy = project?.busy.mutation !== null;
 
@@ -358,9 +399,12 @@ export const TimelineStrip: React.FC = () => {
         <div className="tl-gutter">
           <span className="tl-gutter-ruler" />
           <span className="tl-gutter-label">Video</span>
-          <span className="tl-gutter-label">Suara</span>
+          <span className="tl-gutter-label">Narasi</span>
+          <span className="tl-gutter-label" title="Musik latar & cue efek suara">
+            Musik
+          </span>
         </div>
-        <div className="tl-scroll">
+        <div className="tl-scroll" ref={scrollRef}>
           <div className="tl-canvas" ref={canvasRef} style={{ width: width + 80 }}>
             <div
               className="tl-ruler"
@@ -459,6 +503,46 @@ export const TimelineStrip: React.FC = () => {
                     }
                   >
                     <span className="audio-wave" aria-hidden />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/*
+              Track ketiga: musik latar (ADR-0014) dan cue efek suara
+              (ADR-0018). Keduanya sudah lama bisa dipasang, tetapi tidak
+              pernah terlihat di timeline — dan lapisan audio yang tak terlihat
+              tidak bisa ditakar oleh siapa pun.
+            */}
+            <div className="tl-track audio mix">
+              {plan.audio.music ? (
+                <span
+                  className="music-bar"
+                  style={{ left: 0, width }}
+                  title={`Musik: ${plan.audio.music.assetId} · volume ${Math.round(
+                    plan.audio.music.volume * 100,
+                  )}%${plan.audio.music.ducking ? " · ducking aktif" : ""}`}
+                >
+                  <span className="music-label">
+                    {plan.audio.music.assetId.replace("pustaka:", "")}
+                  </span>
+                </span>
+              ) : null}
+              {plan.audio.sfx.map((cue) => {
+                const index = plan.scenes.findIndex((scene) => scene.id === cue.sceneId);
+                if (index < 0) return null;
+                const box = boxes[index] as ClipBox;
+                const x = box.x + cue.atSec * pxPerSec;
+                return (
+                  <button
+                    key={cue.id}
+                    type="button"
+                    className="sfx-pin"
+                    style={{ left: x }}
+                    onClick={() => studioClient.selectScene(cue.sceneId)}
+                    title={`Efek suara ${cue.id} · +${cue.atSec.toFixed(1)}s dari awal ${cue.sceneId} · volume ${Math.round(cue.volume * 100)}%`}
+                  >
+                    <span className="sfx-pin-dot" />
                   </button>
                 );
               })}

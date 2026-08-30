@@ -601,7 +601,7 @@ const Header: React.FC = () => {
           className="tool"
           disabled={!project?.patchLog.canUndo}
           onClick={() => void studioClient.undo()}
-          data-tip="Batalkan perubahan terakhir"
+          data-tip="Batalkan perubahan terakhir (Ctrl+Z)"
           data-tip-bottom=""
         >
           <IconUndo />
@@ -612,7 +612,7 @@ const Header: React.FC = () => {
           className="tool"
           disabled={!project?.patchLog.canRedo}
           onClick={() => void studioClient.redo()}
-          data-tip="Ulangi perubahan"
+          data-tip="Ulangi perubahan (Ctrl+Shift+Z)"
           data-tip-bottom=""
         >
           <IconRedo />
@@ -757,23 +757,51 @@ export const App: React.FC = () => {
   const state = useStudio();
   const { chatOpen, inspectorOpen } = useUi();
 
-  // Pintasan editor: Spasi = putar/jeda; panah kiri/kanan = geser playhead
-  // 1 frame (Shift = 1 detik) — selama fokus tidak di kontrol input.
+  // Pintasan editor.
+  //
+  // Undo/redo dipisah dari pintasan transport dan SENGAJA tetap berlaku saat
+  // fokus ada di kolom teks: Ctrl+Z adalah refleks, bukan fitur — pengguna
+  // yang baru mengetik narasi lalu menekannya berharap perubahan terakhirnya
+  // dibatalkan, bukan tidak terjadi apa-apa. Undo di sini membatalkan PATCH
+  // (dokumen), bukan ketikan yang belum disimpan, jadi ia tidak merebut undo
+  // milik kolom teks yang masih punya perubahan tertunda.
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== " " && event.key !== "ArrowLeft" && event.key !== "ArrowRight")
-        return;
-      const target = event.target as HTMLElement | null;
+    const isTypingTarget = (target: HTMLElement | null): boolean => {
       const tag = target?.tagName ?? "";
-      if (
+      return (
         tag === "INPUT" ||
         tag === "TEXTAREA" ||
         tag === "SELECT" ||
         tag === "BUTTON" ||
         (target?.isContentEditable ?? false)
-      ) {
+      );
+    };
+
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        // Kolom teks dengan ketikan yang belum disimpan tetap memegang undo-nya
+        // sendiri; kalau tidak, satu Ctrl+Z akan melompati koreksi ketik.
+        if (
+          (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") &&
+          (target as HTMLInputElement).value !== (target as HTMLInputElement).defaultValue
+        ) {
+          return;
+        }
+        event.preventDefault();
+        void (event.shiftKey ? studioClient.redo() : studioClient.undo());
         return;
       }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        void studioClient.redo();
+        return;
+      }
+
+      if (event.key !== " " && event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+        return;
+      if (isTypingTarget(target)) return;
       event.preventDefault();
       if (event.key === " ") {
         playback.requestToggle();
