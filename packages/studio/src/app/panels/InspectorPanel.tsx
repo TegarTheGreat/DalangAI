@@ -672,7 +672,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
 
       <section className="prop-group">
         <h4>Gerak kamera</h4>
-        <div className="chip-row">
+        <div className="chip-row grid-3">
           {MOTIONS.map((motion) => (
             <button
               key={motion}
@@ -694,10 +694,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
 
       <section className="prop-group">
         <h4>Bingkai</h4>
-        <p className="group-hint">
-          Fokus memilih bagian aset yang dipertahankan crop; cermin membalik arah pandang
-          footage.
-        </p>
+        <p className="group-hint">Bagian aset yang dipertahankan saat di-crop.</p>
         <SliderRow
           label="Fokus X"
           min={0}
@@ -886,10 +883,13 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
       <section className="prop-group">
         <div className="group-head">
           <h4>Caption karaoke</h4>
+          {/* Label mengikuti KEADAAN, bukan tetap "Aktif": sakelar mati yang
+              bertuliskan "Aktif" terbaca seperti pernyataan status yang salah,
+              bukan seperti nama sakelarnya. */}
           <Switch
             checked={scene.caption.enabled}
             disabled={busy}
-            label="Aktif"
+            label={scene.caption.enabled ? "Aktif" : "Nonaktif"}
             onChange={(enabled) =>
               void studioClient.applyPatch(
                 [{ op: "updateScene", id: scene.id, patch: { caption: { enabled } } }],

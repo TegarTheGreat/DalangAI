@@ -1684,6 +1684,21 @@ input[type="color"]::-webkit-color-swatch {
   font-weight: 650;
 }
 
+/* Delapan chip dengan lebar berbeda-beda membungkus jadi tiga baris bergerigi
+   dengan lubang besar di ujungnya. Grid lebar seragam membuat blok pilihan
+   terbaca sebagai SATU kelompok, bukan tumpukan sisa baris. */
+.chip-row.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.chip-row.grid-3 .chip {
+  justify-content: center;
+  padding-left: 6px;
+  padding-right: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .slider-row {
   display: grid;
   grid-template-columns: 62px 1fr 44px;
