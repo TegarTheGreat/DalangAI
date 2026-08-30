@@ -117,6 +117,15 @@ export const IconPlus: React.FC = () => (
   </Icon>
 );
 
+/** Belah klip di playhead: garis potong + dua bagian menjauh. */
+export const IconSplit: React.FC = () => (
+  <Icon>
+    <path d="M12 4v16" strokeDasharray="2.6 2.4" />
+    <path d="M8.5 8.5 5 12l3.5 3.5" />
+    <path d="M15.5 8.5 19 12l-3.5 3.5" />
+  </Icon>
+);
+
 export const IconX: React.FC = () => (
   <Icon>
     <path d="M18 6 6 18" />

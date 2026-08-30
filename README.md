@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -151,7 +151,24 @@ Yang sudah berjalan:
     padat, hierarki teks, outro) tampil di `dalang validate` DAN disuntikkan
     ke konteks agent + KAIDAH SUTRADARA di system prompt — agent memperbaiki
     rencananya sendiri sebelum diminta.
-- **Kualitas terjaga otomatis**: 271 unit test (kontrak lock/pin/undo, timing
+- **Kehandalan gerak + sisa perkakas editor (ADR-0015)**:
+  - **Latar prosedural benar-benar hidup**: sinar berputar, kontur bernapas,
+    grid melayang, cincin struktur tergambar lalu berputar pelan — semua
+    fungsi frame deterministik (terbukti dari selisih piksel antar frame,
+    bukan klaim).
+  - **Satu bahasa easing** (`anim.ts`): kurva dinamai per rasa
+    (settle/glide/dolly) + util keyframe `kf()` dan `enterExit()`, dipakai
+    kedua preset — tak ada lagi masuk/keluar teks yang linear.
+  - **Gerak & bingkai**: tambahan pan atas/bawah + melayang, **cermin
+    horizontal**, **titik fokus crop**, **kecepatan video** (0.25–4x), dan
+    **blur** 0–20px sebagai filter; chip teks jadi **kaca** (backdrop blur)
+    dengan glow lembut, kicker menyala di footage gelap.
+  - **Belah scene di playhead** (bagian kedua mewarisi aset resolved,
+    undoable), **panah kiri/kanan menggeser playhead** (Shift = 1 detik),
+    **drop file gambar ke klip** langsung terpasang ter-pin.
+  - **H.265** di dialog Ekspor + **chip preset** Sosial / Web ringan /
+    Master arsip.
+- **Kualitas terjaga otomatis**: 283 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -164,7 +181,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 271 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 283 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

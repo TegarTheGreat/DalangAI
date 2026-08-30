@@ -250,7 +250,7 @@ describe("pipeline & render", () => {
     expect(webm.body.label).toBe("webm 720p cepat");
     await webmEvents;
     const listed = (await getProject(studio)).renders.map((r) => r.url);
-    expect(listed).toContain("/.dalang/renders/ekspor-720p-cepat.webm");
+    expect(listed).toContain("/.dalang/renders/ekspor-webm-720p-cepat.webm");
   });
 
   it("busy lock: patch ditolak 409 selama stage berjalan", async () => {

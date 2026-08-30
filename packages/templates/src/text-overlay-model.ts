@@ -60,6 +60,8 @@ export interface EmphasisPalette {
   boxInk?: string;
   /** Warna garis untuk emphasis "underline". */
   accent: string;
+  /** Warna glow lembut di sekeliling chip (ADR-0015); kosong = tanpa glow. */
+  glow?: string;
 }
 
 export const emphasisStyle = (
@@ -76,6 +78,11 @@ export const emphasisStyle = (
         textShadow: "none",
         boxDecorationBreak: "clone",
         WebkitBoxDecorationBreak: "clone",
+        // Chip kaca (ADR-0015): latar di belakang chip ikut buram sehingga
+        // chip terbaca di atas footage ramai — di Player dan render sama.
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        ...(palette.glow ? { boxShadow: `0 8px 32px ${palette.glow}` } : {}),
       };
     case "underline":
       return {

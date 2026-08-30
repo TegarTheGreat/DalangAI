@@ -2,7 +2,7 @@ import { MIN_SCENE_SEC, type Scene, type ScenePlan } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { Thumbnail } from "@remotion/player";
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { IconLock, IconPause, IconPlay, IconPlus } from "../icons";
+import { IconLock, IconPause, IconPlay, IconPlus, IconSplit } from "../icons";
 import { type PlanMeta, planMeta } from "../model/plan-meta";
 import { deriveSceneStatus } from "../model/scene-status";
 import {
@@ -127,6 +127,17 @@ const Clip: React.FC<{
       }}
       onDrop={(event) => {
         event.preventDefault();
+        // ADR-0015: jatuhkan file gambar dari OS ke klip = unggah + pasang
+        // ter-pin ke scene itu; tanpa file, ini reorder klip biasa.
+        const file = event.dataTransfer.files?.[0];
+        if (file && /^image\/(png|jpe?g)$/.test(file.type)) {
+          const reader = new FileReader();
+          reader.onload = () =>
+            void studioClient.uploadAsset(scene.id, file.name, String(reader.result));
+          reader.readAsDataURL(file);
+          onDragState(null);
+          return;
+        }
         const rect = event.currentTarget.getBoundingClientRect();
         onDrop(scene.id, event.clientX < rect.left + rect.width / 2 ? "before" : "after");
       }}
@@ -252,6 +263,21 @@ export const TimelineStrip: React.FC = () => {
     void studioClient.applyPatch([{ op: "reorderScenes", order }], "Urutan scene diubah");
   };
 
+  // ADR-0015: target belah = scene di bawah playhead, dengan kedua bagian
+  // minimal 1 detik dan scene tidak terkunci.
+  const splitTarget = (() => {
+    for (let i = meta.sceneStarts.length - 1; i >= 0; i--) {
+      const start = meta.sceneStarts[i] ?? 0;
+      if (frame < start) continue;
+      const local = (frame - start) / meta.fps;
+      const total = (meta.sceneFrames[i] ?? 0) / meta.fps;
+      const scene = plan.scenes[i];
+      if (!scene || scene.locked || local < 1 || total - local < 1) return null;
+      return { sceneId: scene.id, atSec: Math.round(local * 10) / 10 };
+    }
+    return null;
+  })();
+
   const addAtEnd = () => {
     const id = `sc-${Date.now().toString(36)}`;
     void studioClient.applyPatch(
@@ -284,6 +310,19 @@ export const TimelineStrip: React.FC = () => {
             / {formatTime(meta.durationInFrames, meta.fps)}
           </span>
         </span>
+        <button
+          type="button"
+          className="mini split-btn"
+          disabled={busy || !splitTarget}
+          data-tip="Belah scene di playhead"
+          onClick={() => {
+            if (splitTarget) {
+              void studioClient.splitScene(splitTarget.sceneId, splitTarget.atSec);
+            }
+          }}
+        >
+          <IconSplit />
+        </button>
         <span className="transport-spacer" />
         <div className="zoom-group">
           <button

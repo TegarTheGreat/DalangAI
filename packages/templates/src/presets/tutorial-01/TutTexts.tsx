@@ -1,5 +1,6 @@
 import type { Scene, TextOverlay } from "@dalang/core";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { enterExit } from "../../anim";
 import type { AspectMetrics } from "../../layout";
 import {
   alignStyles,
@@ -121,14 +122,14 @@ export const TutTexts: React.FC<{
                 Math.round(text.endFrac * durationInFrames),
               );
               if (frame < start || frame > end) return null;
-              const enter = interpolate(frame, [start, start + ENTER_FRAMES], [0, 1], {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-              });
-              const exit = interpolate(frame, [end - EXIT_FRAMES, end], [1, 0], {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-              });
+              // ADR-0015: kurva settle bersama utk masuk/keluar (anim.ts).
+              const { progress, opacity } = enterExit(
+                frame,
+                start,
+                end,
+                ENTER_FRAMES,
+                EXIT_FRAMES,
+              );
               const align = alignStyles(text.align);
               return (
                 <p
@@ -140,12 +141,10 @@ export const TutTexts: React.FC<{
                     ...emphasisStyle(text.emphasis, {
                       boxBg: theme.card,
                       accent: theme.accent,
+                      glow: "rgba(29, 33, 41, 0.14)",
                     }),
-                    ...(text.emphasis === "box"
-                      ? { boxShadow: "0 10px 30px rgba(29, 33, 41, 0.14)" }
-                      : {}),
-                    opacity: Math.min(enter, exit),
-                    transform: `translateY(${(1 - enter) * 22}px)`,
+                    opacity,
+                    translate: `0px ${((1 - progress) * 22).toFixed(2)}px`,
                   }}
                 >
                   {text.content}

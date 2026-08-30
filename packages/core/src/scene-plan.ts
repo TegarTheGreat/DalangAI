@@ -38,6 +38,10 @@ export const MOTIONS = [
   "kenburns-out",
   "pan-left",
   "pan-right",
+  // ADR-0015: variasi vertikal utk 9:16 + drift orbit pelan.
+  "pan-up",
+  "pan-down",
+  "drift",
 ] as const;
 export const motionSchema = z.enum(MOTIONS);
 export type Motion = z.infer<typeof motionSchema>;
@@ -82,6 +86,8 @@ export const visualFilterSchema = z.strictObject({
   contrast: z.number().min(0.25).max(2).default(1),
   saturation: z.number().min(0).max(2).default(1),
   opacity: normalized01.default(1),
+  /** Blur piksel pada basis 1080 (ADR-0015); 0 = tajam. */
+  blur: z.number().min(0).max(20).default(0),
 });
 export type VisualFilter = z.infer<typeof visualFilterSchema>;
 
@@ -168,6 +174,13 @@ export const visualSchema = z.strictObject({
   variant: z.string().optional(),
   /** Filter/penyesuaian tampilan (ADR-0011); tidak ada = netral. */
   filter: visualFilterSchema.optional(),
+  /** Kecepatan putar aset VIDEO (ADR-0015); 1 = normal, diabaikan utk gambar. */
+  speed: z.number().min(0.25).max(4).default(1),
+  /** Cermin horizontal aset (ADR-0015) — membalik arah pandang footage. */
+  flipH: z.boolean().default(false),
+  /** Titik fokus crop `cover` (ADR-0015), fraksi 0-1; 0.5/0.5 = tengah. */
+  focusX: normalized01.default(0.5),
+  focusY: normalized01.default(0.5),
 });
 export type Visual = z.infer<typeof visualSchema>;
 

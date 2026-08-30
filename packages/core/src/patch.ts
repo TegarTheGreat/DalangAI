@@ -57,6 +57,11 @@ export const sceneUpdateSchema = z.strictObject({
       variant: z.string().nullable().optional(),
       /** `null` menghapus filter (kembali netral). */
       filter: visualFilterSchema.nullable().optional(),
+      /** ADR-0015. */
+      speed: z.number().min(0.25).max(4).optional(),
+      flipH: z.boolean().optional(),
+      focusX: z.number().min(0).max(1).optional(),
+      focusY: z.number().min(0).max(1).optional(),
     })
     .optional(),
   caption: z

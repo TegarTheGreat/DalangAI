@@ -1,6 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PatchError, patchOpSchema, setResolvedAsset } from "@dalang/core";
+import {
+  PatchError,
+  patchOpSchema,
+  resolveSceneDurationSec,
+  setResolvedAsset,
+} from "@dalang/core";
 import {
   contentHash,
   imageDims,
@@ -306,7 +311,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
 
     session.persist();
     const fileName = explicit
-      ? `ekspor-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`
+      ? `ekspor-${settings.format}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`
       : profile === "final"
         ? "final.mp4"
         : "preview.mp4";
@@ -483,6 +488,69 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
       );
       store.notifyPlan("pick");
       return c.json({ ok: true, file: relPath, summary: result.summary });
+    } catch (error) {
+      if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
+      return c.json(errorPayload(error), 400);
+    }
+  });
+
+  // ADR-0015: belah scene di titik waktu — durasi terbagi, bagian kedua
+  // mewarisi visual + aset resolved (disalin di renderState) tanpa narasi.
+  app.post("/api/scene/split", async (c) => {
+    const body = z
+      .object({ sceneId: z.string(), atSec: z.number().positive().finite() })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const scene = plan.scenes.find((s) => s.id === body.data.sceneId);
+    if (!scene) return c.json({ error: `Scene ${body.data.sceneId} tidak ada` }, 400);
+    if (scene.locked) return c.json({ error: "Scene terkunci" }, 400);
+    const total = resolveSceneDurationSec(scene, plan);
+    const d1 = Math.round(body.data.atSec * 10) / 10;
+    const d2 = Math.round((total - d1) * 10) / 10;
+    if (d1 < 1 || d2 < 1) {
+      return c.json({ error: "Kedua bagian minimal 1 detik" }, 400);
+    }
+
+    const newId = `${scene.id.slice(0, 16)}-p${Date.now().toString(36).slice(-4)}`;
+    try {
+      const startedAt = Date.now();
+      const result = await store.runExclusive("pick", async () => {
+        const current = session.plan;
+        if (!current) throw new Error("Plan hilang di tengah split");
+        const asset = current.renderState.resolvedAssets[scene.id];
+        if (asset) {
+          session.plan = setResolvedAsset(current, newId, asset);
+        }
+        const { summary } = session.applyUserPatch([
+          { op: "updateScene", id: scene.id, patch: { duration: d1 } },
+          {
+            op: "addScene",
+            afterId: scene.id,
+            scene: {
+              id: newId,
+              narration: "",
+              duration: d2,
+              visual: { ...scene.visual },
+              caption: { ...scene.caption },
+              transition: { ...scene.transition },
+              texts: [],
+              annotations: [],
+            } as never,
+          },
+        ]);
+        return { summary };
+      });
+      logUiEvent(
+        "splitScene",
+        { sceneId: scene.id, atSec: d1 },
+        { newId, d1, d2 },
+        0,
+        Date.now() - startedAt,
+      );
+      store.notifyPlan("patch-user");
+      return c.json({ ok: true, newId, summary: result.summary });
     } catch (error) {
       if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
       return c.json(errorPayload(error), 400);

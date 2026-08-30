@@ -25,6 +25,7 @@ export const filterToCss = (filter: VisualFilter | undefined): FilterCss => {
   if (filter.brightness !== 1) parts.push(`brightness(${filter.brightness})`);
   if (filter.contrast !== 1) parts.push(`contrast(${filter.contrast})`);
   if (filter.saturation !== 1) parts.push(`saturate(${filter.saturation})`);
+  if (filter.blur > 0) parts.push(`blur(${filter.blur}px)`);
   return {
     ...(parts.length > 0 ? { filter: parts.join(" ") } : {}),
     ...(filter.opacity !== 1 ? { opacity: filter.opacity } : {}),

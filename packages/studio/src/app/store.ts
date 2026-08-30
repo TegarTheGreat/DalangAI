@@ -165,6 +165,17 @@ export class StudioClient {
     }
   }
 
+  /** Belah scene di titik waktu lokal (ADR-0015); bisa di-undo. */
+  async splitScene(sceneId: string, atSec: number): Promise<void> {
+    try {
+      const { newId } = await api.splitScene(sceneId, atSec);
+      this.toast(`Scene dibelah — bagian kedua: ${newId}`);
+      await this.refresh();
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
   stop(): void {
     this.stopEvents?.();
   }

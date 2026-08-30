@@ -63,6 +63,11 @@ const EXPORT_FORMATS: ReadonlyArray<{
     desc: "Kompatibilitas paling luas: media sosial, perpesanan, semua pemutar.",
   },
   {
+    id: "hevc",
+    title: "MP4 · H.265",
+    desc: "Setengah ukuran H.264 pada mutu setara; butuh pemutar modern.",
+  },
+  {
     id: "webm",
     title: "WebM · VP9",
     desc: "Lebih kecil untuk web modern; pemutar lama mungkin tidak mendukung.",
@@ -72,6 +77,18 @@ const EXPORT_FORMATS: ReadonlyArray<{
     title: "MOV · ProRes",
     desc: "Master untuk edit lanjut di NLE — nyaris tanpa kompresi, file besar.",
   },
+];
+
+/** Preset satu-klik: mengisi format+resolusi+mutu (rasio milik proyek). */
+const EXPORT_PRESETS: ReadonlyArray<{ label: string } & ExportSettingsLite> = [
+  {
+    label: "Sosial (YouTube/Reels)",
+    format: "mp4",
+    resolution: 1080,
+    quality: "seimbang",
+  },
+  { label: "Web ringan", format: "webm", resolution: 720, quality: "seimbang" },
+  { label: "Master arsip", format: "mov", resolution: 1080, quality: "terbaik" },
 ];
 
 const RESOLUTIONS = [540, 720, 1080] as const;
@@ -89,6 +106,11 @@ const QUALITY_HINT: Record<
     cepat: "CRF 23 · preset veryfast — pratinjau kilat.",
     seimbang: "CRF 18 · preset medium · audio 192k — pilihan rilis.",
     terbaik: "CRF 15 · preset slow · audio 192k — detail maksimal, paling lama.",
+  },
+  hevc: {
+    cepat: "H.265 CRF 28 — kecil dan cepat.",
+    seimbang: "H.265 CRF 23 · audio 192k — mutu H.264 dengan ukuran jauh lebih kecil.",
+    terbaik: "H.265 CRF 20 — detail maksimal, enkode paling lama.",
   },
   webm: {
     cepat: "VP9 CRF 36 — kecil dan cepat.",
@@ -119,6 +141,28 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
       <div className="dialog export-dialog">
         <h3>Ekspor video</h3>
         <p>Render berjalan lokal di mesin ini (CPU) dan hasilnya masuk riwayat render.</p>
+        <div className="chip-row export-presets">
+          {EXPORT_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              className={
+                format === preset.format &&
+                resolution === preset.resolution &&
+                quality === preset.quality
+                  ? "chip active"
+                  : "chip"
+              }
+              onClick={() => {
+                setFormat(preset.format);
+                setResolution(preset.resolution);
+                setQuality(preset.quality);
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
         <div className="radio-stack">
           {EXPORT_FORMATS.map((option) => (
             <RadioCard
@@ -608,10 +652,12 @@ export const App: React.FC = () => {
   const state = useStudio();
   const { chatOpen, inspectorOpen } = useUi();
 
-  // Pintasan editor: Spasi = putar/jeda, selama fokus tidak di kontrol input.
+  // Pintasan editor: Spasi = putar/jeda; panah kiri/kanan = geser playhead
+  // 1 frame (Shift = 1 detik) — selama fokus tidak di kontrol input.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== " ") return;
+      if (event.key !== " " && event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+        return;
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName ?? "";
       if (
@@ -624,7 +670,13 @@ export const App: React.FC = () => {
         return;
       }
       event.preventDefault();
-      playback.requestToggle();
+      if (event.key === " ") {
+        playback.requestToggle();
+        return;
+      }
+      const step = (event.shiftKey ? 30 : 1) * (event.key === "ArrowLeft" ? -1 : 1);
+      playback.requestPause();
+      playback.requestSeek(Math.max(0, playback.getFrame() + step));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

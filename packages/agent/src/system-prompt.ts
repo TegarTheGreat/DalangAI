@@ -19,7 +19,8 @@ CARA KERJA
 - Narasi Bahasa Indonesia gaya dokumenter lisan: kalimat pendek, aktif, tanpa jargon akademik. visual.query dalam bahasa Inggris, konkret dan sinematik (mis. "aerial jungle mist sunrise", bukan "beautiful nature").
 
 PERANGKAT SINEMATIK (pakai lewat applyPatch updateScene)
-- visual.filter: { preset: none|warm|cool|mono|vivid|film, brightness/contrast/saturation (0.25–2, 1=netral), opacity (0–1) }. Gunakan hemat dan konsisten antar scene yang berdekatan; null menghapus filter.
+- visual.filter: { preset: none|warm|cool|mono|vivid|film, brightness/contrast/saturation (0.25–2, 1=netral), opacity (0–1), blur (0–20 px — untuk latar di belakang teks besar atau efek mimpi) }. Gunakan hemat dan konsisten antar scene yang berdekatan; null menghapus filter.
+- visual.motion kini juga: pan-up | pan-down (bagus utk 9:16) | drift (orbit melayang pelan). visual.speed (0.25–4) mengatur kecepatan aset VIDEO; visual.flipH mencerminkan aset (menyamakan arah pandang antar shot); visual.focusX/focusY (0–1) memilih bagian aset yang dipertahankan crop.
 - transition: { type: cross-fade|slide-left|slide-right|slide-up|wipe-right|wipe-down|none } — transisi KELUAR scene itu. Cross-fade adalah default aman; slide/wipe untuk pergantian bab atau perubahan tempo.
 - texts (maks 3/scene): { id, content, role: headline|subline|kicker|quote, position: top|center|bottom, align: left|center|right, size: s|m|l, emphasis: none|box|underline, startFrac/endFrac 0–1 }. Untuk angka kunci, kutipan, atau penekanan — bukan duplikat narasi. Kicker = label pendek uppercase; quote = kutipan italic; emphasis "box" = chip berlatar (bagus untuk angka), "underline" = garis aksen.
 - transition.durationFrames (6–24, default 15): perpendek untuk tempo cepat/berita, perpanjang untuk perpindahan bab yang tenang.

@@ -44,7 +44,7 @@ export const PROFILES: Record<RenderProfile, ProfileConfig> = {
 // Profil lama tetap ada sebagai makro default; pengaturan eksplisit menimpa.
 // ---------------------------------------------------------------------------
 
-export const VIDEO_FORMATS = ["mp4", "webm", "mov"] as const;
+export const VIDEO_FORMATS = ["mp4", "hevc", "webm", "mov"] as const;
 export type VideoFormat = (typeof VIDEO_FORMATS)[number];
 
 /** Sisi pendek dalam piksel; komposisi dasar 1080. */
@@ -70,11 +70,12 @@ export const resolveExportSettings = (
   overrides?: Partial<ExportSettings>,
 ): ExportSettings => ({ ...DEFAULT_EXPORT_SETTINGS[profile], ...overrides });
 
-/** Ekstensi file untuk format (mov = ProRes di kontainer QuickTime). */
-export const extensionFor = (format: VideoFormat): string => format;
+/** Ekstensi file untuk format (hevc tetap .mp4; mov = kontainer QuickTime). */
+export const extensionFor = (format: VideoFormat): string =>
+  format === "hevc" ? "mp4" : format;
 
 export interface EncoderArgs {
-  codec: "h264" | "vp9" | "prores";
+  codec: "h264" | "h265" | "vp9" | "prores";
   scale: number;
   audioCodec: "aac" | "opus" | "pcm-16";
   crf?: number;
@@ -102,6 +103,16 @@ export const encoderArgs = (settings: ExportSettings): EncoderArgs => {
         audioCodec: "aac",
         crf: q === "cepat" ? 23 : q === "seimbang" ? 18 : 15,
         x264Preset: q === "cepat" ? "veryfast" : q === "seimbang" ? "medium" : "slow",
+        audioBitrate: q === "cepat" ? "128k" : "192k",
+        jpegQuality,
+      };
+    case "hevc":
+      // Skala CRF H.265 bergeser ~+5 dari H.264 utk mutu visual setara.
+      return {
+        codec: "h265",
+        scale,
+        audioCodec: "aac",
+        crf: q === "cepat" ? 28 : q === "seimbang" ? 23 : 20,
         audioBitrate: q === "cepat" ? "128k" : "192k",
         jpegQuality,
       };

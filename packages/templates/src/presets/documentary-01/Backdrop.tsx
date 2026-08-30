@@ -2,13 +2,14 @@ import type { ResolvedAsset, Scene } from "@dalang/core";
 import { Video } from "@remotion/media";
 import {
   AbsoluteFill,
-  Easing,
   Img,
   interpolate,
   random,
   staticFile,
   useCurrentFrame,
 } from "remotion";
+import { easeDolly, kf } from "../../anim";
+import { motionTransform } from "../../motion-model";
 import { filterToCss } from "./filters";
 import type { DocTheme } from "./theme";
 
@@ -18,55 +19,37 @@ import type { DocTheme } from "./theme";
  * scenes whose asset has not been resolved yet.
  */
 
-const motionStyle = (
-  motion: Scene["visual"]["motion"],
-  frame: number,
-  durationInFrames: number,
-): React.CSSProperties => {
-  // Easing kubik halus (ADR-0014): Ken Burns linear terasa mekanis; kurva
-  // ini memberi "settle" pelan di awal/akhir seperti gerak dolly sungguhan.
-  const progress = interpolate(frame, [0, Math.max(durationInFrames, 1)], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.bezier(0.33, 0.0, 0.25, 1),
-  });
-  switch (motion) {
-    case "kenburns-in":
-      return { scale: String(1.03 + progress * 0.1) };
-    case "kenburns-out":
-      return { scale: String(1.13 - progress * 0.1) };
-    case "pan-left":
-      return {
-        scale: "1.1",
-        translate: `${interpolate(progress, [0, 1], [2.2, -2.2])}% 0%`,
-      };
-    case "pan-right":
-      return {
-        scale: "1.1",
-        translate: `${interpolate(progress, [0, 1], [-2.2, 2.2])}% 0%`,
-      };
-    case "none":
-      return {};
-  }
-};
-
 const AssetLayer: React.FC<{
   asset: ResolvedAsset;
   scene: Scene;
   durationInFrames: number;
 }> = ({ asset, scene, durationInFrames }) => {
   const frame = useCurrentFrame();
+  // Easing dolly (ADR-0014/0015): gerak kamera settle di awal/akhir; semua
+  // matematika transform hidup di motion-model (murni & diuji).
+  const progress = interpolate(frame, [0, Math.max(durationInFrames, 1)], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: easeDolly,
+  });
   const style: React.CSSProperties = {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    ...motionStyle(scene.visual.motion, frame, durationInFrames),
+    ...motionTransform(scene.visual, progress),
     // ADR-0011: filter/opacity scene diterapkan di lapisan media.
     ...filterToCss(scene.visual.filter),
   };
 
   if (asset.kind === "video") {
-    return <Video src={staticFile(asset.file)} muted style={style} />;
+    return (
+      <Video
+        src={staticFile(asset.file)}
+        muted
+        playbackRate={scene.visual.speed}
+        style={style}
+      />
+    );
   }
   return <Img src={staticFile(asset.file)} style={style} />;
 };
@@ -80,22 +63,29 @@ const variantOf = (scene: Scene): ProceduralVariant =>
     ? (scene.visual.variant as ProceduralVariant)
     : "duotone";
 
-/** Lapisan seni tambahan di atas dasar duotone, per varian. */
+/**
+ * Lapisan seni tambahan di atas dasar duotone, per varian — HIDUP (ADR-0015):
+ * rays berputar sangat pelan, kontur topo bernapas, grid drift diagonal.
+ * Semuanya fungsi frame deterministik (bukan CSS animation).
+ */
 const variantArt = (
   variant: ProceduralVariant,
   seedA: number,
   seedB: number,
   duotone: [string, string],
+  frame: number,
 ): React.CSSProperties | null => {
   switch (variant) {
     case "rays":
       return {
-        backgroundImage: `repeating-conic-gradient(from ${Math.round(seedA * 360)}deg at ${20 + seedB * 60}% ${18 + seedA * 20}%, rgba(245,240,230,0.045) 0deg 7deg, transparent 7deg 24deg)`,
+        backgroundImage: `repeating-conic-gradient(from ${(seedA * 360 + frame * 0.055).toFixed(2)}deg at ${20 + seedB * 60}% ${18 + seedA * 20}%, rgba(245,240,230,0.045) 0deg 7deg, transparent 7deg 24deg)`,
       };
-    case "topo":
+    case "topo": {
+      const breathe = Math.sin(frame * 0.021 + seedB * 6) * 2.4;
       return {
-        backgroundImage: `repeating-radial-gradient(90% 70% at ${25 + seedA * 50}% ${30 + seedB * 40}%, transparent 0 46px, rgba(245,240,230,0.05) 46px 48px)`,
+        backgroundImage: `repeating-radial-gradient(90% 70% at ${(25 + seedA * 50 + breathe).toFixed(2)}% ${(30 + seedB * 40).toFixed(2)}%, transparent 0 46px, rgba(245,240,230,0.05) 46px 48px)`,
       };
+    }
     case "grid":
       return {
         backgroundImage: [
@@ -104,6 +94,7 @@ const variantArt = (
           `radial-gradient(120% 100% at 50% 40%, transparent 40%, ${duotone[0]}55 100%)`,
         ].join(", "),
         backgroundSize: "72px 72px, 72px 72px, 100% 100%",
+        backgroundPosition: `${(frame * 0.16).toFixed(2)}px ${(frame * 0.11).toFixed(2)}px, ${(frame * 0.16).toFixed(2)}px ${(frame * 0.11).toFixed(2)}px, 0 0`,
       };
     case "duotone":
       return null;
@@ -132,7 +123,7 @@ export const ProceduralBackdrop: React.FC<{
   const ay = 8 + seedB * 24;
   const bx = 62 + seedB * 28;
   const by = 64 + seedA * 26;
-  const art = variantArt(variantOf(scene), seedA, seedB, duotone);
+  const art = variantArt(variantOf(scene), seedA, seedB, duotone, frame);
 
   return (
     <AbsoluteFill
@@ -160,18 +151,39 @@ export const ProceduralBackdrop: React.FC<{
       >
         {art ? <AbsoluteFill style={art} /> : null}
       </AbsoluteFill>
-      {/* Oversized ring for quiet structure */}
-      <div
+      {/* Cincin raksasa: draw-on pelan di awal scene lalu berputar sangat
+          lambat — struktur tenang yang HIDUP (ADR-0015). pathLength=1
+          menormalkan dash sehingga offset 1->0 = menggambar penuh. */}
+      <svg
+        role="presentation"
         style={{
           position: "absolute",
           width: "160%",
           aspectRatio: "1 / 1",
           left: `${-40 + seedB * 30}%`,
           top: `${18 + seedA * 22}%`,
-          borderRadius: "50%",
-          border: "2px solid rgba(245, 240, 230, 0.05)",
+          rotate: `${(seedB * 360 + frame * 0.03).toFixed(2)}deg`,
         }}
-      />
+        viewBox="0 0 100 100"
+      >
+        <circle
+          cx="50"
+          cy="50"
+          r="49"
+          fill="none"
+          stroke="rgba(245, 240, 230, 0.05)"
+          strokeWidth="0.14"
+          pathLength={1}
+          strokeDasharray="1"
+          strokeDashoffset={
+            1 -
+            kf(frame, [
+              [0, 0],
+              [80, 1],
+            ])
+          }
+        />
+      </svg>
     </AbsoluteFill>
   );
 };

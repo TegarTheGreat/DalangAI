@@ -1,5 +1,6 @@
 import type { Scene, TextOverlay } from "@dalang/core";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { enterExit } from "../../anim";
 import type { AspectMetrics } from "../../layout";
 import {
   alignStyles,
@@ -60,6 +61,8 @@ const roleStyle = (
         letterSpacing: "0.34em",
         textTransform: "uppercase",
         color: theme.accent,
+        // Glow aksen lembut (ADR-0015) — label kecil tetap menyala di footage gelap.
+        textShadow: `0 0 18px ${theme.accent}66, 0 2px 10px rgba(0,0,0,0.6)`,
       };
     case "quote":
       return {
@@ -125,14 +128,14 @@ export const TextsOverlay: React.FC<{
                 Math.round(text.endFrac * durationInFrames),
               );
               if (frame < start || frame > end) return null;
-              const enter = interpolate(frame, [start, start + ENTER_FRAMES], [0, 1], {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-              });
-              const exit = interpolate(frame, [end - EXIT_FRAMES, end], [1, 0], {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-              });
+              // ADR-0015: kurva settle bersama utk masuk/keluar (anim.ts).
+              const { progress, opacity } = enterExit(
+                frame,
+                start,
+                end,
+                ENTER_FRAMES,
+                EXIT_FRAMES,
+              );
               const align = alignStyles(text.align);
               return (
                 <p
@@ -142,11 +145,12 @@ export const TextsOverlay: React.FC<{
                     ...align.self,
                     ...align.block,
                     ...emphasisStyle(text.emphasis, {
-                      boxBg: "rgba(7, 9, 15, 0.78)",
+                      boxBg: "rgba(7, 9, 15, 0.66)",
                       accent: theme.accent,
+                      glow: "rgba(0, 0, 0, 0.45)",
                     }),
-                    opacity: Math.min(enter, exit),
-                    transform: `translateY(${(1 - enter) * 26}px)`,
+                    opacity,
+                    translate: `0px ${((1 - progress) * 26).toFixed(2)}px`,
                   }}
                 >
                   {text.content}

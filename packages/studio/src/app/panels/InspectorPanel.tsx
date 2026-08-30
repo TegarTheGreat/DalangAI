@@ -89,6 +89,17 @@ const EMPHASIS_LABEL: Record<string, string> = {
   underline: "Garis",
 };
 
+const MOTION_LABEL: Record<string, string> = {
+  none: "Diam",
+  "kenburns-in": "Zoom masuk",
+  "kenburns-out": "Zoom keluar",
+  "pan-left": "Pan kiri",
+  "pan-right": "Pan kanan",
+  "pan-up": "Pan atas",
+  "pan-down": "Pan bawah",
+  drift: "Melayang",
+};
+
 /** Varian seni prosedural (ADR-0013) untuk scene solid/stock belum ter-resolve. */
 const ART_VARIANTS = ["duotone", "rays", "topo", "grid"] as const;
 const ART_LABEL: Record<string, string> = {
@@ -634,25 +645,86 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
 
       <section className="prop-group">
         <h4>Gerak kamera</h4>
-        <Segmented
-          options={MOTIONS}
-          value={scene.visual.motion}
-          disabled={busy}
-          label={(motion) =>
-            motion === "none"
-              ? "Diam"
-              : motion === "kenburns-in"
-                ? "Zoom masuk"
-                : motion === "kenburns-out"
-                  ? "Zoom keluar"
-                  : motion === "pan-left"
-                    ? "Pan kiri"
-                    : "Pan kanan"
-          }
-          onChange={(motion) =>
-            patch([{ op: "updateScene", id: scene.id, patch: { visual: { motion } } }])
+        <div className="chip-row">
+          {MOTIONS.map((motion) => (
+            <button
+              key={motion}
+              type="button"
+              className={scene.visual.motion === motion ? "chip active" : "chip"}
+              disabled={busy}
+              onClick={() =>
+                patch(
+                  [{ op: "updateScene", id: scene.id, patch: { visual: { motion } } }],
+                  `Gerak ${MOTION_LABEL[motion]}`,
+                )
+              }
+            >
+              {MOTION_LABEL[motion] ?? motion}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="prop-group">
+        <h4>Bingkai</h4>
+        <p className="group-hint">
+          Fokus memilih bagian aset yang dipertahankan crop; cermin membalik arah pandang
+          footage.
+        </p>
+        <SliderRow
+          label="Fokus X"
+          min={0}
+          max={1}
+          step={0.05}
+          neutral={0.5}
+          value={scene.visual.focusX}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(focusX) =>
+            patch([{ op: "updateScene", id: scene.id, patch: { visual: { focusX } } }])
           }
         />
+        <SliderRow
+          label="Fokus Y"
+          min={0}
+          max={1}
+          step={0.05}
+          neutral={0.5}
+          value={scene.visual.focusY}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(focusY) =>
+            patch([{ op: "updateScene", id: scene.id, patch: { visual: { focusY } } }])
+          }
+        />
+        <div className="switch-row">
+          <Switch
+            checked={scene.visual.flipH}
+            disabled={busy}
+            label="Cermin horizontal"
+            onChange={(flipH) =>
+              patch(
+                [{ op: "updateScene", id: scene.id, patch: { visual: { flipH } } }],
+                flipH ? "Aset dicerminkan" : "Cermin dilepas",
+              )
+            }
+          />
+        </div>
+        {project?.plan?.renderState.resolvedAssets[scene.id]?.kind === "video" ? (
+          <SliderRow
+            label="Kecepatan"
+            min={0.25}
+            max={4}
+            step={0.25}
+            neutral={1}
+            value={scene.visual.speed}
+            format={(v) => `${v}x`}
+            onCommit={(speed) =>
+              patch(
+                [{ op: "updateScene", id: scene.id, patch: { visual: { speed } } }],
+                `Kecepatan ${speed}x`,
+              )
+            }
+          />
+        ) : null}
       </section>
 
       {scene.visual.type === "solid" || scene.visual.type === "stock" ? (
@@ -756,6 +828,16 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           value={filter.opacity}
           format={(v) => `${Math.round(v * 100)}%`}
           onCommit={(opacity) => commitFilter({ opacity })}
+        />
+        <SliderRow
+          label="Blur"
+          min={0}
+          max={20}
+          step={1}
+          neutral={0}
+          value={filter.blur}
+          format={(v) => `${v}px`}
+          onCommit={(blur) => commitFilter({ blur })}
         />
       </section>
     </>

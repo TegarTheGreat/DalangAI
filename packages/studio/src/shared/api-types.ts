@@ -25,7 +25,7 @@ export interface BusyState {
 // terhadap sumber kebenarannya.
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = "mp4" | "webm" | "mov";
+export type ExportFormat = "mp4" | "hevc" | "webm" | "mov";
 export type ExportResolution = 540 | 720 | 1080;
 export type ExportQuality = "cepat" | "seimbang" | "terbaik";
 

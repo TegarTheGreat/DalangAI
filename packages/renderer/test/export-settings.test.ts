@@ -97,6 +97,13 @@ describe("pengaturan ekspor (ADR-0014)", () => {
     }
   });
 
+  it("hevc -> h265+aac dengan skala CRF bergeser, ekstensi tetap mp4", () => {
+    const args = encoderArgs({ format: "hevc", resolution: 1080, quality: "seimbang" });
+    expect(args).toMatchObject({ codec: "h265", audioCodec: "aac", crf: 23 });
+    expect(args.x264Preset).toBeUndefined();
+    expect(extensionFor("hevc")).toBe("mp4");
+  });
+
   it("ekstensi file per format", () => {
     expect(extensionFor("mp4")).toBe("mp4");
     expect(extensionFor("webm")).toBe("webm");

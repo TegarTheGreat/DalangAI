@@ -86,6 +86,12 @@ export const api = {
       body: JSON.stringify(req),
     }),
 
+  splitScene: (sceneId: string, atSec: number) =>
+    request<{ ok: true; newId: string; summary: string }>("/api/scene/split", {
+      method: "POST",
+      body: JSON.stringify({ sceneId, atSec }),
+    }),
+
   stockSearch: (query: string, kind: "video" | "image") =>
     request<StockSearchResponse>(
       `/api/stock/search?query=${encodeURIComponent(query)}&kind=${kind}`,

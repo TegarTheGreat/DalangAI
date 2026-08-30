@@ -177,7 +177,10 @@
                   "kenburns-in",
                   "kenburns-out",
                   "pan-left",
-                  "pan-right"
+                  "pan-right",
+                  "pan-up",
+                  "pan-down",
+                  "drift"
                 ]
               },
               "pinned": {
@@ -225,9 +228,37 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
+                  },
+                  "blur": {
+                    "default": 0,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 20
                   }
                 },
                 "additionalProperties": false
+              },
+              "speed": {
+                "default": 1,
+                "type": "number",
+                "minimum": 0.25,
+                "maximum": 4
+              },
+              "flipH": {
+                "default": false,
+                "type": "boolean"
+              },
+              "focusX": {
+                "default": 0.5,
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "focusY": {
+                "default": 0.5,
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
             "required": [
