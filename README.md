@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -213,7 +213,39 @@ Yang sudah berjalan:
   - **Catatan sutradara terlihat manusia**: tombol berlencana di header
     membuka daftar temuan berperingkat dengan kerangka format yang sedang
     dipakai — dihitung di browser, jadi selalu sinkron dengan editan terakhir.
-- **Kualitas terjaga otomatis**: 345 unit test (kontrak lock/pin/undo, timing
+- **Pustaka media (ADR-0018)** — GIF, stiker, ikon, dan efek suara, dengan
+  hak pakai yang dinyatakan apa adanya:
+  - **GIF & stiker** lewat **GIPHY** dan **Tenor** (API resmi keduanya).
+    Stiker mempertahankan latar tembus pandang (WebP/GIF, bukan MP4 yang
+    tak berkanal alfa); peringkat konten aman-semua-umur secara bawaan.
+  - **Ikon** lewat **Iconify** — API publik tanpa kunci, 237 set. Lisensi
+    melekat per set, jadi penyaringnya memakai **daftar putih SPDX**: yang
+    belum dikenal dianggap tidak aman sampai ditinjau, apa pun ber-`-NC-`
+    ditolak lebih dulu, dan set yang mewajibkan kredit ditandai.
+  - **Efek suara** lewat **Openverse** (bawaan `cc0`/`pdm`) — dipilih di atas
+    Freesound karena syarat pemakaian API Freesound sendiri gratis hanya untuk
+    keperluan non-komersial, terlepas dari lisensi suaranya.
+  - **Tempelan yang mengikuti rasio**: `scene.graphics[]` (maks 4) memakai
+    jangkar + geseran fraksional, bukan koordinat piksel — satu nilai tetap
+    benar di 16:9, 9:16, dan 1:1. Ikon diwarnai lewat CSS mask, bukan
+    `currentColor` (SVG yang dimuat sebagai `<img>` tidak mewarisi warna
+    induknya). `audio.sfx[]` (maks 24) menambatkan bunyi ke **scene**, bukan
+    garis waktu mutlak: scene digeser, bunyinya ikut.
+  - **Hak pakai dijaga tiga lapis**: lisensi ditulis apa adanya dengan penanda
+    `PERIKSA HAK PAKAI`, kritik sutradara `aset-hak-pakai` menegur bila aset
+    bertanda itu terpakai (memeriksa lisensinya, bukan nama providernya), dan
+    urutan rantai stock menaruh Pexels/Pixabay SELALU di depan GIPHY/Tenor —
+    dikunci test.
+  - **`dalang providers:check`** memverifikasi setiap provider terhadap
+    layanan aslinya (bukan mock): kunci terpasang, endpoint hidup, dan field
+    yang benar-benar dipakai kode ada di respons. "Belum diatur" dibedakan
+    dari "tak terjangkau".
+  - *Tidak diintegrasikan, dengan alasan tertulis di ADR-0018: **MyInstants,
+    yarn.co, icon-icons** — ketiganya tanpa API resmi, dan syarat pakainya
+    melarang persis apa yang dibutuhkan integrasi otomatis (akses via bot,
+    scraping, atau penggunaan komersial). Iconify dan Openverse dipakai
+    sebagai penggantinya.*
+- **Kualitas terjaga otomatis**: 433 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -226,7 +258,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 345 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 433 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -239,6 +271,7 @@ pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
 pnpm dalang render   examples/borobudur-60s/plan.json --video-format webm --resolution 720 --quality terbaik
 pnpm dalang still    examples/borobudur-60s/plan.json -t 8 -t 29 -t 44 -o out
 pnpm dalang log      proyekku/        # garis waktu pipeline + agent + biaya
+pnpm dalang providers:check           # cek kunci & endpoint provider ke layanan asli
 
 pnpm studio:remotion      # Remotion Studio (alat pengembang preset/template)
 ```
@@ -265,12 +298,14 @@ shell sekali.
 packages/
   core/       skema scene-plan + patch ops + patch log + resolusi durasi (zod saja)
   pipeline/   stages deterministik + ledger SQLite + content-hash + ports provider
-  providers/  adapter TTS (ElevenLabs/Edge/silence) & stock (Pexels/Pixabay)
+  providers/  adapter TTS (ElevenLabs/Edge/silence), stock (Pexels/Pixabay/GIPHY/Tenor),
+              ikon (Iconify) & efek suara (Openverse) — semua di balik port pipeline
   agent/      runtime agent: AI SDK v7, registry models.dev, tools §6.2, guardrails
   studio/     UI hybrid 3 panel (Vite+React+Player) + server Hono/SSE single-writer
   templates/  preset Remotion terkurasi (documentary-01, tutorial-01) + 6 font vendored
   renderer/   RenderTarget lokal: staging, bundling, profil draft|final
-  cli/        dalang studio | chat | validate | generate | still | render | log
+  cli/        dalang studio | chat | validate | generate | still | render | log |
+              providers:check
 examples/
   borobudur-60s/   plan.json demo + aset ilustrasi lokal (lisensi tercatat)
 docs/
