@@ -1,5 +1,6 @@
 import { parseScenePlan, type ScenePlanInput } from "@dalang/core";
 import { useMemo } from "react";
+import { AssetBaseUrlProvider } from "./asset-src";
 import { DocumentaryPreset } from "./presets/documentary-01/index";
 import { TutorialPreset } from "./presets/tutorial-01/index";
 
@@ -13,6 +14,14 @@ export type DalangVideoProps = {
   plan: ScenePlanInput;
   /** Draft renders overlay pipeline hints (e.g. unresolved assets). */
   debug?: boolean;
+  /**
+   * URL dasar aset PLAN untuk render cloud (ADR-0019). null/tidak diisi =
+   * aset diambil dari public dir bundle lewat staticFile, seperti render lokal
+   * dan preview Player. Sengaja prop render-time, BUKAN field scene-plan:
+   * alamat bucket adalah detail penyebaran, bukan keputusan kreatif, dan tidak
+   * boleh ikut masuk patch log, undo, maupun diff dokumen.
+   */
+  assetBaseUrl?: string | null;
 };
 
 const PRESETS: Record<
@@ -26,6 +35,7 @@ const PRESETS: Record<
 export const DalangVideo: React.FC<DalangVideoProps> = ({
   plan: rawPlan,
   debug = false,
+  assetBaseUrl = null,
 }) => {
   const plan = useMemo(() => parseScenePlan(rawPlan), [rawPlan]);
 
@@ -36,5 +46,9 @@ export const DalangVideo: React.FC<DalangVideoProps> = ({
     );
   }
   const Chosen = Preset ?? DocumentaryPreset;
-  return <Chosen plan={plan} debug={debug} />;
+  return (
+    <AssetBaseUrlProvider value={assetBaseUrl}>
+      <Chosen plan={plan} debug={debug} />
+    </AssetBaseUrlProvider>
+  );
 };

@@ -35,10 +35,21 @@ const planWithMusic = (opts?: { ducking?: boolean }) =>
 
 describe("resolveMusicFile", () => {
   it("pustaka dikenal -> file bundle; tidak dikenal -> null; path proyek apa adanya", () => {
-    expect(resolveMusicFile("pustaka:tenang")).toBe("music/tenang.wav");
-    expect(resolveMusicFile("pustaka:cerah")).toBe("music/cerah.wav");
+    // ADR-0019: `bundled` membedakan aset SITUS (ikut bundle komposisi) dari
+    // aset PLAN (milik proyek) — keduanya dialamatkan berbeda di render cloud.
+    expect(resolveMusicFile("pustaka:tenang")).toEqual({
+      file: "music/tenang.wav",
+      bundled: true,
+    });
+    expect(resolveMusicFile("pustaka:cerah")).toEqual({
+      file: "music/cerah.wav",
+      bundled: true,
+    });
     expect(resolveMusicFile("pustaka:tidak-ada")).toBeNull();
-    expect(resolveMusicFile("assets/lagu.mp3")).toBe("assets/lagu.mp3");
+    expect(resolveMusicFile("assets/lagu.mp3")).toEqual({
+      file: "assets/lagu.mp3",
+      bundled: false,
+    });
   });
 });
 

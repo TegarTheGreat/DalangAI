@@ -8,6 +8,7 @@ import { Audio } from "@remotion/media";
 import { TransitionSeries } from "@remotion/transitions";
 import { type ReactNode, useMemo } from "react";
 import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
+import { useAssetSrc } from "../../asset-src";
 import { ensureFontsLoaded } from "../../fonts";
 import { GraphicsOverlay } from "../../GraphicsOverlay";
 import {
@@ -17,7 +18,7 @@ import {
   FPS,
   TRANSITION_FRAMES,
 } from "../../layout";
-import { buildMusicVolume, resolveMusicFile } from "../../music";
+import { buildMusicVolume, type ResolvedMusic, resolveMusicFile } from "../../music";
 import { placeSfxCues } from "../../sfx";
 import { presentationFor, timingFor } from "../../transitions";
 import { Backdrop } from "./Backdrop";
@@ -46,6 +47,7 @@ const SceneRouter: React.FC<{
 }> = (props) => {
   const { scene, plan } = props;
   const { fps } = useVideoConfig();
+  const assetSrc = useAssetSrc();
   const narrationAudio = plan.renderState.narrationAudio[scene.id];
 
   let content: ReactNode;
@@ -77,7 +79,7 @@ const SceneRouter: React.FC<{
         // Narration starts at the lead-in; captions-model shifts word
         // timestamps by the same constant, keeping audio & karaoke in sync.
         <Audio
-          src={staticFile(narrationAudio.file)}
+          src={assetSrc(narrationAudio.file)}
           from={Math.round(NARRATION_LEAD_IN_SEC * fps)}
         />
       ) : null}
@@ -97,6 +99,11 @@ export const DocumentaryPreset: React.FC<{
   // Musik latar (ADR-0014): bed di-loop + ducking di bawah narasi.
   const musicFile = plan.audio.music ? resolveMusicFile(plan.audio.music.assetId) : null;
   const musicVolume = useMemo(() => buildMusicVolume(plan, layout), [plan, layout]);
+  const assetSrc = useAssetSrc();
+  // Bed pustaka ikut ter-bundle bersama komposisi (aset situs); musik unggahan
+  // milik proyek (aset plan). Keduanya dialamatkan berbeda di render cloud.
+  const musicSrc = (music: ResolvedMusic) =>
+    music.bundled ? staticFile(music.file) : assetSrc(music.file);
 
   const series: ReactNode[] = [];
   plan.scenes.forEach((scene, index) => {
@@ -146,13 +153,13 @@ export const DocumentaryPreset: React.FC<{
       <Vignette />
       <FilmGrain />
       <Chrome plan={plan} layout={layout} metrics={metrics} theme={theme} />
-      {musicFile ? <Audio src={staticFile(musicFile)} loop volume={musicVolume} /> : null}
+      {musicFile ? <Audio src={musicSrc(musicFile)} loop volume={musicVolume} /> : null}
       {/* Efek suara (ADR-0018): posisinya diturunkan dari scene, jadi ikut
           bergeser saat susunan berubah. */}
       {placeSfxCues(plan, layout, FPS).map((cue) => (
         <Audio
           key={cue.cueId}
-          src={staticFile(cue.file)}
+          src={assetSrc(cue.file)}
           from={cue.fromFrame}
           volume={cue.volume}
         />

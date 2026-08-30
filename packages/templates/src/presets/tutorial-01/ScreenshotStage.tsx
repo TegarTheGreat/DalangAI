@@ -1,5 +1,6 @@
 import type { Annotation, ResolvedAsset, Scene } from "@dalang/core";
-import { AbsoluteFill, Img, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, useCurrentFrame, useVideoConfig } from "remotion";
+import { useAssetSrc } from "../../asset-src";
 import type { AspectMetrics } from "../../layout";
 import {
   type ArrowSide,
@@ -206,6 +207,7 @@ export const ScreenshotStage: React.FC<{
 }> = ({ scene, asset, metrics, theme, durationInFrames, debug }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const assetSrc = useAssetSrc();
   const box = stageBox(metrics, asset);
   const zoom = activeZoom(
     scene.annotations,
@@ -244,7 +246,7 @@ export const ScreenshotStage: React.FC<{
           >
             {asset ? (
               <Img
-                src={staticFile(asset.file)}
+                src={assetSrc(asset.file)}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (

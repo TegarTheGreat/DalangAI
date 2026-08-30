@@ -1,5 +1,6 @@
 import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
-import { Img, Sequence, staticFile, useCurrentFrame } from "remotion";
+import { Img, Sequence, useCurrentFrame } from "remotion";
+import { useAssetSrc } from "./asset-src";
 import { graphicMotion, graphicStyle, graphicWindow, isIconRef } from "./graphic-model";
 import type { AspectMetrics } from "./layout";
 
@@ -70,6 +71,7 @@ const GraphicItem: React.FC<{
 }> = ({ graphic, asset, metrics, accent, windowFrames }) => {
   // Di dalam Sequence, frame sudah relatif terhadap awal jendela tampil.
   const frame = useCurrentFrame();
+  const assetSrc = useAssetSrc();
   const motion = graphicMotion(graphic, frame, windowFrames);
   const style = graphicStyle(graphic, motion, metrics);
 
@@ -85,7 +87,7 @@ const GraphicItem: React.FC<{
   // memang satu warna; STIKER justru rusak kalau di-mask (warna aslinya
   // hilang), jadi stiker tetap digambar sebagai gambar biasa.
   if (isIconRef(graphic.ref)) {
-    const source = `url(${staticFile(asset.file)})`;
+    const source = `url(${assetSrc(asset.file)})`;
     return (
       <div
         style={{
@@ -107,7 +109,7 @@ const GraphicItem: React.FC<{
   return (
     <div style={style}>
       <Img
-        src={staticFile(asset.file)}
+        src={assetSrc(asset.file)}
         style={{
           width: "100%",
           height: "100%",

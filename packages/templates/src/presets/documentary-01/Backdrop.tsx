@@ -5,11 +5,11 @@ import {
   Img,
   interpolate,
   random,
-  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
 import { easeDolly, kf } from "../../anim";
+import { useAssetSrc } from "../../asset-src";
 import { motionTransform } from "../../motion-model";
 import { filterToCss } from "./filters";
 import type { DocTheme } from "./theme";
@@ -27,6 +27,7 @@ const AssetLayer: React.FC<{
 }> = ({ asset, scene, durationInFrames }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const assetSrc = useAssetSrc();
   // Easing dolly (ADR-0014/0015): gerak kamera settle di awal/akhir; semua
   // matematika transform hidup di motion-model (murni & diuji).
   const progress = interpolate(frame, [0, Math.max(durationInFrames, 1)], [0, 1], {
@@ -46,7 +47,7 @@ const AssetLayer: React.FC<{
   if (asset.kind === "video") {
     return (
       <Video
-        src={staticFile(asset.file)}
+        src={assetSrc(asset.file)}
         muted
         playbackRate={scene.visual.speed}
         // ADR-0017: titik masuk di rekaman sumber — satu video panjang bisa
@@ -56,7 +57,7 @@ const AssetLayer: React.FC<{
       />
     );
   }
-  return <Img src={staticFile(asset.file)} style={style} />;
+  return <Img src={assetSrc(asset.file)} style={style} />;
 };
 
 /** Varian seni prosedural (ADR-0013) — dipilih lewat visual.variant. */

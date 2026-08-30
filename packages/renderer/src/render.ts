@@ -170,6 +170,16 @@ export interface RenderBehaviorOptions {
   concurrency?: number | null;
   logLevel?: LogLevel;
   onProgress?: (event: ProgressEvent) => void;
+  /**
+   * URL dasar aset PLAN (ADR-0019). Diisi = aset TIDAK disalin ke public dir
+   * bundle, dan komposisi mengambilnya dari URL itu.
+   *
+   * Kombinasi itu disengaja, bukan penghematan: kalau asetnya tetap disalin,
+   * satu pemanggil `staticFile()` yang terlewat akan tetap menemukan berkasnya
+   * dan jalur URL-nya lolos tanpa pernah benar-benar diuji. Dengan tidak
+   * menyalin, kelalaian seperti itu langsung terlihat sebagai gambar hilang.
+   */
+  assetBaseUrl?: string | null;
 }
 
 interface PreparedRender {
@@ -203,9 +213,16 @@ const prepare = async (
   if (bundleResult.ephemeral) {
     rmSync(bundleResult.bundleDir, { recursive: true, force: true });
   }
-  copyPlanAssets(planPath, plan, join(renderDir, "public"));
+  const assetBaseUrl = options.assetBaseUrl ?? null;
+  if (assetBaseUrl === null) {
+    copyPlanAssets(planPath, plan, join(renderDir, "public"));
+  }
 
-  const inputProps = { plan, debug: PROFILES[profile].debug };
+  const inputProps = {
+    plan,
+    debug: PROFILES[profile].debug,
+    ...(assetBaseUrl === null ? {} : { assetBaseUrl }),
+  };
   const composition = await selectComposition({
     serveUrl: renderDir,
     id: COMPOSITION_ID,

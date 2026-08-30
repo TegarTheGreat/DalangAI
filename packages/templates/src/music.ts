@@ -28,16 +28,30 @@ export const BUNDLED_MUSIC: readonly BundledMusic[] = [
 export const MUSIC_LIBRARY_PREFIX = "pustaka:";
 
 /**
- * assetId musik → path untuk staticFile, atau null bila id pustaka tidak
- * dikenal (komponen lalu tidak memutar apa-apa — tanpa crash render, tapi
+ * Berkas musik hasil resolusi, beserta ASALNYA.
+ *
+ * `bundled` bukan detail administratif: bed pustaka ikut ter-bundle bersama
+ * komposisi (aset situs), sedangkan musik unggahan hidup di folder proyek
+ * (aset plan). Di render cloud keduanya dialamatkan dengan cara yang berbeda
+ * (lihat `asset-src.ts`), jadi pemanggil harus bisa membedakannya.
+ */
+export interface ResolvedMusic {
+  file: string;
+  bundled: boolean;
+}
+
+/**
+ * assetId musik → berkas + asalnya, atau null bila id pustaka tidak dikenal
+ * (komponen lalu tidak memutar apa-apa — tanpa crash render, tapi
  * validate/critique yang memberi tahu).
  */
-export const resolveMusicFile = (assetId: string): string | null => {
+export const resolveMusicFile = (assetId: string): ResolvedMusic | null => {
   if (assetId.startsWith(MUSIC_LIBRARY_PREFIX)) {
     const id = assetId.slice(MUSIC_LIBRARY_PREFIX.length);
-    return BUNDLED_MUSIC.find((m) => m.id === id)?.file ?? null;
+    const found = BUNDLED_MUSIC.find((m) => m.id === id);
+    return found ? { file: found.file, bundled: true } : null;
   }
-  return assetId;
+  return { file: assetId, bundled: false };
 };
 
 const FADE_IN_FRAMES = 30;

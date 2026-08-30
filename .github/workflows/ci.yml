@@ -68,6 +68,16 @@ jobs:
           test -s /tmp/smoke/tutorial-studio-f240.png
           test -s /tmp/smoke/tutorial-studio-f645.png
 
+      # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)
+      # ATAU dari URL (render cloud). Gerbang ini merender kedua jalur dan
+      # menuntut hasilnya identik byte per byte. Satu pemanggil staticFile()
+      # yang terlewat tidak menggagalkan unit test mana pun — hanya ini.
+      - name: Asset URL parity gate
+        timeout-minutes: 8
+        run: |
+          pnpm --filter @dalang/renderer asset-url-parity
+          pnpm --filter @dalang/renderer asset-url-parity examples/tutorial-studio/plan.json
+
       - name: Upload smoke frames
         uses: actions/upload-artifact@v4
         with:

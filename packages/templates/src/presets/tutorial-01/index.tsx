@@ -9,6 +9,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { useAssetSrc } from "../../asset-src";
 import { ensureFontsLoaded } from "../../fonts";
 import { GraphicsOverlay } from "../../GraphicsOverlay";
 import {
@@ -19,7 +20,7 @@ import {
   type FrameLayout,
   TRANSITION_FRAMES,
 } from "../../layout";
-import { buildMusicVolume, resolveMusicFile } from "../../music";
+import { buildMusicVolume, type ResolvedMusic, resolveMusicFile } from "../../music";
 import { presentationFor, timingFor } from "../../transitions";
 import { type StepInfo, stepNumbers } from "./annotate";
 import { OutroScene, StepScene, TitleScene } from "./Scenes";
@@ -85,6 +86,7 @@ const SceneRouter: React.FC<{
   debug: boolean;
 }> = ({ scene, plan, metrics, theme, durationInFrames, step, debug }) => {
   const { fps } = useVideoConfig();
+  const assetSrc = useAssetSrc();
   const narrationAudio = plan.renderState.narrationAudio[scene.id];
 
   let content: ReactNode;
@@ -130,7 +132,7 @@ const SceneRouter: React.FC<{
       />
       {narrationAudio ? (
         <Audio
-          src={staticFile(narrationAudio.file)}
+          src={assetSrc(narrationAudio.file)}
           from={Math.round(NARRATION_LEAD_IN_SEC * fps)}
         />
       ) : null}
@@ -151,6 +153,11 @@ export const TutorialPreset: React.FC<{
   // Musik latar (ADR-0014): bed di-loop + ducking di bawah narasi.
   const musicFile = plan.audio.music ? resolveMusicFile(plan.audio.music.assetId) : null;
   const musicVolume = useMemo(() => buildMusicVolume(plan, layout), [plan, layout]);
+  const assetSrc = useAssetSrc();
+  // Bed pustaka ikut ter-bundle bersama komposisi (aset situs); musik unggahan
+  // milik proyek (aset plan). Keduanya dialamatkan berbeda di render cloud.
+  const musicSrc = (music: ResolvedMusic) =>
+    music.bundled ? staticFile(music.file) : assetSrc(music.file);
 
   const series: ReactNode[] = [];
   plan.scenes.forEach((scene, index) => {
@@ -189,7 +196,7 @@ export const TutorialPreset: React.FC<{
     <AbsoluteFill style={{ backgroundColor: theme.paper, fontFamily: theme.fontBody }}>
       <TransitionSeries>{series}</TransitionSeries>
       <Chrome plan={plan} layout={layout} metrics={metrics} theme={theme} />
-      {musicFile ? <Audio src={staticFile(musicFile)} loop volume={musicVolume} /> : null}
+      {musicFile ? <Audio src={musicSrc(musicFile)} loop volume={musicVolume} /> : null}
     </AbsoluteFill>
   );
 };

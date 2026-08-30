@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "asset-url-parity": "tsx scripts/asset-url-parity.mts"
   },
   "dependencies": {
     "@dalang/core": "workspace:*",
