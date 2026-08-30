@@ -156,6 +156,11 @@ gratis, dan bisa diuji. Ambangnya dipilih longgar dengan sengaja — test
 `naskah wajar TIDAK dituduh apa pun` menjaga agar detektor ini tidak berubah
 jadi pengganggu.
 
+Dua aturan pelaksanaan yang ternyata menentukan benar-tidaknya detektor ini
+(keduanya baru benar setelah audit pasca-rilis, lihat Jebakan 7 dan 8):
+pencocokan frasa WAJIB menghormati batas kata, dan batas scene WAJIB dianggap
+batas kalimat.
+
 Catatan jujur: tidak ada korpus klise AI berbahasa Indonesia yang
 tervalidasi (dicari, tidak ditemukan), jadi leksikonnya adalah kalibrasi
 awal kami sendiri, bukan temuan bersumber.
@@ -221,7 +226,7 @@ pengganti transkrip.
 
 ## Bukti
 
-Gerbang unit: **333 test hijau** (core 109, templates 60, pipeline 31,
+Gerbang unit: **345 test hijau** (core 121, templates 60, pipeline 31,
 renderer 19, providers 27, agent 59, studio 28), typecheck dan lint bersih.
 
 Gerbang E2E `verify-51.mts` menjalankan jalur klip yang SEBENARNYA lewat
@@ -280,7 +285,31 @@ di-undo, dan kritik yang menyesuaikan resep baru.
    `.ratio-switch`, dan judul proyek yang mengalah (elipsis, lalu
    disembunyikan di bawah 1440px karena judul sisa satu huruf lebih buruk
    daripada tidak ada judul).
-6. **Ekspektasi test yang salah, bukan kode yang salah.** Tiga dari kasus uji
+6. **Pencocokan substring polos adalah bencana untuk Bahasa Indonesia.**
+   Leksikon pengisi memuat "eh", "sih", "nah", "anu" — dan `String.includes`
+   menemukan keempatnya di dalam "ol-EH-", "ma-SIH", "ta-NAH", "m-ANU-sia".
+   Demo Borobudur yang kami kirim sendiri akan dituduh memuat kata pengisi
+   karena kata "pernah" dan "manusia". Detektor yang sering salah akan
+   diabaikan orang, termasuk saat ia benar — jadi ini bukan cacat kecil.
+   Diperbaiki dengan pola `(?<![a-z0-9])frasa(?![a-z0-9])`, yang sekaligus
+   membuat tanda hubung tetap dihitung sebagai batas kata ("batu-batu"
+   memuat "batu" dua kali).
+7. **Batas scene adalah batas kalimat, apa pun tanda bacanya.** Narasi scene
+   sering ditulis tanpa titik di akhir. Karena statistik dihitung atas
+   gabungan seluruh narasi, kalimat terakhir sebuah scene MENYATU dengan
+   kalimat pertama scene berikutnya: tiga scene sembilan kata terukur sebagai
+   satu kalimat 26 kata (lalu dituduh `kalimat-panjang`) dengan burstiness
+   nol. `proseStatsOf(texts[])` menggantikan `proseStats(text)` pada jalur
+   plan.
+8. **Satu gerbang untuk dua jenis pemeriksaan.** Ambang "minimal 25 kata" itu
+   syarat agar ukuran SEBARAN berarti, tetapi ia ikut mematikan pemeriksaan
+   per-scene yang tidak butuh sebaran sama sekali — sehingga klip pendek,
+   justru yang paling rawan dibuka penghubung menggantung, tidak pernah
+   diperiksa. Dipisah jadi `critiqueSceneLevel`.
+9. **Kode catatan bukan kunci yang unik.** `narasi-padat` muncul sekali per
+   scene bermasalah, jadi `key={note.code}` di daftar React bentrok. Kunci
+   sekarang `kode:sceneId`.
+10. **Ekspektasi test yang salah, bukan kode yang salah.** Tiga dari kasus uji
    penghitung suku kata pertama ternyata harapan penulisnya yang keliru
    ("mempertanggungjawabkan" memang 7 suku kata, bukan 8). Dua sisanya bug
    sungguhan (diftong non-final dan digit) — dan keduanya baru ketahuan

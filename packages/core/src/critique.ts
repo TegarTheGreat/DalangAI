@@ -7,7 +7,7 @@ import {
   opensWithConnector,
   PENGISI_ID,
   phrasesFound,
-  proseStats,
+  proseStatsOf,
 } from "./prose";
 import type { Scene, ScenePlan } from "./scene-plan";
 
@@ -180,11 +180,18 @@ const MAX_ADJACENT_OVERLAP = 0.5;
 const critiqueProse = (plan: ScenePlan, recipe: FormatRecipe): DirectorNote[] => {
   const notes: DirectorNote[] = [];
   const body = plan.scenes.filter(isBodyScene);
-  const script = plan.scenes.map((scene) => scene.narration).join(" ");
-  // Naskah sangat pendek tidak punya cukup data untuk ukuran statistik.
-  if (wordCount(script) < 25) return notes;
 
-  const stats = proseStats(script);
+  // Dua pemeriksaan ini membaca SATU scene, bukan sebaran statistik, jadi
+  // keduanya berlaku walau naskahnya masih pendek. Justru klip pendek yang
+  // paling rawan dibuka penghubung menggantung.
+  notes.push(...critiqueSceneLevel(body, recipe));
+
+  const narrations = plan.scenes.map((scene) => scene.narration);
+  // Ukuran sebaran (irama, kepadatan frasa) butuh cukup data untuk berarti.
+  if (wordCount(narrations.join(" ")) < 25) return notes;
+
+  const stats = proseStatsOf(narrations);
+  const script = narrations.join(" ");
 
   const kliseHits = phrasesFound(script, KLISE_ID);
   if (kliseHits.length > 0) {
@@ -238,6 +245,16 @@ const critiqueProse = (plan: ScenePlan, recipe: FormatRecipe): DirectorNote[] =>
         "Keseragaman itulah yang membuat narasi terdengar dibacakan mesin. Selingi kalimat sangat pendek di antara yang panjang.",
     });
   }
+
+  return notes;
+};
+
+/** Pemeriksaan yang cukup membaca satu scene — tidak butuh sebaran statistik. */
+const critiqueSceneLevel = (
+  body: readonly Scene[],
+  recipe: FormatRecipe,
+): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
 
   // Dua scene isi berurutan yang mengatakan hal yang sama dengan kata berbeda.
   for (let index = 1; index < body.length; index += 1) {

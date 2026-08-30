@@ -459,8 +459,13 @@ const CritiqueDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
           </p>
         ) : (
           <ul className="note-list">
-            {notes.map((note) => (
-              <li key={note.code} className={`note-item ${note.level}`}>
+            {notes.map((note, index) => (
+              // Satu kode bisa muncul berkali-kali (mis. narasi-padat per
+              // scene), jadi kode saja bukan kunci yang unik.
+              <li
+                key={`${note.code}:${note.sceneId ?? index}`}
+                className={`note-item ${note.level}`}
+              >
                 <span className="note-level">
                   {note.level === "perhatian" ? "Perhatian" : "Saran"}
                 </span>

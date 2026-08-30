@@ -213,7 +213,7 @@ Yang sudah berjalan:
   - **Catatan sutradara terlihat manusia**: tombol berlencana di header
     membuka daftar temuan berperingkat dengan kerangka format yang sedang
     dipakai — dihitung di browser, jadi selalu sinkron dengan editan terakhir.
-- **Kualitas terjaga otomatis**: 333 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 345 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -226,7 +226,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 333 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 345 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

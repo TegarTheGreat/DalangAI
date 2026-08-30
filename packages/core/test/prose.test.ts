@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   countSyllablesInWord,
   critiquePlan,
+  HEDGING_ID,
   lexicalOverlap,
   opensWithConnector,
+  PENGISI_ID,
   parseScenePlan,
+  phraseDensity,
+  phrasesFound,
   proseStats,
+  proseStatsOf,
 } from "../src";
 
 /**
@@ -120,6 +125,65 @@ describe("kritik prosa", () => {
   });
 });
 
+describe("pencocokan frasa menghormati batas kata", () => {
+  // Regresi: pencarian substring polos menuduh kata Indonesia paling umum —
+  // "eh" di dalam "oleh", "sih" di "masih", "nah" di "tanah", "anu" di
+  // "manusia". Detektor yang sering salah akan diabaikan orang.
+  it.each([
+    ["dibangun oleh dinasti Syailendra", "eh"],
+    ["candi itu masih berdiri kokoh", "sih"],
+    ["tumbuh di atas tanah vulkanik", "nah"],
+    ["hasil karya manusia purba", "anu"],
+    ["boleh jadi memang begitu", "eh"],
+  ])("%s tidak dituduh memuat pengisi %s", (text) => {
+    expect(phrasesFound(text, PENGISI_ID)).toEqual([]);
+    expect(phraseDensity(text, PENGISI_ID)).toBe(0);
+  });
+
+  it("kata pengisi yang BERDIRI SENDIRI tetap tertangkap", () => {
+    expect(phrasesFound("nah itu dia maksudnya", PENGISI_ID)).toContain("nah");
+    expect(phrasesFound("ceritanya gitu sih", PENGISI_ID)).toEqual(
+      expect.arrayContaining(["gitu", "sih"]),
+    );
+  });
+
+  it("kata pagar sungguhan tetap tertangkap", () => {
+    expect(phrasesFound("hasilnya secara relatif aman", HEDGING_ID)).toContain("relatif");
+  });
+
+  it("tanda hubung dihitung sebagai batas kata", () => {
+    // "batu-batu" memuat "batu" dua kali sebagai kata utuh.
+    expect(phraseDensity("batu-batu itu", ["batu"])).toBeGreaterThan(0);
+  });
+});
+
+describe("batas scene adalah batas kalimat", () => {
+  // Regresi: narasi scene sering ditulis tanpa titik di akhir. Kalau semua
+  // digabung jadi satu string, kalimat menyatu lintas scene — panjang kalimat
+  // menggelembung dan burstiness anjlok ke nol.
+  const tanpaTitik = [
+    "Candi ini dibangun pada abad kesembilan oleh dinasti Syailendra",
+    "Batunya dua juta blok tanpa perekat semen sama sekali",
+    "Lalu tertimbun abu vulkanik selama delapan abad lamanya",
+  ];
+
+  it("menghitung tiap scene sebagai kalimat tersendiri", () => {
+    const stats = proseStatsOf(tanpaTitik);
+    expect(stats.sentences).toBe(3);
+    expect(stats.longestSentenceWords).toBe(9);
+    expect(stats.burstiness).toBeGreaterThan(0);
+  });
+
+  it("tidak ada tuduhan kalimat-panjang palsu untuk narasi tanpa titik", () => {
+    expect(codes(planWith(tanpaTitik))).not.toContain("kalimat-panjang");
+  });
+
+  it("proseStats satu teks tetap setara proseStatsOf berisi satu", () => {
+    const one = "Pendek. Ini kalimat kedua yang lebih panjang sedikit.";
+    expect(proseStats(one)).toEqual(proseStatsOf([one]));
+  });
+});
+
 describe("pengulangan antar scene", () => {
   it("kemiripan leksikal terukur", () => {
     expect(
@@ -160,5 +224,12 @@ describe("klip yang menggantung", () => {
     ];
     expect(codes(planWith(narasi, "klip"))).toContain("klip-menggantung");
     expect(codes(planWith(narasi, "bebas"))).not.toContain("klip-menggantung");
+  });
+
+  it("klip PENDEK tetap diperiksa (pemeriksaan ini tidak butuh statistik)", () => {
+    // Regresi: gerbang 25 kata untuk ukuran sebaran sempat ikut mematikan
+    // pemeriksaan per-scene — padahal klip pendek justru yang paling rawan.
+    const pendek = ["Jadi itulah intinya semua", "Angkanya naik tiga kali lipat"];
+    expect(codes(planWith(pendek, "klip"))).toContain("klip-menggantung");
   });
 });

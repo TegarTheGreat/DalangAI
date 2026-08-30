@@ -99,6 +99,25 @@ export const PENGHUBUNG_AWAL_ID: readonly string[] = [
 
 const normalise = (text: string): string => text.toLowerCase().replace(/\s+/g, " ");
 
+/**
+ * Pencocokan frasa WAJIB menghormati batas kata. Pencarian substring polos
+ * adalah bencana untuk Bahasa Indonesia: "eh" ada di dalam "oleh", "sih" di
+ * "masih", "nah" di "tanah", "anu" di "manusia" — kata-kata paling umum yang
+ * ada. Tanpa penjaga ini, detektor menuduh hampir semua naskah wajar, dan
+ * kritik yang sering salah akan diabaikan orang, termasuk saat ia benar.
+ */
+const boundaryCache = new Map<string, RegExp>();
+const phrasePattern = (phrase: string): RegExp => {
+  const cached = boundaryCache.get(phrase);
+  if (cached) return cached;
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Bukan \b: tanda hubung dan apostrof harus tetap dianggap batas kata,
+  // supaya "batu-batu" tetap cocok dengan frasa "batu".
+  const pattern = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, "g");
+  boundaryCache.set(phrase, pattern);
+  return pattern;
+};
+
 /** Berapa frasa dari daftar yang muncul, dihitung per 100 kata. */
 export const phraseDensity = (text: string, phrases: readonly string[]): number => {
   const words = countWords(text);
@@ -106,23 +125,21 @@ export const phraseDensity = (text: string, phrases: readonly string[]): number 
   const haystack = normalise(text);
   let hits = 0;
   for (const phrase of phrases) {
+    const pattern = phrasePattern(phrase);
+    pattern.lastIndex = 0;
     // Hitung SEMUA kemunculan, bukan sekadar ada/tidak.
-    let from = 0;
-    for (;;) {
-      const at = haystack.indexOf(phrase, from);
-      if (at === -1) break;
-      hits += 1;
-      from = at + phrase.length;
-    }
+    while (pattern.exec(haystack) !== null) hits += 1;
   }
   return (hits / words) * 100;
 };
 
 /** Frasa dari daftar yang benar-benar ditemukan (untuk pesan kritik). */
-export const phrasesFound = (text: string, phrases: readonly string[]): string[] => {
-  const haystack = normalise(text);
-  return phrases.filter((phrase) => haystack.includes(phrase));
-};
+export const phrasesFound = (text: string, phrases: readonly string[]): string[] =>
+  phrases.filter((phrase) => {
+    const pattern = phrasePattern(phrase);
+    pattern.lastIndex = 0;
+    return pattern.test(normalise(text));
+  });
 
 /** Pecah jadi kalimat berdasarkan tanda akhir; abaikan sisa kosong. */
 export const splitSentences = (text: string): string[] =>
@@ -148,8 +165,18 @@ export interface ProseStats {
   pengisiPer100: number;
 }
 
-export const proseStats = (text: string): ProseStats => {
-  const sentences = splitSentences(text);
+/**
+ * Ukuran atas SEKUMPULAN naskah (satu per scene).
+ *
+ * Kenapa daftar, bukan satu teks gabungan: narasi scene sering ditulis tanpa
+ * titik di akhir. Kalau semuanya disambung jadi satu string, kalimat terakhir
+ * sebuah scene MENYATU dengan kalimat pertama scene berikutnya — panjang
+ * kalimat jadi menggelembung dan burstiness anjlok ke nol. Batas scene adalah
+ * batas kalimat, apa pun tanda bacanya.
+ */
+export const proseStatsOf = (texts: readonly string[]): ProseStats => {
+  const joined = texts.join(" ");
+  const sentences = texts.flatMap(splitSentences);
   const lengths = sentences.map(countWords).filter((length) => length > 0);
   const mean =
     lengths.length === 0 ? 0 : lengths.reduce((a, b) => a + b, 0) / lengths.length;
@@ -159,16 +186,18 @@ export const proseStats = (text: string): ProseStats => {
       : lengths.reduce((sum, length) => sum + (length - mean) ** 2, 0) /
         (lengths.length - 1);
   return {
-    words: countWords(text),
-    syllables: countSyllables(text),
+    words: countWords(joined),
+    syllables: countSyllables(joined),
     sentences: sentences.length,
     longestSentenceWords: lengths.length === 0 ? 0 : Math.max(...lengths),
     burstiness: mean === 0 ? 0 : Math.sqrt(variance) / mean,
-    klisePer100: phraseDensity(text, KLISE_ID),
-    hedgingPer100: phraseDensity(text, HEDGING_ID),
-    pengisiPer100: phraseDensity(text, PENGISI_ID),
+    klisePer100: phraseDensity(joined, KLISE_ID),
+    hedgingPer100: phraseDensity(joined, HEDGING_ID),
+    pengisiPer100: phraseDensity(joined, PENGISI_ID),
   };
 };
+
+export const proseStats = (text: string): ProseStats => proseStatsOf([text]);
 
 /** Apakah teks dibuka dengan penghubung yang menggantung ke luar konteks. */
 export const opensWithConnector = (text: string): string | null => {
