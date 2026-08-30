@@ -295,13 +295,16 @@ Yang sudah berjalan:
     dari bundel, sekali dari URL dengan aset sengaja TIDAK disalin — dan wajib
     identik byte per byte. Satu pemanggil `staticFile()` yang terlewat tidak
     menggagalkan unit test mana pun; hanya gerbang ini yang menangkapnya.
+    Frame yang berselisih dirender ULANG sekali sebelum divonis: aset yang tidak
+    sampai akan hilang lagi, derau runner tidak — jadi gerbangnya tetap byte per
+    byte tanpa memerahkan CI karena kebisingan (ADR-0019, amandemen).
   - *Batas jujur: belum pernah dijalankan terhadap AWS sungguhan — repo ini
     tidak punya kredensialnya. Yang terverifikasi: seluruh urutan langkah (dengan
     fake) dan seluruh kontrak SDK (typecheck terhadap tipe paket terpasang, yang
     menemukan dua API deprecated dan satu kunci S3 tebakan yang salah untuk
     WebM/MOV). `dalang cloud:check` dibuat supaya pemilik repo bisa memverifikasi
     sisanya sendiri.*
-- **Kualitas terjaga otomatis**: 492 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 529 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -314,7 +317,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 523 unit test (8 paket) — tanpa browser & jaringan
+pnpm test                 # 529 unit test (8 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

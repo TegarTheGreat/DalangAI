@@ -89,6 +89,29 @@ punya aset ter-resolve), bukan ditulis tangan — nomor frame tetap bisa jatuh d
 kartu judul yang tidak memuat aset, yaitu lulus tanpa menguji apa pun.
 Gerbang ini jalan di CI.
 
+**Amandemen 30 Agustus 2026 — dua percobaan, bukan satu.** Setelah 14 run
+hijau berturut-turut, gerbang ini gagal sekali pada commit yang isinya hanya
+berkas dokumen: frame 252 berselisih antara kedua jalur. Commit yang sama
+lulus saat dijalankan ulang, dan frame yang sama dirender tiga kali lewat
+jalur yang identik menghasilkan hash yang identik pula — jadi rendernya
+deterministik dan selisih itu lahir dari kondisi runner.
+
+Menurunkan gerbangnya ke perbandingan bertoleransi piksel akan melemahkan
+justru yang ingin dijaga. Yang memisahkan derau dari cacat sungguhan bukan
+besar selisihnya, melainkan KETERULANGANNYA: aset yang tidak sampai lewat satu
+jalur akan hilang di setiap render. Maka frame yang berselisih dirender ulang
+sekali sebelum divonis, dan hanya selisih yang bertahan yang menggagalkan
+gerbang; selisih yang tidak bertahan dicetak sebagai peringatan bernomor frame,
+bukan disembunyikan. Perbandingannya tetap byte per byte.
+
+Dibuktikan dua arah, bukan diasumsikan: dengan cacat disuntikkan (jalur URL
+menyajikan aset lain yang sah — beda gambar, bukan 404) gerbang GAGAL dengan
+hash yang sama persis di kedua percobaan dan baris "aset terlayani" yang
+langsung menyebut berkas keliru itu; tanpa cacat, kedua contoh proyek lulus.
+Putusannya sendiri (`src/parity-verdict.ts`) adalah fungsi murni dengan 6 test,
+termasuk kasus yang paling penting: selisih yang berulang TETAP menggagalkan
+gerbang.
+
 **Kontrak Remotion diambil dari tipe paket terpasang, bukan dari ingatan.** Dua
 temuan yang akan salah kalau menebak (diperiksa terhadap 4.0.518):
 
@@ -100,7 +123,7 @@ temuan yang akan salah kalau menebak (diperiksa terhadap 4.0.518):
   `renders/<id>/out.mp4` — benar untuk MP4, dan diam-diam salah untuk WebM dan
   MOV yang bernama `out.webm`/`out.mov`.
 
-**19 test** untuk paket ini: urutan langkah, aset tidak terunggah dua kali,
+**25 test** untuk paket ini: urutan langkah, aset tidak terunggah dua kali,
 alamat aset benar-benar sampai ke komposisi, kegagalan Lambda jadi galat yang
 memuat pesan aslinya, render tidak menggantung selamanya, dan estimasi biaya
 bisa dijawab tanpa satu pun panggilan AWS.
