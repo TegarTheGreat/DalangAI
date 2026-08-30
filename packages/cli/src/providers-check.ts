@@ -1,4 +1,9 @@
-import { buildGifChain, buildStockChain } from "@dalang/providers";
+import {
+  buildGifChain,
+  buildIconProvider,
+  buildSfxChain,
+  buildStockChain,
+} from "@dalang/providers";
 import type { Command } from "commander";
 
 /**
@@ -96,6 +101,95 @@ const probe = async (
   }
 };
 
+/** Ikon: yang diperiksa penjaga lisensinya, bukan sekadar konektivitas. */
+const probeIcons = async (query: string): Promise<ProbeResult> => {
+  const provider = buildIconProvider();
+  try {
+    const found = await provider.search(query, 12);
+    if (found.length === 0) {
+      return {
+        id: provider.id,
+        label: provider.label,
+        ok: false,
+        detail: "terhubung, tapi 0 ikon lolos saringan lisensi",
+      };
+    }
+    const unsafe = found.filter((icon) => !icon.commercialSafe);
+    if (unsafe.length > 0) {
+      return {
+        id: provider.id,
+        label: provider.label,
+        ok: false,
+        detail: `${unsafe.length} ikon NonCommercial lolos saringan — ini bug, jangan dipakai`,
+      };
+    }
+    const sets = [...new Set(found.map((icon) => icon.setPrefix))].slice(0, 3);
+    return {
+      id: provider.id,
+      label: provider.label,
+      ok: true,
+      detail: `${found.length} ikon aman-komersial · set ${sets.join(", ")}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      id: provider.id,
+      label: provider.label,
+      ok: false,
+      detail: oneLine(message),
+    };
+  }
+};
+
+/** SFX: sama — hasil NonCommercial yang lolos dihitung sebagai KEGAGALAN. */
+const probeSfx = async (
+  provider: {
+    id: string;
+    label: string;
+    search: (
+      q: string,
+      n: number,
+    ) => Promise<Array<{ commercialSafe: boolean; license: string }>>;
+  },
+  query: string,
+): Promise<ProbeResult> => {
+  try {
+    const found = await provider.search(query, 8);
+    if (found.length === 0) {
+      return {
+        id: provider.id,
+        label: provider.label,
+        ok: false,
+        detail: "terhubung, tapi 0 suara lolos saringan lisensi",
+      };
+    }
+    const unsafe = found.filter((sfx) => !sfx.commercialSafe);
+    if (unsafe.length > 0) {
+      return {
+        id: provider.id,
+        label: provider.label,
+        ok: false,
+        detail: `${unsafe.length} suara NonCommercial lolos saringan — ini bug, jangan dipakai`,
+      };
+    }
+    const licenses = [...new Set(found.map((sfx) => sfx.license))].slice(0, 3);
+    return {
+      id: provider.id,
+      label: provider.label,
+      ok: true,
+      detail: `${found.length} suara · lisensi ${licenses.join(", ")}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      id: provider.id,
+      label: provider.label,
+      ok: false,
+      detail: oneLine(message),
+    };
+  }
+};
+
 export const registerProvidersCheckCommand = (program: Command): void => {
   program
     .command("providers:check")
@@ -108,24 +202,37 @@ export const registerProvidersCheckCommand = (program: Command): void => {
       const stickers = buildGifChain({ stickers: true });
       const all = [...stock, ...stickers];
 
+      // Ikon dan SFX tidak butuh kunci sama sekali, jadi selalu ikut diuji.
+      const extras: ProbeResult[] = [
+        await probeIcons(options.query),
+        ...(await Promise.all(
+          buildSfxChain().map((sfx) => probeSfx(sfx, options.query)),
+        )),
+      ];
+
+      // Ikon dan SFX selalu ada (tanpa kunci), jadi laporannya TIDAK pernah
+      // kosong. Kegagalan jaringan bukan alasan bilang "tidak terkonfigurasi" —
+      // itu dua hal berbeda dan membingungkan kalau dicampur.
       if (all.length === 0) {
         console.log(
-          "Tidak ada provider aset yang aktif. Set salah satu kunci di .env:\n" +
+          "Provider berkunci belum diset. Ikon & efek suara tetap jalan tanpa kunci.\n" +
+            "Untuk foto/video/GIF, set salah satu di .env:\n" +
             "  PEXELS_API_KEY   foto & video, lisensi jelas untuk komersial\n" +
             "  PIXABAY_API_KEY  foto & video, lisensi jelas untuk komersial\n" +
             "  GIPHY_API_KEY    GIF & stiker — hak pakai per konten harus diperiksa\n" +
-            "  TENOR_API_KEY    GIF & stiker — hak pakai per konten harus diperiksa",
+            "  TENOR_API_KEY    GIF & stiker — hak pakai per konten harus diperiksa\n",
         );
-        return;
       }
 
       console.log(
-        `Menguji ${all.length} provider dengan kata kunci "${options.query}"…\n`,
+        `Menguji ${all.length + extras.length} provider dengan kata kunci "${options.query}"…\n`,
       );
       const results: ProbeResult[] = [];
       for (const provider of all) {
-        const result = await probe(provider as never, options.query);
-        results.push(result);
+        results.push(await probe(provider as never, options.query));
+      }
+      results.push(...extras);
+      for (const result of results) {
         const mark = result.ok ? "OK   " : "GAGAL";
         console.log(`  ${mark} ${result.label.padEnd(16)} ${result.detail}`);
       }

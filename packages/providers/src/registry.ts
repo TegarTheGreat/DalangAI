@@ -1,5 +1,12 @@
-import type { StockProvider, TtsProvider } from "@dalang/pipeline";
+import type {
+  IconProvider,
+  SfxProvider,
+  StockProvider,
+  TtsProvider,
+} from "@dalang/pipeline";
 import type { FetchImpl } from "./http";
+import { createIconifyIcons } from "./icons/iconify";
+import { createOpenverseSfx } from "./sfx/openverse";
 import { createGiphyStock } from "./stock/giphy";
 import { createPexelsStock } from "./stock/pexels";
 import { createPixabayStock } from "./stock/pixabay";
@@ -26,6 +33,8 @@ export interface ProviderEnv {
   /** GIF & stiker (ADR-0018) — opsional, isinya perlu ditinjau hak pakai. */
   GIPHY_API_KEY?: string;
   TENOR_API_KEY?: string;
+  /** Openverse: token OPSIONAL, hanya menaikkan batas laju (ADR-0018). */
+  OPENVERSE_TOKEN?: string;
 }
 
 export const KNOWN_TTS_PROVIDERS = ["elevenlabs", "edge", "silence"] as const;
@@ -132,3 +141,31 @@ export const buildGifChain = ({
   }
   return chain;
 };
+
+/**
+ * Ikon (ADR-0018). Iconify adalah API publik TANPA KUNCI, jadi tidak ada
+ * gerbang konfigurasi: ikon selalu tersedia. Set NonCommercial disaring di
+ * dalam provider, bukan di sini.
+ */
+export const buildIconProvider = ({
+  fetchImpl,
+}: {
+  fetchImpl?: FetchImpl;
+} = {}): IconProvider => createIconifyIcons({ fetchImpl });
+
+/**
+ * Efek suara (ADR-0018). Openverse juga tidak mewajibkan kunci; token hanya
+ * menaikkan batas laju, jadi SFX pun tersedia tanpa konfigurasi apa pun.
+ */
+export const buildSfxChain = ({
+  env = process.env as ProviderEnv,
+  fetchImpl,
+}: {
+  env?: ProviderEnv;
+  fetchImpl?: FetchImpl;
+} = {}): SfxProvider[] => [
+  createOpenverseSfx({
+    ...(env.OPENVERSE_TOKEN ? { accessToken: env.OPENVERSE_TOKEN } : {}),
+    fetchImpl,
+  }),
+];

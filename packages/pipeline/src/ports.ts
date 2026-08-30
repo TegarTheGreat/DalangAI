@@ -83,3 +83,66 @@ export interface StockProvider {
   /** Fetch the asset bytes for a candidate this provider returned. */
   download(candidate: StockCandidate): Promise<Uint8Array>;
 }
+
+// ---------------------------------------------------------------------------
+// Ikon & efek suara (ADR-0018)
+// ---------------------------------------------------------------------------
+
+/**
+ * Satu ikon dari pustaka terbuka. Lisensi dibawa PER SET, bukan per ikon, dan
+ * `commercialSafe` sudah dihitung provider supaya pemanggil tidak perlu tahu
+ * seluk-beluk SPDX untuk mengambil keputusan yang aman.
+ */
+export interface IconCandidate {
+  providerId: string;
+  /** Identitas penuh, mis. "mdi:home". */
+  iconId: string;
+  setPrefix: string;
+  setName: string;
+  /** Nama lisensi apa adanya, mis. "Apache 2.0". */
+  license: string;
+  licenseSpdx?: string;
+  licenseUrl?: string;
+  author?: string;
+  authorUrl?: string;
+  /** Wajib menampilkan kredit (CC-BY, OFL, Apache-2.0). */
+  needsAttribution: boolean;
+  /** Aman untuk video komersial — set NonCommercial bernilai false. */
+  commercialSafe: boolean;
+}
+
+export interface IconProvider {
+  id: string;
+  label: string;
+  search(query: string, limit: number): Promise<IconCandidate[]>;
+  /** Ambil SVG mentah untuk ikon; `color` mewarnai `currentColor`. */
+  fetchSvg(
+    iconId: string,
+    options?: { color?: string; height?: number },
+  ): Promise<string>;
+}
+
+/** Satu efek suara berlisensi terbuka. */
+export interface SfxCandidate {
+  providerId: string;
+  assetId: string;
+  title: string;
+  /** URL berkas audio yang bisa diunduh langsung. */
+  downloadUrl: string;
+  fileExt: string;
+  durationSec?: number;
+  /** Lisensi apa adanya, mis. "cc0". */
+  license: string;
+  /** String kredit siap tempel bila providernya menyediakan. */
+  attribution?: string;
+  author?: string;
+  sourceUrl?: string;
+  commercialSafe: boolean;
+}
+
+export interface SfxProvider {
+  id: string;
+  label: string;
+  search(query: string, limit: number): Promise<SfxCandidate[]>;
+  download(candidate: SfxCandidate): Promise<Uint8Array>;
+}
