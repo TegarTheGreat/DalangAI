@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 3 (UI hybrid) selesai · Fase 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -211,8 +211,16 @@ Kontrak-kontrak penting yang SUDAH ditegakkan kode (bukan prompt):
       *Catatan: giliran agent live di UI & grid aset dengan provider nyata
       menunggu API key pemilik repo — jalur HTTP-nya teruji penuh dengan
       mock/fake.*
-- [ ] **Fase 4 — Mode tutorial** (annotations sudah tervalidasi di skema),
-      preset tambahan.
+- [x] **Fase 4 — Mode tutorial + preset tutorial-01** (ADR-0012): konten
+      how-to berbasis screenshot — preset kedua bergaya dokumentasi produk
+      (kartu screenshot ber-titlebar di kertas terang, chip langkah, caption
+      terang), keempat anotasi §9 sebagai animasi murni (zoom dengan klem
+      pan, sorot + peredup, panah pemilih sisi lapang, blur redaksi), ingest
+      aset lokal di stage assets, tool agent `locateUiElement` dengan
+      VERIFIKASI grounding (crop → konfirmasi), tab Anotasi di Inspector,
+      demo `examples/tutorial-studio` dari screenshot nyata Dalang Studio.
+      *Catatan: grounding live butuh API key model vision; screen recording
+      (deteksi klik, auto-zoom kursor) belum dibangun.*
 - [ ] **Fase 5 — RenderTarget cloud**, publish integrations.
 
 Tugas riset R-2…R-6 & R-8…R-11 (PRD §14) belum diputuskan — masing-masing akan

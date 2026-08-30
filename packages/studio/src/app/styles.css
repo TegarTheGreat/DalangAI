@@ -734,6 +734,17 @@ textarea::placeholder {
   font-variant-numeric: tabular-nums;
 }
 
+.tab-hint {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
 .prop-group {
   display: flex;
   flex-direction: column;

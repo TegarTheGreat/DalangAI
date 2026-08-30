@@ -1,6 +1,7 @@
 import { parseScenePlan, type ScenePlanInput } from "@dalang/core";
 import { useMemo } from "react";
 import { DocumentaryPreset } from "./presets/documentary-01/index";
+import { TutorialPreset } from "./presets/tutorial-01/index";
 
 /**
  * Entry component: routes a scene-plan to its style preset.
@@ -19,6 +20,7 @@ const PRESETS: Record<
   React.FC<{ plan: ReturnType<typeof parseScenePlan>; debug: boolean }>
 > = {
   "documentary-01": DocumentaryPreset,
+  "tutorial-01": TutorialPreset,
 };
 
 export const DalangVideo: React.FC<DalangVideoProps> = ({

@@ -21,6 +21,7 @@
     "@dalang/providers": "workspace:*",
     "@dalang/renderer": "workspace:*",
     "ai": "7.0.84",
+    "jimp": "1.6.0",
     "zod": "4.5.2"
   },
   "devDependencies": {

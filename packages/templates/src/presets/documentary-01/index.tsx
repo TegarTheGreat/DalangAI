@@ -3,18 +3,9 @@ import {
   type ResolvedAsset,
   type Scene,
   type ScenePlan,
-  type TransitionType,
 } from "@dalang/core";
 import { Audio } from "@remotion/media";
-import {
-  linearTiming,
-  type TransitionPresentation,
-  TransitionSeries,
-} from "@remotion/transitions";
-import { fade } from "@remotion/transitions/fade";
-import { none } from "@remotion/transitions/none";
-import { slide } from "@remotion/transitions/slide";
-import { wipe } from "@remotion/transitions/wipe";
+import { linearTiming, TransitionSeries } from "@remotion/transitions";
 import type { ReactNode } from "react";
 import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
 import { ensureFontsLoaded } from "../../fonts";
@@ -24,6 +15,7 @@ import {
   computeFrameLayout,
   TRANSITION_FRAMES,
 } from "../../layout";
+import { presentationFor } from "../../transitions";
 import { Backdrop } from "./Backdrop";
 import { BodyScene } from "./BodyScene";
 import { Chrome } from "./Chrome";
@@ -32,27 +24,6 @@ import { FilmGrain, ReadabilityGradients, Vignette } from "./Overlays";
 import { TextsOverlay } from "./TextsOverlay";
 import { TitleScene } from "./TitleScene";
 import { type DocTheme, themeFromPlan } from "./theme";
-
-/** ADR-0011: peta transisi keluar scene → presentation @remotion/transitions. */
-type AnyPresentation = TransitionPresentation<Record<string, unknown>>;
-const presentationFor = (type: TransitionType): AnyPresentation => {
-  switch (type) {
-    case "slide-left":
-      return slide({ direction: "from-right" }) as AnyPresentation;
-    case "slide-right":
-      return slide({ direction: "from-left" }) as AnyPresentation;
-    case "slide-up":
-      return slide({ direction: "from-bottom" }) as AnyPresentation;
-    case "wipe-right":
-      return wipe({ direction: "from-left" }) as AnyPresentation;
-    case "wipe-down":
-      return wipe({ direction: "from-top" }) as AnyPresentation;
-    case "none":
-      return none() as AnyPresentation;
-    case "cross-fade":
-      return fade() as AnyPresentation;
-  }
-};
 
 /**
  * documentary-01 — the first curated style preset (PRD Fase 0 gate).

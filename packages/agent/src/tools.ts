@@ -16,6 +16,13 @@ import { z } from "zod";
 import type { ResolvedModel } from "./models/resolve";
 import type { Guardrails } from "./runtime/guardrails";
 import type { ProjectSession } from "./runtime/session";
+import {
+  cropImage,
+  locatePrompt,
+  parseBbox,
+  parseVerification,
+  verifyPrompt,
+} from "./vision/grounding";
 
 /**
  * Tools §6.2 — jendela agent ke sistem. Setiap tool:
@@ -466,6 +473,94 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             costUsd: null,
           });
           return { ok: true, analisis: result.text };
+        }),
+    }),
+
+    locateUiElement: tool({
+      description:
+        "MODE TUTORIAL (§9): temukan bounding box elemen UI pada aset screenshot sebuah scene, LENGKAP dengan verifikasi grounding (crop hasil deteksi dikonfirmasi balik ke model vision). Pakai target-nya untuk annotations zoom/highlight/arrow via applyPatch. verified=false berarti model ragu — perbaiki deskripsi atau tentukan target manual, jangan dipakai buta.",
+      inputSchema: z.object({
+        sceneId: z.string(),
+        /** Deskripsi elemen dalam bahasa apa pun, sespesifik mungkin. */
+        description: z.string().min(3),
+      }),
+      execute: (input) =>
+        run("locateUiElement", input, async () => {
+          const plan = requirePlan();
+          const asset = plan.renderState.resolvedAssets[input.sceneId];
+          if (!asset) {
+            throw new Error(
+              `Scene ${input.sceneId} belum punya aset ter-resolve — jalankan stage assets dulu (aset lokal butuh visual.assetId path file)`,
+            );
+          }
+          if (asset.kind !== "image") {
+            throw new Error("Grounding hanya untuk aset gambar/screenshot");
+          }
+          const volume = deps.volumeModel;
+          if (!volume) {
+            throw new Error("Model tier-volume tidak tersedia");
+          }
+          if (volume.info && !volume.info.imageInput) {
+            throw new Error(
+              `Model ${volume.key} tidak mendukung input gambar — pilih model vision`,
+            );
+          }
+          const bytes = readFileSync(join(session.paths.planDir, asset.file));
+
+          const located = await generateText({
+            model: volume.model,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "image", image: bytes, mediaType: "image/png" },
+                  { type: "text", text: locatePrompt(input.description) },
+                ],
+              },
+            ],
+          });
+          guards.addLlmUsage(volume.info, located.totalUsage);
+          const target = parseBbox(located.text);
+          if (!target) {
+            throw new Error(
+              `Model tidak mengembalikan bounding box valid (jawaban: ${located.text.slice(0, 120)})`,
+            );
+          }
+
+          // Verifikasi grounding: crop area terdeteksi -> konfirmasi.
+          const crop = await cropImage(bytes, target);
+          const verifiedResult = await generateText({
+            model: volume.model,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "image", image: crop.png, mediaType: "image/png" },
+                  { type: "text", text: verifyPrompt(input.description) },
+                ],
+              },
+            ],
+          });
+          guards.addLlmUsage(volume.info, verifiedResult.totalUsage);
+          const verified = parseVerification(verifiedResult.text);
+
+          session.events.record({
+            turn: session.turn,
+            kind: "llm",
+            name: `grounding:${volume.key}`,
+            input: { sceneId: input.sceneId, description: input.description },
+            output: { target, verified },
+            costUsd: null,
+          });
+
+          return {
+            ok: true,
+            target,
+            verified,
+            catatan: verified
+              ? "Terkonfirmasi oleh verifikasi crop — aman dipakai untuk anotasi."
+              : "Verifikasi crop MENOLAK deteksi ini. Coba deskripsi lebih spesifik, atau minta user menentukan target lewat tab Anotasi.",
+          };
         }),
     }),
   };

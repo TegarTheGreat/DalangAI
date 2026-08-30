@@ -1,4 +1,5 @@
 import type {
+  Annotation,
   PatchOpInput,
   Scene,
   ScenePlan,
@@ -29,7 +30,15 @@ import { studioClient, useStudio } from "../use-studio";
  * Semua perubahan = patch user (tercatat, bisa di-undo, terlihat agent).
  */
 
-type Tab = "scene" | "visual" | "teks" | "transisi";
+type Tab = "scene" | "visual" | "teks" | "transisi" | "anotasi";
+
+const ANNOTATION_TYPES = ["zoom", "highlight", "arrow", "blur"] as const;
+const ANNOTATION_LABEL: Record<(typeof ANNOTATION_TYPES)[number], string> = {
+  zoom: "Zoom",
+  highlight: "Sorot",
+  arrow: "Panah",
+  blur: "Blur",
+};
 
 const TRANSITION_LABEL: Record<TransitionType, string> = {
   "cross-fade": "Larut",
@@ -300,6 +309,160 @@ const SceneTab: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
             Hapus
           </button>
         </div>
+      </section>
+    </>
+  );
+};
+
+/**
+ * Tab Anotasi (Fase 4 §9): zoom/sorot/panah/blur pada scene — kontrak data
+ * yang sama dengan tool locateUiElement agent, jadi manusia bisa menandai
+ * atau mengoreksi target secara manual. Dirender oleh preset tutorial-01.
+ */
+const AnotasiTab: React.FC<{ scene: Scene; stylePreset: string }> = ({
+  scene,
+  stylePreset,
+}) => {
+  const { project } = useStudio();
+  const busy = project?.busy.mutation !== null;
+  const commit = (annotations: Annotation[], label: string) =>
+    void studioClient.applyPatch(
+      [{ op: "updateScene", id: scene.id, patch: { annotations } }],
+      label,
+    );
+  const update = (index: number, next: Partial<Annotation>) =>
+    commit(
+      scene.annotations.map((annotation, i) =>
+        i === index ? ({ ...annotation, ...next } as Annotation) : annotation,
+      ),
+      "Anotasi diubah",
+    );
+
+  return (
+    <>
+      {stylePreset !== "tutorial-01" ? (
+        <p className="tab-hint">
+          Anotasi dirender oleh preset tutorial-01 (preset aktif: {stylePreset}). Nilainya
+          tetap tersimpan di plan dan terlihat agent.
+        </p>
+      ) : null}
+      {scene.annotations.map((annotation, index) => {
+        const untilEnd = annotation.timing.endSec === undefined;
+        return (
+          <section
+            className="prop-group"
+            key={`${annotation.type}-${annotation.timing.startSec}-${annotation.target.x}-${annotation.target.y}-${annotation.target.w}-${annotation.target.h}`}
+          >
+            <Segmented
+              grow
+              options={ANNOTATION_TYPES}
+              value={annotation.type}
+              label={(option) => ANNOTATION_LABEL[option]}
+              disabled={busy}
+              onChange={(type) => update(index, { type })}
+            />
+            {(["x", "y", "w", "h"] as const).map((axis) => (
+              <SliderRow
+                key={axis}
+                label={axis.toUpperCase()}
+                min={0}
+                max={1}
+                step={0.01}
+                value={annotation.target[axis]}
+                neutral={axis === "w" || axis === "h" ? 0.3 : 0.35}
+                onCommit={(value) =>
+                  update(index, {
+                    target: { ...annotation.target, [axis]: value },
+                  })
+                }
+              />
+            ))}
+            <SliderRow
+              label="Mulai"
+              min={0}
+              max={20}
+              step={0.1}
+              value={annotation.timing.startSec}
+              neutral={0}
+              format={(value) => `${value.toFixed(1)}s`}
+              onCommit={(startSec) =>
+                update(index, {
+                  timing: untilEnd
+                    ? { startSec }
+                    : { startSec, endSec: annotation.timing.endSec as number },
+                })
+              }
+            />
+            <Switch
+              checked={untilEnd}
+              disabled={busy}
+              label="Bertahan sampai akhir scene"
+              onChange={(on) =>
+                update(index, {
+                  timing: on
+                    ? { startSec: annotation.timing.startSec }
+                    : {
+                        startSec: annotation.timing.startSec,
+                        endSec: annotation.timing.startSec + 2,
+                      },
+                })
+              }
+            />
+            {!untilEnd ? (
+              <SliderRow
+                label="Selesai"
+                min={0.2}
+                max={22}
+                step={0.1}
+                value={annotation.timing.endSec ?? 2}
+                neutral={0}
+                format={(value) => `${value.toFixed(1)}s`}
+                onCommit={(endSec) =>
+                  update(index, {
+                    timing: { startSec: annotation.timing.startSec, endSec },
+                  })
+                }
+              />
+            ) : null}
+            <button
+              type="button"
+              className="ghost danger with-icon"
+              disabled={busy}
+              onClick={() =>
+                commit(
+                  scene.annotations.filter((_, i) => i !== index),
+                  "Anotasi dihapus",
+                )
+              }
+            >
+              <IconTrash />
+              Hapus anotasi
+            </button>
+          </section>
+        );
+      })}
+      <section className="prop-group">
+        <button
+          type="button"
+          className="secondary with-icon"
+          disabled={busy}
+          onClick={() =>
+            commit(
+              [
+                ...scene.annotations,
+                {
+                  type: "highlight",
+                  target: { x: 0.35, y: 0.35, w: 0.3, h: 0.2 },
+                  timing: { startSec: 0.5 },
+                },
+              ],
+              "Anotasi ditambahkan",
+            )
+          }
+        >
+          <IconPlus />
+          Tambah anotasi
+        </button>
       </section>
     </>
   );
@@ -708,6 +871,7 @@ export const InspectorPanel: React.FC = () => {
                 ["visual", "Visual"],
                 ["teks", "Teks"],
                 ["transisi", "Transisi"],
+                ["anotasi", "Anotasi"],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -720,6 +884,9 @@ export const InspectorPanel: React.FC = () => {
                 {key === "teks" && scene.texts.length > 0 ? (
                   <span className="tab-count">{scene.texts.length}</span>
                 ) : null}
+                {key === "anotasi" && scene.annotations.length > 0 ? (
+                  <span className="tab-count">{scene.annotations.length}</span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -731,6 +898,9 @@ export const InspectorPanel: React.FC = () => {
             {tab === "teks" ? <TeksTab scene={scene} /> : null}
             {tab === "transisi" ? (
               <TransisiTab scene={scene} isLast={index === plan.scenes.length - 1} />
+            ) : null}
+            {tab === "anotasi" ? (
+              <AnotasiTab scene={scene} stylePreset={plan.meta.stylePreset} />
             ) : null}
           </div>
         </>

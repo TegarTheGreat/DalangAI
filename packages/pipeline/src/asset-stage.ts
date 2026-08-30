@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join, normalize } from "node:path";
 import {
   type AspectRatio,
   assignResolvedAsset,
@@ -10,6 +10,7 @@ import {
 import type { PipelineDb } from "./db";
 import { atomicWriteFile, round3 } from "./fs-utils";
 import { contentHash } from "./hash";
+import { imageDims } from "./image-dims";
 import type { StockCandidate, StockKind, StockOrientation, StockProvider } from "./ports";
 import type { ProjectPaths } from "./project-paths";
 import { consoleLogger, type SceneStageResult, type StageLogger } from "./stage-types";
@@ -81,6 +82,75 @@ export const runAssetStage = async ({
       }
     }
   }
+  // -- Ingest aset LOKAL (Fase 4 §9): screenshot/image dengan assetId berupa
+  //    path relatif di folder proyek — dimaterialkan ke resolvedAssets tanpa
+  //    provider. Sumber "local", lisensi milik user.
+  const localScenes = plan.scenes.filter(
+    (scene) =>
+      (scene.visual.type === "screenshot" || scene.visual.type === "image") &&
+      (!targetIds || targetIds.has(scene.id)),
+  );
+  for (const scene of localScenes) {
+    const relPath = scene.visual.assetId;
+    if (!relPath) {
+      results.push({
+        sceneId: scene.id,
+        status: "error",
+        detail:
+          "visual.assetId kosong — isi path file di folder proyek (mis. assets/step-1.png)",
+      });
+      continue;
+    }
+    if (current.renderState.resolvedAssets[scene.id]?.file === relPath) {
+      results.push({ sceneId: scene.id, status: "cached", detail: "sudah ter-resolve" });
+      continue;
+    }
+    if (scene.locked) {
+      results.push({ sceneId: scene.id, status: "skipped", detail: "scene terkunci" });
+      continue;
+    }
+    if (isAbsolute(relPath) || normalize(relPath).startsWith("..")) {
+      results.push({
+        sceneId: scene.id,
+        status: "error",
+        detail: "path aset lokal harus relatif di dalam folder proyek",
+      });
+      continue;
+    }
+    const absPath = join(paths.planDir, relPath);
+    if (!existsSync(absPath)) {
+      results.push({
+        sceneId: scene.id,
+        status: "error",
+        detail: `file lokal tidak ditemukan: ${relPath}`,
+      });
+      continue;
+    }
+    const dims = imageDims(readFileSync(absPath));
+    const localAsset: ResolvedAsset = {
+      file: relPath,
+      kind: "image",
+      source: "local",
+      license: "milik user (aset lokal proyek)",
+      ...(dims ? { width: dims.width, height: dims.height } : {}),
+    };
+    try {
+      current = assignResolvedAsset(current, scene.id, relPath, localAsset);
+      results.push({
+        sceneId: scene.id,
+        status: "done",
+        detail: `aset lokal ${relPath}${dims ? ` · ${dims.width}×${dims.height}` : ""}`,
+        costUsd: 0,
+      });
+    } catch (error) {
+      results.push({
+        sceneId: scene.id,
+        status: "skipped",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const stockScenes = plan.scenes.filter(
     (scene) => scene.visual.type === "stock" && (!targetIds || targetIds.has(scene.id)),
   );

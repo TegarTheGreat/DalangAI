@@ -50,6 +50,10 @@ jobs:
           pnpm dalang still examples/borobudur-60s/plan.json -t 8 29 -s 0.25 -o /tmp/smoke
           test -s /tmp/smoke/borobudur-60s-f240.png
           test -s /tmp/smoke/borobudur-60s-f870.png
+          # Fase 4: preset tutorial-01 (screenshot + anotasi zoom/highlight/arrow)
+          pnpm dalang still examples/tutorial-studio/plan.json -t 8 21.5 -s 0.25 -o /tmp/smoke
+          test -s /tmp/smoke/tutorial-studio-f240.png
+          test -s /tmp/smoke/tutorial-studio-f645.png
 
       - name: Upload smoke frames
         uses: actions/upload-artifact@v4
