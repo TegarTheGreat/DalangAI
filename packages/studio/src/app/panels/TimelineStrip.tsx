@@ -2,7 +2,7 @@ import { MIN_SCENE_SEC, type Scene, type ScenePlan } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { Thumbnail } from "@remotion/player";
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { IconLock, IconPlay, IconPlus } from "../icons";
+import { IconLock, IconPause, IconPlay, IconPlus } from "../icons";
 import { type PlanMeta, planMeta } from "../model/plan-meta";
 import { deriveSceneStatus } from "../model/scene-status";
 import {
@@ -33,20 +33,6 @@ const formatTime = (frame: number, fps: number): string => {
   const s = totalSec - m * 60;
   return `${m}:${s.toFixed(1).padStart(4, "0")}`;
 };
-
-const IconPause: React.FC = () => (
-  <svg
-    aria-hidden="true"
-    width={16}
-    height={16}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    stroke="none"
-  >
-    <rect x="6" y="5" width="4" height="14" rx="1" />
-    <rect x="14" y="5" width="4" height="14" rx="1" />
-  </svg>
-);
 
 const Clip: React.FC<{
   plan: ScenePlan;

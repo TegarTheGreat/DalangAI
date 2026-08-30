@@ -140,6 +140,27 @@ Dua koreksi arah pada hari yang sama, keduanya dari umpan balik langsung:
    Player dan `white-space: normal` pada RadioCard (teks kini membungkus di
    390px).
 
+5. **Pass presisi setelah owner menolak hasil #4** ("tidak presisi, tidak
+   simetris, ikon tak jelas, form asisten seperti buatan anak SD" — kritik
+   yang terbukti benar di screenshot). Perombakan: (a) `icons.tsx` digambar
+   ulang total di grid 24 dengan bentuk baku (mic, gembok, paku payung,
+   sparkles AI, pesawat kirim, baki ekspor/unduh) dan DIVERIFIKASI lewat
+   lembar ikon yang dirender dari markup produksi — bukan dikira-kira;
+   (b) komposer chat yang tadinya empat elemen bertumpuk miring menjadi
+   SATU kartu: textarea tanpa bingkai di atas, toolbar sejajar di bawah
+   (sparkles + lampir kiri, kirim ikon pesawat kanan; ring fokus pindah ke
+   kartu), terverifikasi sejajar dy=0.0px; (c) form brief keluar dari
+   popover sempit: proyek kosong disambut KARTU PEMBUKA inline (glyph +
+   judul + form), proyek berjalan membukanya sebagai dialog terpusat 480px
+   — layout form simetris: topik penuh, twin select Gaya|Suara, Durasi
+   3-segmen sama lebar, Rasio 3-segmen dengan GLYPH kotak proporsional
+   (16:9 lebar, 9:16 tinggi, 1:1 persegi — juga dipasang di switcher rasio
+   header), switch, CTA penuh; (d) lebar panel kiri/kanan disamakan 336px;
+   (e) tombol "Mulai dari brief" di stage kosong kini memfokus input topik
+   kartu pembuka (selektor lamanya sudah mati). Auto-scroll chat hanya
+   berlaku saat ada pesan supaya kartu pembuka tampil dari atas.
+   Verifikasi Playwright 21/21 termasuk regresi #43 (Ekspor, trim, Spasi).
+
 ## Konsekuensi
 
 - (+) Fase 4 (tutorial) & preset baru otomatis muncul di studio — Player

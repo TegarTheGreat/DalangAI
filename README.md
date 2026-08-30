@@ -94,9 +94,12 @@ Yang sudah berjalan:
     filmstrip selebar durasi (drag untuk susun ulang, **trim handle** di
     tepi kanan mengubah durasi — snap 0.1s, bisa di-undo), track suara per
     scene, transport play/jeda + zoom, pintasan Spasi. **Dialog Ekspor
-    beropsi** (Draft 540p / Final 1080p), **perancang brief** + chip aksi
-    cepat di chat. Sistem kontrol buatan sendiri tanpa dependensi UI
-    (switch/popover/kartu radio/tooltip CSS, ring fokus konsisten).
+    beropsi** (Draft 540p / Final 1080p), **kartu pembuka brief** di proyek
+    kosong + dialog Brief baru (twin select, segmen sama lebar, glyph rasio
+    proporsional) + chip aksi cepat di chat, komposer kartu utuh dengan
+    kirim ikon pesawat. Sistem kontrol buatan sendiri tanpa dependensi UI
+    (switch/kartu radio/tooltip CSS, ring fokus konsisten, set ikon presisi
+    grid-24 terverifikasi lembar ikon).
     Mobile-friendly (laci penuh layar, Ekspor selalu terlihat, target
     sentuh besar); ikon SVG tanpa emoji.
   - **Edit manual = patch user**: narasi/durasi/visual/reorder/hapus/tambah,

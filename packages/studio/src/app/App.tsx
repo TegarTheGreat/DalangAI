@@ -1,6 +1,6 @@
 import { ASPECT_RATIOS } from "@dalang/core";
 import { useEffect, useState } from "react";
-import { RadioCard } from "./components/controls";
+import { RadioCard, useEscape } from "./components/controls";
 import {
   IconChat,
   IconExport,
@@ -35,6 +35,12 @@ const BUSY_LABEL: Record<string, string> = {
   pick: "Memasang aset",
 };
 
+const RATIO_GLYPH: Record<(typeof ASPECT_RATIOS)[number], string> = {
+  "16:9": "r169",
+  "9:16": "r916",
+  "1:1": "r11",
+};
+
 /**
  * Dialog Ekspor beropsi (pola editor umum): pilih profil render dengan
  * penjelasan jujur soal waktu/kualitas — pilihan di sini SEKALIGUS
@@ -46,15 +52,7 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
 }) => {
   const { project } = useStudio();
   const [profile, setProfile] = useState<"draft" | "final">("draft");
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscape(open, onClose);
 
   if (!open) return null;
   const busy = project?.busy.render !== null;
@@ -134,6 +132,7 @@ const Header: React.FC = () => {
                   )
                 }
               >
+                <span className={`ratio-glyph ${RATIO_GLYPH[ratio]}`} aria-hidden />
                 {ratio}
               </button>
             ))}

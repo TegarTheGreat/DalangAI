@@ -68,7 +68,7 @@ export const PreviewPanel: React.FC = () => {
               uiStore.openChat();
               window.setTimeout(() => {
                 document
-                  .querySelector<HTMLTextAreaElement>(".chat-compose textarea")
+                  .querySelector<HTMLInputElement>(".starter .brief-form input")
                   ?.focus();
               }, 50);
             }}

@@ -1,7 +1,8 @@
 /**
  * Set ikon SVG inline (16px, goresan 1.8, warna mengikuti teks) — pengganti
- * emoji di seluruh UI. Satu gaya, satu berat visual. Semua dekoratif
- * (aria-hidden): makna disampaikan label teks di sebelahnya.
+ * emoji di seluruh UI. Digambar presisi di grid 24 dengan bentuk yang sudah
+ * baku di editor/OS (mic, gembok, pin, sparkles) supaya terbaca sekali
+ * lihat. Semua dekoratif (aria-hidden): makna disampaikan label teks.
  */
 
 const Icon: React.FC<{
@@ -41,17 +42,17 @@ export const IconRedo: React.FC = () => (
 
 export const IconMic: React.FC = () => (
   <Icon>
-    <rect x="9" y="3" width="6" height="12" rx="3" />
-    <path d="M5 11a7 7 0 0 0 14 0" />
-    <path d="M12 18v3" />
+    <path d="M12 2.5a3 3 0 0 1 3 3V12a3 3 0 0 1-6 0V5.5a3 3 0 0 1 3-3Z" />
+    <path d="M19 10.5V12a7 7 0 0 1-14 0v-1.5" />
+    <path d="M12 19v3" />
   </Icon>
 );
 
 export const IconImage: React.FC = () => (
   <Icon>
-    <rect x="3" y="5" width="18" height="14" rx="2" />
-    <circle cx="8.5" cy="10" r="1.5" />
-    <path d="m21 15-4.5-4.5L6 21" />
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
   </Icon>
 );
 
@@ -61,41 +62,65 @@ export const IconPlay: React.FC = () => (
   </Icon>
 );
 
+export const IconPause: React.FC = () => (
+  <Icon filled>
+    <rect x="6" y="5" width="4" height="14" rx="1" />
+    <rect x="14" y="5" width="4" height="14" rx="1" />
+  </Icon>
+);
+
+/** Panah keluar dari baki — konvensi "Export" di editor video. */
 export const IconExport: React.FC = () => (
   <Icon>
-    <path d="M12 15V3" />
-    <path d="m7 8 5-5 5 5" />
-    <path d="M5 21h14" />
-    <path d="M5 17v4M19 17v4" />
+    <path d="M12 15V4" />
+    <path d="m6.5 9.5 5.5-5.5 5.5 5.5" />
+    <path d="M4 15v3a2.5 2.5 0 0 0 2.5 2.5h11A2.5 2.5 0 0 0 20 18v-3" />
+  </Icon>
+);
+
+export const IconDownload: React.FC = () => (
+  <Icon>
+    <path d="M12 3v11" />
+    <path d="m6.5 9.5 5.5 5.5 5.5-5.5" />
+    <path d="M4 17v1a2.5 2.5 0 0 0 2.5 2.5h11A2.5 2.5 0 0 0 20 18v-1" />
   </Icon>
 );
 
 export const IconLock: React.FC = () => (
   <Icon>
-    <rect x="5" y="11" width="14" height="10" rx="2" />
-    <path d="M8 11V7a4 4 0 1 1 8 0v4" />
+    <rect x="4.5" y="10.5" width="15" height="10.5" rx="2" />
+    <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
   </Icon>
 );
 
+/** Paku payung (pushpin): kepala, bahu, jarum. */
 export const IconPin: React.FC = () => (
   <Icon>
-    <path d="M9 4h6l-.8 6.2 3.3 3.3H6.5l3.3-3.3Z" />
-    <path d="M12 13.5V21" />
+    <path d="M9 3h6" />
+    <path d="M10 3v5.5l-3.4 2.9a1 1 0 0 0 .65 1.76h9.5a1 1 0 0 0 .65-1.76L14 8.5V3" />
+    <path d="M12 13.2V21" />
   </Icon>
 );
 
 export const IconTrash: React.FC = () => (
   <Icon>
     <path d="M4 7h16" />
-    <path d="M9 7V4h6v3" />
-    <path d="m6.5 7 .9 13h9.2l.9-13" />
-    <path d="M10 11v5M14 11v5" />
+    <path d="M9.5 7V4.5h5V7" />
+    <path d="m6 7 1 13.5h10L18 7" />
+    <path d="M10 11v5.5M14 11v5.5" />
   </Icon>
 );
 
 export const IconPlus: React.FC = () => (
   <Icon>
     <path d="M12 5v14M5 12h14" />
+  </Icon>
+);
+
+export const IconX: React.FC = () => (
+  <Icon>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
   </Icon>
 );
 
@@ -108,7 +133,7 @@ export const IconSearch: React.FC = () => (
 
 export const IconChat: React.FC = () => (
   <Icon>
-    <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l1.9-3.4A8.5 8.5 0 1 1 21 11.5Z" />
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
   </Icon>
 );
 
@@ -121,20 +146,23 @@ export const IconSliders: React.FC = () => (
   </Icon>
 );
 
-export const IconDownload: React.FC = () => (
+/** Bintang empat titik + kilau kecil — bahasa visual "AI/generatif". */
+export const IconSparkles: React.FC = () => (
   <Icon>
-    <path d="M12 3v12" />
-    <path d="m7 10 5 5 5-5" />
-    <path d="M5 21h14" />
+    <path
+      d="M11 3.5 12.9 9l5.6 1.9-5.6 1.9L11 18.3l-1.9-5.5-5.6-1.9L9.1 9Z"
+      fill="currentColor"
+      stroke="none"
+    />
+    <path d="M18.5 14.5v5M16 17h5" />
   </Icon>
 );
 
-export const IconWand: React.FC = () => (
+/** Pesawat kertas — kirim pesan. */
+export const IconSend: React.FC = () => (
   <Icon>
-    <path d="m3 21 12.5-12.5" />
-    <path d="m14 5 5 5" />
-    <path d="M12.5 8.5 15.5 11.5" />
-    <path d="M19 2v3M22 6h-3M6 2v2M3 5h2" />
+    <path d="m21.5 2.5-7 19-3.6-8.4-8.4-3.6Z" />
+    <path d="M21.5 2.5 10.9 13.1" />
   </Icon>
 );
 

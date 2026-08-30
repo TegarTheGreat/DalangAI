@@ -1,10 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 /**
  * Kontrol dasar buatan sendiri — tanpa dependensi UI eksternal, dengan
  * standar yang kami pegang sendiri: state fokus/hover/aktif lengkap,
- * animasi halus, aksesibel (label nyata, Esc/klik-luar untuk popover).
+ * animasi halus, aksesibel (label nyata, Esc untuk menutup dialog).
  */
+
+/** Tutup dialog/overlay dengan Escape selama terbuka. */
+export const useEscape = (open: boolean, onClose: () => void): void => {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+};
 
 export const Switch: React.FC<{
   checked: boolean;
@@ -26,62 +38,25 @@ export const Switch: React.FC<{
 );
 
 /**
- * Popover berjangkar: render `trigger`, tampilkan isi saat terbuka.
- * Tutup dengan klik di luar atau Esc. Posisi default di ATAS jangkar
- * (cocok untuk baris komposer); `align="top"` menaruhnya di bawah.
+ * Pilihan eksklusif ringkas (tab kecil) — dipakai Inspector, Chat, dsb.
+ * `grow` menyamakan lebar semua segmen (layout presisi untuk form).
  */
-export const Popover: React.FC<{
-  open: boolean;
-  onClose: () => void;
-  trigger: React.ReactNode;
-  align?: "bottom" | "top";
-  children: React.ReactNode;
-}> = ({ open, onClose, trigger, align = "bottom", children }) => {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) onClose();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onClose]);
-
-  return (
-    <div className="popover-anchor" ref={ref}>
-      {trigger}
-      {open ? (
-        <div className={align === "top" ? "popover align-top" : "popover"} role="dialog">
-          {children}
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
-/** Pilihan eksklusif ringkas (tab kecil) — dipakai Inspector, Chat, dsb. */
 export const Segmented = <T extends string>({
   options,
   value,
   label,
   onChange,
   disabled,
+  grow,
 }: {
   options: readonly T[];
   value: T;
   label: (option: T) => string;
   onChange: (option: T) => void;
   disabled?: boolean;
+  grow?: boolean;
 }) => (
-  <div className="segmented">
+  <div className={grow ? "segmented grow" : "segmented"}>
     {options.map((option) => (
       <button
         key={option}
