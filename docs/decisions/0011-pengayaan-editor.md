@@ -64,7 +64,7 @@ butuh kredensial nyata untuk diverifikasi, jadi tidak diklaim sekarang.
 
 Unit: 5 test kontrak ADR-0011 di core (default kompatibel, set/undo/clear
 filter, transition+texts+inverse, lock tetap menolak, maks-3 ditegakkan) +
-3 test `filterToCss`; total suite 223 hijau, typecheck penuh, Biome bersih.
+3 test `filterToCss`; total suite 224 hijau, typecheck penuh, Biome bersih.
 Live via UI nyata (Playwright): pilih klip → chip filter Mono → filmstrip &
 preview berubah; tambah teks → overlay & badge tab; kartu Geser kiri →
 `transition.type` berubah — semua tercatat di patch log dan bisa di-undo.

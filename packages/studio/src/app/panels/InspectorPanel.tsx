@@ -227,7 +227,9 @@ const SceneTab: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
       <section className="prop-group">
         <h4>Waktu</h4>
         <label className="field">
-          <span>Durasi (detik — kosongkan untuk otomatis dari narasi)</span>
+          <span data-tip="Kosongkan untuk otomatis mengikuti durasi narasi">
+            Durasi (detik)
+          </span>
           <input
             type="text"
             inputMode="decimal"

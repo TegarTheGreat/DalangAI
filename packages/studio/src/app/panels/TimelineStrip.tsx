@@ -349,6 +349,16 @@ export const TimelineStrip: React.FC = () => {
               ))}
             </div>
 
+            {ticks
+              .filter((tick) => tick.label)
+              .map((tick) => (
+                <span
+                  key={`grid-${tick.sec}`}
+                  className="grid-line"
+                  style={{ left: tick.x }}
+                />
+              ))}
+
             {/* biome-ignore lint/a11y/noStaticElementInteractions: kontainer drop DnD klip */}
             <div className="tl-track video" onDragLeave={() => setDropHint(null)}>
               {plan.scenes.map((scene, index) => (

@@ -329,9 +329,11 @@ export const ChatPanel: React.FC = () => {
         </button>
       </div>
       {chatDisabled ? (
-        <div className="chat-disabled">
-          Chat nonaktif: {chatDisabled}. Isi API key di `.env` lalu jalankan ulang — panel
-          preview dan timeline tetap berfungsi penuh.
+        <div className="notice-warn">
+          <strong>Chat nonaktif</strong>
+          <p>
+            {chatDisabled}. Panel preview, timeline, dan properti tetap berfungsi penuh.
+          </p>
         </div>
       ) : null}
       <div className="chat-scroll" ref={scrollRef}>

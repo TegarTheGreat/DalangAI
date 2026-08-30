@@ -26,7 +26,8 @@ import { studioClient, useStudio } from "./use-studio";
  * state (PRD §8.1).
  */
 
-const formatUsd = (value: number): string => `$${value.toFixed(value < 0.1 ? 4 : 2)}`;
+const formatUsd = (value: number): string =>
+  value === 0 ? "$0.00" : `$${value.toFixed(value < 0.1 ? 4 : 2)}`;
 
 const BUSY_LABEL: Record<string, string> = {
   chat: "Agent sedang bekerja",

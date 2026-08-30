@@ -161,6 +161,31 @@ Dua koreksi arah pada hari yang sama, keduanya dari umpan balik langsung:
    berlaku saat ada pesan supaya kartu pembuka tampil dari atas.
    Verifikasi Playwright 21/21 termasuk regresi #43 (Ekspor, trim, Spasi).
 
+6. **Polish profesional lanjutan + bukti kehandalan agent + audit hasil**
+   (permintaan owner). Polish: scrollbar tipis kustom global, `input range`
+   digambar penuh (track 4px + thumb aksen + ring fokus — zoom timeline dan
+   slider filter tidak lagi bawaan browser), banner chat-nonaktif jadi
+   pemberitahuan kompak (judul aksen + isi tenang), chat-empty tanpa dashed,
+   garis grid vertikal di tick berlabel menembus track timeline, panggung
+   preview diberi vignette radial halus, biaya nol tampil "$0.00", label
+   durasi Inspector diringkas + tooltip. **Kehandalan agent dibuktikan,
+   bukan diklaim**: server studio NYATA dijalankan dengan orchestrator
+   MOCK terskrip (seam injeksi `StudioDeps.orchestrator` yang memang
+   dirancang untuk ini) lalu diuji E2E lewat UI produksi — brief dari kartu
+   pembuka → `writeScenePlan` → 5 klip muncul di timeline + player hidup;
+   chip "Rapikan narasi" → `applyPatch` → kartu diff + narasi berubah →
+   Undo mengembalikan; teks overlay & transisi ADR-0011 dari agent utuh;
+   14/14 asersi lulus. Satu-satunya yang dipalsukan adalah otak LLM-nya —
+   kualitas penyusunan nyata tetap butuh API key owner. Ditambah unit test
+   baru: tool yang gagal (scene terkunci) menjadi `ok:false` yang diumpankan
+   balik ke model, giliran selesai normal, kegagalan tercatat di log event
+   (total suite 224). **Hasil render diaudit dengan mata**: 7 still final
+   (judul, tengah cross-fade, batu berukir + caption karaoke, outro CTA)
+   plus draft MP4 utuh 540x960 / 51,3 dtk / 2,8 MB / render 68 dtk — arah
+   seni prosedural konsisten; yang memisahkannya dari hasil "jadi" adalah
+   footage stock nyata, voiceover TTS nyata, dan musik, semuanya jalur
+   pipeline yang sudah teruji tapi menunggu API key.
+
 ## Konsekuensi
 
 - (+) Fase 4 (tutorial) & preset baru otomatis muncul di studio — Player

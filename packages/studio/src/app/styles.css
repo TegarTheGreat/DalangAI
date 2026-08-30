@@ -47,6 +47,23 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 99px;
+  border: 2px solid var(--bg);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 html,
@@ -194,6 +211,53 @@ textarea {
   resize: vertical;
   min-height: 64px;
   line-height: 1.6;
+}
+/* Range: gaya penuh (track tipis + thumb aksen), bukan bawaan browser. */
+input[type="range"] {
+  appearance: none;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+input[type="range"]:hover,
+input[type="range"]:focus-visible {
+  border: none;
+  box-shadow: none;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 99px;
+  background: var(--line-strong);
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2.5px solid var(--bg-deep);
+  margin-top: -5px;
+  transition: transform 100ms ease;
+}
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--ring);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 99px;
+  background: var(--line-strong);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2.5px solid var(--bg-deep);
 }
 input::placeholder,
 textarea::placeholder {
@@ -370,23 +434,36 @@ textarea::placeholder {
   gap: 10px;
 }
 .chat-empty {
-  margin: 4px;
-  padding: 14px;
-  border: 1px dashed var(--line-strong);
+  margin: 2px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
   border-radius: var(--r);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.65;
   color: var(--text-dim);
 }
-.chat-disabled {
+/* Pemberitahuan kompak (bukan dinding teks): judul aksen + isi tenang. */
+.notice-warn {
   margin: 12px 14px 0;
-  padding: 10px 12px;
+  padding: 9px 11px;
   border-radius: var(--r-sm);
-  background: rgba(232, 163, 61, 0.09);
-  border: 1px solid rgba(232, 163, 61, 0.3);
+  background: rgba(232, 163, 61, 0.08);
+  border: 1px solid rgba(232, 163, 61, 0.28);
+  flex-shrink: 0;
+}
+.notice-warn strong {
+  display: block;
   color: var(--warn);
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.notice-warn p {
+  margin: 0;
+  font-size: 11px;
   line-height: 1.55;
+  color: var(--text-dim);
 }
 
 .bubble {
@@ -552,6 +629,7 @@ textarea::placeholder {
   align-items: center;
   justify-content: center;
   padding: 18px;
+  background: radial-gradient(120% 90% at 50% 32%, #131519 0%, var(--bg-deep) 70%);
 }
 .player-box {
   border-radius: var(--r-lg);
@@ -836,11 +914,6 @@ textarea::placeholder {
 }
 .zoom-group input[type="range"] {
   width: 110px;
-  padding: 0;
-  height: 4px;
-  accent-color: var(--accent);
-  background: transparent;
-  border: none;
 }
 .zoom-group .mini {
   width: 24px;
@@ -885,17 +958,20 @@ textarea::placeholder {
   overflow-x: auto;
   overflow-y: hidden;
 }
-.tl-scroll::-webkit-scrollbar {
-  height: 8px;
-}
-.tl-scroll::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
-  border-radius: 99px;
-}
 .tl-canvas {
   position: relative;
   min-width: 100%;
   padding-bottom: 8px;
+}
+/* Garis grid vertikal tipis di tick berlabel — membaca waktu lintas track. */
+.grid-line {
+  position: absolute;
+  top: 22px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--line);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .tl-ruler {
