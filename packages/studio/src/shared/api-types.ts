@@ -15,8 +15,24 @@ export type BusyKind = "chat" | "tts" | "assets" | "pick";
 export interface BusyState {
   /** Job yang sedang memutasi plan (satu-per-satu), atau null. */
   mutation: BusyKind | null;
-  /** Profil render yang sedang berjalan, atau null. */
-  render: "draft" | "final" | null;
+  /** Label ekspor yang sedang berjalan (mis. "1080p seimbang"), atau null. */
+  render: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Ekspor (ADR-0014) — union literal disalin dari @dalang/renderer supaya
+// bundle browser tidak menyeret @remotion/renderer; server memvalidasi
+// terhadap sumber kebenarannya.
+// ---------------------------------------------------------------------------
+
+export type ExportFormat = "mp4" | "webm" | "mov";
+export type ExportResolution = 540 | 720 | 1080;
+export type ExportQuality = "cepat" | "seimbang" | "terbaik";
+
+export interface ExportSettingsLite {
+  format: ExportFormat;
+  resolution: ExportResolution;
+  quality: ExportQuality;
 }
 
 export interface PatchLogEntryLite {
@@ -38,8 +54,9 @@ export interface StageRunLite {
 }
 
 export interface RenderOutput {
-  profile: "draft" | "final";
-  /** Path web ke MP4 (relatif root server), mis. "/.dalang/renders/preview.mp4". */
+  /** Nama berkas tanpa ekstensi, mis. "ekspor-1080p-seimbang" / "final". */
+  label: string;
+  /** Path web ke berkas video (relatif root server). */
   url: string;
   sizeBytes: number;
   finishedAt: string;
@@ -107,7 +124,11 @@ export interface PipelineRunRequest {
 }
 
 export interface RenderRequest {
-  profile: "draft" | "final";
+  /** Makro default lama; boleh dihilangkan bila pengaturan eksplisit dikirim. */
+  profile?: "draft" | "final";
+  format?: ExportFormat;
+  resolution?: ExportResolution;
+  quality?: ExportQuality;
   confirm?: boolean;
 }
 
@@ -165,7 +186,8 @@ export type StudioEvent =
   | {
       type: "render";
       status: "started" | "done" | "error";
-      profile: "draft" | "final";
+      /** Deskripsi ekspor, mis. "mp4 1080p seimbang". */
+      label: string;
       url?: string;
       error?: string;
     };

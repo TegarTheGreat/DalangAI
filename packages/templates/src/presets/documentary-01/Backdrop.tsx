@@ -2,6 +2,7 @@ import type { ResolvedAsset, Scene } from "@dalang/core";
 import { Video } from "@remotion/media";
 import {
   AbsoluteFill,
+  Easing,
   Img,
   interpolate,
   random,
@@ -22,9 +23,12 @@ const motionStyle = (
   frame: number,
   durationInFrames: number,
 ): React.CSSProperties => {
+  // Easing kubik halus (ADR-0014): Ken Burns linear terasa mekanis; kurva
+  // ini memberi "settle" pelan di awal/akhir seperti gerak dolly sungguhan.
   const progress = interpolate(frame, [0, Math.max(durationInFrames, 1)], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
+    easing: Easing.bezier(0.33, 0.0, 0.25, 1),
   });
   switch (motion) {
     case "kenburns-in":

@@ -112,7 +112,7 @@ export const PreviewPanel: React.FC = () => {
       (project?.renders.length ?? 0) > 0 ? (
         <div className="render-strip">
           {renderProgress?.status === "started" ? (
-            <span className="render-note">Merender {renderProgress.profile}…</span>
+            <span className="render-note">Merender {renderProgress.label}…</span>
           ) : null}
           {renderProgress?.status === "error" ? (
             <span className="render-note error">
@@ -128,8 +128,8 @@ export const PreviewPanel: React.FC = () => {
               rel="noreferrer"
             >
               <IconDownload />
-              {render.profile === "final" ? "final.mp4" : "preview.mp4"} (
-              {(render.sizeBytes / 1024 / 1024).toFixed(1)} MB)
+              {render.url.split("/").pop()} ({(render.sizeBytes / 1024 / 1024).toFixed(1)}{" "}
+              MB)
             </a>
           ))}
         </div>

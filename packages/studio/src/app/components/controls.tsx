@@ -41,7 +41,7 @@ export const Switch: React.FC<{
  * Pilihan eksklusif ringkas (tab kecil) — dipakai Inspector, Chat, dsb.
  * `grow` menyamakan lebar semua segmen (layout presisi untuk form).
  */
-export const Segmented = <T extends string>({
+export const Segmented = <T extends string | number>({
   options,
   value,
   label,

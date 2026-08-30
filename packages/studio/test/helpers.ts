@@ -160,6 +160,7 @@ export const makeStudio = (
           width: 1080,
           height: 1920,
           bundleFromCache: true,
+          settings: { format: "mp4", resolution: 540, quality: "cepat" } as const,
         };
       },
       ...(overrides?.noOrchestrator

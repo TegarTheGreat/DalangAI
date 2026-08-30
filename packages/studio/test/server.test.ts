@@ -215,7 +215,7 @@ describe("pipeline & render", () => {
       .map((event) => JSON.parse(event.data));
     expect(done.at(-1)).toMatchObject({
       status: "done",
-      profile: "draft",
+      label: "mp4 540p cepat",
       url: "/.dalang/renders/preview.mp4",
     });
 
@@ -223,6 +223,34 @@ describe("pipeline & render", () => {
     expect(project.renders[0]?.url).toBe("/.dalang/renders/preview.mp4");
     const served = await call(studio, "/.dalang/renders/preview.mp4");
     expect(served.status).toBe(200);
+
+    // ADR-0014: pengaturan eksplisit ringan -> 202 tanpa confirm, nama file
+    // per pengaturan; resolusi 1080/terbaik/mov tetap butuh confirm.
+    const heavy = await callJson<NeedsConfirmation>(studio, "/api/render", {
+      method: "POST",
+      body: JSON.stringify({ format: "mp4", resolution: 1080 }),
+    });
+    expect(heavy.status).toBe(428);
+    const webmEvents = call(studio, "/api/events").then((response) =>
+      collectSse(response, (list) =>
+        list.some(
+          (event) => event.event === "render" && JSON.parse(event.data).status === "done",
+        ),
+      ),
+    );
+    const webm = await callJson<{ started: boolean; label: string }>(
+      studio,
+      "/api/render",
+      {
+        method: "POST",
+        body: JSON.stringify({ format: "webm", resolution: 720, quality: "cepat" }),
+      },
+    );
+    expect(webm.status).toBe(202);
+    expect(webm.body.label).toBe("webm 720p cepat");
+    await webmEvents;
+    const listed = (await getProject(studio)).renders.map((r) => r.url);
+    expect(listed).toContain("/.dalang/renders/ekspor-720p-cepat.webm");
   });
 
   it("busy lock: patch ditolak 409 selama stage berjalan", async () => {

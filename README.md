@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -134,7 +134,24 @@ Yang sudah berjalan:
   - **Agent lebih handal**: riwayat sesi panjang dipangkas aman (marker +
     drop kepala `tool` yatim yang ditolak provider), system prompt mengenal
     seluruh perangkat baru.
-- **Kualitas terjaga otomatis**: 250 unit test (kontrak lock/pin/undo, timing
+- **Ekspor kaya + hasil rasa editor (ADR-0014)**:
+  - **Format & kualitas dipilih di dialog Ekspor**: MP4 (H.264+AAC) /
+    WebM (VP9+Opus) / MOV (ProRes+PCM master), resolusi 540/720/1080p, mutu
+    Cepat/Seimbang/Terbaik (CRF+preset per codec, dijelaskan jujur per
+    kombinasi) — juga dari CLI (`--video-format --resolution --quality`).
+    Ketiga format terverifikasi E2E dari byte kontainernya.
+  - **Musik latar akhirnya hidup**: `audio.music` §5.1 dieksekusi penuh —
+    dua bed CC0 ter-bundle (disintesis deterministik, loop mulus), fade
+    in/out, **ducking otomatis di bawah narasi**; dipilih dari dialog Gaya
+    (satu op `setAudio`, undoable), sama untuk preview dan render.
+  - **Gerak lebih hidup**: transisi dan Ken Burns memakai easing kubik
+    (settle seperti dolly), tempo transisi demo bervariasi per momen.
+  - **Kritik sutradara otomatis** (`critiquePlan`): heuristik anti-generic
+    (hook 3 detik, musik hening, gerak/transisi monoton, narasi terlalu
+    padat, hierarki teks, outro) tampil di `dalang validate` DAN disuntikkan
+    ke konteks agent + KAIDAH SUTRADARA di system prompt — agent memperbaiki
+    rencananya sendiri sebelum diminta.
+- **Kualitas terjaga otomatis**: 271 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -147,7 +164,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 250 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 271 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -157,6 +174,7 @@ pnpm dalang validate examples/borobudur-60s/plan.json
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
+pnpm dalang render   examples/borobudur-60s/plan.json --video-format webm --resolution 720 --quality terbaik
 pnpm dalang still    examples/borobudur-60s/plan.json -t 8 -t 29 -t 44 -o out
 pnpm dalang log      proyekku/        # garis waktu pipeline + agent + biaya
 

@@ -1,6 +1,6 @@
 import type { AgentDeps, Guardrails, ResolvedModel } from "@dalang/agent";
 import type { StockProvider, TtsProvider } from "@dalang/pipeline";
-import type { RenderVideoResult } from "@dalang/renderer";
+import type { ExportSettings, RenderVideoResult } from "@dalang/renderer";
 import type { ApprovalBroker } from "./approvals";
 import type { StudioStore } from "./store";
 
@@ -16,6 +16,8 @@ export interface StudioDeps {
     planPath: string;
     outputLocation: string;
     profile: "draft" | "final";
+    /** Pengaturan ekspor eksplisit (ADR-0014); tanpa ini profil jadi makro. */
+    settings?: Partial<ExportSettings>;
   }) => Promise<RenderVideoResult>;
   /**
    * Model orkestrator chat. Boleh kosong (mis. API key belum diset): panel

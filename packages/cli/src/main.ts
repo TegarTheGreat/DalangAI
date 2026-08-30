@@ -3,17 +3,27 @@ import { basename, dirname, join, resolve } from "node:path";
 import {
   computeTimeline,
   countWords,
+  critiquePlan,
+  formatDirectorNotes,
   resolveSceneDurationSec,
   type ScenePlan,
 } from "@dalang/core";
 import { generatePlan, readPlanFile, type SceneStageResult } from "@dalang/pipeline";
 import { buildStockChain, buildTtsChain } from "@dalang/providers";
 import {
+  ENCODE_QUALITIES,
+  type EncodeQuality,
+  extensionFor,
   loadPlan,
   type ProgressEvent,
   type RenderProfile,
   renderPlanStills,
   renderPlanToVideo,
+  resolveExportSettings,
+  VIDEO_FORMATS,
+  VIDEO_RESOLUTIONS,
+  type VideoFormat,
+  type VideoResolution,
 } from "@dalang/renderer";
 import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
 import { Command, InvalidArgumentError, Option } from "commander";
@@ -132,6 +142,15 @@ program
     const plan = loadPlan(resolve(planPath));
     console.log("Scene-plan valid (skema v0).");
     printPlanSummary(plan);
+    // Kritik sutradara (ADR-0014): heuristik anti-"generic", murni saran.
+    const notes = critiquePlan(plan);
+    if (notes.length > 0) {
+      console.log("  Saran sutradara:");
+      for (const line of formatDirectorNotes(notes)) {
+        console.log(`  - ${line}`);
+      }
+      console.log("");
+    }
   });
 
 program
@@ -193,21 +212,36 @@ program
 program
   .command("render")
   .argument("<plan>", "path ke scene-plan JSON")
-  .option("-o, --out <file>", "file output .mp4")
+  .option("-o, --out <file>", "file output video")
   .addOption(profileOption().default("draft"))
+  .addOption(
+    new Option(
+      "--video-format <format>",
+      "format kontainer (ADR-0014); menimpa default profil",
+    ).choices(VIDEO_FORMATS),
+  )
+  .addOption(
+    new Option("--resolution <p>", "sisi pendek piksel").choices(
+      VIDEO_RESOLUTIONS.map(String),
+    ),
+  )
+  .addOption(new Option("--quality <mutu>", "mutu enkode").choices(ENCODE_QUALITIES))
   .option(
     "--concurrency <n>",
     "jumlah tab render paralel (default: otomatis)",
     parsePositiveInt,
   )
   .option("--no-cache", "jangan pakai bundle cache (selalu bundling ulang)")
-  .description("Render scene-plan menjadi MP4 (H.264) secara lokal")
+  .description("Render scene-plan menjadi video (MP4 H.264 / WebM VP9 / MOV ProRes)")
   .action(
     async (
       planPath: string,
       options: {
         out?: string;
         profile: RenderProfile;
+        videoFormat?: VideoFormat;
+        resolution?: string;
+        quality?: EncodeQuality;
         concurrency?: number;
         cache: boolean;
       },
@@ -216,9 +250,21 @@ program
       const plan = loadPlan(absPlan);
       printPlanSummary(plan);
 
+      const overrides = {
+        ...(options.videoFormat ? { format: options.videoFormat } : {}),
+        ...(options.resolution
+          ? { resolution: Number(options.resolution) as VideoResolution }
+          : {}),
+        ...(options.quality ? { quality: options.quality } : {}),
+      };
+      const settings = resolveExportSettings(options.profile, overrides);
       const name = basename(dirname(absPlan));
       const outPath = resolve(
-        options.out ?? join("out", `${name}-${options.profile}.mp4`),
+        options.out ??
+          join(
+            "out",
+            `${name}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`,
+          ),
       );
       mkdirSync(dirname(outPath), { recursive: true });
 
@@ -227,6 +273,7 @@ program
         planPath: absPlan,
         outputLocation: outPath,
         profile: options.profile,
+        settings: overrides,
         concurrency: options.concurrency ?? null,
         disableBundleCache: !options.cache,
         onProgress: progressPrinter(),
@@ -236,7 +283,8 @@ program
       const elapsed = (Date.now() - startedAt) / 1000;
       console.log(
         `selesai: ${result.outputLocation}\n` +
-          `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
+          `  ${result.settings.format} ${result.width}×${result.height} (${result.settings.quality}) · ` +
+          `${formatSec(result.durationSec)} · ` +
           `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec(elapsed)}` +
           `${result.bundleFromCache ? " · bundle cache: hit" : ""}`,
       );

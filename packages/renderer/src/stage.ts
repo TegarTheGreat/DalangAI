@@ -34,6 +34,12 @@ export const copyPlanAssets = (
     ...Object.values(plan.renderState.resolvedAssets).map((asset) => asset.file),
     ...Object.values(plan.renderState.narrationAudio).map((audio) => audio.file),
   ];
+  // Musik proyek (ADR-0014): file milik plan ikut di-stage; id "pustaka:*"
+  // sudah ada di public templates, tidak perlu disalin.
+  const music = plan.audio.music;
+  if (music && !music.assetId.startsWith("pustaka:")) {
+    files.push(music.assetId);
+  }
 
   for (const file of files) {
     assertSafeRelative(file);

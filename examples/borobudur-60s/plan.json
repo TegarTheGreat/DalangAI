@@ -9,15 +9,35 @@
     "language": "id",
     "stylePreset": "documentary-01"
   },
-  "audio": {},
+  "audio": {
+    "music": {
+      "assetId": "pustaka:tenang",
+      "volume": 0.14,
+      "ducking": true
+    }
+  },
   "scenes": [
     {
       "id": "sc-title",
       "locked": false,
       "narration": "Candi sejuta batu yang pernah hilang ditelan zaman.",
-      "visual": { "type": "template-anim", "variant": "title" },
-      "caption": { "enabled": false, "style": "inherit" },
+      "visual": {
+        "type": "template-anim",
+        "assetId": null,
+        "motion": "none",
+        "pinned": false,
+        "variant": "title"
+      },
+      "caption": {
+        "enabled": false,
+        "style": "inherit"
+      },
       "duration": 5,
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 20
+      },
+      "texts": [],
       "annotations": []
     },
     {
@@ -31,7 +51,28 @@
         "motion": "kenburns-in",
         "pinned": true
       },
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
       "duration": "auto",
+      "transition": {
+        "type": "slide-up",
+        "durationFrames": 12
+      },
+      "texts": [
+        {
+          "id": "tx-hook",
+          "content": "Abad ke-9 · Jawa Tengah",
+          "role": "kicker",
+          "position": "top",
+          "align": "center",
+          "size": "m",
+          "emphasis": "box",
+          "startFrac": 0.04,
+          "endFrac": 0.7
+        }
+      ],
       "annotations": []
     },
     {
@@ -45,7 +86,16 @@
         "motion": "pan-right",
         "pinned": true
       },
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
       "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 15
+      },
+      "texts": [],
       "annotations": []
     },
     {
@@ -59,7 +109,16 @@
         "motion": "kenburns-out",
         "pinned": true
       },
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
       "duration": "auto",
+      "transition": {
+        "type": "wipe-down",
+        "durationFrames": 18
+      },
+      "texts": [],
       "annotations": []
     },
     {
@@ -73,7 +132,16 @@
         "motion": "pan-left",
         "pinned": true
       },
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
       "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 24
+      },
+      "texts": [],
       "annotations": []
     },
     {
@@ -87,7 +155,16 @@
         "motion": "kenburns-in",
         "pinned": true
       },
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
       "duration": "auto",
+      "transition": {
+        "type": "slide-up",
+        "durationFrames": 10
+      },
+      "texts": [],
       "annotations": []
     },
     {
@@ -101,16 +178,39 @@
         "motion": "kenburns-in",
         "pinned": true
       },
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
       "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 20
+      },
+      "texts": [],
       "annotations": []
     },
     {
       "id": "sc-outro",
       "locked": false,
       "narration": "Ikuti untuk sejarah Nusantara satu menit lainnya.",
-      "visual": { "type": "template-anim", "variant": "outro" },
-      "caption": { "enabled": false, "style": "inherit" },
+      "visual": {
+        "type": "template-anim",
+        "assetId": null,
+        "motion": "none",
+        "pinned": false,
+        "variant": "outro"
+      },
+      "caption": {
+        "enabled": false,
+        "style": "inherit"
+      },
       "duration": 4.5,
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 15
+      },
+      "texts": [],
       "annotations": []
     }
   ],
@@ -121,43 +221,43 @@
         "file": "assets/bg-sunrise.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
       "sc-002": {
         "file": "assets/bg-stone.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
       "sc-003": {
         "file": "assets/bg-relief.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
       "sc-004": {
         "file": "assets/bg-ash.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
       "sc-005": {
         "file": "assets/bg-rediscovery.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
       "sc-006": {
         "file": "assets/bg-stupa-dawn.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       }
     }
   }

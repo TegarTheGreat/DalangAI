@@ -1,6 +1,8 @@
 import { ASPECT_RATIOS } from "@dalang/core";
 import { FONT_CHOICES } from "@dalang/templates/fonts";
+import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useState } from "react";
+import type { ExportSettingsLite } from "../shared/api-types";
 import { RadioCard, Segmented, useEscape } from "./components/controls";
 import {
   IconChat,
@@ -46,16 +48,68 @@ const RATIO_GLYPH: Record<(typeof ASPECT_RATIOS)[number], string> = {
 };
 
 /**
- * Dialog Ekspor beropsi (pola editor umum): pilih profil render dengan
+ * Dialog Ekspor (ADR-0014): format kontainer + resolusi + mutu enkode, dengan
  * penjelasan jujur soal waktu/kualitas — pilihan di sini SEKALIGUS
  * konfirmasinya, tanpa dialog kedua.
  */
+const EXPORT_FORMATS: ReadonlyArray<{
+  id: ExportSettingsLite["format"];
+  title: string;
+  desc: string;
+}> = [
+  {
+    id: "mp4",
+    title: "MP4 · H.264",
+    desc: "Kompatibilitas paling luas: media sosial, perpesanan, semua pemutar.",
+  },
+  {
+    id: "webm",
+    title: "WebM · VP9",
+    desc: "Lebih kecil untuk web modern; pemutar lama mungkin tidak mendukung.",
+  },
+  {
+    id: "mov",
+    title: "MOV · ProRes",
+    desc: "Master untuk edit lanjut di NLE — nyaris tanpa kompresi, file besar.",
+  },
+];
+
+const RESOLUTIONS = [540, 720, 1080] as const;
+const QUALITIES = ["cepat", "seimbang", "terbaik"] as const;
+const QUALITY_LABEL: Record<(typeof QUALITIES)[number], string> = {
+  cepat: "Cepat",
+  seimbang: "Seimbang",
+  terbaik: "Terbaik",
+};
+const QUALITY_HINT: Record<
+  ExportSettingsLite["format"],
+  Record<(typeof QUALITIES)[number], string>
+> = {
+  mp4: {
+    cepat: "CRF 23 · preset veryfast — pratinjau kilat.",
+    seimbang: "CRF 18 · preset medium · audio 192k — pilihan rilis.",
+    terbaik: "CRF 15 · preset slow · audio 192k — detail maksimal, paling lama.",
+  },
+  webm: {
+    cepat: "VP9 CRF 36 — kecil dan cepat.",
+    seimbang: "VP9 CRF 32 · Opus — rilis web.",
+    terbaik: "VP9 CRF 28 — detail maksimal, enkode lama.",
+  },
+  mov: {
+    cepat: "ProRes Proxy — ringan untuk offline edit.",
+    seimbang: "ProRes 422 — standar pertukaran NLE.",
+    terbaik: "ProRes 422 HQ · audio PCM — master arsip.",
+  },
+};
+
 const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   open,
   onClose,
 }) => {
   const { project } = useStudio();
-  const [profile, setProfile] = useState<"draft" | "final">("draft");
+  const [format, setFormat] = useState<ExportSettingsLite["format"]>("mp4");
+  const [resolution, setResolution] = useState<ExportSettingsLite["resolution"]>(1080);
+  const [quality, setQuality] = useState<ExportSettingsLite["quality"]>("seimbang");
   useEscape(open, onClose);
 
   if (!open) return null;
@@ -66,19 +120,39 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
         <h3>Ekspor video</h3>
         <p>Render berjalan lokal di mesin ini (CPU) dan hasilnya masuk riwayat render.</p>
         <div className="radio-stack">
-          <RadioCard
-            active={profile === "draft"}
-            title="Draft — 540p"
-            desc="Cepat (kira-kira 1–2 menit), bitrate rendah. Untuk memeriksa alur, timing, dan aset."
-            onSelect={() => setProfile("draft")}
-          />
-          <RadioCard
-            active={profile === "final"}
-            title="Final — 1080p"
-            desc="Kualitas penuh, butuh beberapa menit. Pastikan suara dan aset sudah beres."
-            onSelect={() => setProfile("final")}
-          />
+          {EXPORT_FORMATS.map((option) => (
+            <RadioCard
+              key={option.id}
+              active={format === option.id}
+              title={option.title}
+              desc={option.desc}
+              onSelect={() => setFormat(option.id)}
+            />
+          ))}
         </div>
+        <div className="export-fields">
+          <div className="field">
+            <span>Resolusi</span>
+            <Segmented
+              grow
+              options={RESOLUTIONS}
+              value={resolution}
+              label={(r) => `${r}p`}
+              onChange={setResolution}
+            />
+          </div>
+          <div className="field">
+            <span>Mutu enkode</span>
+            <Segmented
+              grow
+              options={QUALITIES}
+              value={quality}
+              label={(q) => QUALITY_LABEL[q]}
+              onChange={setQuality}
+            />
+          </div>
+        </div>
+        <p className="export-hint">{QUALITY_HINT[format][quality]}</p>
         <div className="dialog-actions">
           <button type="button" className="ghost" onClick={onClose}>
             Batal
@@ -89,10 +163,10 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
             disabled={busy}
             onClick={() => {
               onClose();
-              void studioClient.startRenderConfirmed(profile);
+              void studioClient.startExportConfirmed({ format, resolution, quality });
             }}
           >
-            Mulai render
+            Mulai ekspor
           </button>
         </div>
       </div>
@@ -118,6 +192,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const [primary, setPrimary] = useState("#0b0e17");
   const [fontDisplay, setFontDisplay] = useState("");
   const [fontBody, setFontBody] = useState("");
+  const [music, setMusic] = useState("");
   useEscape(open, onClose);
 
   useEffect(() => {
@@ -132,6 +207,12 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
     );
     setFontDisplay(tokens.fontDisplay ?? "");
     setFontBody(tokens.fontBody ?? "");
+    const assetId = plan.audio.music?.assetId ?? "";
+    setMusic(
+      assetId.startsWith(MUSIC_LIBRARY_PREFIX)
+        ? assetId.slice(MUSIC_LIBRARY_PREFIX.length)
+        : "",
+    );
   }, [open, plan]);
 
   if (!open || !plan) return null;
@@ -150,6 +231,18 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               ...(fontDisplay ? { fontDisplay } : {}),
               ...(fontBody ? { fontBody } : {}),
             },
+          },
+        },
+        {
+          op: "setAudio",
+          patch: {
+            music: music
+              ? {
+                  assetId: `${MUSIC_LIBRARY_PREFIX}${music}`,
+                  volume: 0.15,
+                  ducking: true,
+                }
+              : null,
           },
         },
       ],
@@ -228,6 +321,24 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
                 ))}
               </select>
             </label>
+          </div>
+          <div className="field">
+            <span>Musik latar</span>
+            <Segmented
+              grow
+              options={["", ...BUNDLED_MUSIC.map((m) => m.id)]}
+              value={music}
+              label={(id) =>
+                id === ""
+                  ? "Tanpa"
+                  : (BUNDLED_MUSIC.find((m) => m.id === id)?.label.split(" (")[0] ?? id)
+              }
+              onChange={setMusic}
+            />
+            <p className="field-hint">
+              Bed CC0 di-loop, volume rendah, otomatis mengecil di bawah narasi (ducking).
+              Bisa di-undo seperti patch lain.
+            </p>
           </div>
           <div className="brief-actions">
             <button

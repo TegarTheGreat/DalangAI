@@ -2032,6 +2032,26 @@ input[type="color"]::-webkit-color-swatch {
   margin: 12px 0 2px;
 }
 
+/* Dialog Ekspor (ADR-0014) */
+.export-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.export-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
 /* Chip aksi cepat di chat */
 .quick-row {
   display: flex;

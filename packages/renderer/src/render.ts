@@ -39,6 +39,92 @@ export const PROFILES: Record<RenderProfile, ProfileConfig> = {
   final: { scale: 1, crf: 17, x264Preset: "medium", jpegQuality: 90, debug: false },
 };
 
+// ---------------------------------------------------------------------------
+// Pengaturan ekspor (ADR-0014): format kontainer + resolusi + mutu enkode.
+// Profil lama tetap ada sebagai makro default; pengaturan eksplisit menimpa.
+// ---------------------------------------------------------------------------
+
+export const VIDEO_FORMATS = ["mp4", "webm", "mov"] as const;
+export type VideoFormat = (typeof VIDEO_FORMATS)[number];
+
+/** Sisi pendek dalam piksel; komposisi dasar 1080. */
+export const VIDEO_RESOLUTIONS = [540, 720, 1080] as const;
+export type VideoResolution = (typeof VIDEO_RESOLUTIONS)[number];
+
+export const ENCODE_QUALITIES = ["cepat", "seimbang", "terbaik"] as const;
+export type EncodeQuality = (typeof ENCODE_QUALITIES)[number];
+
+export interface ExportSettings {
+  format: VideoFormat;
+  resolution: VideoResolution;
+  quality: EncodeQuality;
+}
+
+export const DEFAULT_EXPORT_SETTINGS: Record<RenderProfile, ExportSettings> = {
+  draft: { format: "mp4", resolution: 540, quality: "cepat" },
+  final: { format: "mp4", resolution: 1080, quality: "seimbang" },
+};
+
+export const resolveExportSettings = (
+  profile: RenderProfile,
+  overrides?: Partial<ExportSettings>,
+): ExportSettings => ({ ...DEFAULT_EXPORT_SETTINGS[profile], ...overrides });
+
+/** Ekstensi file untuk format (mov = ProRes di kontainer QuickTime). */
+export const extensionFor = (format: VideoFormat): string => format;
+
+export interface EncoderArgs {
+  codec: "h264" | "vp9" | "prores";
+  scale: number;
+  audioCodec: "aac" | "opus" | "pcm-16";
+  crf?: number;
+  x264Preset?: "veryfast" | "medium" | "slow";
+  proResProfile?: "proxy" | "standard" | "hq";
+  audioBitrate?: `${number}k`;
+  jpegQuality: number;
+}
+
+/**
+ * Peta (format, resolusi, mutu) → argumen encoder Remotion/FFmpeg.
+ * Skala CRF berbeda per codec (VP9 memakai rentang lebih tinggi); ProRes
+ * tidak ber-CRF — mutunya lewat profil. Audio: AAC utk MP4, Opus utk WebM,
+ * PCM 16-bit utk master ProRes.
+ */
+export const encoderArgs = (settings: ExportSettings): EncoderArgs => {
+  const scale = settings.resolution / 1080;
+  const q = settings.quality;
+  const jpegQuality = q === "cepat" ? 80 : q === "seimbang" ? 90 : 95;
+  switch (settings.format) {
+    case "mp4":
+      return {
+        codec: "h264",
+        scale,
+        audioCodec: "aac",
+        crf: q === "cepat" ? 23 : q === "seimbang" ? 18 : 15,
+        x264Preset: q === "cepat" ? "veryfast" : q === "seimbang" ? "medium" : "slow",
+        audioBitrate: q === "cepat" ? "128k" : "192k",
+        jpegQuality,
+      };
+    case "webm":
+      return {
+        codec: "vp9",
+        scale,
+        audioCodec: "opus",
+        crf: q === "cepat" ? 36 : q === "seimbang" ? 32 : 28,
+        audioBitrate: "128k",
+        jpegQuality,
+      };
+    case "mov":
+      return {
+        codec: "prores",
+        scale,
+        audioCodec: "pcm-16",
+        proResProfile: q === "cepat" ? "proxy" : q === "seimbang" ? "standard" : "hq",
+        jpegQuality,
+      };
+  }
+};
+
 export const loadPlan = (planPath: string): ScenePlan => {
   let raw: string;
   try {
@@ -136,6 +222,7 @@ export interface RenderVideoResult {
   width: number;
   height: number;
   bundleFromCache: boolean;
+  settings: ExportSettings;
 }
 
 export const renderPlanToVideo = async (
@@ -143,10 +230,13 @@ export const renderPlanToVideo = async (
     planPath: string;
     outputLocation: string;
     profile?: RenderProfile;
+    /** Menimpa default profil (ADR-0014): format, resolusi, mutu enkode. */
+    settings?: Partial<ExportSettings>;
   } & RenderBehaviorOptions,
 ): Promise<RenderVideoResult> => {
   const profile = options.profile ?? "draft";
-  const config = PROFILES[profile];
+  const settings = resolveExportSettings(profile, options.settings);
+  const enc = encoderArgs(settings);
   const logLevel = options.logLevel ?? "warn";
 
   const prepared = await prepare(options.planPath, profile, options);
@@ -154,15 +244,18 @@ export const renderPlanToVideo = async (
     await renderMedia({
       composition: prepared.composition,
       serveUrl: prepared.serveUrl,
-      codec: "h264",
+      codec: enc.codec,
+      audioCodec: enc.audioCodec,
       outputLocation: options.outputLocation,
       inputProps: prepared.inputProps,
       browserExecutable: prepared.browserExecutable,
-      crf: config.crf,
-      x264Preset: config.x264Preset,
-      scale: config.scale,
+      ...(enc.crf !== undefined ? { crf: enc.crf } : {}),
+      ...(enc.x264Preset ? { x264Preset: enc.x264Preset } : {}),
+      ...(enc.proResProfile ? { proResProfile: enc.proResProfile } : {}),
+      ...(enc.audioBitrate ? { audioBitrate: enc.audioBitrate } : {}),
+      scale: enc.scale,
       imageFormat: "jpeg",
-      jpegQuality: config.jpegQuality,
+      jpegQuality: enc.jpegQuality,
       concurrency: options.concurrency ?? null,
       logLevel,
       onProgress: ({ progress, stitchStage }) =>
@@ -177,9 +270,10 @@ export const renderPlanToVideo = async (
       durationInFrames: prepared.composition.durationInFrames,
       durationSec: prepared.composition.durationInFrames / FPS,
       sizeBytes: statSync(options.outputLocation).size,
-      width: Math.round(prepared.composition.width * config.scale),
-      height: Math.round(prepared.composition.height * config.scale),
+      width: Math.round(prepared.composition.width * enc.scale),
+      height: Math.round(prepared.composition.height * enc.scale),
       bundleFromCache: prepared.bundleFromCache,
+      settings,
     };
   } finally {
     prepared.cleanup();

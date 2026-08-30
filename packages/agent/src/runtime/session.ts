@@ -4,6 +4,8 @@ import {
   applyPatch,
   computeTimeline,
   countWords,
+  critiquePlan,
+  formatDirectorNotes,
   PatchLog,
   type PatchOpInput,
   parseScenePlan,
@@ -265,10 +267,17 @@ export class ProjectSession {
         `${flags ? ` (${flags})` : ""} — "${scene.narration.slice(0, 70)}${scene.narration.length > 70 ? "…" : ""}"`
       );
     });
+    // Kritik sutradara (ADR-0014): heuristik anti-"generic" ikut disuntikkan
+    // supaya model memperbaiki kelemahan rencana tanpa harus diminta.
+    const notes = formatDirectorNotes(critiquePlan(plan)).slice(0, 5);
     return [
       `Judul: ${plan.meta.title} · ${plan.meta.aspectRatio} · preset ${plan.meta.stylePreset} · bahasa ${plan.meta.language}`,
-      `Voice: ${plan.audio.voice ? `${plan.audio.voice.provider}/${plan.audio.voice.voiceId}` : "(belum diset)"} · total ±${totalSec.toFixed(0)}s`,
+      `Voice: ${plan.audio.voice ? `${plan.audio.voice.provider}/${plan.audio.voice.voiceId}` : "(belum diset)"} · ` +
+        `Musik: ${plan.audio.music ? plan.audio.music.assetId : "(tanpa)"} · total ±${totalSec.toFixed(0)}s`,
       ...lines,
+      ...(notes.length > 0
+        ? [`Saran sutradara:\n${notes.map((n) => `- ${n}`).join("\n")}`]
+        : []),
       `Perubahan terakhir:\n${this.patchLog.summarize(5)}`,
     ].join("\n");
   }

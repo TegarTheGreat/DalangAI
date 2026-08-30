@@ -192,6 +192,7 @@ export const fakeRender = (): AgentDeps["renderVideo"] & {
       width: 540,
       height: 960,
       bundleFromCache: true,
+      settings: { format: "mp4", resolution: 540, quality: "cepat" },
     };
   }) as AgentDeps["renderVideo"] & { calls: typeof calls };
   fn.calls = calls;

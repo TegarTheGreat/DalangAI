@@ -1,6 +1,7 @@
 import type { PatchOpInput } from "@dalang/core";
 import type {
   ChatTurnResultLite,
+  ExportSettingsLite,
   ProjectStatePayload,
   StockCandidateLite,
   StudioEvent,
@@ -55,7 +56,8 @@ export interface AssetSearchState {
 }
 
 export interface RenderProgress {
-  profile: "draft" | "final";
+  /** Deskripsi ekspor, mis. "mp4 1080p seimbang". */
+  label: string;
   status: "started" | "done" | "error";
   url?: string;
   error?: string;
@@ -192,14 +194,14 @@ export class StudioClient {
       case "render":
         this.set({
           renderProgress: {
-            profile: event.profile,
+            label: event.label,
             status: event.status,
             ...(event.url ? { url: event.url } : {}),
             ...(event.error ? { error: event.error } : {}),
           },
         });
         if (event.status === "done") {
-          this.toast(`Render ${event.profile} selesai`);
+          this.toast(`Ekspor ${event.label} selesai`);
           this.scheduleRefresh();
         }
         if (event.status === "error") this.toast(`Render gagal: ${event.error}`);
@@ -319,14 +321,14 @@ export class StudioClient {
 
   startRender(profile: "draft" | "final"): Promise<void> {
     return this.withConfirm(async (confirm) => {
-      await api.render(profile, confirm);
+      await api.render({ profile, confirm });
     });
   }
 
   /** Dipanggil dari dialog Ekspor — pilihan di dialog ADALAH konfirmasinya. */
-  async startRenderConfirmed(profile: "draft" | "final"): Promise<void> {
+  async startExportConfirmed(settings: ExportSettingsLite): Promise<void> {
     try {
-      await api.render(profile, true);
+      await api.render({ ...settings, confirm: true });
     } catch (error) {
       this.failure(error);
     }

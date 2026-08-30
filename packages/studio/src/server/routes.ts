@@ -9,6 +9,12 @@ import {
   runTtsStage,
 } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
+import {
+  ENCODE_QUALITIES,
+  extensionFor,
+  resolveExportSettings,
+  VIDEO_FORMATS,
+} from "@dalang/renderer";
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -33,7 +39,10 @@ const pipelineBody = z.object({
   confirm: z.boolean().optional(),
 });
 const renderBody = z.object({
-  profile: z.enum(["draft", "final"]),
+  profile: z.enum(["draft", "final"]).optional(),
+  format: z.enum(VIDEO_FORMATS).optional(),
+  resolution: z.union([z.literal(540), z.literal(720), z.literal(1080)]).optional(),
+  quality: z.enum(ENCODE_QUALITIES).optional(),
   confirm: z.boolean().optional(),
 });
 const pickBody = z.object({
@@ -257,38 +266,66 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
   app.post("/api/render", async (c) => {
     const body = renderBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) {
-      return c.json({ error: "Body tidak valid: butuh { profile: draft|final }" }, 400);
+      return c.json(
+        { error: "Body tidak valid: { profile? , format?, resolution?, quality? }" },
+        400,
+      );
     }
     if (!session.plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
-    const { profile } = body.data;
-    if (profile === "final" && !body.data.confirm) {
+
+    // ADR-0014: profil = makro default; pengaturan eksplisit menimpanya.
+    const { format, resolution, quality } = body.data;
+    const explicit =
+      format !== undefined || resolution !== undefined || quality !== undefined;
+    const profile = body.data.profile ?? (explicit ? "final" : "draft");
+    const settings = resolveExportSettings(
+      profile,
+      explicit ? { format, resolution, quality } : undefined,
+    );
+    const label = `${settings.format} ${settings.resolution}p ${settings.quality}`;
+
+    // Konfirmasi utk pekerjaan berat (menit-menit CPU), pola 428 yang sama.
+    const heavy =
+      settings.resolution === 1080 ||
+      settings.quality === "terbaik" ||
+      settings.format === "mov";
+    if (heavy && !body.data.confirm) {
       const payload: NeedsConfirmation = {
         needsConfirmation: true,
-        detail: "Render final 1080p (beberapa menit CPU/GPU)",
+        detail: `Ekspor ${label} (beberapa menit CPU)`,
         estimatedUsd: null,
       };
       return c.json(payload, 428);
     }
 
     try {
-      store.beginRender(profile);
+      store.beginRender(label);
     } catch (error) {
       return c.json(errorPayload(error), 409);
     }
 
     session.persist();
-    const fileName = profile === "final" ? "final.mp4" : "preview.mp4";
+    const fileName = explicit
+      ? `ekspor-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`
+      : profile === "final"
+        ? "final.mp4"
+        : "preview.mp4";
     const outputLocation = join(session.paths.dalangDir, "renders", fileName);
-    store.bus.emit({ type: "render", status: "started", profile });
+    store.bus.emit({ type: "render", status: "started", label });
     const startedAt = Date.now();
 
     // Job berjalan di belakang; hasil disiarkan lewat /api/events.
     void deps
-      .renderVideo({ planPath: session.paths.planPath, outputLocation, profile })
+      .renderVideo({
+        planPath: session.paths.planPath,
+        outputLocation,
+        profile,
+        ...(explicit ? { settings: { format, resolution, quality } } : {}),
+      })
       .then((result) => {
         logUiEvent(
           "render",
-          { profile },
+          { profile, settings: result.settings },
           { file: result.outputLocation, sizeBytes: result.sizeBytes },
           0,
           Date.now() - startedAt,
@@ -296,7 +333,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         store.bus.emit({
           type: "render",
           status: "done",
-          profile,
+          label,
           url: `/.dalang/renders/${fileName}`,
         });
       })
@@ -304,7 +341,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         store.bus.emit({
           type: "render",
           status: "error",
-          profile,
+          label,
           error: error instanceof Error ? error.message : String(error),
         });
       })
@@ -312,7 +349,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         store.endRender();
       });
 
-    return c.json({ ok: true, started: true, profile }, 202);
+    return c.json({ ok: true, started: true, label }, 202);
   });
 
   app.get("/api/stock/search", async (c) => {

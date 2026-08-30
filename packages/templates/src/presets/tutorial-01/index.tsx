@@ -1,7 +1,7 @@
 import { NARRATION_LEAD_IN_SEC, type Scene, type ScenePlan } from "@dalang/core";
 import { Audio } from "@remotion/media";
-import { linearTiming, TransitionSeries } from "@remotion/transitions";
-import type { ReactNode } from "react";
+import { TransitionSeries } from "@remotion/transitions";
+import { type ReactNode, useMemo } from "react";
 import {
   AbsoluteFill,
   interpolate,
@@ -18,7 +18,8 @@ import {
   type FrameLayout,
   TRANSITION_FRAMES,
 } from "../../layout";
-import { presentationFor } from "../../transitions";
+import { buildMusicVolume, resolveMusicFile } from "../../music";
+import { presentationFor, timingFor } from "../../transitions";
 import { type StepInfo, stepNumbers } from "./annotate";
 import { OutroScene, StepScene, TitleScene } from "./Scenes";
 import { type TutTheme, themeFromPlan } from "./theme";
@@ -136,6 +137,10 @@ export const TutorialPreset: React.FC<{
   const layout = computeFrameLayout(plan);
   const steps = stepNumbers(plan);
 
+  // Musik latar (ADR-0014): bed di-loop + ducking di bawah narasi.
+  const musicFile = plan.audio.music ? resolveMusicFile(plan.audio.music.assetId) : null;
+  const musicVolume = useMemo(() => buildMusicVolume(plan, layout), [plan, layout]);
+
   const series: ReactNode[] = [];
   plan.scenes.forEach((scene, index) => {
     if (index > 0) {
@@ -145,7 +150,7 @@ export const TutorialPreset: React.FC<{
         <TransitionSeries.Transition
           key={`transition-${index}`}
           presentation={presentationFor(type)}
-          timing={linearTiming({ durationInFrames: frames })}
+          timing={timingFor(frames)}
         />,
       );
     }
@@ -173,6 +178,7 @@ export const TutorialPreset: React.FC<{
     <AbsoluteFill style={{ backgroundColor: theme.paper, fontFamily: theme.fontBody }}>
       <TransitionSeries>{series}</TransitionSeries>
       <Chrome plan={plan} layout={layout} metrics={metrics} theme={theme} />
+      {musicFile ? <Audio src={staticFile(musicFile)} loop volume={musicVolume} /> : null}
     </AbsoluteFill>
   );
 };

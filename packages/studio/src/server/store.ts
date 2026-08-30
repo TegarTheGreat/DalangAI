@@ -35,7 +35,7 @@ export class StudioStore {
   readonly bus: EventBus;
   revision = 0;
   private mutation: BusyKind | null = null;
-  private render: "draft" | "final" | null = null;
+  private render: string | null = null;
   private stopWatch: (() => void) | null = null;
 
   constructor(session: ProjectSession, bus: EventBus) {
@@ -71,11 +71,11 @@ export class StudioStore {
   }
 
   /** Render berjalan paralel dengan baca, tapi hanya satu render sekaligus. */
-  beginRender(profile: "draft" | "final"): void {
+  beginRender(label: string): void {
     if (this.render) {
       throw new StudioBusyError(`render-${this.render}`);
     }
-    this.render = profile;
+    this.render = label;
     this.notifyBusy();
   }
 
@@ -169,11 +169,11 @@ export class StudioStore {
     const dir = join(this.session.paths.dalangDir, "renders");
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
-      .filter((name) => name.endsWith(".mp4"))
+      .filter((name) => /\.(mp4|webm|mov)$/.test(name))
       .map((name) => {
         const stats = statSync(join(dir, name));
         return {
-          profile: (name.startsWith("final") ? "final" : "draft") as "draft" | "final",
+          label: name.replace(/\.(mp4|webm|mov)$/, ""),
           url: `/.dalang/renders/${name}`,
           sizeBytes: stats.size,
           finishedAt: stats.mtime.toISOString(),

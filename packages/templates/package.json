@@ -9,7 +9,8 @@
     "./video": "./src/DalangVideo.tsx",
     "./paths": "./src/paths.ts",
     "./layout": "./src/layout.ts",
-    "./fonts": "./src/fonts.ts"
+    "./fonts": "./src/fonts.ts",
+    "./music": "./src/music.ts"
   },
   "scripts": {
     "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",

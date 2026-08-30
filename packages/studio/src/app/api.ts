@@ -2,6 +2,7 @@ import type { PatchOpInput } from "@dalang/core";
 import type {
   ChatStreamEvent,
   ProjectStatePayload,
+  RenderRequest,
   StockSearchResponse,
   StudioEvent,
 } from "../shared/api-types";
@@ -79,10 +80,10 @@ export const api = {
       body: JSON.stringify({ sceneIds, confirm }),
     }),
 
-  render: (profile: "draft" | "final", confirm: boolean) =>
+  render: (req: RenderRequest) =>
     request<{ ok: true; started: true }>("/api/render", {
       method: "POST",
-      body: JSON.stringify({ profile, confirm }),
+      body: JSON.stringify(req),
     }),
 
   stockSearch: (query: string, kind: "video" | "image") =>

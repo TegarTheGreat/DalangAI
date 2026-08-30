@@ -51,9 +51,10 @@ describe("computeFrameLayout", () => {
   it("demo plan timeline stays stable (guards accidental timing changes)", () => {
     const plan = parseScenePlan(demoPlan);
     const layout = computeFrameLayout(plan);
+    // ADR-0014: tempo transisi demo bervariasi (10-24 frame per batas).
     expect(layout.sceneFrames).toEqual([150, 241, 216, 216, 229, 216, 241, 135]);
-    expect(layout.totalFrames).toBe(1539);
-    expect(layout.totalFrames / FPS).toBeCloseTo(51.3, 1);
+    expect(layout.totalFrames).toBe(1525);
+    expect(layout.totalFrames / FPS).toBeCloseTo(50.8, 1);
   });
 });
 

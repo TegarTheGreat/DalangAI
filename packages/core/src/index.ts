@@ -1,3 +1,4 @@
+export * from "./critique";
 export * from "./durations";
 export * from "./json-schema";
 export * from "./patch";
