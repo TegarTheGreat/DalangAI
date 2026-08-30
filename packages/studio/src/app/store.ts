@@ -176,6 +176,67 @@ export class StudioClient {
     }
   }
 
+  // --- Pustaka media (ADR-0018) ---------------------------------------------
+  //
+  // Ketiganya memakai jalur yang sama dengan panel manual lain: server menulis
+  // berkas, mengisi renderState, lalu menerapkan SATU patch user — jadi
+  // hasilnya bisa di-undo dan terlihat agent di giliran berikutnya.
+
+  async addIcon(input: {
+    sceneId: string;
+    iconId: string;
+    anchor: string;
+    size: number;
+    color: string | null;
+    anim: string;
+  }): Promise<boolean> {
+    try {
+      await api.addIcon(input);
+      this.toast(`Ikon ${input.iconId} terpasang`);
+      await this.refresh();
+      return true;
+    } catch (error) {
+      this.failure(error);
+      return false;
+    }
+  }
+
+  async addSticker(input: {
+    sceneId: string;
+    query: string;
+    index: number;
+    anchor: string;
+    size: number;
+    anim: string;
+  }): Promise<boolean> {
+    try {
+      await api.addSticker(input);
+      this.toast("Stiker terpasang — periksa hak pakainya sebelum publikasi");
+      await this.refresh();
+      return true;
+    } catch (error) {
+      this.failure(error);
+      return false;
+    }
+  }
+
+  async addSfx(input: {
+    sceneId: string;
+    assetId: string;
+    atSec: number;
+    volume: number;
+  }): Promise<boolean> {
+    try {
+      const { cueId } = await api.addSfx(input);
+      this.toast(`Efek suara terpasang: ${cueId}`);
+      await this.refresh();
+      return true;
+    } catch (error) {
+      this.failure(error);
+      return false;
+    }
+  }
+
   stop(): void {
     this.stopEvents?.();
   }

@@ -4,8 +4,14 @@ import {
   GRAPHIC_ANCHORS,
   GRAPHIC_ANIMS,
   type Graphic,
+  idSlug,
+  orphanMediaAssetIds,
   parseScenePlan,
   type SfxCue,
+  setGraphicAsset,
+  setSfxAsset,
+  uniqueGraphicId,
+  uniqueSfxCueId,
 } from "../src";
 
 /**
@@ -186,5 +192,126 @@ describe("lumbung berkas terpisah di renderState", () => {
     // resolvedAssets tetap dikunci per SCENE; dua peta baru dikunci per
     // grafis/cue, sehingga satu scene bisa punya banyak tempelan.
     expect(p.renderState.resolvedAssets).toEqual({});
+  });
+});
+
+describe("id media unik se-plan", () => {
+  const withGraphic = () => {
+    const base = plan({
+      scenes: [
+        {
+          id: "a",
+          visual: { type: "solid" },
+          duration: 5,
+          graphics: [graphic({ id: "ikon-mdi-home" })],
+        },
+        { id: "b", visual: { type: "solid" }, duration: 5 },
+      ],
+    });
+    return setGraphicAsset(base, "ikon-mdi-home", {
+      file: "assets/icons/mdi-home.svg",
+      kind: "image",
+      source: "iconify",
+      license: "MIT",
+    });
+  };
+
+  it("id yang belum terpakai dikembalikan apa adanya", () => {
+    expect(uniqueGraphicId(withGraphic(), "ikon-mdi-map")).toBe("ikon-mdi-map");
+  });
+
+  /**
+   * Inti masalahnya: renderState.graphicAssets dikunci per id untuk SELURUH
+   * plan, jadi scene kedua yang memasang ikon yang sama tidak boleh memakai id
+   * yang sama — entri berkasnya akan saling menimpa.
+   */
+  it("id yang sudah dipakai scene lain diberi nomor", () => {
+    expect(uniqueGraphicId(withGraphic(), "ikon-mdi-home")).toBe("ikon-mdi-home-2");
+  });
+
+  it("entri renderState yatim pun dihitung sebagai terpakai", () => {
+    // Grafisnya sudah dihapus dari scene, entri berkasnya sengaja ditinggal
+    // (supaya undo mengembalikannya utuh) — id itu tetap tidak boleh dipakai ulang.
+    const base = setGraphicAsset(plan(), "ikon-mdi-home", {
+      file: "assets/icons/mdi-home.svg",
+      kind: "image",
+      source: "iconify",
+      license: "MIT",
+    });
+    expect(uniqueGraphicId(base, "ikon-mdi-home")).toBe("ikon-mdi-home-2");
+  });
+
+  it("cue efek suara memakai aturan yang sama", () => {
+    const base = setSfxAsset(plan(), "sfx-a", {
+      file: "assets/sfx/sfx-a.mp3",
+      kind: "audio",
+      source: "openverse",
+      license: "cc0",
+    });
+    expect(uniqueSfxCueId(base, "sfx-a")).toBe("sfx-a-2");
+    expect(uniqueSfxCueId(base, "sfx-b")).toBe("sfx-b");
+  });
+
+  it("slug membersihkan karakter yang tidak sah untuk nama berkas", () => {
+    expect(idSlug("iconify:mdi:home")).toBe("iconify-mdi-home");
+    expect(idSlug("  ../etc/passwd  ")).toBe("etc-passwd");
+    expect(idSlug("###")).toBe("aset");
+  });
+});
+
+describe("aset media yatim", () => {
+  const populated = () => {
+    let base = plan({
+      scenes: [
+        {
+          id: "a",
+          visual: { type: "solid" },
+          duration: 5,
+          graphics: [graphic({ id: "hidup" })],
+        },
+        { id: "b", visual: { type: "solid" }, duration: 5 },
+      ],
+      audio: {
+        voice: { provider: "silence", voiceId: "x", speed: 1 },
+        sfx: [{ id: "cue-hidup", assetId: "openverse:1", sceneId: "a", atSec: 0 }],
+      },
+    });
+    for (const id of ["hidup", "yatim"]) {
+      base = setGraphicAsset(base, id, {
+        file: `assets/icons/${id}.svg`,
+        kind: "image",
+        source: "iconify",
+        license: "MIT",
+      });
+    }
+    for (const id of ["cue-hidup", "cue-yatim"]) {
+      base = setSfxAsset(base, id, {
+        file: `assets/sfx/${id}.mp3`,
+        kind: "audio",
+        source: "openverse",
+        license: "cc0",
+      });
+    }
+    return base;
+  };
+
+  it("hanya entri yang tidak dirujuk lagi yang dilaporkan", () => {
+    expect(orphanMediaAssetIds(populated())).toEqual({
+      graphics: ["yatim"],
+      sfx: ["cue-yatim"],
+    });
+  });
+
+  /**
+   * Kuerinya TIDAK boleh memutasi plan: menghapus entri yatim saat grafisnya
+   * dibuang akan merusak undo — patch yang mengembalikan grafis itu tidak
+   * mengembalikan berkasnya, sehingga render jadi 404 pada aksi yang justru
+   * bermaksud membatalkan penghapusan.
+   */
+  it("tidak mengubah plan yang diperiksanya", () => {
+    const base = populated();
+    const before = structuredClone(base);
+    orphanMediaAssetIds(base);
+    expect(base).toEqual(before);
   });
 });

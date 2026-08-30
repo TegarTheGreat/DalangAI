@@ -143,6 +143,43 @@ Ini penting karena proxy lingkungan pengembangan hanya mengizinkan
 hidup dari sana**. Perintah ini memindahkan verifikasi itu ke tempat yang
 memang bisa melakukannya.
 
+### 6. Panel manual di Studio, bukan hanya tool agent
+
+Tool agent saja tidak cukup, dan alasannya bukan selera: tool agent butuh API
+key model. Ikon (Iconify) dan efek suara (Openverse) justru TIDAK butuh kunci
+apa pun — mengunci keduanya di balik chat berarti menjadikannya fitur berbayar
+tanpa sebab, dan mematikannya total pada pemasangan yang paling umum: tanpa
+key sama sekali.
+
+Karena itu tab **Grafis** (ikon + stiker) dan bagian **Efek suara** di tab
+Scene memakai jalur yang sama dengan panel manual lain: server menulis berkas,
+mengisi renderState, lalu menerapkan SATU patch USER — sehingga bisa di-undo
+dan terlihat agent di giliran berikutnya (PRD §5.2 dua arah). Ingatan
+pencarian stiker dibagi dengan agent lewat kunci yang sama, jadi apa yang
+dicari manusia bisa dipasang agent, dan sebaliknya.
+
+Dua keputusan tampilan yang lahir dari melihat layarnya, bukan dari menebak:
+
+- **Jangkar digambar sebagai pad 3x3**, bukan dropdown nama. Posisi adalah
+  pertanyaan spasial; menjawabnya dengan daftar kata memaksa pembacanya
+  menerjemahkan "kiri-bawah" jadi gambar di kepalanya setiap kali.
+- **Tempelan terpasang tampil ringkas** (satu baris: jangkar, ukuran, lisensi)
+  dan membuka kendali penuh saat diklik. Empat kartu terbuka mendorong pustaka
+  jauh ke bawah lipatan — dan itu membuat "tambah tempelan lagi" terasa seperti
+  fitur yang hilang.
+
+Pratinjau ikon di grid memakai warna yang benar-benar akan dipakai preset
+(`meta.tokens.accent`, atau aksen bawaan preset), bukan warna mentah SVG —
+pratinjau yang berbeda dari hasilnya lebih buruk daripada tidak ada pratinjau.
+
+### 7. Tempelan berlaku untuk KEDUA preset
+
+`GraphicsOverlay` semula tinggal di dalam `documentary-01`. Akibatnya proyek
+`tutorial-01` bisa menyimpan grafis di plan-nya yang tidak pernah muncul di
+video — data yang diam-diam tidak berarti. Komponennya dipindah ke level paket
+dan menerima satu warna aksen (bukan objek tema salah satu preset), lalu
+dipakai kedua preset.
+
 ## Konsekuensi
 
 - GIF, stiker, ikon, dan efek suara tersedia; ikon dan efek suara bahkan tanpa
@@ -154,15 +191,26 @@ memang bisa melakukannya.
 
 ## Bukti
 
-**433 unit test hijau**; typecheck dan lint bersih. Yang diuji terutama bukan
+**467 unit test hijau**; typecheck dan lint bersih. Yang diuji terutama bukan
 jalur bahagianya, melainkan penjaganya: penolakan lisensi NonCommercial,
-urutan rantai yang menjaga lisensi, batas ukuran grafis, cue yatim, dan enam
-kasus path traversal.
+urutan rantai yang menjaga lisensi, batas ukuran grafis, cue yatim, enam kasus
+path traversal, keunikan id media se-plan, dan bahwa pustaka tetap hidup ketika
+chat mati.
 
-**Gerbang visual** — still dirender dari proyek bergrafis dan diperiksa dengan
-mata: dua ikon muncul di jangkar yang benar (kiri-atas dan kanan-bawah),
-berukuran proporsional terhadap tinggi frame (0,12 dan 0,18), dan berwarna
-benar (satu hijau sesuai `color` eksplisit, satu memakai warna aksen preset).
+**Gerbang visual (render)** — still dirender dari proyek bergrafis di KEDUA
+preset dan diperiksa dengan mata: ikon dan stiker muncul di jangkar yang benar,
+berukuran proporsional terhadap tinggi frame, dan berwarna benar — satu hijau
+sesuai `color` eksplisit, satu memakai aksen preset (amber di
+`documentary-01`, biru di `tutorial-01`, dari plan yang sama persis). Stiker
+mempertahankan warnanya sendiri karena tidak di-mask.
+
+**Gerbang visual (UI)** — panel Studio dijalankan sungguhan dan dikemudikan
+Playwright: cari ikon, pasang, ubah jangkar/warna, cari stiker, pasang efek
+suara, dan lebar 430px. Providernya palsu (proxy lingkungan kerja memblokir
+ketiga layanan), tetapi HTTP, patch, SSE, dan render panelnya nyata. Tiga
+temuan datang dari melihat hasilnya, bukan dari test: hasil pencarian muncul di
+bawah lipatan tanpa tanda apa pun, peringatan hak pakai terbaca setengah
+("ERIKSA HAK PAKA"), dan stiker beralfa tidak terlihat transparan di grid.
 
 ## Jebakan yang ditemukan (dicatat supaya tidak berulang)
 
@@ -186,6 +234,31 @@ benar (satu hijau sesuai `color` eksplisit, satu memakai warna aksen preset).
 5. **Pesan "tidak ada provider aktif" yang menyesatkan** di `providers:check`:
    ikon/SFX ada dan hanya jaringannya yang gagal. Provider tidak
    terkonfigurasi dan provider tak terjangkau adalah dua hal berbeda.
+6. **`addSfx` mencari ulang dengan UUID sebagai kata kunci.** assetId Openverse
+   berbentuk UUID; memakainya sebagai query tidak akan pernah cocok dengan
+   judul apa pun, jadi pemasangan SELALU gagal di layanan sungguhan.
+   Test-nya lulus karena provider palsu menjawab query apa pun. Diperbaiki
+   dengan mengingat kandidat per assetId di sesi — ingatan yang sama juga
+   dipakai panel Studio.
+7. **Id grafis dinomori per SCENE, padahal lumbungnya se-PLAN.** Dua scene yang
+   sama-sama memasang tempelan pertamanya menghasilkan id yang sama, sehingga
+   entri berkasnya saling menimpa: ikon yang sama dengan dua warna berbeda
+   berakhir jadi satu warna. Diperbaiki dengan `uniqueGraphicId`/`uniqueSfxCueId`
+   yang memeriksa scene DAN renderState, plus warna ikut nama berkas ikon.
+8. **Kritik `aset-hak-pakai` hanya membaca `resolvedAssets`.** Stiker GIPHY/Tenor
+   masuk lewat `graphicAssets` — jalur yang paling sering dipakai — jadi
+   pemeriksanya diam persis pada kasus yang paling perlu ditegur, dan diamnya
+   terbaca seperti "aman". Sekarang ketiga lumbung diperiksa, dengan scene
+   pemilik grafis/cue sebagai rujukan catatannya.
+9. **Sisipan tepi datar 4,5% menabrak chrome preset.** Terlihat hanya di render:
+   tempelan kiri-atas duduk tepat di atas running head. Jangkar tepi sekarang
+   memakai margin aman preset — angka yang sama dengan teks, dan sudah berbeda
+   per rasio.
+10. **Membersihkan entri renderState yatim merusak undo.** Menghapus entri
+    berkas saat grafisnya dibuang terdengar rapi, tapi patch yang mengembalikan
+    grafis itu tidak mengembalikan berkasnya. Karena itu `pruneOrphanMediaAssets`
+    (mutasi) diganti `orphanMediaAssetIds` (kueri): staging melewati yang yatim,
+    plan tidak disentuh.
 
 ## Alternatif yang ditolak
 
@@ -201,3 +274,9 @@ benar (satu hijau sesuai `color` eksplisit, satu memakai warna aksen preset).
   seperti aset lain.
 - **Mewarnai ikon dengan `color` + `currentColor`.** Ditolak setelah terbukti
   tidak bekerja pada SVG yang dimuat lewat `<img>` (lihat Jebakan 2).
+- **Membiarkan pustaka media hanya lewat agent.** Ditolak: ikon dan efek suara
+  tidak butuh kunci apa pun, sedangkan chat butuh API key model. Menguncinya di
+  balik chat mematikan fitur gratis pada pemasangan yang paling umum.
+- **Menyimpan judul suara di skema.** Ditolak untuk sekarang: baris cue memakai
+  `author` dari renderState, dengan assetId dan lisensi penuh di tooltip —
+  cukup untuk mengenali cue tanpa menambah field §5.1.

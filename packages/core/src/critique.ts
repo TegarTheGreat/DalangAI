@@ -184,17 +184,39 @@ const RIGHTS_REVIEW_MARK = "PERIKSA HAK PAKAI";
  * karena asetnya kebetulan mudah didapat.
  */
 const critiqueAssetRights = (plan: ScenePlan): DirectorNote[] => {
-  const flagged = Object.entries(plan.renderState.resolvedAssets).filter(([, asset]) =>
-    (asset.license ?? "").includes(RIGHTS_REVIEW_MARK),
-  );
+  const needsReview = (license: string | undefined): boolean =>
+    (license ?? "").includes(RIGHTS_REVIEW_MARK);
+
+  // KETIGA lumbung diperiksa, bukan hanya aset scene. Stiker dari GIPHY/Tenor
+  // masuk lewat `graphicAssets` (ADR-0018) — justru jalur yang paling sering
+  // dipakai — jadi memeriksa `resolvedAssets` saja membuat kritik ini diam
+  // persis pada kasus yang paling perlu ditegur.
+  const flagged: Array<{ sceneId: string | undefined; source: string }> = [];
+  for (const [sceneId, asset] of Object.entries(plan.renderState.resolvedAssets)) {
+    if (needsReview(asset.license)) flagged.push({ sceneId, source: asset.source });
+  }
+  for (const [graphicId, asset] of Object.entries(plan.renderState.graphicAssets)) {
+    if (!needsReview(asset.license)) continue;
+    const owner = plan.scenes.find((scene) =>
+      scene.graphics.some((graphic) => graphic.id === graphicId),
+    );
+    // Entri yatim (grafisnya sudah dihapus) tidak ditegur: ia tidak ikut render.
+    if (owner) flagged.push({ sceneId: owner.id, source: asset.source });
+  }
+  for (const [cueId, asset] of Object.entries(plan.renderState.sfxAssets)) {
+    if (!needsReview(asset.license)) continue;
+    const cue = plan.audio.sfx.find((entry) => entry.id === cueId);
+    if (cue) flagged.push({ sceneId: cue.sceneId, source: asset.source });
+  }
   if (flagged.length === 0) return [];
 
-  const sources = [...new Set(flagged.map(([, asset]) => asset.source))].sort();
+  const sources = [...new Set(flagged.map((entry) => entry.source))].sort();
+  const firstScene = flagged.find((entry) => entry.sceneId !== undefined)?.sceneId;
   return [
     {
       code: "aset-hak-pakai",
       level: "perhatian",
-      sceneId: flagged[0]?.[0],
+      ...(firstScene ? { sceneId: firstScene } : {}),
       message:
         `${flagged.length} aset dari ${sources.join(", ")} dipakai. Isinya unggahan pihak ketiga ` +
         "yang hak ciptanya milik pengunggah — API resminya memberi jalur pencarian, BUKAN hak siar ulang. " +

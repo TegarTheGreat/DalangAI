@@ -61,21 +61,26 @@ export const setSfxAsset = (
 };
 
 /**
- * Buang berkas grafis/cue yang sudah tidak dirujuk plan (ADR-0018). Dipanggil
- * setelah penyuntingan supaya renderState tidak menimbun berkas yatim yang
- * ikut terbawa saat proyek disalin.
+ * Entri grafis/cue di renderState yang sudah tidak dirujuk plan (ADR-0018).
+ *
+ * Sengaja KUERI, bukan mutasi. Menghapus entri yatim saat grafis dibuang
+ * terdengar rapi, tapi merusak undo: `updateScene` yang mengembalikan grafis
+ * itu tidak mengembalikan berkasnya, sehingga render jadi 404 pada aksi yang
+ * seharusnya persis membatalkan penghapusan. Yang benar-benar dibutuhkan
+ * pemanggilnya hanya "jangan ikut disalin/diperiksa" — dan itu bisa dilakukan
+ * tanpa menyentuh plan.
  */
-export const pruneOrphanMediaAssets = (plan: ScenePlan): ScenePlan => {
+export const orphanMediaAssetIds = (
+  plan: ScenePlan,
+): { graphics: string[]; sfx: string[] } => {
   const graphicIds = new Set(plan.scenes.flatMap((s) => s.graphics.map((g) => g.id)));
   const cueIds = new Set(plan.audio.sfx.map((cue) => cue.id));
-  const next = structuredClone(plan);
-  for (const id of Object.keys(next.renderState.graphicAssets)) {
-    if (!graphicIds.has(id)) delete next.renderState.graphicAssets[id];
-  }
-  for (const id of Object.keys(next.renderState.sfxAssets)) {
-    if (!cueIds.has(id)) delete next.renderState.sfxAssets[id];
-  }
-  return next;
+  return {
+    graphics: Object.keys(plan.renderState.graphicAssets).filter(
+      (id) => !graphicIds.has(id),
+    ),
+    sfx: Object.keys(plan.renderState.sfxAssets).filter((id) => !cueIds.has(id)),
+  };
 };
 
 /**

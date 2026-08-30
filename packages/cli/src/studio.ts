@@ -7,6 +7,7 @@ import {
   resolveModel,
 } from "@dalang/agent";
 import {
+  buildGifChain,
   buildIconProvider,
   buildSfxChain,
   buildStockChain,
@@ -85,6 +86,7 @@ export const registerStudioCommand = (program: Command): void => {
           deps: {
             ttsChainFor: (provider) => buildTtsChain({ provider }),
             stockChain: () => buildStockChain(),
+            stickerChain: () => buildGifChain({ stickers: true }),
             renderVideo: (renderOptions) => renderPlanToVideo(renderOptions),
             probeVideo: probeLocalVideo,
             detectSilence,

@@ -205,3 +205,23 @@ export const IconSpinner: React.FC = () => (
     <path d="M12 3a9 9 0 1 0 9 9" />
   </Icon>
 );
+
+/** Stiker: kotak membulat dengan sudut terkelupas. */
+export const IconSticker: React.FC = () => (
+  <Icon>
+    <path d="M4.5 6.2A2.2 2.2 0 0 1 6.7 4h10.6A2.2 2.2 0 0 1 19.5 6.2v6.1L13.2 20H6.7a2.2 2.2 0 0 1-2.2-2.2Z" />
+    <path d="M19.5 12.3h-4.1a2.2 2.2 0 0 0-2.2 2.2V20" />
+  </Icon>
+);
+
+/** Gelombang bunyi — efek suara pendek. */
+export const IconWave: React.FC = () => (
+  <Icon>
+    <path d="M4 12h1.6" />
+    <path d="M8 8.4v7.2" />
+    <path d="M11.4 5.6v12.8" />
+    <path d="M14.8 9.2v5.6" />
+    <path d="M18.2 7.2v9.6" />
+    <path d="M21.5 11h-1" />
+  </Icon>
+);

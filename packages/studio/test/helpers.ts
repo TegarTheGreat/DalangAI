@@ -122,6 +122,27 @@ export const fakeStock = (): StockProvider => {
   };
 };
 
+/** Stiker palsu: kandidat berlisensi bertanda perlu-diperiksa, seperti aslinya. */
+export const fakeSticker = (): StockProvider => {
+  const candidates: StockCandidate[] = [0, 1].map((index) => ({
+    providerId: "giphy",
+    assetId: `giphy:sticker:${index}`,
+    kind: "image",
+    downloadUrl: `https://media.test/sticker-${index}.webp`,
+    fileExt: "webp",
+    width: 480,
+    height: 480,
+    license: "GIPHY - PERIKSA HAK PAKAI sebelum dipakai komersial",
+    thumbnailUrl: `https://media.test/sticker-${index}-thumb.webp`,
+  }));
+  return {
+    id: "giphy",
+    label: "GIPHY Stiker",
+    search: async () => candidates,
+    download: async () => PIXEL_JPG,
+  };
+};
+
 export const makeStudio = (
   planPath: string,
   overrides?: {
@@ -143,6 +164,7 @@ export const makeStudio = (
         ),
       ],
       stockChain: () => [fakeStock()],
+      stickerChain: () => [fakeSticker()],
       probeVideo: async (_planPath, file) =>
         file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null,
       iconProvider: () => ({

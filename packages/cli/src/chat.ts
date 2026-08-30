@@ -15,6 +15,7 @@ import {
 } from "@dalang/agent";
 import { PipelineDb, projectPaths, readPlanFile } from "@dalang/pipeline";
 import {
+  buildGifChain,
   buildIconProvider,
   buildSfxChain,
   buildStockChain,
@@ -159,6 +160,7 @@ export const registerChatCommand = (program: Command): void => {
           guards,
           ttsChainFor: (provider) => buildTtsChain({ provider }),
           stockChain: () => buildStockChain(),
+          stickerChain: () => buildGifChain({ stickers: true }),
           renderVideo: (renderOptions) => renderPlanToVideo(renderOptions),
           videoMetadata: (file) => probeLocalVideo(session.paths.planPath, file),
           detectSilence: (file) => detectSilence(session.paths.planPath, file),

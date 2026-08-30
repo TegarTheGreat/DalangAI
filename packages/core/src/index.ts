@@ -2,6 +2,7 @@ export * from "./critique";
 export * from "./durations";
 export * from "./format-recipe";
 export * from "./json-schema";
+export * from "./media-ids";
 export * from "./patch";
 export * from "./patch-log";
 export * from "./prose";

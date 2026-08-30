@@ -1,7 +1,7 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
-import type { ScenePlan } from "@dalang/core";
+import { orphanMediaAssetIds, type ScenePlan } from "@dalang/core";
 
 /**
  * Render-input staging.
@@ -30,14 +30,28 @@ export const copyPlanAssets = (
   targetPublicDir: string,
 ): string[] => {
   const planDir = dirname(resolve(planPath));
+  // ADR-0018: entri grafis/cue yang grafisnya sudah dihapus tetap tertinggal di
+  // renderState (sengaja — supaya undo mengembalikannya utuh). Entri seperti
+  // itu tidak boleh ikut dipentaskan: berkasnya tidak dipakai render, dan bila
+  // pengguna sudah menghapusnya dari disk, menuntutnya ada akan menggagalkan
+  // render yang sebenarnya sehat.
+  const orphans = orphanMediaAssetIds(plan);
+  const live = (
+    store: Record<string, { file: string }>,
+    orphanIds: readonly string[],
+  ): string[] =>
+    Object.entries(store)
+      .filter(([id]) => !orphanIds.includes(id))
+      .map(([, asset]) => asset.file);
+
   const files = [
     ...Object.values(plan.renderState.resolvedAssets).map((asset) => asset.file),
     ...Object.values(plan.renderState.narrationAudio).map((audio) => audio.file),
     // ADR-0018: grafis tempelan dan efek suara punya lumbung berkas sendiri.
     // Melupakan keduanya di sini berarti render gagal memuat berkasnya — dan
     // itu TIDAK terlihat oleh test mana pun, hanya oleh render sungguhan.
-    ...Object.values(plan.renderState.graphicAssets).map((asset) => asset.file),
-    ...Object.values(plan.renderState.sfxAssets).map((asset) => asset.file),
+    ...live(plan.renderState.graphicAssets, orphans.graphics),
+    ...live(plan.renderState.sfxAssets, orphans.sfx),
   ];
   // Musik proyek (ADR-0014): file milik plan ikut di-stage; id "pustaka:*"
   // sudah ada di public templates, tidak perlu disalin.

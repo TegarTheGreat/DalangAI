@@ -17,6 +17,7 @@ import { EventBus } from "./bus";
 import { registerChatRoutes } from "./chat";
 import type { ChatBridge, StudioContext, StudioDeps } from "./context";
 import { registerMedia } from "./media";
+import { registerMediaLibraryRoutes } from "./media-library";
 import { registerJobRoutes, registerProjectRoutes } from "./routes";
 import { StudioStore } from "./store";
 
@@ -73,6 +74,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
     // dengan planPath sesi ini — paket studio tidak mengimpor renderer.
     videoMetadata: (file) => options.deps.probeVideo(session.paths.planPath, file),
     detectSilence: (file) => options.deps.detectSilence(session.paths.planPath, file),
+    stickerChain: options.deps.stickerChain,
     iconProvider: options.deps.iconProvider,
     sfxChain: options.deps.sfxChain,
     saveMedia: (media) => options.deps.saveMedia(session.paths.planPath, media),
@@ -95,6 +97,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
   registerProjectRoutes(app, context);
   registerJobRoutes(app, context);
   registerChatRoutes(app, context);
+  registerMediaLibraryRoutes(app, context);
   registerMedia(app, {
     templatesPublicDir,
     planDir: session.paths.planDir,

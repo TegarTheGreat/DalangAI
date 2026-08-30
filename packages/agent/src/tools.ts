@@ -4,6 +4,7 @@ import {
   critiquePlan,
   GRAPHIC_ANCHORS,
   GRAPHIC_ANIMS,
+  idSlug,
   patchOpSchema,
   recipeFor,
   type ScenePlanInput,
@@ -11,6 +12,8 @@ import {
   setGraphicAsset,
   setResolvedAsset,
   setSfxAsset,
+  uniqueGraphicId,
+  uniqueSfxCueId,
 } from "@dalang/core";
 import type { IconProvider, SfxProvider } from "@dalang/pipeline";
 import {
@@ -50,6 +53,12 @@ export interface AgentDeps {
   guards: Guardrails;
   ttsChainFor: (provider: string) => TtsProvider[];
   stockChain: () => StockProvider[];
+  /**
+   * Pustaka stiker (GIF berlatar tembus pandang) — GIPHY/Tenor (ADR-0018).
+   * Terpisah dari `stockChain` karena stiker adalah endpoint yang berbeda,
+   * bukan sekadar hasil pencarian lain.
+   */
+  stickerChain: () => StockProvider[];
   /** Pustaka ikon terbuka (ADR-0018) — tanpa kunci, selalu tersedia. */
   iconProvider: () => IconProvider;
   /** Pustaka efek suara berlisensi terbuka (ADR-0018). */
@@ -103,6 +112,13 @@ const compactResults = (results: SceneStageResult[]) =>
     status: result.status,
     detail: result.detail,
   }));
+
+/**
+ * Kunci ingatan pencarian stiker. Diberi awalan supaya query yang sama untuk
+ * stock biasa dan untuk stiker tidak saling menimpa — "smile" sebagai footage
+ * dan "smile" sebagai stiker adalah dua daftar kandidat yang berbeda.
+ */
+export const stickerKey = (query: string): string => `stiker:${query}`;
 
 const sumCost = (results: SceneStageResult[]): number =>
   results.reduce((sum, result) => sum + (result.costUsd ?? 0), 0);
@@ -514,7 +530,10 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             file = await deps.saveMedia({
               url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
               folder: "icons",
-              name: iconId.replace(/[^a-z0-9]+/gi, "-"),
+              // Warna ikut nama berkas: SVG yang diwarnai server berbeda ISI-nya
+              // per warna, jadi satu nama untuk semua warna membuat pemakaian
+              // kedua menimpa berkas milik yang pertama.
+              name: idSlug(`${iconId}${input.color ? `-${input.color}` : ""}`),
               fileExt: "svg",
             });
           } catch (error) {
@@ -522,7 +541,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             return { ok: false, error: `Gagal mengambil ikon ${iconId}: ${message}` };
           }
 
-          const graphicId = `ikon-${iconId.replace(/[^a-z0-9]+/gi, "-")}-${scene.graphics.length + 1}`;
+          const graphicId = uniqueGraphicId(plan, `ikon-${iconId}`);
           session.plan = setGraphicAsset(plan, graphicId, {
             file,
             kind: "image",
@@ -558,6 +577,147 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         }),
     }),
 
+    // ADR-0018: stiker = GIF berlatar tembus pandang dari GIPHY/Tenor. Endpoint
+    // stiker terpisah dari pencarian GIF biasa, jadi rantainya juga terpisah.
+    searchStickers: tool({
+      description:
+        "Cari stiker (GIF berlatar tembus pandang) di GIPHY/Tenor. Butuh GIPHY_API_KEY atau TENOR_API_KEY. PERHATIAN HAK PAKAI: isinya unggahan pihak ketiga — punya API resmi berarti boleh mencari dan menampilkan, BUKAN otomatis boleh menyiarkan ulang di video. Sebutkan itu ke user bila memakainya.",
+      inputSchema: z.object({
+        query: z.string().min(2),
+        limit: z.number().int().min(1).max(12).default(8),
+      }),
+      execute: (input) =>
+        run("searchStickers", input, async () => {
+          requirePlan();
+          const chain = deps.stickerChain();
+          if (chain.length === 0) {
+            return {
+              ok: false,
+              error:
+                "Tidak ada provider stiker — set GIPHY_API_KEY atau TENOR_API_KEY. Alternatif tanpa kunci dan berlisensi jelas: searchIcons (Iconify).",
+            };
+          }
+          for (const provider of chain) {
+            const candidates = await provider.search({
+              query: input.query,
+              kind: "image",
+              orientation: "square",
+              perPage: input.limit,
+            });
+            if (candidates.length === 0) continue;
+            session.lastSearches.set(stickerKey(input.query), candidates);
+            return {
+              ok: true,
+              provider: provider.id,
+              stiker: candidates.slice(0, input.limit).map((candidate, index) => ({
+                index,
+                assetId: candidate.assetId,
+                ukuran: `${candidate.width}x${candidate.height}`,
+                lisensi: candidate.license,
+              })),
+              catatan: "Pasang dengan addSticker(sceneId, query, index).",
+            };
+          }
+          return { ok: false, error: `Tidak ada stiker untuk "${input.query}"` };
+        }),
+    }),
+
+    addSticker: tool({
+      description:
+        "Pasang satu stiker hasil searchStickers ke sebuah scene sebagai grafis tempelan. Berkasnya diunduh ke folder proyek. Lisensinya ikut tercatat apa adanya, termasuk penanda perlu-diperiksa.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        query: z.string().min(2).describe("Query yang sama dengan searchStickers"),
+        index: z.number().int().min(0).default(0),
+        anchor: z.enum(GRAPHIC_ANCHORS).default("kanan-bawah"),
+        size: z.number().min(0.02).max(0.6).default(0.18),
+        anim: z.enum(GRAPHIC_ANIMS).default("pop"),
+        startFrac: z.number().min(0).max(1).default(0),
+        endFrac: z.number().min(0).max(1).default(1),
+      }),
+      execute: (input) =>
+        run("addSticker", input, async () => {
+          const plan = requirePlan();
+          const scene = plan.scenes.find((s) => s.id === input.sceneId);
+          if (!scene) return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          if (scene.graphics.length >= 4) {
+            return {
+              ok: false,
+              error: `Scene ${input.sceneId} sudah punya 4 grafis (batas maksimum)`,
+            };
+          }
+          const candidates = session.lastSearches.get(stickerKey(input.query));
+          if (!candidates) {
+            return {
+              ok: false,
+              error: `Belum ada hasil searchStickers untuk "${input.query}"`,
+            };
+          }
+          const candidate = candidates[input.index];
+          if (!candidate) {
+            return {
+              ok: false,
+              error: `Index ${input.index} di luar jangkauan (${candidates.length} stiker)`,
+            };
+          }
+
+          const graphicId = uniqueGraphicId(plan, `stiker-${scene.id}`);
+          let file: string;
+          try {
+            file = await deps.saveMedia({
+              url: candidate.downloadUrl,
+              folder: "stickers",
+              name: graphicId,
+              fileExt: candidate.fileExt,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { ok: false, error: `Gagal mengunduh stiker: ${message}` };
+          }
+
+          session.plan = setGraphicAsset(plan, graphicId, {
+            file,
+            kind: "image",
+            source: candidate.providerId,
+            license: candidate.license,
+            ...(candidate.author ? { author: candidate.author } : {}),
+            ...(candidate.sourceUrl ? { sourceUrl: candidate.sourceUrl } : {}),
+          });
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "updateScene",
+              id: input.sceneId,
+              patch: {
+                graphics: [
+                  ...scene.graphics,
+                  {
+                    id: graphicId,
+                    ref: candidate.assetId,
+                    anchor: input.anchor,
+                    size: input.size,
+                    offsetX: 0,
+                    offsetY: 0,
+                    rotate: 0,
+                    opacity: 1,
+                    color: null,
+                    anim: input.anim,
+                    startFrac: input.startFrac,
+                    endFrac: input.endFrac,
+                  },
+                ],
+              },
+            },
+          ]);
+          return {
+            ok: true,
+            graphicId,
+            berkas: file,
+            lisensi: candidate.license,
+            ringkasanPerubahan: summary,
+          };
+        }),
+    }),
+
     // ADR-0018: efek suara berlisensi terbuka.
     searchSfx: tool({
       description:
@@ -573,6 +733,10 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           if (chain.length === 0)
             return { ok: false, error: "Tidak ada provider efek suara" };
           const found = await (chain[0] as SfxProvider).search(input.query, input.limit);
+          // assetId Openverse adalah UUID: mencarinya ulang sebagai kata kunci
+          // selalu nihil, jadi kandidatnya HARUS diingat di sini agar addSfx
+          // punya URL unduhannya.
+          for (const sfx of found) session.lastSfxCandidates.set(sfx.assetId, sfx);
           return {
             ok: true,
             jumlah: found.length,
@@ -605,23 +769,15 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           if (!plan.scenes.some((s) => s.id === input.sceneId)) {
             return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
           }
-          const chain = deps.sfxChain();
-          if (chain.length === 0)
-            return { ok: false, error: "Tidak ada provider efek suara" };
-          const provider = chain[0] as SfxProvider;
-
-          // Cari ulang kandidatnya: assetId saja tidak membawa URL unduhan.
-          const found = await provider.search(input.assetId.split(":").pop() ?? "", 12);
-          const candidate =
-            found.find((sfx) => sfx.assetId === input.assetId) ?? found[0];
+          const candidate = session.lastSfxCandidates.get(input.assetId);
           if (!candidate) {
             return {
               ok: false,
-              error: `Efek suara ${input.assetId} tidak ditemukan lagi — jalankan searchSfx lalu pakai assetId dari hasil terbaru`,
+              error: `Efek suara ${input.assetId} tidak ada di hasil pencarian sesi ini — jalankan searchSfx lalu pakai assetId dari hasilnya`,
             };
           }
 
-          const cueId = `sfx-${plan.audio.sfx.length + 1}-${input.sceneId}`;
+          const cueId = uniqueSfxCueId(plan, `sfx-${input.sceneId}`);
           let file: string;
           try {
             file = await deps.saveMedia({

@@ -28,6 +28,7 @@ import { Segmented, Switch } from "../components/controls";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
+import { GrafisTab, SfxSection } from "./MediaLibrary";
 
 /**
  * Panel properti bertab (pola editor: CapCut/Premiere) untuk scene terpilih:
@@ -38,7 +39,7 @@ import { studioClient, useStudio } from "../use-studio";
  * Semua perubahan = patch user (tercatat, bisa di-undo, terlihat agent).
  */
 
-type Tab = "scene" | "visual" | "teks" | "transisi" | "anotasi";
+type Tab = "scene" | "visual" | "teks" | "grafis" | "transisi" | "anotasi";
 
 const ANNOTATION_TYPES = ["zoom", "highlight", "arrow", "blur"] as const;
 const ANNOTATION_LABEL: Record<(typeof ANNOTATION_TYPES)[number], string> = {
@@ -132,7 +133,7 @@ const ART_LABEL: Record<string, string> = {
 };
 
 /** Slider dengan label nilai; commit patch saat dilepas (bukan tiap piksel). */
-const SliderRow: React.FC<{
+export const SliderRow: React.FC<{
   label: string;
   min: number;
   max: number;
@@ -315,6 +316,10 @@ const SceneTab: React.FC<{ plan: ScenePlan; scene: Scene; index: number }> = ({
           </button>
         </div>
       ) : null}
+
+      {/* Efek suara scene ini duduk di sini, bukan di tab terpisah: ia audio
+          milik scene, sebaris dengan naskah dan durasinya (ADR-0018). */}
+      <SfxSection plan={plan} scene={scene} />
 
       <section className="prop-group">
         <h4>Susunan</h4>
@@ -1309,6 +1314,7 @@ export const InspectorPanel: React.FC = () => {
                 ["scene", "Scene"],
                 ["visual", "Visual"],
                 ["teks", "Teks"],
+                ["grafis", "Grafis"],
                 ["transisi", "Transisi"],
                 ["anotasi", "Anotasi"],
               ] as const
@@ -1323,6 +1329,9 @@ export const InspectorPanel: React.FC = () => {
                 {key === "teks" && scene.texts.length > 0 ? (
                   <span className="tab-count">{scene.texts.length}</span>
                 ) : null}
+                {key === "grafis" && scene.graphics.length > 0 ? (
+                  <span className="tab-count">{scene.graphics.length}</span>
+                ) : null}
                 {key === "anotasi" && scene.annotations.length > 0 ? (
                   <span className="tab-count">{scene.annotations.length}</span>
                 ) : null}
@@ -1335,6 +1344,7 @@ export const InspectorPanel: React.FC = () => {
             ) : null}
             {tab === "visual" ? <VisualTab scene={scene} /> : null}
             {tab === "teks" ? <TeksTab scene={scene} /> : null}
+            {tab === "grafis" ? <GrafisTab plan={plan} scene={scene} /> : null}
             {tab === "transisi" ? (
               <TransisiTab scene={scene} isLast={index === plan.scenes.length - 1} />
             ) : null}

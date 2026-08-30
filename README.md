@@ -236,6 +236,13 @@ Yang sudah berjalan:
     bertanda itu terpakai (memeriksa lisensinya, bukan nama providernya), dan
     urutan rantai stock menaruh Pexels/Pixabay SELALU di depan GIPHY/Tenor —
     dikunci test.
+  - **Panel manual di Studio**, bukan hanya lewat chat: tab **Grafis** (cari
+    ikon/stiker, pad jangkar 3x3, ukuran/opasitas/rotasi/gerak/warna, daftar
+    terpasang yang bisa dilipat) dan bagian **Efek suara** di tab Scene.
+    Alasannya bukan selera — ikon dan efek suara tidak butuh kunci API sama
+    sekali, jadi menguncinya di balik chat akan mematikan fitur gratis pada
+    pemasangan yang paling umum. Semuanya patch USER: bisa di-undo dan
+    terlihat agent di giliran berikutnya.
   - **`dalang providers:check`** memverifikasi setiap provider terhadap
     layanan aslinya (bukan mock): kunci terpasang, endpoint hidup, dan field
     yang benar-benar dipakai kode ada di respons. "Belum diatur" dibedakan
@@ -245,7 +252,7 @@ Yang sudah berjalan:
     melarang persis apa yang dibutuhkan integrasi otomatis (akses via bot,
     scraping, atau penggunaan komersial). Iconify dan Openverse dipakai
     sebagai penggantinya.*
-- **Kualitas terjaga otomatis**: 433 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 467 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -258,7 +265,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 433 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 467 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

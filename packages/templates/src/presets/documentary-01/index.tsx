@@ -9,6 +9,7 @@ import { TransitionSeries } from "@remotion/transitions";
 import { type ReactNode, useMemo } from "react";
 import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
 import { ensureFontsLoaded } from "../../fonts";
+import { GraphicsOverlay } from "../../GraphicsOverlay";
 import {
   type AspectMetrics,
   aspectMetrics,
@@ -22,7 +23,6 @@ import { presentationFor, timingFor } from "../../transitions";
 import { Backdrop } from "./Backdrop";
 import { BodyScene } from "./BodyScene";
 import { Chrome } from "./Chrome";
-import { GraphicsOverlay } from "./GraphicsOverlay";
 import { OutroScene } from "./OutroScene";
 import { FilmGrain, ReadabilityGradients, Vignette } from "./Overlays";
 import { TextsOverlay } from "./TextsOverlay";
@@ -70,7 +70,7 @@ const SceneRouter: React.FC<{
         scene={scene}
         plan={plan}
         metrics={props.metrics}
-        theme={props.theme}
+        accent={props.theme.accent}
         durationInFrames={props.durationInFrames}
       />
       {narrationAudio ? (

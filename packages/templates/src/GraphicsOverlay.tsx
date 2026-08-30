@@ -1,13 +1,7 @@
 import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
 import { Img, Sequence, staticFile, useCurrentFrame } from "remotion";
-import {
-  graphicMotion,
-  graphicStyle,
-  graphicWindow,
-  isIconRef,
-} from "../../graphic-model";
-import type { AspectMetrics } from "../../layout";
-import type { DocTheme } from "./theme";
+import { graphicMotion, graphicStyle, graphicWindow, isIconRef } from "./graphic-model";
+import type { AspectMetrics } from "./layout";
 
 /**
  * Lapisan grafis tempelan (ADR-0018): ikon dari pustaka terbuka dan stiker
@@ -22,14 +16,20 @@ import type { DocTheme } from "./theme";
  * Grafis yang belum ter-resolve TIDAK menggagalkan render dan tidak
  * menggambar apa-apa yang menyesatkan — ia hanya absen, dan status itu sudah
  * terlihat di Studio.
+ *
+ * Dipakai KEDUA preset. Karena itu ia menerima satu warna aksen, bukan objek
+ * tema milik salah satu preset: tempelan adalah kontrak data §5.1 yang berlaku
+ * untuk semua gaya, dan menguncinya ke satu preset berarti proyek tutorial
+ * menyimpan grafis yang tidak pernah muncul di videonya.
  */
 export const GraphicsOverlay: React.FC<{
   scene: Scene;
   plan: ScenePlan;
   metrics: AspectMetrics;
-  theme: DocTheme;
+  /** Warna bawaan ikon bila `graphic.color` kosong. */
+  accent: string;
   durationInFrames: number;
-}> = ({ scene, plan, metrics, theme, durationInFrames }) => {
+}> = ({ scene, plan, metrics, accent, durationInFrames }) => {
   if (scene.graphics.length === 0) return null;
 
   return (
@@ -51,7 +51,7 @@ export const GraphicsOverlay: React.FC<{
               graphic={graphic}
               asset={asset}
               metrics={metrics}
-              theme={theme}
+              accent={accent}
               windowFrames={frames}
             />
           </Sequence>
@@ -65,13 +65,13 @@ const GraphicItem: React.FC<{
   graphic: Scene["graphics"][number];
   asset: ResolvedAsset;
   metrics: AspectMetrics;
-  theme: DocTheme;
+  accent: string;
   windowFrames: number;
-}> = ({ graphic, asset, metrics, theme, windowFrames }) => {
+}> = ({ graphic, asset, metrics, accent, windowFrames }) => {
   // Di dalam Sequence, frame sudah relatif terhadap awal jendela tampil.
   const frame = useCurrentFrame();
   const motion = graphicMotion(graphic, frame, windowFrames);
-  const style = graphicStyle(graphic, motion, metrics.width, metrics.height);
+  const style = graphicStyle(graphic, motion, metrics);
 
   // PEWARNAAN IKON, dan kenapa BUKAN `color` + currentColor.
   //
@@ -90,7 +90,7 @@ const GraphicItem: React.FC<{
       <div
         style={{
           ...style,
-          backgroundColor: graphic.color ?? theme.accent,
+          backgroundColor: graphic.color ?? accent,
           maskImage: source,
           WebkitMaskImage: source,
           maskRepeat: "no-repeat",

@@ -33,23 +33,66 @@ const graphic = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/** Bingkai uji: angka margin nyata dari aspectMetrics 16:9 dan 9:16. */
+const LANDSCAPE = { width: 1920, height: 1080, marginX: 144, marginTop: 96 };
+const PORTRAIT = { width: 1080, height: 1920, marginX: 84, marginTop: 108 };
+
 describe("jangkar grafis", () => {
-  it("sudut menempel dua tepi, tanpa geseran pemusatan", () => {
-    const spec = anchorSpec("kiri-atas");
-    expect(spec.top).not.toBeNull();
-    expect(spec.left).not.toBeNull();
-    expect(spec.bottom).toBeNull();
-    expect(spec.right).toBeNull();
-    expect(spec.translate).toBe("0 0");
+  const styleAt = (anchor: Parameters<typeof anchorSpec>[0], frame = LANDSCAPE) =>
+    graphicStyle(
+      graphic({ anchor }),
+      graphicMotion(graphic({ anim: "diam" }), 0, 60),
+      frame,
+    );
+
+  it("sudut menempel dua tepi pada MARGIN AMAN, bukan tepi frame", () => {
+    const style = styleAt("kiri-atas");
+    expect(style.top).toBe(LANDSCAPE.marginTop);
+    expect(style.left).toBe(LANDSCAPE.marginX);
+    expect(style.bottom).toBeUndefined();
+    expect(style.right).toBeUndefined();
+    expect(String(style.translate)).toContain("0px");
+  });
+
+  /**
+   * Regresi dari render sungguhan: sisipan datar 4,5% menaruh tempelan
+   * kiri-atas tepat menimpa running head preset. Margin aman preset jauh lebih
+   * dalam, dan itulah yang harus dipakai.
+   */
+  it("margin aman lebih dalam daripada sisipan datar 4,5% lama", () => {
+    expect(LANDSCAPE.marginTop).toBeGreaterThan(0.045 * LANDSCAPE.height);
+    expect(LANDSCAPE.marginX).toBeGreaterThan(0.045 * LANDSCAPE.width);
+  });
+
+  it("jangkar bawah/kanan memakai bottom/right, bukan top/left", () => {
+    const style = styleAt("kanan-bawah");
+    expect(style.bottom).toBe(LANDSCAPE.marginTop);
+    expect(style.right).toBe(LANDSCAPE.marginX);
+    expect(style.top).toBeUndefined();
+    expect(style.left).toBeUndefined();
   });
 
   it("tengah memusatkan dirinya sendiri di kedua sumbu", () => {
-    expect(anchorSpec("tengah").translate).toBe("-50% -50%");
+    const style = styleAt("tengah");
+    expect(style.left).toBe("50%");
+    expect(style.top).toBe("50%");
+    expect(String(style.translate)).toContain("-50%");
   });
 
   it("tepi tengah hanya memusatkan pada sumbu yang di tengah", () => {
-    expect(anchorSpec("tengah-atas").translate).toBe("-50% 0");
-    expect(anchorSpec("kiri-tengah").translate).toBe("0 -50%");
+    const atas = styleAt("tengah-atas");
+    expect(atas.left).toBe("50%");
+    expect(atas.top).toBe(LANDSCAPE.marginTop);
+
+    const kiri = styleAt("kiri-tengah");
+    expect(kiri.left).toBe(LANDSCAPE.marginX);
+    expect(kiri.top).toBe("50%");
+  });
+
+  it("margin ikut rasio: potret memakai angka amannya sendiri", () => {
+    const style = styleAt("kiri-atas", PORTRAIT);
+    expect(style.top).toBe(PORTRAIT.marginTop);
+    expect(style.left).toBe(PORTRAIT.marginX);
   });
 
   it("kesembilan jangkar terdefinisi", () => {
@@ -72,8 +115,8 @@ describe("jangkar grafis", () => {
 describe("ukuran grafis mengikuti tinggi frame, bukan piksel tetap", () => {
   it("size yang sama menghasilkan tinggi proporsional di rasio berbeda", () => {
     const motion = graphicMotion(graphic({ anim: "diam" }), 0, 60);
-    const landscape = graphicStyle(graphic(), motion, 1920, 1080);
-    const portrait = graphicStyle(graphic(), motion, 1080, 1920);
+    const landscape = graphicStyle(graphic(), motion, LANDSCAPE);
+    const portrait = graphicStyle(graphic(), motion, PORTRAIT);
     expect(landscape.height).toBeCloseTo(0.12 * 1080, 3);
     expect(portrait.height).toBeCloseTo(0.12 * 1920, 3);
     // Inilah gunanya: satu nilai tetap benar di dua rasio tanpa ditata ulang.
@@ -85,8 +128,7 @@ describe("ukuran grafis mengikuti tinggi frame, bukan piksel tetap", () => {
     const style = graphicStyle(
       graphic({ offsetX: 0.1, offsetY: -0.05 }),
       motion,
-      1920,
-      1080,
+      LANDSCAPE,
     );
     expect(String(style.translate)).toContain("192px");
     expect(String(style.translate)).toContain("-54px");

@@ -228,6 +228,7 @@ export const makeDeps = (
     guards: overrides.guards ?? new Guardrails({}, approvals.approve),
     ttsChainFor: overrides.ttsChainFor ?? (() => [fakeTts()]),
     stockChain: overrides.stockChain ?? (() => [fakeStock()]),
+    stickerChain: overrides.stickerChain ?? (() => [fakeStock("giphy")]),
     renderVideo: overrides.renderVideo ?? render,
     videoMetadata:
       overrides.videoMetadata ??

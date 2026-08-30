@@ -162,6 +162,72 @@ export interface StockPickRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Pustaka media (ADR-0018): ikon, stiker, efek suara
+// ---------------------------------------------------------------------------
+
+export interface IconCandidateLite {
+  /** Id Iconify, mis. "mdi:home". */
+  iconId: string;
+  setName: string;
+  license: string;
+  /** Lisensi mewajibkan kredit (CC-BY/OFL/Apache-2.0). */
+  needsAttribution: boolean;
+}
+
+export interface IconSearchResponse {
+  ok: true;
+  provider: string;
+  query: string;
+  icons: IconCandidateLite[];
+}
+
+export interface StickerCandidateLite {
+  index: number;
+  assetId: string;
+  width: number;
+  height: number;
+  /** Apa adanya dari provider; memuat penanda bila hak pakainya perlu dicek. */
+  license: string;
+  thumbnailUrl: string | null;
+}
+
+export interface StickerSearchResponse {
+  ok: true;
+  provider: string;
+  query: string;
+  stickers: StickerCandidateLite[];
+}
+
+export interface SfxCandidateLite {
+  assetId: string;
+  title: string;
+  durationSec: number | null;
+  license: string;
+  author: string | null;
+}
+
+export interface SfxSearchResponse {
+  ok: true;
+  provider: string;
+  query: string;
+  sounds: SfxCandidateLite[];
+}
+
+export interface AddGraphicResponse {
+  ok: true;
+  graphicId: string;
+  file: string;
+  summary: string;
+}
+
+export interface AddSfxResponse {
+  ok: true;
+  cueId: string;
+  file: string;
+  summary: string;
+}
+
+// ---------------------------------------------------------------------------
 // SSE broadcast (GET /api/events) — sinkronisasi antar panel
 // ---------------------------------------------------------------------------
 

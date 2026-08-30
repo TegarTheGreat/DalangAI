@@ -12,85 +12,34 @@ import { easeSettle, kf } from "./anim";
  * piksel. Dengan begitu satu nilai yang sama tetap benar di 16:9, 9:16, dan
  * 1:1 tanpa dihitung ulang — kalau memakai piksel, tiap ganti rasio semua
  * tempelan harus ditata ulang.
+ *
+ * Jangkar tepi memakai MARGIN AMAN preset, bukan sisipan tetap. Alasannya
+ * terlihat di render sungguhan: sisipan datar 4,5% menaruh tempelan kiri-atas
+ * tepat menimpa running head. Memakai margin yang sama dengan teks membuat
+ * tempelan hidup di dalam kolom aman yang sama — dan ikut menyesuaikan diri
+ * tiap rasio, karena margin itu memang sudah berbeda per rasio.
  */
 
-interface AnchorSpec {
-  /** Nilai CSS inset; null = tidak diatur di sumbu itu. */
-  top: string | null;
-  bottom: string | null;
-  left: string | null;
-  right: string | null;
-  /** Geseran untuk memusatkan diri sendiri pada sumbu yang di tengah. */
-  translate: string;
+/** Sisi jangkar pada satu sumbu. */
+export type AnchorSide = "awal" | "tengah" | "akhir";
+
+export interface AnchorSpec {
+  /** Sumbu vertikal: awal = atas, akhir = bawah. */
+  vertical: AnchorSide;
+  /** Sumbu horizontal: awal = kiri, akhir = kanan. */
+  horizontal: AnchorSide;
 }
 
-/** Sisipan tepi: grafis tidak pernah menempel persis di pinggir frame. */
-export const GRAPHIC_EDGE_INSET = "4.5%";
-
 const ANCHORS: Record<GraphicAnchor, AnchorSpec> = {
-  "kiri-atas": {
-    top: GRAPHIC_EDGE_INSET,
-    bottom: null,
-    left: GRAPHIC_EDGE_INSET,
-    right: null,
-    translate: "0 0",
-  },
-  "tengah-atas": {
-    top: GRAPHIC_EDGE_INSET,
-    bottom: null,
-    left: "50%",
-    right: null,
-    translate: "-50% 0",
-  },
-  "kanan-atas": {
-    top: GRAPHIC_EDGE_INSET,
-    bottom: null,
-    left: null,
-    right: GRAPHIC_EDGE_INSET,
-    translate: "0 0",
-  },
-  "kiri-tengah": {
-    top: "50%",
-    bottom: null,
-    left: GRAPHIC_EDGE_INSET,
-    right: null,
-    translate: "0 -50%",
-  },
-  tengah: {
-    top: "50%",
-    bottom: null,
-    left: "50%",
-    right: null,
-    translate: "-50% -50%",
-  },
-  "kanan-tengah": {
-    top: "50%",
-    bottom: null,
-    left: null,
-    right: GRAPHIC_EDGE_INSET,
-    translate: "0 -50%",
-  },
-  "kiri-bawah": {
-    top: null,
-    bottom: GRAPHIC_EDGE_INSET,
-    left: GRAPHIC_EDGE_INSET,
-    right: null,
-    translate: "0 0",
-  },
-  "tengah-bawah": {
-    top: null,
-    bottom: GRAPHIC_EDGE_INSET,
-    left: "50%",
-    right: null,
-    translate: "-50% 0",
-  },
-  "kanan-bawah": {
-    top: null,
-    bottom: GRAPHIC_EDGE_INSET,
-    left: null,
-    right: GRAPHIC_EDGE_INSET,
-    translate: "0 0",
-  },
+  "kiri-atas": { vertical: "awal", horizontal: "awal" },
+  "tengah-atas": { vertical: "awal", horizontal: "tengah" },
+  "kanan-atas": { vertical: "awal", horizontal: "akhir" },
+  "kiri-tengah": { vertical: "tengah", horizontal: "awal" },
+  tengah: { vertical: "tengah", horizontal: "tengah" },
+  "kanan-tengah": { vertical: "tengah", horizontal: "akhir" },
+  "kiri-bawah": { vertical: "akhir", horizontal: "awal" },
+  "tengah-bawah": { vertical: "akhir", horizontal: "tengah" },
+  "kanan-bawah": { vertical: "akhir", horizontal: "akhir" },
 };
 
 export const anchorSpec = (anchor: GraphicAnchor): AnchorSpec => ANCHORS[anchor];
@@ -172,33 +121,58 @@ export const graphicMotion = (
 };
 
 /**
- * Gaya CSS penuh untuk satu grafis. `frameHeight` dipakai agar `size` yang
- * berupa fraksi berubah jadi piksel nyata.
+ * Bingkai tempat grafis dipasang. Sengaja tipe minimal, bukan `AspectMetrics`
+ * penuh: model ini murni geometri, dan hanya empat angka itu yang dibutuhkan.
+ */
+export interface GraphicFrame {
+  width: number;
+  height: number;
+  /** Margin aman kiri/kanan (px) — sama dengan yang dipakai teks preset. */
+  marginX: number;
+  /** Margin aman atas (px); dipakai juga untuk bawah supaya simetris. */
+  marginTop: number;
+}
+
+/**
+ * Gaya CSS penuh untuk satu grafis. `size` berupa fraksi TINGGI frame, jadi
+ * satu nilai bekerja di semua rasio.
  */
 export const graphicStyle = (
   graphic: Graphic,
   motion: GraphicMotion,
-  frameWidth: number,
-  frameHeight: number,
+  frame: GraphicFrame,
 ): CSSProperties => {
   const spec = anchorSpec(graphic.anchor);
-  const sizePx = fmt(graphic.size * frameHeight);
-  const dx = fmt(graphic.offsetX * frameWidth);
-  const dy = fmt((graphic.offsetY + motion.liftFrac * graphic.size) * frameHeight);
+  const sizePx = fmt(graphic.size * frame.height);
+  const dx = fmt(graphic.offsetX * frame.width);
+  const dy = fmt((graphic.offsetY + motion.liftFrac * graphic.size) * frame.height);
+
+  // Sumbu horizontal: kiri/kanan memakai margin aman; tengah memakai 50% dan
+  // menggeser dirinya sendiri setengah lebar.
+  const horizontal =
+    spec.horizontal === "awal"
+      ? { left: frame.marginX, shiftX: "0px" }
+      : spec.horizontal === "akhir"
+        ? { right: frame.marginX, shiftX: "0px" }
+        : { left: "50%", shiftX: "-50%" };
+  const vertical =
+    spec.vertical === "awal"
+      ? { top: frame.marginTop, shiftY: "0px" }
+      : spec.vertical === "akhir"
+        ? { bottom: frame.marginTop, shiftY: "0px" }
+        : { top: "50%", shiftY: "-50%" };
 
   return {
     position: "absolute",
-    ...(spec.top === null ? {} : { top: spec.top }),
-    ...(spec.bottom === null ? {} : { bottom: spec.bottom }),
-    ...(spec.left === null ? {} : { left: spec.left }),
-    ...(spec.right === null ? {} : { right: spec.right }),
+    ...("left" in horizontal ? { left: horizontal.left } : { right: horizontal.right }),
+    ...("top" in vertical ? { top: vertical.top } : { bottom: vertical.bottom }),
     width: sizePx,
     height: sizePx,
     opacity: motion.opacity,
     // Geseran jangkar dan geseran pengguna digabung dalam SATU translate agar
     // urutannya pasti; scale dan rotate dipisah supaya keduanya berputar pada
     // pusat grafis, bukan pada titik jangkar.
-    translate: `calc(${spec.translate.split(" ")[0]} + ${dx}px) calc(${spec.translate.split(" ")[1]} + ${dy}px)`,
+    translate: `calc(${horizontal.shiftX} + ${dx}px) calc(${vertical.shiftY} + ${dy}px)`,
     scale: motion.scale,
     rotate: `${motion.rotate}deg`,
   };

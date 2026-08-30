@@ -303,4 +303,110 @@ describe("hak pakai aset (ADR-0018)", () => {
     expect(notes).toHaveLength(1);
     expect(notes[0]?.message).toContain("2 aset dari giphy, tenor");
   });
+
+  /**
+   * Regresi. Stiker GIPHY/Tenor masuk lewat `graphicAssets`, bukan
+   * `resolvedAssets` — justru jalur yang paling sering dipakai. Pemeriksaan
+   * yang hanya membaca aset scene karenanya diam persis pada kasus yang paling
+   * perlu ditegur, dan diamnya terlihat seperti "aman".
+   */
+  const withGraphic = (license: string) =>
+    parseScenePlan({
+      version: 1,
+      projectId: "uji-stiker",
+      meta: { title: "Uji Stiker" },
+      scenes: [
+        {
+          id: "s0",
+          narration: "Satu kalimat saja.",
+          visual: { type: "solid" },
+          duration: 5,
+          graphics: [{ id: "g1", ref: "giphy:abc" }],
+        },
+      ],
+      renderState: {
+        narrationAudio: {},
+        resolvedAssets: {},
+        graphicAssets: {
+          g1: {
+            file: "assets/stickers/g1.webp",
+            kind: "image",
+            source: "giphy",
+            license,
+          },
+        },
+        sfxAssets: {},
+      },
+    });
+
+  it("stiker yang dipasang sebagai grafis ikut ditegur", () => {
+    const note = critiquePlan(withGraphic("GIPHY — PERIKSA HAK PAKAI")).find(
+      (n) => n.code === "aset-hak-pakai",
+    );
+    expect(note?.level).toBe("perhatian");
+    // sceneId menunjuk scene PEMILIK grafis, bukan id grafisnya.
+    expect(note?.sceneId).toBe("s0");
+  });
+
+  it("grafis berlisensi jelas tidak ditegur", () => {
+    expect(critiquePlan(withGraphic("MIT")).map((n) => n.code)).not.toContain(
+      "aset-hak-pakai",
+    );
+  });
+
+  it("entri grafis yatim tidak ditegur — ia tidak ikut render", () => {
+    const plan = parseScenePlan({
+      version: 1,
+      projectId: "uji-yatim",
+      meta: { title: "Uji Yatim" },
+      scenes: [
+        { id: "s0", narration: "Satu kalimat.", visual: { type: "solid" }, duration: 5 },
+      ],
+      renderState: {
+        narrationAudio: {},
+        resolvedAssets: {},
+        graphicAssets: {
+          "g-terhapus": {
+            file: "assets/stickers/g1.webp",
+            kind: "image",
+            source: "giphy",
+            license: "GIPHY — PERIKSA HAK PAKAI",
+          },
+        },
+        sfxAssets: {},
+      },
+    });
+    expect(critiquePlan(plan).map((n) => n.code)).not.toContain("aset-hak-pakai");
+  });
+
+  it("efek suara bertanda ikut ditegur, dengan scene cue-nya", () => {
+    const plan = parseScenePlan({
+      version: 1,
+      projectId: "uji-sfx",
+      meta: { title: "Uji SFX" },
+      scenes: [
+        { id: "s0", narration: "Satu kalimat.", visual: { type: "solid" }, duration: 5 },
+      ],
+      audio: {
+        voice: { provider: "silence", voiceId: "x", speed: 1 },
+        sfx: [{ id: "cue-1", assetId: "x:1", sceneId: "s0", atSec: 0 }],
+      },
+      renderState: {
+        narrationAudio: {},
+        resolvedAssets: {},
+        graphicAssets: {},
+        sfxAssets: {
+          "cue-1": {
+            file: "assets/sfx/a.mp3",
+            kind: "audio",
+            source: "pustaka-x",
+            license: "PERIKSA HAK PAKAI",
+          },
+        },
+      },
+    });
+    const note = critiquePlan(plan).find((n) => n.code === "aset-hak-pakai");
+    expect(note?.sceneId).toBe("s0");
+    expect(note?.message).toContain("pustaka-x");
+  });
 });

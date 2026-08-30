@@ -18,6 +18,7 @@ import {
   PipelineDb,
   type ProjectPaths,
   projectPaths,
+  type SfxCandidate,
   type StockCandidate,
   sha256Hex,
 } from "@dalang/pipeline";
@@ -55,6 +56,15 @@ export class ProjectSession {
   turn = 0;
   /** Kandidat hasil searchAssets, per query — dipakai pickAsset. */
   readonly lastSearches = new Map<string, StockCandidate[]>();
+  /**
+   * Kandidat hasil searchSfx, per assetId — dipakai addSfx (ADR-0018).
+   *
+   * Dikunci per assetId, bukan per query, karena assetId Openverse adalah UUID
+   * yang TIDAK bisa dipakai sebagai kata pencarian: mencari ulang dengannya
+   * selalu nihil. Sebelum ada ingatan ini, addSfx hanya berhasil pada provider
+   * palsu yang menjawab apa pun — pada Openverse sungguhan ia selalu gagal.
+   */
+  readonly lastSfxCandidates = new Map<string, SfxCandidate>();
   private planDiskHash: string | null = null;
   /** Snapshot terakhir yang dipersist — plan hanya ditulis bila berubah. */
   private lastPersistedPlan: string | null = null;

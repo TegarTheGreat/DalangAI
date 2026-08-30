@@ -1,8 +1,13 @@
 import type { PatchOpInput } from "@dalang/core";
 import type {
+  AddGraphicResponse,
+  AddSfxResponse,
   ChatStreamEvent,
+  IconSearchResponse,
   ProjectStatePayload,
   RenderRequest,
+  SfxSearchResponse,
+  StickerSearchResponse,
   StockSearchResponse,
   StudioEvent,
 } from "../shared/api-types";
@@ -101,6 +106,57 @@ export const api = {
     request<{ ok: true; file: string; summary: string }>("/api/stock/pick", {
       method: "POST",
       body: JSON.stringify({ sceneId, query, index }),
+    }),
+
+  // --- Pustaka media (ADR-0018) -------------------------------------------
+
+  iconSearch: (query: string) =>
+    request<IconSearchResponse>(`/api/icons/search?query=${encodeURIComponent(query)}`),
+
+  /** URL pratinjau ikon (dipakai langsung sebagai src <img>). */
+  iconPreviewUrl: (iconId: string, color: string | null): string =>
+    `/api/icons/svg?id=${encodeURIComponent(iconId)}${
+      color ? `&color=${encodeURIComponent(color)}` : ""
+    }`,
+
+  addIcon: (input: {
+    sceneId: string;
+    iconId: string;
+    anchor: string;
+    size: number;
+    color: string | null;
+    anim: string;
+  }) =>
+    request<AddGraphicResponse>("/api/graphics/icon", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  stickerSearch: (query: string) =>
+    request<StickerSearchResponse>(
+      `/api/stickers/search?query=${encodeURIComponent(query)}`,
+    ),
+
+  addSticker: (input: {
+    sceneId: string;
+    query: string;
+    index: number;
+    anchor: string;
+    size: number;
+    anim: string;
+  }) =>
+    request<AddGraphicResponse>("/api/graphics/sticker", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  sfxSearch: (query: string) =>
+    request<SfxSearchResponse>(`/api/sfx/search?query=${encodeURIComponent(query)}`),
+
+  addSfx: (input: { sceneId: string; assetId: string; atSec: number; volume: number }) =>
+    request<AddSfxResponse>("/api/sfx/add", {
+      method: "POST",
+      body: JSON.stringify(input),
     }),
 
   answerApproval: (id: string, approved: boolean) =>

@@ -17,6 +17,8 @@ import type { StudioStore } from "./store";
 export interface StudioDeps {
   ttsChainFor: (provider: string) => TtsProvider[];
   stockChain: () => StockProvider[];
+  /** Pustaka stiker (GIF beralfa) — endpoint terpisah dari stock biasa. */
+  stickerChain: () => StockProvider[];
   renderVideo: (options: {
     planPath: string;
     outputLocation: string;
