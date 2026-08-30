@@ -7,11 +7,14 @@ import type {
   VisualFilter,
 } from "@dalang/core";
 import {
+  CAPTION_POSITIONS,
+  CAPTION_STYLES,
   FILTER_PRESETS,
   MAX_TRANSITION_FRAMES,
   MIN_TRANSITION_FRAMES,
   MOTIONS,
   TEXT_ALIGNS,
+  TEXT_ANIMS,
   TEXT_EMPHASES,
   TEXT_POSITIONS,
   TEXT_ROLES,
@@ -87,6 +90,25 @@ const EMPHASIS_LABEL: Record<string, string> = {
   none: "Polos",
   box: "Kotak",
   underline: "Garis",
+  stabilo: "Stabilo",
+};
+
+/** ADR-0016: animasi masuk teks + gaya caption. */
+const ANIM_LABEL: Record<string, string> = {
+  fade: "Larut",
+  pop: "Pop",
+  rise: "Naik",
+  typewriter: "Ketik",
+};
+const CAPTION_STYLE_LABEL: Record<string, string> = {
+  klasik: "Klasik",
+  tegas: "Tegas",
+  chip: "Chip",
+  halus: "Halus",
+};
+const CAPTION_POSITION_LABEL: Record<string, string> = {
+  bottom: "Bawah",
+  center: "Tengah",
 };
 
 const MOTION_LABEL: Record<string, string> = {
@@ -854,144 +876,316 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
     );
 
   return (
-    <section className="prop-group">
-      <div className="group-head">
-        <h4>Teks di atas visual</h4>
-        <button
-          type="button"
-          className="mini"
-          disabled={busy || scene.texts.length >= 3}
-          onClick={() =>
-            patchTexts(
-              [
-                ...scene.texts,
-                {
-                  id: `tx-${Date.now().toString(36)}`,
-                  content: "Teks baru",
-                  role: "headline",
-                  position: "center",
-                  align: "center",
-                  size: "m",
-                  emphasis: "none",
-                  startFrac: 0,
-                  endFrac: 1,
-                },
-              ],
-              "Teks ditambahkan",
-            )
-          }
-        >
-          Tambah
-        </button>
-      </div>
-      {scene.texts.length === 0 ? (
-        <p className="group-hint">
-          Judul besar, label kecil, atau kutipan yang tampil di atas visual — untuk angka
-          kunci dan penekanan, bukan duplikat narasi.
-        </p>
-      ) : null}
-      {scene.texts.map((text, index) => (
-        <div key={text.id} className="text-item">
-          <textarea
-            rows={2}
-            defaultValue={text.content}
-            onBlur={(event) => {
-              const content = event.target.value.trim();
-              if (content !== "" && content !== text.content) {
-                patchTexts(
-                  scene.texts.map((entry, i) =>
-                    i === index ? { ...entry, content } : entry,
-                  ),
-                );
-              }
-            }}
+    <>
+      {/* ADR-0016: caption karaoke akhirnya punya gaya nyata. */}
+      <section className="prop-group">
+        <div className="group-head">
+          <h4>Caption karaoke</h4>
+          <Switch
+            checked={scene.caption.enabled}
+            disabled={busy}
+            label="Aktif"
+            onChange={(enabled) =>
+              void studioClient.applyPatch(
+                [{ op: "updateScene", id: scene.id, patch: { caption: { enabled } } }],
+                enabled ? "Caption dinyalakan" : "Caption dimatikan",
+              )
+            }
           />
-          <div className="text-item-controls">
+        </div>
+        {scene.caption.enabled ? (
+          <>
+            <p className="group-hint">
+              Kata aktif tersinkron narasi. Tegas = kapital tebal ber-garis-luar (gaya
+              klip sosial), Chip = kata aktif berkotak aksen, Halus = tanpa karaoke.
+            </p>
             <Segmented
-              options={TEXT_ROLES}
-              value={text.role}
-              disabled={busy}
-              label={(role) => ROLE_LABEL[role] ?? role}
-              onChange={(role) =>
-                patchTexts(
-                  scene.texts.map((entry, i) =>
-                    i === index ? { ...entry, role } : entry,
-                  ),
-                )
+              grow
+              options={CAPTION_STYLES}
+              value={
+                (CAPTION_STYLES as readonly string[]).includes(scene.caption.style)
+                  ? (scene.caption.style as (typeof CAPTION_STYLES)[number])
+                  : "klasik"
               }
-            />
-            <Segmented
-              options={TEXT_POSITIONS}
-              value={text.position}
               disabled={busy}
-              label={(position) => POSITION_LABEL[position] ?? position}
-              onChange={(position) =>
-                patchTexts(
-                  scene.texts.map((entry, i) =>
-                    i === index ? { ...entry, position } : entry,
-                  ),
+              label={(style) => CAPTION_STYLE_LABEL[style] ?? style}
+              onChange={(style) =>
+                void studioClient.applyPatch(
+                  [{ op: "updateScene", id: scene.id, patch: { caption: { style } } }],
+                  `Caption ${CAPTION_STYLE_LABEL[style]}`,
                 )
               }
             />
             <div className="text-item-row">
               <Segmented
-                options={TEXT_ALIGNS}
-                value={text.align}
+                options={TEXT_SIZES}
+                value={scene.caption.size}
                 disabled={busy}
-                label={(align) => ALIGN_LABEL[align] ?? align}
-                onChange={(align) =>
+                label={(size) => SIZE_LABEL[size] ?? size}
+                onChange={(size) =>
+                  void studioClient.applyPatch([
+                    { op: "updateScene", id: scene.id, patch: { caption: { size } } },
+                  ])
+                }
+              />
+              <Segmented
+                options={CAPTION_POSITIONS}
+                value={scene.caption.position}
+                disabled={busy}
+                label={(position) => CAPTION_POSITION_LABEL[position] ?? position}
+                onChange={(position) =>
+                  void studioClient.applyPatch([
+                    {
+                      op: "updateScene",
+                      id: scene.id,
+                      patch: { caption: { position } },
+                    },
+                  ])
+                }
+              />
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      <section className="prop-group">
+        <div className="group-head">
+          <h4>Teks di atas visual</h4>
+          <button
+            type="button"
+            className="mini"
+            disabled={busy || scene.texts.length >= 3}
+            onClick={() =>
+              patchTexts(
+                [
+                  ...scene.texts,
+                  {
+                    id: `tx-${Date.now().toString(36)}`,
+                    content: "Teks baru",
+                    role: "headline",
+                    position: "center",
+                    align: "center",
+                    size: "m",
+                    emphasis: "none",
+                    anim: "fade",
+                    color: null,
+                    stroke: 0,
+                    uppercase: false,
+                    tracking: 0,
+                    startFrac: 0,
+                    endFrac: 1,
+                  },
+                ],
+                "Teks ditambahkan",
+              )
+            }
+          >
+            Tambah
+          </button>
+        </div>
+        {scene.texts.length === 0 ? (
+          <p className="group-hint">
+            Judul besar, label kecil, atau kutipan yang tampil di atas visual — untuk
+            angka kunci dan penekanan, bukan duplikat narasi.
+          </p>
+        ) : null}
+        {scene.texts.map((text, index) => (
+          <div key={text.id} className="text-item">
+            <textarea
+              rows={2}
+              defaultValue={text.content}
+              onBlur={(event) => {
+                const content = event.target.value.trim();
+                if (content !== "" && content !== text.content) {
                   patchTexts(
                     scene.texts.map((entry, i) =>
-                      i === index ? { ...entry, align } : entry,
+                      i === index ? { ...entry, content } : entry,
+                    ),
+                  );
+                }
+              }}
+            />
+            <div className="text-item-controls">
+              <Segmented
+                options={TEXT_ROLES}
+                value={text.role}
+                disabled={busy}
+                label={(role) => ROLE_LABEL[role] ?? role}
+                onChange={(role) =>
+                  patchTexts(
+                    scene.texts.map((entry, i) =>
+                      i === index ? { ...entry, role } : entry,
                     ),
                   )
                 }
               />
               <Segmented
-                options={TEXT_SIZES}
-                value={text.size}
+                options={TEXT_POSITIONS}
+                value={text.position}
                 disabled={busy}
-                label={(size) => SIZE_LABEL[size] ?? size}
-                onChange={(size) =>
+                label={(position) => POSITION_LABEL[position] ?? position}
+                onChange={(position) =>
                   patchTexts(
                     scene.texts.map((entry, i) =>
-                      i === index ? { ...entry, size } : entry,
+                      i === index ? { ...entry, position } : entry,
                     ),
                   )
                 }
               />
+              <div className="text-item-row">
+                <Segmented
+                  options={TEXT_ALIGNS}
+                  value={text.align}
+                  disabled={busy}
+                  label={(align) => ALIGN_LABEL[align] ?? align}
+                  onChange={(align) =>
+                    patchTexts(
+                      scene.texts.map((entry, i) =>
+                        i === index ? { ...entry, align } : entry,
+                      ),
+                    )
+                  }
+                />
+                <Segmented
+                  options={TEXT_SIZES}
+                  value={text.size}
+                  disabled={busy}
+                  label={(size) => SIZE_LABEL[size] ?? size}
+                  onChange={(size) =>
+                    patchTexts(
+                      scene.texts.map((entry, i) =>
+                        i === index ? { ...entry, size } : entry,
+                      ),
+                    )
+                  }
+                />
+              </div>
+              <Segmented
+                options={TEXT_EMPHASES}
+                value={text.emphasis}
+                disabled={busy}
+                label={(emphasis) => EMPHASIS_LABEL[emphasis] ?? emphasis}
+                onChange={(emphasis) =>
+                  patchTexts(
+                    scene.texts.map((entry, i) =>
+                      i === index ? { ...entry, emphasis } : entry,
+                    ),
+                  )
+                }
+              />
+              {/* ADR-0016: animasi masuk + rupa (warna, garis luar, kapital). */}
+              <Segmented
+                options={TEXT_ANIMS}
+                value={text.anim}
+                disabled={busy}
+                label={(anim) => ANIM_LABEL[anim] ?? anim}
+                onChange={(anim) =>
+                  patchTexts(
+                    scene.texts.map((entry, i) =>
+                      i === index ? { ...entry, anim } : entry,
+                    ),
+                    `Animasi ${ANIM_LABEL[anim]}`,
+                  )
+                }
+              />
+              <div className="text-item-row">
+                <input
+                  type="color"
+                  title="Warna teks"
+                  value={text.color ?? "#f5f0e6"}
+                  disabled={busy}
+                  onChange={(event) =>
+                    patchTexts(
+                      scene.texts.map((entry, i) =>
+                        i === index ? { ...entry, color: event.target.value } : entry,
+                      ),
+                      "Warna teks diubah",
+                    )
+                  }
+                />
+                <Switch
+                  checked={text.uppercase}
+                  disabled={busy}
+                  label="KAPITAL"
+                  onChange={(uppercase) =>
+                    patchTexts(
+                      scene.texts.map((entry, i) =>
+                        i === index ? { ...entry, uppercase } : entry,
+                      ),
+                    )
+                  }
+                />
+              </div>
+              <SliderRow
+                label="Garis luar"
+                min={0}
+                max={8}
+                step={1}
+                neutral={0}
+                value={text.stroke}
+                format={(v) => `${v}px`}
+                onCommit={(stroke) =>
+                  patchTexts(
+                    scene.texts.map((entry, i) =>
+                      i === index ? { ...entry, stroke } : entry,
+                    ),
+                  )
+                }
+              />
+              <SliderRow
+                label="Kerapatan"
+                min={-0.05}
+                max={0.5}
+                step={0.01}
+                neutral={0}
+                value={text.tracking}
+                format={(v) => `${v.toFixed(2)}em`}
+                onCommit={(tracking) =>
+                  patchTexts(
+                    scene.texts.map((entry, i) =>
+                      i === index ? { ...entry, tracking } : entry,
+                    ),
+                  )
+                }
+              />
+              <div className="text-item-row">
+                {text.color ? (
+                  <button
+                    type="button"
+                    className="mini"
+                    disabled={busy}
+                    onClick={() =>
+                      patchTexts(
+                        scene.texts.map((entry, i) =>
+                          i === index ? { ...entry, color: null } : entry,
+                        ),
+                        "Warna kembali ke tema",
+                      )
+                    }
+                  >
+                    Warna tema
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="ghost danger with-icon"
+                  disabled={busy}
+                  onClick={() =>
+                    patchTexts(
+                      scene.texts.filter((_, i) => i !== index),
+                      "Teks dihapus",
+                    )
+                  }
+                >
+                  <IconTrash />
+                  Hapus
+                </button>
+              </div>
             </div>
-            <Segmented
-              options={TEXT_EMPHASES}
-              value={text.emphasis}
-              disabled={busy}
-              label={(emphasis) => EMPHASIS_LABEL[emphasis] ?? emphasis}
-              onChange={(emphasis) =>
-                patchTexts(
-                  scene.texts.map((entry, i) =>
-                    i === index ? { ...entry, emphasis } : entry,
-                  ),
-                )
-              }
-            />
-            <button
-              type="button"
-              className="ghost danger with-icon"
-              disabled={busy}
-              onClick={() =>
-                patchTexts(
-                  scene.texts.filter((_, i) => i !== index),
-                  "Teks dihapus",
-                )
-              }
-            >
-              <IconTrash />
-              Hapus
-            </button>
           </div>
-        </div>
-      ))}
-    </section>
+        ))}
+      </section>
+    </>
   );
 };
 

@@ -32,6 +32,18 @@ export const FONT_CHOICES = [
     label: "Space Grotesk (sans teknis)",
   },
   { family: "Lora", file: "fonts/Lora-var.ttf", label: "Lora (serif hangat)" },
+  {
+    family: "Plus Jakarta Sans",
+    file: "fonts/PlusJakartaSans-var.ttf",
+    label: "Plus Jakarta Sans (geometris, karya Indonesia)",
+  },
+  {
+    family: "Anton",
+    file: "fonts/Anton-Regular.ttf",
+    label: "Anton (display berat, judul menghentak)",
+    /** Anton berkas STATIS satu bobot — bukan variable font. */
+    weight: "400",
+  },
 ] as const;
 
 let started = false;
@@ -41,13 +53,14 @@ export const ensureFontsLoaded = (): void => {
   if (started) return;
   started = true;
 
-  const handle = delayRender("Memuat font Dalang (4 keluarga ter-bundle)");
+  const handle = delayRender("Memuat font Dalang (6 keluarga ter-bundle)");
   Promise.all(
     FONT_CHOICES.map((choice) =>
       loadFont({
         family: choice.family,
         url: staticFile(choice.file),
-        weight: "100 900",
+        // Variable font memakai rentang; berkas statis memakai bobot tunggal.
+        weight: "weight" in choice ? choice.weight : "100 900",
       }),
     ),
   )

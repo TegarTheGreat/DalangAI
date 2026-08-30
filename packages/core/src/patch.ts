@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   annotationSchema,
   aspectRatioSchema,
+  captionPositionSchema,
   designTokensSchema,
   getSceneIndex,
   type Meta,
@@ -13,6 +14,7 @@ import {
   scenePlanSchema,
   sceneSchema,
   textOverlaySchema,
+  textSizeSchema,
   transitionSchema,
   visualFilterSchema,
   visualTypeSchema,
@@ -68,6 +70,9 @@ export const sceneUpdateSchema = z.strictObject({
     .strictObject({
       enabled: z.boolean().optional(),
       style: z.string().optional(),
+      /** ADR-0016. */
+      size: textSizeSchema.optional(),
+      position: captionPositionSchema.optional(),
     })
     .optional(),
   /** Transisi keluar scene (ADR-0011). */

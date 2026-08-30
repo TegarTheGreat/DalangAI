@@ -1,4 +1,5 @@
 import type { Scene, TextOverlay } from "@dalang/core";
+import { Fragment } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { enterExit } from "../../anim";
 import type { AspectMetrics } from "../../layout";
@@ -8,6 +9,7 @@ import {
   TEXT_POSITIONS,
   TEXT_SIZE_FACTOR,
 } from "../../text-overlay-model";
+import { animPieceStyle, isSpacer, splitForAnim, textLookStyle } from "../../type-style";
 import type { DocTheme } from "./theme";
 
 /**
@@ -137,6 +139,10 @@ export const TextsOverlay: React.FC<{
                 EXIT_FRAMES,
               );
               const align = alignStyles(text.align);
+              // ADR-0016: animasi masuk per kata/karakter — blok tidak lagi
+              // ikut bergeser saat animasi potongan yang mengurus geraknya.
+              const pieces = splitForAnim(text.content, text.anim);
+              const blockRise = text.anim === "fade" ? (1 - progress) * 26 : 0;
               return (
                 <p
                   key={text.id}
@@ -144,16 +150,44 @@ export const TextsOverlay: React.FC<{
                     ...roleStyle(text.role, theme, metrics, TEXT_SIZE_FACTOR[text.size]),
                     ...align.self,
                     ...align.block,
-                    ...emphasisStyle(text.emphasis, {
-                      boxBg: "rgba(7, 9, 15, 0.66)",
-                      accent: theme.accent,
-                      glow: "rgba(0, 0, 0, 0.45)",
-                    }),
+                    ...emphasisStyle(
+                      text.emphasis,
+                      {
+                        boxBg: "rgba(7, 9, 15, 0.66)",
+                        accent: theme.accent,
+                        glow: "rgba(0, 0, 0, 0.45)",
+                      },
+                      progress,
+                    ),
+                    ...textLookStyle(text, { strokeColor: "rgba(0,0,0,0.9)" }),
                     opacity,
-                    translate: `0px ${((1 - progress) * 26).toFixed(2)}px`,
+                    translate: `0px ${blockRise.toFixed(2)}px`,
                   }}
                 >
-                  {text.content}
+                  {text.anim === "fade"
+                    ? text.content
+                    : pieces.map((piece, pieceIndex) => {
+                        // Spasi polos: di luar kotak inline-block agar tidak
+                        // dikempiskan (lihat splitToken).
+                        if (isSpacer(piece)) {
+                          return (
+                            <Fragment key={`${text.id}-${pieceIndex}-sp`}>
+                              {piece}
+                            </Fragment>
+                          );
+                        }
+                        const style = animPieceStyle(
+                          text.anim,
+                          pieceIndex,
+                          frame - start,
+                        );
+                        if (style === null) return null;
+                        return (
+                          <span key={`${text.id}-${pieceIndex}-${piece}`} style={style}>
+                            {piece}
+                          </span>
+                        );
+                      })}
                 </p>
               );
             })}

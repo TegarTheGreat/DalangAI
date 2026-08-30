@@ -1,5 +1,5 @@
 import type { Scene, ScenePlan } from "@dalang/core";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import {
   AbsoluteFill,
   Easing,
@@ -10,6 +10,8 @@ import {
 } from "remotion";
 import { buildCaptionPages, type CaptionPageModel } from "../../captions-model";
 import type { AspectMetrics } from "../../layout";
+import { TEXT_SIZE_FACTOR } from "../../text-overlay-model";
+import { captionStyleOf, captionStyleSpec, splitToken } from "../../type-style";
 import type { TutTheme } from "./theme";
 
 /**
@@ -20,12 +22,20 @@ import type { TutTheme } from "./theme";
 
 const CaptionBar: React.FC<{
   page: CaptionPageModel;
+  scene: Scene;
   metrics: AspectMetrics;
   theme: TutTheme;
-}> = ({ page, metrics, theme }) => {
+}> = ({ page, scene, metrics, theme }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sceneTimeMs = page.startMs + (frame / fps) * 1000;
+  // ADR-0016: gaya caption dari plan; palet mengikuti kertas terang.
+  const spec = captionStyleSpec(captionStyleOf(scene), {
+    ink: theme.ink,
+    inkSoft: theme.inkSoft,
+    accent: theme.accent,
+    onAccent: theme.paper,
+  });
   const rise = interpolate(frame, [0, 6], [14, 0], {
     extrapolateRight: "clamp",
     easing: Easing.bezier(0.16, 1, 0.3, 1),
@@ -48,26 +58,28 @@ const CaptionBar: React.FC<{
           padding: "18px 34px",
           textAlign: "center",
           fontFamily: theme.fontBody,
-          fontWeight: 620,
-          fontSize: metrics.captionFontSize * 0.82,
-          lineHeight: 1.32,
+          fontSize:
+            metrics.captionFontSize *
+            0.82 *
+            spec.sizeFactor *
+            TEXT_SIZE_FACTOR[scene.caption.size],
           color: theme.ink,
           whiteSpace: "pre-wrap",
+          lineHeight: 1.32,
+          ...spec.block,
         }}
       >
         {page.tokens.map((token, tokenIndex) => {
           const started = token.fromMs <= sceneTimeMs;
           const active = started && token.toMs > sceneTimeMs;
+          const { lead, word } = splitToken(token.text);
           return (
-            <span
-              key={`${token.fromMs}-${tokenIndex}`}
-              style={{
-                color: active ? theme.accent : started ? theme.ink : theme.inkSoft,
-                fontWeight: active ? 740 : 620,
-              }}
-            >
-              {token.text}
-            </span>
+            <Fragment key={`${token.fromMs}-${tokenIndex}`}>
+              {lead}
+              <span style={spec.token(active ? "active" : started ? "past" : "future")}>
+                {word}
+              </span>
+            </Fragment>
           );
         })}
       </div>
@@ -99,7 +111,7 @@ export const TutCaptions: React.FC<{
           layout="none"
           name={`caption-${index + 1}`}
         >
-          <CaptionBar page={page} metrics={metrics} theme={theme} />
+          <CaptionBar page={page} scene={scene} metrics={metrics} theme={theme} />
         </Sequence>
       ))}
     </AbsoluteFill>

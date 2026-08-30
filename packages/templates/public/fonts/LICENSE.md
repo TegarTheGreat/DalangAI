@@ -11,6 +11,11 @@ licensed under the SIL Open Font License 1.1:
   https://github.com/floriankarsten/space-grotesk
 - **Lora** (`Lora-var.ttf`) — © The Lora Project Authors,
   https://github.com/cyrealtype/Lora-Cyrillic
+- **Plus Jakarta Sans** (`PlusJakartaSans-var.ttf`) — © Tokotype (foundry
+  Indonesia); huruf resmi Pemprov DKI Jakarta,
+  https://github.com/tokotype/PlusJakartaSans
+- **Anton** (`Anton-Regular.ttf`) — © Vernon Adams / The Anton Project Authors,
+  https://github.com/googlefonts/AntonFont
 
 The OFL permits bundling, redistribution, and commercial use. Full text:
 https://openfontlicense.org

@@ -1,4 +1,5 @@
 import type { Scene, TextOverlay } from "@dalang/core";
+import { Fragment } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { enterExit } from "../../anim";
 import type { AspectMetrics } from "../../layout";
@@ -8,6 +9,7 @@ import {
   TEXT_POSITIONS,
   TEXT_SIZE_FACTOR,
 } from "../../text-overlay-model";
+import { animPieceStyle, isSpacer, splitForAnim, textLookStyle } from "../../type-style";
 import type { TutTheme } from "./theme";
 
 /**
@@ -131,6 +133,9 @@ export const TutTexts: React.FC<{
                 EXIT_FRAMES,
               );
               const align = alignStyles(text.align);
+              // ADR-0016: animasi masuk per kata/karakter (lihat type-style).
+              const pieces = splitForAnim(text.content, text.anim);
+              const blockRise = text.anim === "fade" ? (1 - progress) * 22 : 0;
               return (
                 <p
                   key={text.id}
@@ -138,16 +143,42 @@ export const TutTexts: React.FC<{
                     ...roleStyle(text.role, theme, metrics, TEXT_SIZE_FACTOR[text.size]),
                     ...align.self,
                     ...align.block,
-                    ...emphasisStyle(text.emphasis, {
-                      boxBg: theme.card,
-                      accent: theme.accent,
-                      glow: "rgba(29, 33, 41, 0.14)",
-                    }),
+                    ...emphasisStyle(
+                      text.emphasis,
+                      {
+                        boxBg: theme.card,
+                        accent: theme.accent,
+                        glow: "rgba(29, 33, 41, 0.14)",
+                      },
+                      progress,
+                    ),
+                    ...textLookStyle(text, { strokeColor: "rgba(255,255,255,0.92)" }),
                     opacity,
-                    translate: `0px ${((1 - progress) * 22).toFixed(2)}px`,
+                    translate: `0px ${blockRise.toFixed(2)}px`,
                   }}
                 >
-                  {text.content}
+                  {text.anim === "fade"
+                    ? text.content
+                    : pieces.map((piece, pieceIndex) => {
+                        if (isSpacer(piece)) {
+                          return (
+                            <Fragment key={`${text.id}-${pieceIndex}-sp`}>
+                              {piece}
+                            </Fragment>
+                          );
+                        }
+                        const style = animPieceStyle(
+                          text.anim,
+                          pieceIndex,
+                          frame - start,
+                        );
+                        if (style === null) return null;
+                        return (
+                          <span key={`${text.id}-${pieceIndex}-${piece}`} style={style}>
+                            {piece}
+                          </span>
+                        );
+                      })}
                 </p>
               );
             })}

@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -168,7 +168,21 @@ Yang sudah berjalan:
     **drop file gambar ke klip** langsung terpasang ter-pin.
   - **H.265** di dialog Ekspor + **chip preset** Sosial / Web ringan /
     Master arsip.
-- **Kualitas terjaga otomatis**: 283 unit test (kontrak lock/pin/undo, timing
+- **Tipografi lengkap (ADR-0016)** — teks sebagai elemen utama, bukan hiasan:
+  - **Caption karaoke punya 4 gaya**: Klasik, **Tegas** (KAPITAL tebal
+    ber-garis-luar, kata aktif membesar — untuk klip pendek berenergi),
+    **Chip** (kata aktif berkotak aksen), Halus (tanpa karaoke); plus
+    ukuran S/M/L dan posisi bawah/tengah. *(Field `caption.style` ada di
+    skema sejak v0 tapi tidak pernah dieksekusi — sekarang hidup.)*
+  - **Tipografi kinetik**: animasi masuk teks per KATA (`pop`, `rise`,
+    berjenjang) atau per karakter (`typewriter`).
+  - **Rupa teks penuh**: warna bebas, **garis luar 0–8px** (keterbacaan di
+    footage ramai), KAPITAL, kerapatan huruf, dan penekanan **stabilo** —
+    sapuan stabilo yang menyapu saat teks masuk.
+  - **6 font ter-bundle** (OFL, offline): Fraunces, Inter, Space Grotesk,
+    Lora, **Plus Jakarta Sans** (karya Tokotype — foundry Indonesia), dan
+    **Anton** (display berat untuk judul menghentak).
+- **Kualitas terjaga otomatis**: 296 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -181,7 +195,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 283 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 296 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -223,7 +237,7 @@ packages/
   providers/  adapter TTS (ElevenLabs/Edge/silence) & stock (Pexels/Pixabay)
   agent/      runtime agent: AI SDK v7, registry models.dev, tools §6.2, guardrails
   studio/     UI hybrid 3 panel (Vite+React+Player) + server Hono/SSE single-writer
-  templates/  preset Remotion terkurasi (documentary-01, tutorial-01) + 4 font vendored
+  templates/  preset Remotion terkurasi (documentary-01, tutorial-01) + 6 font vendored
   renderer/   RenderTarget lokal: staging, bundling, profil draft|final
   cli/        dalang studio | chat | validate | generate | still | render | log
 examples/

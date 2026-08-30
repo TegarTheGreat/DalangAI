@@ -269,7 +269,9 @@
           "caption": {
             "default": {
               "enabled": true,
-              "style": "inherit"
+              "style": "klasik",
+              "size": "m",
+              "position": "bottom"
             },
             "type": "object",
             "properties": {
@@ -278,8 +280,25 @@
                 "type": "boolean"
               },
               "style": {
-                "default": "inherit",
+                "default": "klasik",
                 "type": "string"
+              },
+              "size": {
+                "default": "m",
+                "type": "string",
+                "enum": [
+                  "s",
+                  "m",
+                  "l"
+                ]
+              },
+              "position": {
+                "default": "bottom",
+                "type": "string",
+                "enum": [
+                  "bottom",
+                  "center"
+                ]
               }
             },
             "additionalProperties": false
@@ -384,8 +403,47 @@
                   "enum": [
                     "none",
                     "box",
-                    "underline"
+                    "underline",
+                    "stabilo"
                   ]
+                },
+                "anim": {
+                  "default": "fade",
+                  "type": "string",
+                  "enum": [
+                    "fade",
+                    "pop",
+                    "rise",
+                    "typewriter"
+                  ]
+                },
+                "color": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{3,8}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "stroke": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 8
+                },
+                "uppercase": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "tracking": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": -0.05,
+                  "maximum": 0.5
                 },
                 "startFrac": {
                   "default": 0,

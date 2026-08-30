@@ -129,8 +129,17 @@ export const TEXT_ALIGNS = ["left", "center", "right"] as const;
 export const textAlignSchema = z.enum(TEXT_ALIGNS);
 export const TEXT_SIZES = ["s", "m", "l"] as const;
 export const textSizeSchema = z.enum(TEXT_SIZES);
-export const TEXT_EMPHASES = ["none", "box", "underline"] as const;
+// "stabilo" (ADR-0016) = sapuan stabilo yang menyapu di balik teks —
+// treatment penekanan yang lazim di konten esai/edukasi Indonesia.
+export const TEXT_EMPHASES = ["none", "box", "underline", "stabilo"] as const;
 export const textEmphasisSchema = z.enum(TEXT_EMPHASES);
+
+// ADR-0016: tipografi bergerak — animasi masuk per kata/karakter dan
+// kontrol rupa (warna, garis luar, kapital, kerapatan huruf).
+export const TEXT_ANIMS = ["fade", "pop", "rise", "typewriter"] as const;
+export const textAnimSchema = z.enum(TEXT_ANIMS);
+/** Warna CSS heksadesimal (#rgb / #rrggbb); null = warna peran dari theme. */
+export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{3,8}$/);
 
 /** Teks overlay di atas visual (di bawah caption); gaya dari theme preset. */
 export const textOverlaySchema = z.strictObject({
@@ -144,6 +153,16 @@ export const textOverlaySchema = z.strictObject({
   size: textSizeSchema.default("m"),
   /** Penekanan: kotak berlatar atau garis bawah aksen (ADR-0013). */
   emphasis: textEmphasisSchema.default("none"),
+  /** Animasi masuk (ADR-0016): fade blok, atau pop/rise per KATA, ketik per karakter. */
+  anim: textAnimSchema.default("fade"),
+  /** Warna teks; null = warna bawaan peran di theme preset. */
+  color: hexColorSchema.nullable().default(null),
+  /** Garis luar (outline) px pada basis 1080 — keterbacaan di footage ramai. */
+  stroke: z.number().min(0).max(8).default(0),
+  /** Paksa HURUF KAPITAL. */
+  uppercase: z.boolean().default(false),
+  /** Kerapatan huruf tambahan dalam em (relatif terhadap gaya peran). */
+  tracking: z.number().min(-0.05).max(0.5).default(0),
   /** Jendela tampil, fraksi 0–1 dari durasi scene. */
   startFrac: normalized01.default(0),
   endFrac: normalized01.default(1),
@@ -184,9 +203,22 @@ export const visualSchema = z.strictObject({
 });
 export type Visual = z.infer<typeof visualSchema>;
 
+/**
+ * Gaya caption karaoke (ADR-0016). Field `style` sudah ada sejak v0 tapi
+ * belum pernah dieksekusi; tetap `string` agar plan lama ("inherit") valid —
+ * templates menormalkan nilai tak dikenal ke "klasik" (pola yang sama dengan
+ * visual.variant).
+ */
+export const CAPTION_STYLES = ["klasik", "tegas", "chip", "halus"] as const;
+export const CAPTION_POSITIONS = ["bottom", "center"] as const;
+export const captionPositionSchema = z.enum(CAPTION_POSITIONS);
+
 export const captionSchema = z.strictObject({
   enabled: z.boolean().default(true),
-  style: z.string().default("inherit"),
+  style: z.string().default("klasik"),
+  /** Skala relatif ukuran caption preset (ADR-0016). */
+  size: textSizeSchema.default("m"),
+  position: captionPositionSchema.default("bottom"),
 });
 export type Caption = z.infer<typeof captionSchema>;
 
@@ -196,7 +228,14 @@ export const sceneSchema = z.strictObject({
   locked: z.boolean().default(false),
   narration: z.string().default(""),
   visual: visualSchema,
-  caption: captionSchema.default({ enabled: true, style: "inherit" }),
+  // Gotcha zod: `.default(obj)` memakai objek APA ADANYA — default field di
+  // dalamnya TIDAK diterapkan, jadi objek ini harus ditulis lengkap (ADR-0013).
+  caption: captionSchema.default({
+    enabled: true,
+    style: "klasik",
+    size: "m",
+    position: "bottom",
+  }),
   /** "auto" = narration length + padding; number = fixed seconds. */
   duration: z.union([z.literal("auto"), finitePositive]).default("auto"),
   /** Transisi keluar ke scene berikutnya (ADR-0011). */

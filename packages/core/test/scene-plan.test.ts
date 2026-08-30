@@ -8,7 +8,13 @@ describe("scene-plan schema v0", () => {
     expect(plan.meta.stylePreset).toBe("documentary-01");
     expect(plan.scenes[0]?.locked).toBe(false);
     expect(plan.scenes[0]?.duration).toBe("auto");
-    expect(plan.scenes[0]?.caption).toEqual({ enabled: true, style: "inherit" });
+    // ADR-0016: caption punya gaya nyata + ukuran + posisi (default netral).
+    expect(plan.scenes[0]?.caption).toEqual({
+      enabled: true,
+      style: "klasik",
+      size: "m",
+      position: "bottom",
+    });
     expect(plan.scenes[0]?.visual.assetId).toBeNull();
     expect(plan.scenes[0]?.visual.pinned).toBe(false);
     expect(plan.renderState).toEqual({ narrationAudio: {}, resolvedAssets: {} });

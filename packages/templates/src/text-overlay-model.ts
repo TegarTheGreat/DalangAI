@@ -64,9 +64,14 @@ export interface EmphasisPalette {
   glow?: string;
 }
 
+/**
+ * `progress` (0–1) hanya dipakai emphasis "stabilo": sapuan stabilo tumbuh
+ * dari kiri seperti digoreskan. Default 1 = sapuan penuh (untuk still).
+ */
 export const emphasisStyle = (
   emphasis: TextOverlay["emphasis"],
   palette: EmphasisPalette,
+  progress = 1,
 ): React.CSSProperties => {
   switch (emphasis) {
     case "box":
@@ -88,6 +93,18 @@ export const emphasisStyle = (
       return {
         paddingBottom: "0.14em",
         borderBottom: `0.09em solid ${palette.accent}`,
+      };
+    case "stabilo":
+      // Pita stabilo menutupi bagian bawah tinggi-x, ujungnya sedikit miring
+      // seperti mata spidol; lebar sapuan mengikuti progress.
+      return {
+        backgroundImage: `linear-gradient(100deg, transparent 0.2%, ${palette.accent}cc 0.9%, ${palette.accent}cc 98.6%, transparent 99.4%)`,
+        backgroundRepeat: "no-repeat",
+        backgroundSize: `${(progress * 100).toFixed(1)}% 0.52em`,
+        backgroundPosition: "0 78%",
+        padding: "0 0.12em",
+        boxDecorationBreak: "clone",
+        WebkitBoxDecorationBreak: "clone",
       };
     case "none":
       return {};
