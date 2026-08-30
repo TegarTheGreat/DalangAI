@@ -73,12 +73,39 @@ const GraphicItem: React.FC<{
   const motion = graphicMotion(graphic, frame, windowFrames);
   const style = graphicStyle(graphic, motion, metrics.width, metrics.height);
 
-  // Ikon diwarnai: SVG-nya memakai currentColor, jadi `color` pada pembungkus
-  // yang menentukan. Stiker adalah gambar jadi — mewarnainya justru merusak.
-  const tint = isIconRef(graphic.ref) ? (graphic.color ?? theme.accent) : undefined;
+  // PEWARNAAN IKON, dan kenapa BUKAN `color` + currentColor.
+  //
+  // SVG yang dimuat lewat <img> dirender di konteks dokumennya sendiri:
+  // `currentColor` di dalamnya TIDAK mewarisi `color` dari elemen induk, jadi
+  // ikon selalu keluar hitam. Ini tidak terlihat oleh test mana pun — hanya
+  // oleh render sungguhan, dan memang begitu cara bug ini ketahuan.
+  //
+  // Mask CSS memakai bentuk SVG sebagai stensil di atas bidang warna, sehingga
+  // pewarnaan bekerja pada berkas eksternal apa pun. Ini benar untuk IKON yang
+  // memang satu warna; STIKER justru rusak kalau di-mask (warna aslinya
+  // hilang), jadi stiker tetap digambar sebagai gambar biasa.
+  if (isIconRef(graphic.ref)) {
+    const source = `url(${staticFile(asset.file)})`;
+    return (
+      <div
+        style={{
+          ...style,
+          backgroundColor: graphic.color ?? theme.accent,
+          maskImage: source,
+          WebkitMaskImage: source,
+          maskRepeat: "no-repeat",
+          WebkitMaskRepeat: "no-repeat",
+          maskSize: "contain",
+          WebkitMaskSize: "contain",
+          maskPosition: "center",
+          WebkitMaskPosition: "center",
+        }}
+      />
+    );
+  }
 
   return (
-    <div style={{ ...style, ...(tint ? { color: tint } : {}) }}>
+    <div style={style}>
       <Img
         src={staticFile(asset.file)}
         style={{

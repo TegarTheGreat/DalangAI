@@ -1,5 +1,10 @@
 import type { AgentDeps, Guardrails, ResolvedModel } from "@dalang/agent";
-import type { StockProvider, TtsProvider } from "@dalang/pipeline";
+import type {
+  IconProvider,
+  SfxProvider,
+  StockProvider,
+  TtsProvider,
+} from "@dalang/pipeline";
 import type { ExportSettings, RenderVideoResult } from "@dalang/renderer";
 import type { ApprovalBroker } from "./approvals";
 import type { StudioStore } from "./store";
@@ -27,6 +32,15 @@ export interface StudioDeps {
     planPath: string,
     fileRelativeToPlan: string,
   ) => Promise<{ durationSec: number; width: number; height: number } | null>;
+  /** Pustaka ikon terbuka (ADR-0018) — tanpa kunci. */
+  iconProvider: () => IconProvider;
+  /** Pustaka efek suara berlisensi terbuka (ADR-0018). */
+  sfxChain: () => SfxProvider[];
+  /** Simpan media ke folder proyek: (planPath, opsi) -> path relatif. */
+  saveMedia: (
+    planPath: string,
+    media: { url: string; folder: string; name: string; fileExt: string },
+  ) => Promise<string>;
   /** Cari jeda hening di rekaman (ADR-0017): (planPath, path relatif) -> jeda. */
   detectSilence: (
     planPath: string,

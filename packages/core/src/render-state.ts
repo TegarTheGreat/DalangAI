@@ -36,6 +36,49 @@ export const setResolvedAsset = (
 };
 
 /**
+ * Berkas nyata untuk satu grafis tempelan (ADR-0018). Dikunci per ID GRAFIS,
+ * bukan per scene, karena satu scene boleh punya beberapa tempelan.
+ */
+export const setGraphicAsset = (
+  plan: ScenePlan,
+  graphicId: string,
+  asset: ResolvedAsset,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  next.renderState.graphicAssets[graphicId] = resolvedAssetSchema.parse(asset);
+  return next;
+};
+
+/** Berkas nyata untuk satu cue efek suara (ADR-0018), dikunci per ID CUE. */
+export const setSfxAsset = (
+  plan: ScenePlan,
+  cueId: string,
+  asset: ResolvedAsset,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  next.renderState.sfxAssets[cueId] = resolvedAssetSchema.parse(asset);
+  return next;
+};
+
+/**
+ * Buang berkas grafis/cue yang sudah tidak dirujuk plan (ADR-0018). Dipanggil
+ * setelah penyuntingan supaya renderState tidak menimbun berkas yatim yang
+ * ikut terbawa saat proyek disalin.
+ */
+export const pruneOrphanMediaAssets = (plan: ScenePlan): ScenePlan => {
+  const graphicIds = new Set(plan.scenes.flatMap((s) => s.graphics.map((g) => g.id)));
+  const cueIds = new Set(plan.audio.sfx.map((cue) => cue.id));
+  const next = structuredClone(plan);
+  for (const id of Object.keys(next.renderState.graphicAssets)) {
+    if (!graphicIds.has(id)) delete next.renderState.graphicAssets[id];
+  }
+  for (const id of Object.keys(next.renderState.sfxAssets)) {
+    if (!cueIds.has(id)) delete next.renderState.sfxAssets[id];
+  }
+  return next;
+};
+
+/**
  * Pipeline auto-resolve write path: records the chosen asset in
  * renderState AND fills `visual.assetId` (PRD §5.1: "diisi pipeline setelah
  * fetch") — WITHOUT pinning, so the user/agent can still replace it.

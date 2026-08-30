@@ -251,6 +251,47 @@ export const makeDeps = (
               ],
             }
           : null),
+    iconProvider:
+      overrides.iconProvider ??
+      (() => ({
+        id: "iconify",
+        label: "Iconify",
+        search: async (query: string, limit: number) =>
+          Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
+            providerId: "iconify",
+            iconId: `mdi:${query}-${i}`,
+            setPrefix: "mdi",
+            setName: "Material Design Icons",
+            license: "Apache 2.0",
+            licenseSpdx: "Apache-2.0",
+            needsAttribution: true,
+            commercialSafe: true,
+          })),
+        fetchSvg: async () => '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+      })),
+    sfxChain:
+      overrides.sfxChain ??
+      (() => [
+        {
+          id: "openverse",
+          label: "Openverse",
+          search: async (query: string, limit: number) =>
+            Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
+              providerId: "openverse",
+              assetId: `openverse:${query}-${i}`,
+              title: `${query} ${i}`,
+              downloadUrl: `https://cdn.test/${query}-${i}.mp3`,
+              fileExt: "mp3",
+              durationSec: 1.2,
+              license: "cc0 1.0",
+              commercialSafe: true,
+            })),
+          download: async () => new Uint8Array([1, 2, 3]),
+        },
+      ]),
+    saveMedia:
+      overrides.saveMedia ??
+      (async ({ folder, name, fileExt }) => `assets/${folder}/${name}.${fileExt}`),
     volumeModel: overrides.volumeModel,
     onToolActivity: () => {},
   };

@@ -2,12 +2,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   critiquePlan,
+  GRAPHIC_ANCHORS,
+  GRAPHIC_ANIMS,
   patchOpSchema,
   recipeFor,
   type ScenePlanInput,
   scenePlanSchema,
+  setGraphicAsset,
   setResolvedAsset,
+  setSfxAsset,
 } from "@dalang/core";
+import type { IconProvider, SfxProvider } from "@dalang/pipeline";
 import {
   materializeCandidate,
   runAssetStage,
@@ -45,6 +50,23 @@ export interface AgentDeps {
   guards: Guardrails;
   ttsChainFor: (provider: string) => TtsProvider[];
   stockChain: () => StockProvider[];
+  /** Pustaka ikon terbuka (ADR-0018) — tanpa kunci, selalu tersedia. */
+  iconProvider: () => IconProvider;
+  /** Pustaka efek suara berlisensi terbuka (ADR-0018). */
+  sfxChain: () => SfxProvider[];
+  /**
+   * Unduh berkas dari URL ke folder proyek dan kembalikan path relatifnya.
+   * Di-inject supaya paket agent tidak perlu tahu tata letak folder proyek,
+   * dan supaya test bisa memberi fake tanpa jaringan.
+   */
+  saveMedia: (options: {
+    url: string;
+    /** Sub-folder di proyek, mis. "icons" atau "sfx". */
+    folder: string;
+    /** Nama berkas tanpa ekstensi. */
+    name: string;
+    fileExt: string;
+  }) => Promise<string>;
   renderVideo: (options: {
     planPath: string;
     outputLocation: string;
@@ -414,6 +436,237 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           session.plan = outcome.plan;
           session.persist();
           return { ok: true, hasil: compactResults(outcome.results), costUsd: 0 };
+        }),
+    }),
+
+    // ADR-0018: pustaka ikon terbuka. Tanpa kunci API, jadi selalu ada.
+    searchIcons: tool({
+      description:
+        "Cari ikon di pustaka terbuka Iconify (tanpa kunci API). Hasilnya SUDAH disaring hanya lisensi yang aman untuk video komersial. Pakai untuk aksen visual: penanda langkah, simbol topik, tanda centang. Query bahasa Inggris lebih kaya hasilnya.",
+      inputSchema: z.object({
+        query: z.string().min(2),
+        limit: z.number().int().min(1).max(24).default(12),
+      }),
+      execute: (input) =>
+        run("searchIcons", input, async () => {
+          requirePlan();
+          const found = await deps.iconProvider().search(input.query, input.limit);
+          return {
+            ok: true,
+            jumlah: found.length,
+            ikon: found.map((icon) => ({
+              ref: `iconify:${icon.iconId}`,
+              set: icon.setName,
+              lisensi: icon.license,
+              perluKredit: icon.needsAttribution,
+            })),
+            catatan:
+              found.length === 0
+                ? "Tidak ada hasil. Coba kata kunci Inggris yang lebih umum."
+                : "Pasang dengan addIcon(sceneId, ref, …).",
+          };
+        }),
+    }),
+
+    // Memasang ikon = mengunduh SVG-nya ke proyek + menambah entri graphics.
+    // Dua langkah itu digabung karena memisahkannya hanya menciptakan keadaan
+    // setengah jadi yang membingungkan model.
+    addIcon: tool({
+      description:
+        "Pasang satu ikon dari hasil searchIcons ke sebuah scene sebagai grafis tempelan. SVG-nya diunduh ke folder proyek sehingga render tetap bisa jalan tanpa jaringan.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        ref: z
+          .string()
+          .min(3)
+          .describe('Rujukan dari searchIcons, mis. "iconify:mdi:home"'),
+        anchor: z.enum(GRAPHIC_ANCHORS).default("kanan-bawah"),
+        size: z.number().min(0.02).max(0.6).default(0.12),
+        color: z.string().nullable().default(null),
+        anim: z.enum(GRAPHIC_ANIMS).default("pop"),
+        startFrac: z.number().min(0).max(1).default(0),
+        endFrac: z.number().min(0).max(1).default(1),
+      }),
+      execute: (input) =>
+        run("addIcon", input, async () => {
+          const plan = requirePlan();
+          const scene = plan.scenes.find((s) => s.id === input.sceneId);
+          if (!scene) return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          if (scene.graphics.length >= 4) {
+            return {
+              ok: false,
+              error: `Scene ${input.sceneId} sudah punya 4 grafis (batas maksimum)`,
+            };
+          }
+          if (!input.ref.startsWith("iconify:")) {
+            return {
+              ok: false,
+              error: `Rujukan "${input.ref}" bukan ikon Iconify — pakai hasil searchIcons`,
+            };
+          }
+
+          const iconId = input.ref.slice("iconify:".length);
+          let file: string;
+          try {
+            const svg = await deps
+              .iconProvider()
+              .fetchSvg(iconId, { ...(input.color ? { color: input.color } : {}) });
+            file = await deps.saveMedia({
+              url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+              folder: "icons",
+              name: iconId.replace(/[^a-z0-9]+/gi, "-"),
+              fileExt: "svg",
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { ok: false, error: `Gagal mengambil ikon ${iconId}: ${message}` };
+          }
+
+          const graphicId = `ikon-${iconId.replace(/[^a-z0-9]+/gi, "-")}-${scene.graphics.length + 1}`;
+          session.plan = setGraphicAsset(plan, graphicId, {
+            file,
+            kind: "image",
+            source: "iconify",
+            license: "pustaka ikon terbuka (disaring aman-komersial)",
+          });
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "updateScene",
+              id: input.sceneId,
+              patch: {
+                graphics: [
+                  ...scene.graphics,
+                  {
+                    id: graphicId,
+                    ref: input.ref,
+                    anchor: input.anchor,
+                    size: input.size,
+                    offsetX: 0,
+                    offsetY: 0,
+                    rotate: 0,
+                    opacity: 1,
+                    color: input.color,
+                    anim: input.anim,
+                    startFrac: input.startFrac,
+                    endFrac: input.endFrac,
+                  },
+                ],
+              },
+            },
+          ]);
+          return { ok: true, graphicId, berkas: file, ringkasanPerubahan: summary };
+        }),
+    }),
+
+    // ADR-0018: efek suara berlisensi terbuka.
+    searchSfx: tool({
+      description:
+        "Cari efek suara berlisensi terbuka (CC0/domain publik) di Openverse. Hasil SUDAH disaring hanya yang bebas dipakai komersial. Pakai untuk aksen: whoosh transisi, klik, deringan penanda.",
+      inputSchema: z.object({
+        query: z.string().min(2),
+        limit: z.number().int().min(1).max(12).default(8),
+      }),
+      execute: (input) =>
+        run("searchSfx", input, async () => {
+          requirePlan();
+          const chain = deps.sfxChain();
+          if (chain.length === 0)
+            return { ok: false, error: "Tidak ada provider efek suara" };
+          const found = await (chain[0] as SfxProvider).search(input.query, input.limit);
+          return {
+            ok: true,
+            jumlah: found.length,
+            suara: found.map((sfx) => ({
+              assetId: sfx.assetId,
+              judul: sfx.title,
+              durasiDetik: sfx.durationSec ?? null,
+              lisensi: sfx.license,
+            })),
+            catatan:
+              found.length === 0
+                ? 'Tidak ada hasil. Coba kata kunci Inggris yang lebih umum (mis. "whoosh", "click").'
+                : "Pasang dengan addSfx(sceneId, assetId, atSec).",
+          };
+        }),
+    }),
+
+    addSfx: tool({
+      description:
+        "Pasang satu efek suara dari hasil searchSfx ke sebuah scene. Waktunya relatif terhadap AWAL SCENE, jadi bunyinya ikut bergeser bila susunan scene berubah.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        assetId: z.string().min(1).describe("assetId dari hasil searchSfx"),
+        atSec: z.number().min(0).default(0),
+        volume: z.number().min(0).max(1).default(0.6),
+      }),
+      execute: (input) =>
+        run("addSfx", input, async () => {
+          const plan = requirePlan();
+          if (!plan.scenes.some((s) => s.id === input.sceneId)) {
+            return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          }
+          const chain = deps.sfxChain();
+          if (chain.length === 0)
+            return { ok: false, error: "Tidak ada provider efek suara" };
+          const provider = chain[0] as SfxProvider;
+
+          // Cari ulang kandidatnya: assetId saja tidak membawa URL unduhan.
+          const found = await provider.search(input.assetId.split(":").pop() ?? "", 12);
+          const candidate =
+            found.find((sfx) => sfx.assetId === input.assetId) ?? found[0];
+          if (!candidate) {
+            return {
+              ok: false,
+              error: `Efek suara ${input.assetId} tidak ditemukan lagi — jalankan searchSfx lalu pakai assetId dari hasil terbaru`,
+            };
+          }
+
+          const cueId = `sfx-${plan.audio.sfx.length + 1}-${input.sceneId}`;
+          let file: string;
+          try {
+            file = await deps.saveMedia({
+              url: candidate.downloadUrl,
+              folder: "sfx",
+              name: cueId,
+              fileExt: candidate.fileExt,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { ok: false, error: `Gagal mengunduh efek suara: ${message}` };
+          }
+
+          session.plan = setSfxAsset(plan, cueId, {
+            file,
+            kind: "audio",
+            source: candidate.providerId,
+            license: candidate.license,
+            ...(candidate.author ? { author: candidate.author } : {}),
+            ...(candidate.sourceUrl ? { sourceUrl: candidate.sourceUrl } : {}),
+          });
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "setAudio",
+              patch: {
+                sfx: [
+                  ...plan.audio.sfx,
+                  {
+                    id: cueId,
+                    assetId: candidate.assetId,
+                    sceneId: input.sceneId,
+                    atSec: input.atSec,
+                    volume: input.volume,
+                  },
+                ],
+              },
+            },
+          ]);
+          return {
+            ok: true,
+            cueId,
+            berkas: file,
+            lisensi: candidate.license,
+            ringkasanPerubahan: summary,
+          };
         }),
     }),
 

@@ -145,6 +145,41 @@ export const makeStudio = (
       stockChain: () => [fakeStock()],
       probeVideo: async (_planPath, file) =>
         file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null,
+      iconProvider: () => ({
+        id: "iconify",
+        label: "Iconify",
+        search: async (query: string, limit: number) =>
+          Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
+            providerId: "iconify",
+            iconId: `mdi:${query}-${i}`,
+            setPrefix: "mdi",
+            setName: "Material Design Icons",
+            license: "MIT",
+            licenseSpdx: "MIT",
+            needsAttribution: false,
+            commercialSafe: true,
+          })),
+        fetchSvg: async () => '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+      }),
+      sfxChain: () => [
+        {
+          id: "openverse",
+          label: "Openverse",
+          search: async (query: string, limit: number) =>
+            Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
+              providerId: "openverse",
+              assetId: `openverse:${query}-${i}`,
+              title: `${query} ${i}`,
+              downloadUrl: `https://cdn.test/${query}-${i}.mp3`,
+              fileExt: "mp3",
+              license: "cc0 1.0",
+              commercialSafe: true,
+            })),
+          download: async () => new Uint8Array([1]),
+        },
+      ],
+      saveMedia: async (_planPath, media) =>
+        `assets/${media.folder}/${media.name}.${media.fileExt}`,
       detectSilence: async (_planPath, file) =>
         file.endsWith(".mp4")
           ? {

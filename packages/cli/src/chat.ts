@@ -14,8 +14,18 @@ import {
   runAgentTurn,
 } from "@dalang/agent";
 import { PipelineDb, projectPaths, readPlanFile } from "@dalang/pipeline";
-import { buildStockChain, buildTtsChain } from "@dalang/providers";
-import { detectSilence, probeLocalVideo, renderPlanToVideo } from "@dalang/renderer";
+import {
+  buildIconProvider,
+  buildSfxChain,
+  buildStockChain,
+  buildTtsChain,
+} from "@dalang/providers";
+import {
+  detectSilence,
+  probeLocalVideo,
+  renderPlanToVideo,
+  saveMediaToProject,
+} from "@dalang/renderer";
 import { type Command, InvalidArgumentError } from "commander";
 
 /**
@@ -152,6 +162,10 @@ export const registerChatCommand = (program: Command): void => {
           renderVideo: (renderOptions) => renderPlanToVideo(renderOptions),
           videoMetadata: (file) => probeLocalVideo(session.paths.planPath, file),
           detectSilence: (file) => detectSilence(session.paths.planPath, file),
+          iconProvider: () => buildIconProvider(),
+          sfxChain: () => buildSfxChain(),
+          saveMedia: (media) =>
+            saveMediaToProject({ planPath: session.paths.planPath, ...media }),
           volumeModel,
           onToolActivity: (line) => console.log(line),
         };
