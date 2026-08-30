@@ -26,7 +26,7 @@
  * Jalankan: pnpm --filter @dalang/studio gate:layout
  */
 
-import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,58 +53,14 @@ interface Report {
 }
 
 /**
- * Kode pengukur yang dijalankan DI DALAM halaman.
- *
- * Sengaja berupa STRING, bukan fungsi TypeScript: transpiler (esbuild lewat
- * tsx) menyisipkan pembungkus `__name` ke fungsi bernama, dan pembungkus itu
- * ikut terserialisasi ke browser lalu meledak di sana ("__name is not
- * defined"). Teks polos tidak bisa ditulis ulang siapa pun.
+ * Kode pengukur dibaca dari berkas .js tersendiri (measure-layout.js), bukan
+ * ditulis di sini sebagai fungsi atau template literal — dua bentuk itu
+ * masing-masing pernah merusaknya diam-diam; alasannya ada di berkas itu.
  */
-const MEASURE = `(() => {
-  const rect = (el) => el.getBoundingClientRect();
-  const name = (el) =>
-    (el.className || el.tagName).toString().split(" ").slice(0, 2).join(".") +
-    "\u00ab" + (el.innerText || "").trim().slice(0, 14).replace(/s+/g, " ") + "\u00bb";
-
-  const controls = [].concat(
-    Array.from(document.querySelectorAll(".topbar-left > *")),
-    Array.from(document.querySelectorAll(".topbar-actions > *")),
-  ).filter((el) => rect(el).width > 0 && getComputedStyle(el).position !== "sticky");
-
-  const overlaps = [];
-  for (let i = 0; i < controls.length; i++) {
-    for (let j = i + 1; j < controls.length; j++) {
-      const a = rect(controls[i]);
-      const b = rect(controls[j]);
-      const dx = Math.min(a.right, b.right) - Math.max(a.left, b.left);
-      const dy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-      if (dx > 1 && dy > 1) {
-        overlaps.push(name(controls[i]) + " menindih " + name(controls[j]) + " (" + Math.round(dx) + "px)");
-      }
-    }
-  }
-
-  const bar = document.querySelector(".topbar");
-  const barRect = bar ? rect(bar) : { left: 0, right: 0 };
-  const clippedTools = controls.filter((el) => {
-    const scroller = el.closest(".topbar-actions");
-    if (scroller && getComputedStyle(scroller).overflowX === "auto") return false;
-    const r = rect(el);
-    return r.right > barRect.right + 1 || r.left < barRect.left - 1;
-  }).map(name);
-
-  const clippedTabs = Array.from(document.querySelectorAll(".tab-bar > *")).filter((el) => {
-    const parent = el.parentElement;
-    if (!parent) return false;
-    return getComputedStyle(parent).overflowX !== "auto" && rect(el).right > rect(parent).right + 1;
-  }).map(name);
-
-  window.scrollTo(9999, 0);
-  const sideScroll = Math.round(window.scrollX);
-  window.scrollTo(0, 0);
-
-  return { overlaps: overlaps, clippedTools: clippedTools, clippedTabs: clippedTabs, sideScroll: sideScroll };
-})()`;
+const MEASURE = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "measure-layout.js"),
+  "utf8",
+);
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
