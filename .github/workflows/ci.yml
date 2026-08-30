@@ -1,7 +1,15 @@
 name: CI
 
 on:
+  # Hanya main: tanpa batasan ini SETIAP commit di branch ber-PR menjalankan CI
+  # DUA kali (push + pull_request), dan grup concurrency-nya berbeda
+  # (refs/heads/... vs refs/pull/N/merge) sehingga keduanya tidak saling
+  # membatalkan. Dua kali menjalankan Chromium per commit berarti dua kali
+  # peluang kena flake browser — dan itu sudah terjadi: satu run gagal
+  # "Timed out while trying to connect to the browser" sementara run kembarnya
+  # pada commit yang sama lulus.
   push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -46,6 +54,11 @@ jobs:
       # the template-regression safety net (R-8 precursor). Uses the runner's
       # preinstalled Chrome via the renderer's browser detection.
       - name: Render smoke test
+        # Langkah ini yang menyalakan Chromium. Kalau browsernya menggantung,
+        # prosesnya tetap hidup dan menahan job sampai batas 20 menit — pernah
+        # terjadi. Batas sendiri membuat kegagalan browser berbiaya menit, bukan
+        # seluruh anggaran job.
+        timeout-minutes: 8
         run: |
           pnpm dalang still examples/borobudur-60s/plan.json -t 8 29 -s 0.25 -o /tmp/smoke
           test -s /tmp/smoke/borobudur-60s-f240.png
