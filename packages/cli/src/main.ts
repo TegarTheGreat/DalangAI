@@ -31,6 +31,7 @@ import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/la
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
 import { buildLambdaTarget, readCloudConfig, registerCloudCommands } from "./cloud";
+import { planPathOf } from "./project-path";
 import { registerProvidersCheckCommand } from "./providers-check";
 import { registerStudioCommand } from "./studio";
 
@@ -142,10 +143,10 @@ const progressPrinter = () => {
 
 program
   .command("validate")
-  .argument("<plan>", "path ke scene-plan JSON")
+  .argument("<proyek>", "folder proyek atau path plan.json")
   .description("Validasi scene-plan terhadap skema v0 dan tampilkan ringkasan")
   .action((planPath: string) => {
-    const plan = loadPlan(resolve(planPath));
+    const plan = loadPlan(planPathOf(planPath));
     console.log("Scene-plan valid (skema v0).");
     printPlanSummary(plan);
     // Kritik sutradara (ADR-0014): heuristik anti-"generic", murni saran.
@@ -161,7 +162,7 @@ program
 
 program
   .command("still")
-  .argument("<plan>", "path ke scene-plan JSON")
+  .argument("<proyek>", "folder proyek atau path plan.json")
   .option(
     "-t, --time <detik...>",
     "waktu (detik) yang di-render; bisa lebih dari satu",
@@ -190,7 +191,7 @@ program
         cache: boolean;
       },
     ) => {
-      const absPlan = resolve(planPath);
+      const absPlan = planPathOf(planPath);
       const name = basename(dirname(absPlan));
       mkdirSync(resolve(options.outDir), { recursive: true });
       const times = options.time.length > 0 ? options.time : [1];
@@ -219,7 +220,7 @@ registerCloudCommands(program);
 
 program
   .command("render")
-  .argument("<plan>", "path ke scene-plan JSON")
+  .argument("<proyek>", "folder proyek atau path plan.json")
   .option("-o, --out <file>", "file output video")
   .addOption(profileOption().default("draft"))
   .addOption(
@@ -260,7 +261,7 @@ program
         target: "local" | "lambda";
       },
     ) => {
-      const absPlan = resolve(planPath);
+      const absPlan = planPathOf(planPath);
       const plan = loadPlan(absPlan);
       printPlanSummary(plan);
 
@@ -353,7 +354,7 @@ const printStageResults = (title: string, results: SceneStageResult[]): void => 
 
 program
   .command("generate")
-  .argument("<plan>", "path ke scene-plan JSON")
+  .argument("<proyek>", "folder proyek atau path plan.json")
   .option("--force", "abaikan cache — jalankan ulang semua stage")
   .addOption(
     new Option("--render <profile>", "langsung render setelah pipeline selesai").choices([
@@ -366,7 +367,7 @@ program
   )
   .action(
     async (planPath: string, options: { force?: boolean; render?: RenderProfile }) => {
-      const absPlan = resolve(planPath);
+      const absPlan = planPathOf(planPath);
       const peek = readPlanFile(absPlan);
 
       const ttsProviders = peek.audio.voice

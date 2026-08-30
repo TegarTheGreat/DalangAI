@@ -6,7 +6,8 @@ import type { ScenePlanInput } from "@dalang/core";
 import type { StockCandidate, StockProvider, TtsProvider } from "@dalang/pipeline";
 import type { SseEvent } from "../src/app/sse";
 import { SseParser } from "../src/app/sse";
-import { createStudioApp, type Studio } from "../src/server/index";
+import type { StudioDeps } from "../src/server/context";
+import { createStudioApp, type Studio, StudioHost } from "../src/server/index";
 
 /** Plan kecil 3 scene: title (template-anim), body stock, body image lokal. */
 export const makePlan = (): ScenePlanInput => ({
@@ -143,99 +144,139 @@ export const fakeSticker = (): StockProvider => {
   };
 };
 
-export const makeStudio = (
-  planPath: string,
-  overrides?: {
-    ttsDelayMs?: number;
-    guardrails?: Parameters<typeof createStudioApp>[0]["guardrails"];
-    renderDelayMs?: number;
-    renderFail?: boolean;
-    noOrchestrator?: boolean;
+export interface StudioOverrides {
+  ttsDelayMs?: number;
+  guardrails?: Parameters<typeof createStudioApp>[0]["guardrails"];
+  renderDelayMs?: number;
+  renderFail?: boolean;
+  noOrchestrator?: boolean;
+}
+
+export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
+  ttsChainFor: () => [
+    fakeTts(overrides?.ttsDelayMs !== undefined ? { delayMs: overrides.ttsDelayMs } : {}),
+  ],
+  stockChain: () => [fakeStock()],
+  stickerChain: () => [fakeSticker()],
+  probeVideo: async (_planPath, file) =>
+    file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null,
+  iconProvider: () => ({
+    id: "iconify",
+    label: "Iconify",
+    search: async (query: string, limit: number) =>
+      Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
+        providerId: "iconify",
+        iconId: `mdi:${query}-${i}`,
+        setPrefix: "mdi",
+        setName: "Material Design Icons",
+        license: "MIT",
+        licenseSpdx: "MIT",
+        needsAttribution: false,
+        commercialSafe: true,
+      })),
+    fetchSvg: async () => '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+  }),
+  sfxChain: () => [
+    {
+      id: "openverse",
+      label: "Openverse",
+      search: async (query: string, limit: number) =>
+        Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
+          providerId: "openverse",
+          assetId: `openverse:${query}-${i}`,
+          title: `${query} ${i}`,
+          downloadUrl: `https://cdn.test/${query}-${i}.mp3`,
+          fileExt: "mp3",
+          license: "cc0 1.0",
+          commercialSafe: true,
+        })),
+      download: async () => new Uint8Array([1]),
+    },
+  ],
+  saveMedia: async (_planPath, media) =>
+    `assets/${media.folder}/${media.name}.${media.fileExt}`,
+  detectSilence: async (_planPath, file) =>
+    file.endsWith(".mp4")
+      ? {
+          durationSec: 600,
+          silences: [{ startSec: 0, endSec: 0.8 }],
+          audible: [{ startSec: 0.8, endSec: 600 }],
+        }
+      : null,
+  renderVideo: async ({ outputLocation }) => {
+    if (overrides?.renderDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, overrides.renderDelayMs));
+    }
+    if (overrides?.renderFail) throw new Error("render gagal (uji)");
+    const { mkdirSync, writeFileSync: write } = await import("node:fs");
+    const { dirname } = await import("node:path");
+    mkdirSync(dirname(outputLocation), { recursive: true });
+    write(outputLocation, "mp4-uji");
+    return {
+      outputLocation,
+      sizeBytes: 7,
+      durationSec: 12,
+      durationInFrames: 360,
+      width: 1080,
+      height: 1920,
+      bundleFromCache: true,
+      settings: { format: "mp4", resolution: 540, quality: "cepat" } as const,
+    };
   },
-): Studio =>
+  ...(overrides?.noOrchestrator
+    ? { chatDisabledReason: "butuh API key (uji)" }
+    : { orchestrator: resolveModel("mock/echo") }),
+  registrySource: "uji",
+});
+
+export const makeStudio = (planPath: string, overrides?: StudioOverrides): Studio =>
   createStudioApp({
     planPath,
     guardrails: overrides?.guardrails ?? {},
     approvalTimeoutMs: 2000,
-    deps: {
-      ttsChainFor: () => [
-        fakeTts(
-          overrides?.ttsDelayMs !== undefined ? { delayMs: overrides.ttsDelayMs } : {},
-        ),
-      ],
-      stockChain: () => [fakeStock()],
-      stickerChain: () => [fakeSticker()],
-      probeVideo: async (_planPath, file) =>
-        file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null,
-      iconProvider: () => ({
-        id: "iconify",
-        label: "Iconify",
-        search: async (query: string, limit: number) =>
-          Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
-            providerId: "iconify",
-            iconId: `mdi:${query}-${i}`,
-            setPrefix: "mdi",
-            setName: "Material Design Icons",
-            license: "MIT",
-            licenseSpdx: "MIT",
-            needsAttribution: false,
-            commercialSafe: true,
-          })),
-        fetchSvg: async () => '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
-      }),
-      sfxChain: () => [
-        {
-          id: "openverse",
-          label: "Openverse",
-          search: async (query: string, limit: number) =>
-            Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
-              providerId: "openverse",
-              assetId: `openverse:${query}-${i}`,
-              title: `${query} ${i}`,
-              downloadUrl: `https://cdn.test/${query}-${i}.mp3`,
-              fileExt: "mp3",
-              license: "cc0 1.0",
-              commercialSafe: true,
-            })),
-          download: async () => new Uint8Array([1]),
-        },
-      ],
-      saveMedia: async (_planPath, media) =>
-        `assets/${media.folder}/${media.name}.${media.fileExt}`,
-      detectSilence: async (_planPath, file) =>
-        file.endsWith(".mp4")
-          ? {
-              durationSec: 600,
-              silences: [{ startSec: 0, endSec: 0.8 }],
-              audible: [{ startSec: 0.8, endSec: 600 }],
-            }
-          : null,
-      renderVideo: async ({ outputLocation }) => {
-        if (overrides?.renderDelayMs) {
-          await new Promise((resolve) => setTimeout(resolve, overrides.renderDelayMs));
-        }
-        if (overrides?.renderFail) throw new Error("render gagal (uji)");
-        const { mkdirSync, writeFileSync: write } = await import("node:fs");
-        const { dirname } = await import("node:path");
-        mkdirSync(dirname(outputLocation), { recursive: true });
-        write(outputLocation, "mp4-uji");
-        return {
-          outputLocation,
-          sizeBytes: 7,
-          durationSec: 12,
-          durationInFrames: 360,
-          width: 1080,
-          height: 1920,
-          bundleFromCache: true,
-          settings: { format: "mp4", resolution: 540, quality: "cepat" } as const,
-        };
-      },
-      ...(overrides?.noOrchestrator
-        ? { chatDisabledReason: "butuh API key (uji)" }
-        : { orchestrator: resolveModel("mock/echo") }),
-      registrySource: "uji",
-    },
+    deps: fakeDeps(overrides),
   });
+
+/** Host lobi: satu port, banyak proyek. `planPath` kosong = mulai di lobi. */
+export const makeHost = (
+  workspaceRoot: string,
+  planPath?: string,
+  overrides?: StudioOverrides,
+): StudioHost =>
+  new StudioHost({
+    workspaceRoot,
+    ...(planPath ? { planPath } : {}),
+    approvalTimeoutMs: 2000,
+    deps: fakeDeps(overrides),
+  });
+
+export const hostCall = (
+  host: StudioHost,
+  path: string,
+  init?: RequestInit,
+): Promise<Response> =>
+  Promise.resolve(
+    host.app.fetch(
+      new Request(`http://studio.local${path}`, {
+        ...init,
+        ...(init?.body ? { headers: { "content-type": "application/json" } } : {}),
+      }),
+    ),
+  );
+
+export const hostJson = async <T>(
+  host: StudioHost,
+  path: string,
+  init?: RequestInit,
+): Promise<{ status: number; body: T }> => {
+  const response = await hostCall(host, path, init);
+  return { status: response.status, body: (await response.json()) as T };
+};
+
+export const postJson = (body: unknown): RequestInit => ({
+  method: "POST",
+  body: JSON.stringify(body),
+});
 
 /** Fetch langsung ke app.fetch (tanpa port TCP). */
 export const call = (

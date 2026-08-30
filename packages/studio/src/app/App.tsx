@@ -9,6 +9,7 @@ import {
   IconCheck,
   IconClipboard,
   IconExport,
+  IconFolder,
   IconImage,
   IconMic,
   IconPalette,
@@ -19,6 +20,7 @@ import {
 } from "./icons";
 import { ChatPanel } from "./panels/ChatPanel";
 import { InspectorPanel } from "./panels/InspectorPanel";
+import { Lobby } from "./panels/Lobby";
 import { PreviewPanel } from "./panels/PreviewPanel";
 import { TimelineStrip } from "./panels/TimelineStrip";
 import { playback } from "./playback";
@@ -517,6 +519,16 @@ const Header: React.FC = () => {
       <div className="topbar-left">
         <span className="brand-mark">Dalang</span>
         <span className="brand-sub">Studio</span>
+        <button
+          type="button"
+          className="tool lobby-back"
+          onClick={() => void studioClient.backToLobby()}
+          data-tip="Kembali ke daftar proyek"
+          data-tip-bottom=""
+        >
+          <IconFolder />
+          <span>Proyek</span>
+        </button>
         {plan ? <span className="project-title">{plan.meta.title}</span> : null}
         {plan ? (
           <div
@@ -818,10 +830,30 @@ export const App: React.FC = () => {
   if (state.fatal) {
     return (
       <div className="boot-error">
-        <h2>Studio tidak bisa memuat proyek</h2>
+        <h2>Studio tidak bisa memuat workspace</h2>
         <p>{state.fatal}</p>
-        <p>Pastikan server berjalan: pnpm dalang studio &lt;folder-proyek&gt;</p>
+        <p>Pastikan server berjalan: pnpm dalang studio &lt;folder&gt;</p>
       </div>
+    );
+  }
+
+  if (state.loading) {
+    return (
+      <div className="boot-splash">
+        <span className="brand-mark">Dalang</span>
+        <span className="boot-bar" aria-hidden />
+      </div>
+    );
+  }
+
+  // Lobi memakai seluruh layar: tanpa proyek terbuka, tidak ada satu pun
+  // panel editor yang punya isi jujur untuk ditampilkan.
+  if (state.view === "lobby") {
+    return (
+      <>
+        <Lobby />
+        {state.toast ? <div className="toast">{state.toast}</div> : null}
+      </>
     );
   }
 

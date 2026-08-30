@@ -1,5 +1,4 @@
-import { existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import {
   type AgentDeps,
@@ -28,19 +27,12 @@ import {
   saveMediaToProject,
 } from "@dalang/renderer";
 import { type Command, InvalidArgumentError } from "commander";
+import { planPathOf } from "./project-path";
 
 /**
  * `dalang chat` — loop chat agent di CLI (Fase 2, PRD §11) dan
  * `dalang log` — garis waktu observability (stage runs + agent events).
  */
-
-const resolvePlanPath = (input: string): string => {
-  const abs = resolve(input);
-  if (existsSync(abs) && statSync(abs).isDirectory()) {
-    return join(abs, "plan.json");
-  }
-  return abs;
-};
 
 const parseUsd = (value: string): number => {
   const parsed = Number(value);
@@ -97,7 +89,7 @@ export const registerChatCommand = (program: Command): void => {
           budget?: number;
         },
       ) => {
-        const planPath = resolvePlanPath(proyek);
+        const planPath = planPathOf(proyek);
         const registry = await loadModelRegistry();
         // Netral vendor: environment user yang menentukan (API key terpasang /
         // DALANG_MODEL) — bukan preferensi bawaan provider mana pun.
@@ -252,7 +244,7 @@ export const registerLogCommand = (program: Command): void => {
     .option("-n, --limit <n>", "jumlah entri", parsePositiveInt, 30)
     .description("Tampilkan garis waktu pipeline + agent (observability)")
     .action((proyek: string, options: { limit: number }) => {
-      const planPath = resolvePlanPath(proyek);
+      const planPath = planPathOf(proyek);
       const paths = projectPaths(planPath);
       const db = new PipelineDb(paths.dbPath);
       const events = new AgentEventLog(paths.dbPath);

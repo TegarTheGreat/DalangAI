@@ -4,12 +4,15 @@ import type {
   AddSfxResponse,
   ChatStreamEvent,
   IconSearchResponse,
+  NewProjectRequest,
   ProjectStatePayload,
   RenderRequest,
   SfxSearchResponse,
   StickerSearchResponse,
   StockSearchResponse,
   StudioEvent,
+  WorkspacePayload,
+  WorkspaceProjectLite,
 } from "../shared/api-types";
 import { readSseBody } from "./sse";
 
@@ -61,6 +64,46 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
 export const api = {
   getProject: () => request<ProjectStatePayload>("/api/project"),
+
+  // -- lobi (workspace) ------------------------------------------------------
+
+  getWorkspace: () => request<WorkspacePayload>("/api/workspace"),
+
+  openProject: (id: string) =>
+    request<{ ok: true; workspace: WorkspacePayload }>("/api/workspace/open", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    }),
+
+  closeProject: () =>
+    request<{ ok: true; workspace: WorkspacePayload }>("/api/workspace/close", {
+      method: "POST",
+      body: "{}",
+    }),
+
+  createProject: (input: NewProjectRequest) =>
+    request<{ ok: true; project: WorkspaceProjectLite; workspace: WorkspacePayload }>(
+      "/api/workspace/create",
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  renameProject: (id: string, title: string) =>
+    request<{ ok: true; workspace: WorkspacePayload }>("/api/workspace/rename", {
+      method: "POST",
+      body: JSON.stringify({ id, title }),
+    }),
+
+  duplicateProject: (id: string) =>
+    request<{ ok: true; project: WorkspaceProjectLite; workspace: WorkspacePayload }>(
+      "/api/workspace/duplicate",
+      { method: "POST", body: JSON.stringify({ id }) },
+    ),
+
+  trashProject: (id: string) =>
+    request<{ ok: true; trashedTo: string; workspace: WorkspacePayload }>(
+      "/api/workspace/trash",
+      { method: "POST", body: JSON.stringify({ id }) },
+    ),
 
   patch: (ops: PatchOpInput[]) =>
     request<{ ok: true; summary: string }>("/api/patch", {
@@ -215,6 +258,7 @@ export const api = {
       "busy",
       "stage-results",
       "render",
+      "project-closed",
     ];
     for (const name of names) {
       source.addEventListener(name, (message) => {

@@ -225,3 +225,27 @@ export const IconWave: React.FC = () => (
     <path d="M21.5 11h-1" />
   </Icon>
 );
+
+/** Folder workspace — tempat proyek disimpan sebagai folder biasa. */
+export const IconFolder: React.FC = () => (
+  <Icon>
+    <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5Z" />
+  </Icon>
+);
+
+/** Gulungan film: penanda jumlah ekspor yang sudah jadi. */
+export const IconFilm: React.FC = () => (
+  <Icon>
+    <rect x="3.5" y="5" width="17" height="14" rx="2" />
+    <path d="M8 5v14M16 5v14" />
+    <path d="M3.5 12h17" />
+  </Icon>
+);
+
+/** Duplikat: dua lembar bertumpuk. */
+export const IconCopy: React.FC = () => (
+  <Icon>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M15 6.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h.5" />
+  </Icon>
+);

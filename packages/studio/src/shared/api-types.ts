@@ -94,6 +94,53 @@ export interface ProjectStatePayload {
 }
 
 // ---------------------------------------------------------------------------
+// Workspace / lobi (GET /api/workspace)
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceProjectLite {
+  /** Nama folder — id-nya di API. */
+  id: string;
+  title: string;
+  aspectRatio: string;
+  stylePreset: string;
+  format: string;
+  scenes: number;
+  durationSec: number;
+  updatedAt: string;
+  renders: number;
+  /**
+   * Warna aksen efektif proyek (token plan, atau bawaan preset). Sampul kartu
+   * memakainya supaya lobi memperlihatkan rupa proyeknya, bukan kotak seragam.
+   */
+  accent: string;
+  /** Ekspor terbaru untuk dipratinjau di kartu; null = belum pernah ekspor. */
+  posterUrl: string | null;
+  /** false = plan.json rusak/tak sah; proyeknya tetap didaftar apa adanya. */
+  valid: boolean;
+  error?: string;
+}
+
+export interface WorkspacePayload {
+  root: string;
+  projects: WorkspaceProjectLite[];
+  /** Proyek yang sedang dibuka server ini; null = sedang di lobi. */
+  open: { id: string; title: string; planPath: string } | null;
+  /**
+   * Server dibuka pada satu proyek lewat path eksplisit. Lobi tetap ada
+   * (folder induknya), hanya saja tombol "tutup" tidak menutup apa pun
+   * yang diminta pengguna di baris perintah.
+   */
+  pinned: boolean;
+}
+
+export interface NewProjectRequest {
+  title: string;
+  aspectRatio: "16:9" | "9:16" | "1:1";
+  stylePreset: string;
+  format: string;
+}
+
+// ---------------------------------------------------------------------------
 // Mutasi
 // ---------------------------------------------------------------------------
 
@@ -242,6 +289,8 @@ export type PlanUpdateReason =
 
 export type StudioEvent =
   | { type: "hello"; revision: number }
+  /** Proyek ditutup server (pindah proyek / kembali ke lobi) — tutup SSE. */
+  | { type: "project-closed" }
   | { type: "plan-updated"; reason: PlanUpdateReason; revision: number }
   | { type: "busy"; busy: BusyState }
   | {

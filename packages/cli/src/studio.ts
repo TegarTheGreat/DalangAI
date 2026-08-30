@@ -1,5 +1,5 @@
-import { existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
   loadModelRegistry,
   pickDefaultModels,
@@ -19,13 +19,17 @@ import {
   renderPlanToVideo,
   saveMediaToProject,
 } from "@dalang/renderer";
-import { startStudioServer, studioAppDistDir } from "@dalang/studio/server";
+import { resolveEntry, startStudioServer, studioAppDistDir } from "@dalang/studio/server";
 import { type Command, InvalidArgumentError } from "commander";
 
 /**
  * `dalang studio` — UI hybrid 3 panel (Fase 3, PRD §8): server API + SSE +
  * app web di satu port. Composition root yang sama dengan `dalang chat`;
  * proyek kosong pun bisa dibuka (mulai dari brief di panel chat).
+ *
+ * Argumennya menentukan sendiri apa yang dibuka: folder berisi plan.json =
+ * proyek itu (lobinya folder induk), folder lain = lobi berisi proyek-proyek
+ * di dalamnya. Tidak ada flag yang harus diingat pengguna.
  */
 
 const parsePort = (value: string): number => {
@@ -49,9 +53,10 @@ export const registerStudioCommand = (program: Command): void => {
         proyek: string,
         options: { port: number; model?: string; modelVolume?: string },
       ) => {
-        const abs = resolve(proyek);
-        const planPath =
-          existsSync(abs) && statSync(abs).isDirectory() ? join(abs, "plan.json") : abs;
+        const entry = resolveEntry(proyek);
+        const workspaceRoot =
+          entry.mode === "workspace" ? entry.root : dirname(dirname(entry.planPath));
+        const planPath = entry.mode === "project" ? entry.planPath : undefined;
 
         const registry = await loadModelRegistry();
         // Netral vendor: environment user yang menentukan (API key terpasang /
@@ -81,7 +86,8 @@ export const registerStudioCommand = (program: Command): void => {
         }
 
         const studio = await startStudioServer({
-          planPath,
+          workspaceRoot,
+          ...(planPath ? { planPath } : {}),
           port: options.port,
           deps: {
             ttsChainFor: (provider) => buildTtsChain({ provider }),
@@ -104,7 +110,8 @@ export const registerStudioCommand = (program: Command): void => {
         const hasApp = existsSync(join(studioAppDistDir, "index.html"));
         console.log(
           `Dalang Studio · ${studio.url}\n` +
-            `  proyek  : ${planPath}\n` +
+            (planPath ? `  proyek  : ${planPath}\n` : "") +
+            `  lobi    : ${workspaceRoot}\n` +
             (orchestrator
               ? `  model   : ${orchestrator.key}${volumeModel ? ` · volume: ${volumeModel.key}` : ""} (registry: ${registry.source})\n`
               : `  PERHATIAN: chat nonaktif — ${chatDisabledReason}; panel manual tetap berfungsi\n`) +

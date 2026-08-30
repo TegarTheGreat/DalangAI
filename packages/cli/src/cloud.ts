@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { parseScenePlan } from "@dalang/core";
 import {
   type CloudConfig,
@@ -11,6 +10,7 @@ import {
 } from "@dalang/render-lambda";
 import type { RenderTarget } from "@dalang/renderer";
 import type { Command } from "commander";
+import { planPathOf } from "./project-path";
 
 /** Perintah CLI untuk render cloud (ADR-0019). */
 
@@ -34,7 +34,7 @@ export const buildLambdaTarget = (config: CloudConfig): RenderTarget => {
 export const registerCloudCommands = (program: Command): void => {
   program
     .command("cloud:check")
-    .argument("[plan]", "scene-plan untuk contoh estimasi biaya")
+    .argument("[proyek]", "folder proyek atau plan.json untuk contoh estimasi biaya")
     .description(
       "Periksa konfigurasi render cloud (Remotion Lambda) dan estimasi biayanya",
     )
@@ -70,10 +70,11 @@ export const registerCloudCommands = (program: Command): void => {
         return;
       }
 
-      const plan = parseScenePlan(JSON.parse(readFileSync(resolve(planPath), "utf8")));
+      const abs = planPathOf(planPath);
+      const plan = parseScenePlan(JSON.parse(readFileSync(abs, "utf8")));
       const target = buildLambdaTarget(config);
       const estimate = await target.estimateCost({
-        planPath: resolve(planPath),
+        planPath: abs,
         outputLocation: "/tmp/estimasi.mp4",
         profile: "final",
       });

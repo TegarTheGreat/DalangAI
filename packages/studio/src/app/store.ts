@@ -2,9 +2,11 @@ import type { PatchOpInput } from "@dalang/core";
 import type {
   ChatTurnResultLite,
   ExportSettingsLite,
+  NewProjectRequest,
   ProjectStatePayload,
   StockCandidateLite,
   StudioEvent,
+  WorkspacePayload,
 } from "../shared/api-types";
 import { ApiError, api, ConfirmationRequired } from "./api";
 
@@ -66,6 +68,14 @@ export interface RenderProgress {
 export interface StudioState {
   loading: boolean;
   fatal: string | null;
+  /**
+   * Layar aktif. Lobi bukan modal di atas editor: tanpa proyek terbuka, server
+   * memang tidak punya sesi, dan UI harus jujur soal itu.
+   */
+  view: "lobby" | "editor";
+  workspace: WorkspacePayload | null;
+  /** Id proyek yang sedang dibuka/dibuat — kartu terkait tampil menunggu. */
+  switching: string | null;
   project: ProjectStatePayload | null;
   selectedSceneId: string | null;
   chat: ChatMessage[];
@@ -86,6 +96,9 @@ type Listener = () => void;
 const emptyState: StudioState = {
   loading: true,
   fatal: null,
+  view: "lobby",
+  workspace: null,
+  switching: null,
   project: null,
   selectedSceneId: null,
   chat: [],
@@ -137,6 +150,26 @@ export class StudioClient {
   // -- lifecycle -------------------------------------------------------------
 
   async start(): Promise<void> {
+    try {
+      const workspace = await api.getWorkspace();
+      this.set({ workspace });
+      if (workspace.open) await this.enterEditor();
+      else this.set({ view: "lobby" });
+    } catch (error) {
+      this.set({ fatal: error instanceof Error ? error.message : String(error) });
+    }
+    this.set({ loading: false });
+  }
+
+  // -- lobi ------------------------------------------------------------------
+
+  /**
+   * Masuk editor: langganan SSE dibuka SETELAH sesi proyek ada di server,
+   * karena tanpa proyek `/api/events` menjawab 409 dan EventSource akan
+   * mencoba ulang tanpa henti.
+   */
+  private async enterEditor(): Promise<void> {
+    this.stopEvents?.();
     this.stopEvents = api.subscribeEvents(
       (event) => this.onEvent(event),
       (connected) => {
@@ -151,7 +184,110 @@ export class StudioClient {
       },
     );
     await this.refresh();
-    this.set({ loading: false });
+    this.set({ view: "editor" });
+  }
+
+  /** Kembali ke lobi: sesi editor dilepas seluruhnya, bukan disembunyikan. */
+  private leaveEditor(workspace: WorkspacePayload | null): void {
+    this.stopEvents?.();
+    this.stopEvents = null;
+    this.set({
+      view: "lobby",
+      project: null,
+      selectedSceneId: null,
+      chat: [],
+      chatBusy: false,
+      approval: null,
+      confirm: null,
+      assetSearch: null,
+      renderProgress: null,
+      connected: true,
+      switching: null,
+      ...(workspace ? { workspace } : {}),
+    });
+  }
+
+  async refreshWorkspace(): Promise<void> {
+    try {
+      this.set({ workspace: await api.getWorkspace() });
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  async openProject(id: string): Promise<void> {
+    if (this.state.switching) return;
+    this.set({ switching: id });
+    try {
+      const { workspace } = await api.openProject(id);
+      this.set({ workspace, project: null, selectedSceneId: null, chat: [] });
+      await this.enterEditor();
+    } catch (error) {
+      this.failure(error);
+    } finally {
+      this.set({ switching: null });
+    }
+  }
+
+  async createProject(input: NewProjectRequest): Promise<boolean> {
+    if (this.state.switching) return false;
+    this.set({ switching: "baru" });
+    try {
+      const { project, workspace } = await api.createProject(input);
+      this.set({ workspace, project: null, selectedSceneId: null, chat: [] });
+      await this.enterEditor();
+      this.toast(`Proyek "${project.title}" siap — folder ${project.id}`);
+      return true;
+    } catch (error) {
+      this.failure(error);
+      return false;
+    } finally {
+      this.set({ switching: null });
+    }
+  }
+
+  async backToLobby(): Promise<void> {
+    try {
+      const { workspace } = await api.closeProject();
+      this.leaveEditor(workspace);
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  async renameProject(id: string, title: string): Promise<void> {
+    try {
+      const { workspace } = await api.renameProject(id, title);
+      this.set({ workspace });
+      if (this.state.view === "editor") await this.refresh();
+      this.toast(`Judul proyek jadi "${title}"`);
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  async duplicateProject(id: string): Promise<void> {
+    try {
+      const { project, workspace } = await api.duplicateProject(id);
+      this.set({ workspace });
+      this.toast(`Salinan dibuat: ${project.id} (tanpa cache & riwayat proyek asal)`);
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  async trashProject(id: string): Promise<void> {
+    try {
+      const { workspace, trashedTo } = await api.trashProject(id);
+      if (workspace.open === null && this.state.view === "editor") {
+        this.leaveEditor(workspace);
+      } else {
+        this.set({ workspace });
+      }
+      this.toast(`Dipindah ke ${trashedTo} — masih bisa dikembalikan dari folder`);
+    } catch (error) {
+      this.failure(error);
+    }
   }
 
   /** Unggah gambar lokal ke scene (server menulis file + patch + pin). */
@@ -263,6 +399,11 @@ export class StudioClient {
         this.scheduleRefresh();
         break;
       }
+      case "project-closed":
+        // Server melepas proyek (mis. dibuang dari lobi di tab lain).
+        this.leaveEditor(null);
+        void this.refreshWorkspace();
+        break;
       case "render":
         this.set({
           renderProgress: {
