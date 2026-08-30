@@ -457,7 +457,7 @@ const NewProjectDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
 type SortKey = "terbaru" | "judul" | "durasi";
 
 export const Lobby: React.FC = () => {
-  const { workspace, switching, project } = useStudio();
+  const { workspace, switching } = useStudio();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("terbaru");
   const [newOpen, setNewOpen] = useState(false);
@@ -487,15 +487,6 @@ export const Lobby: React.FC = () => {
           <span className="brand-mark">Dalang</span>
           <span className="brand-sub">Studio</span>
         </div>
-        {project ? (
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => void studioClient.openProject(workspace?.open?.id ?? "")}
-          >
-            Kembali ke editor
-          </button>
-        ) : null}
       </header>
 
       <div className="lobby-hero">
