@@ -12,6 +12,7 @@ import {
 import { findBrowserExecutable } from "./browser";
 import { getBundle } from "./bundle-cache";
 import { copyPlanAssets } from "./stage";
+import type { RenderTarget } from "./target";
 
 /**
  * Local RenderTarget (PRD §7.3). The interface stays small on purpose so a
@@ -180,6 +181,8 @@ export interface RenderBehaviorOptions {
    * menyalin, kelalaian seperti itu langsung terlihat sebagai gambar hilang.
    */
   assetBaseUrl?: string | null;
+  /** Peta path aset -> URL penuh (mis. presigned). Mendahului assetBaseUrl. */
+  assetUrls?: Record<string, string> | null;
 }
 
 interface PreparedRender {
@@ -214,7 +217,9 @@ const prepare = async (
     rmSync(bundleResult.bundleDir, { recursive: true, force: true });
   }
   const assetBaseUrl = options.assetBaseUrl ?? null;
-  if (assetBaseUrl === null) {
+  const assetUrls = options.assetUrls ?? null;
+  const remoteAssets = assetBaseUrl !== null || assetUrls !== null;
+  if (!remoteAssets) {
     copyPlanAssets(planPath, plan, join(renderDir, "public"));
   }
 
@@ -222,6 +227,7 @@ const prepare = async (
     plan,
     debug: PROFILES[profile].debug,
     ...(assetBaseUrl === null ? {} : { assetBaseUrl }),
+    ...(assetUrls === null ? {} : { assetUrls }),
   };
   const composition = await selectComposition({
     serveUrl: renderDir,
@@ -365,3 +371,34 @@ export const renderPlanStills = async (
     prepared.cleanup();
   }
 };
+
+/**
+ * Target lokal sebagai implementasi `RenderTarget` (ADR-0019).
+ *
+ * Membungkus `renderPlanToVideo` apa adanya — perilakunya tidak berubah sedikit
+ * pun. Gunanya hanya satu: membuat "render di mesin ini" dan "render di cloud"
+ * bisa dipertukarkan oleh pemanggil yang sama.
+ */
+export const localRenderTarget = (
+  behavior: RenderBehaviorOptions = {},
+): RenderTarget => ({
+  id: "local",
+  label: "Mesin ini",
+  // Render lokal memakai listrik dan waktu, tapi tidak menagih apa pun. Nol
+  // adalah jawaban yang benar, bukan ketiadaan jawaban.
+  estimateCost: async () => ({ usd: 0, detail: "Render lokal tidak berbiaya API." }),
+  render: (request) =>
+    renderPlanToVideo({
+      planPath: request.planPath,
+      outputLocation: request.outputLocation,
+      profile: request.profile,
+      ...(request.settings ? { settings: request.settings } : {}),
+      ...behavior,
+      ...(request.onProgress
+        ? {
+            onProgress: (event) =>
+              request.onProgress?.({ stage: event.stage, progress: event.progress }),
+          }
+        : {}),
+    }),
+});

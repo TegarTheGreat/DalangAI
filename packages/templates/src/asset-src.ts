@@ -25,9 +25,24 @@ import { staticFile } from "remotion";
  * ada.
  */
 
-const AssetBaseUrlContext = createContext<string | null>(null);
+/**
+ * Alamat aset plan untuk render ini.
+ *
+ * `urls` mendahului `baseUrl`, dan itu bukan sekadar keluwesan: URL bertanda
+ * tangan (presigned) berbeda untuk SETIAP berkas, jadi ia tidak bisa dinyatakan
+ * sebagai satu URL dasar. Tanpa peta ini, satu-satunya cara render cloud
+ * bekerja adalah membuat seluruh aset proyek bisa diakses siapa saja yang tahu
+ * URL-nya — bawaan yang salah untuk video yang belum dirilis.
+ */
+export interface AssetLocation {
+  baseUrl?: string | null;
+  /** Path aset relatif plan -> URL penuh (boleh bertanda tangan). */
+  urls?: Record<string, string> | null;
+}
 
-export const AssetBaseUrlProvider = AssetBaseUrlContext.Provider;
+const AssetLocationContext = createContext<AssetLocation | null>(null);
+
+export const AssetLocationProvider = AssetLocationContext.Provider;
 
 /**
  * Gabungkan URL dasar dengan path aset relatif terhadap plan.
@@ -50,9 +65,14 @@ export const joinAssetUrl = (baseUrl: string, file: string): string => {
 
 /** Pengalamat aset PLAN untuk render yang sedang berjalan. */
 export const useAssetSrc = (): ((file: string) => string) => {
-  const baseUrl = useContext(AssetBaseUrlContext);
+  const location = useContext(AssetLocationContext);
   return useCallback(
-    (file: string) => (baseUrl === null ? staticFile(file) : joinAssetUrl(baseUrl, file)),
-    [baseUrl],
+    (file: string) => {
+      const signed = location?.urls?.[file];
+      if (signed) return signed;
+      const baseUrl = location?.baseUrl;
+      return baseUrl ? joinAssetUrl(baseUrl, file) : staticFile(file);
+    },
+    [location],
   );
 };

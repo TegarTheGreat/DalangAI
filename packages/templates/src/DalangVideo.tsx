@@ -1,6 +1,6 @@
 import { parseScenePlan, type ScenePlanInput } from "@dalang/core";
 import { useMemo } from "react";
-import { AssetBaseUrlProvider } from "./asset-src";
+import { type AssetLocation, AssetLocationProvider } from "./asset-src";
 import { DocumentaryPreset } from "./presets/documentary-01/index";
 import { TutorialPreset } from "./presets/tutorial-01/index";
 
@@ -22,6 +22,11 @@ export type DalangVideoProps = {
    * boleh ikut masuk patch log, undo, maupun diff dokumen.
    */
   assetBaseUrl?: string | null;
+  /**
+   * Peta path aset -> URL penuh, untuk URL bertanda tangan yang berbeda per
+   * berkas. Mendahului `assetBaseUrl` bila keduanya ada.
+   */
+  assetUrls?: Record<string, string> | null;
 };
 
 const PRESETS: Record<
@@ -36,6 +41,7 @@ export const DalangVideo: React.FC<DalangVideoProps> = ({
   plan: rawPlan,
   debug = false,
   assetBaseUrl = null,
+  assetUrls = null,
 }) => {
   const plan = useMemo(() => parseScenePlan(rawPlan), [rawPlan]);
 
@@ -46,9 +52,13 @@ export const DalangVideo: React.FC<DalangVideoProps> = ({
     );
   }
   const Chosen = Preset ?? DocumentaryPreset;
+  const location = useMemo<AssetLocation | null>(
+    () => (assetBaseUrl || assetUrls ? { baseUrl: assetBaseUrl, urls: assetUrls } : null),
+    [assetBaseUrl, assetUrls],
+  );
   return (
-    <AssetBaseUrlProvider value={assetBaseUrl}>
+    <AssetLocationProvider value={location}>
       <Chosen plan={plan} debug={debug} />
-    </AssetBaseUrlProvider>
+    </AssetLocationProvider>
   );
 };

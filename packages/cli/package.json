@@ -18,7 +18,8 @@
     "@dalang/renderer": "workspace:*",
     "@dalang/studio": "workspace:*",
     "@dalang/templates": "workspace:*",
-    "commander": "15.0.0"
+    "commander": "15.0.0",
+    "@dalang/render-lambda": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

@@ -15,8 +15,10 @@ import {
   type EncodeQuality,
   extensionFor,
   loadPlan,
+  localRenderTarget,
   type ProgressEvent,
   type RenderProfile,
+  type RenderTargetProgress,
   renderPlanStills,
   renderPlanToVideo,
   resolveExportSettings,
@@ -28,6 +30,7 @@ import {
 import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
+import { buildLambdaTarget, readCloudConfig, registerCloudCommands } from "./cloud";
 import { registerProvidersCheckCommand } from "./providers-check";
 import { registerStudioCommand } from "./studio";
 
@@ -126,7 +129,9 @@ const printPlanSummary = (plan: ScenePlan): void => {
 
 const progressPrinter = () => {
   let lastLine = "";
-  return (event: ProgressEvent) => {
+  // Menerima tahap dari KEDUA target: render lokal tidak mengenal "uploading"
+  // dan "downloading", render cloud tidak mengenal "bundling".
+  return (event: ProgressEvent | RenderTargetProgress) => {
     const line = `  ${event.stage} ${(event.progress * 100).toFixed(0)}%`;
     if (line !== lastLine) {
       process.stdout.write(`\r${line.padEnd(40)}`);
@@ -210,6 +215,8 @@ program
     },
   );
 
+registerCloudCommands(program);
+
 program
   .command("render")
   .argument("<plan>", "path ke scene-plan JSON")
@@ -233,6 +240,11 @@ program
     parsePositiveInt,
   )
   .option("--no-cache", "jangan pakai bundle cache (selalu bundling ulang)")
+  .addOption(
+    new Option("--target <tujuan>", "di mana render dijalankan (ADR-0019)")
+      .choices(["local", "lambda"])
+      .default("local"),
+  )
   .description("Render scene-plan menjadi video (MP4 H.264 / WebM VP9 / MOV ProRes)")
   .action(
     async (
@@ -245,6 +257,7 @@ program
         quality?: EncodeQuality;
         concurrency?: number;
         cache: boolean;
+        target: "local" | "lambda";
       },
     ) => {
       const absPlan = resolve(planPath);
@@ -269,14 +282,38 @@ program
       );
       mkdirSync(dirname(outPath), { recursive: true });
 
+      const target =
+        options.target === "lambda"
+          ? (() => {
+              const read = readCloudConfig();
+              if (!read.ok) {
+                console.error(
+                  "Render cloud belum diatur. Jalankan `dalang cloud:check` untuk melihat apa yang kurang.",
+                );
+                process.exit(1);
+              }
+              return buildLambdaTarget(read.config);
+            })()
+          : localRenderTarget({
+              concurrency: options.concurrency ?? null,
+              disableBundleCache: !options.cache,
+            });
+
+      if (target.id !== "local") {
+        const estimate = await target.estimateCost({
+          planPath: absPlan,
+          outputLocation: outPath,
+          profile: options.profile,
+        });
+        console.log(`  target ${target.label} · estimasi ~$${estimate.usd.toFixed(4)}`);
+      }
+
       const startedAt = Date.now();
-      const result = await renderPlanToVideo({
+      const result = await target.render({
         planPath: absPlan,
         outputLocation: outPath,
         profile: options.profile,
         settings: overrides,
-        concurrency: options.concurrency ?? null,
-        disableBundleCache: !options.cache,
         onProgress: progressPrinter(),
       });
       process.stdout.write("\n");

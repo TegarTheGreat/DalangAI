@@ -5,3 +5,4 @@ export * from "./probe";
 export * from "./render";
 export * from "./save-media";
 export * from "./stage";
+export * from "./target";

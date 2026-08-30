@@ -21,15 +21,20 @@ export const assertSafeRelative = (file: string): void => {
 };
 
 /**
- * Copy every file the plan's renderState references into the target public
- * dir, preserving relative paths. Returns the copied relative paths.
+ * Setiap berkas milik PLAN yang dibutuhkan render, sebagai path relatif
+ * terhadap folder plan (ADR-0019).
+ *
+ * SATU jawaban untuk pertanyaan "berkas apa saja yang dibutuhkan plan ini",
+ * dipakai oleh SEMUA RenderTarget: target lokal menyalinnya ke public dir
+ * bundle, target cloud mengunggahnya ke penyimpanan objek. Kalau kedua target
+ * menyusun daftarnya sendiri-sendiri, keduanya pasti berbeda cepat atau lambat
+ * — persis seperti `graphicAssets` yang dulu terlewat di penyalinan lokal dan
+ * baru ketahuan lewat render sungguhan, bukan lewat test.
+ *
+ * Aset SITUS (font, bed musik "pustaka:*") sengaja TIDAK ada di sini: keduanya
+ * ikut ter-bundle bersama komposisi.
  */
-export const copyPlanAssets = (
-  planPath: string,
-  plan: ScenePlan,
-  targetPublicDir: string,
-): string[] => {
-  const planDir = dirname(resolve(planPath));
+export const planAssetFiles = (plan: ScenePlan): string[] => {
   // ADR-0018: entri grafis/cue yang grafisnya sudah dihapus tetap tertinggal di
   // renderState (sengaja — supaya undo mengembalikannya utuh). Entri seperti
   // itu tidak boleh ikut dipentaskan: berkasnya tidak dipakai render, dan bila
@@ -59,6 +64,22 @@ export const copyPlanAssets = (
   if (music && !music.assetId.startsWith("pustaka:")) {
     files.push(music.assetId);
   }
+  // Satu berkas boleh dirujuk beberapa scene; menyalin/mengunggahnya sekali
+  // saja sudah cukup.
+  return [...new Set(files)];
+};
+
+/**
+ * Copy every file the plan's renderState references into the target public
+ * dir, preserving relative paths. Returns the copied relative paths.
+ */
+export const copyPlanAssets = (
+  planPath: string,
+  plan: ScenePlan,
+  targetPublicDir: string,
+): string[] => {
+  const planDir = dirname(resolve(planPath));
+  const files = planAssetFiles(plan);
 
   for (const file of files) {
     assertSafeRelative(file);

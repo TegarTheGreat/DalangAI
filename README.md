@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -252,7 +252,30 @@ Yang sudah berjalan:
     melarang persis apa yang dibutuhkan integrasi otomatis (akses via bot,
     scraping, atau penggunaan komersial). Iconify dan Openverse dipakai
     sebagai penggantinya.*
-- **Kualitas terjaga otomatis**: 467 unit test (kontrak lock/pin/undo, timing
+- **Render cloud (ADR-0019)** — `RenderTarget` akhirnya jadi port sungguhan
+  (PRD §7.3), dengan implementasi kedua: **Remotion Lambda**.
+  - **Aset situs dan aset plan dibedakan**: font dan bed musik ikut bundel
+    komposisi; narasi, footage, ikon, stiker, dan efek suara dialamatkan lewat
+    URL. Itu yang membuat situs cukup dipasang SEKALI, bukan tiap render.
+  - **URL bertanda tangan per berkas** sebagai bawaan — bukan bucket publik,
+    supaya footage yang belum dirilis tidak bisa dibaca siapa pun yang punya
+    URL-nya. Aset yang isinya tidak berubah tidak diunggah ulang.
+  - **Estimasi biaya ada di kontrak `RenderTarget`**, dijawab dari durasi plan
+    tanpa memanggil AWS sama sekali, dan dibulatkan ke atas — gerbang §6.3 yang
+    terlalu optimistis lebih berbahaya daripada yang terlalu hati-hati.
+  - `dalang render --target lambda` dan `dalang cloud:check`. Tanpa konfigurasi,
+    `dalang render` tetap berjalan penuh di mesin sendiri.
+  - **Gerbang paritas di CI**: satu still dirender lewat kedua jalur — sekali
+    dari bundel, sekali dari URL dengan aset sengaja TIDAK disalin — dan wajib
+    identik byte per byte. Satu pemanggil `staticFile()` yang terlewat tidak
+    menggagalkan unit test mana pun; hanya gerbang ini yang menangkapnya.
+  - *Batas jujur: belum pernah dijalankan terhadap AWS sungguhan — repo ini
+    tidak punya kredensialnya. Yang terverifikasi: seluruh urutan langkah (dengan
+    fake) dan seluruh kontrak SDK (typecheck terhadap tipe paket terpasang, yang
+    menemukan dua API deprecated dan satu kunci S3 tebakan yang salah untuk
+    WebM/MOV). `dalang cloud:check` dibuat supaya pemilik repo bisa memverifikasi
+    sisanya sendiri.*
+- **Kualitas terjaga otomatis**: 492 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -265,7 +288,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 467 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 492 unit test (8 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -279,6 +302,8 @@ pnpm dalang render   examples/borobudur-60s/plan.json --video-format webm --reso
 pnpm dalang still    examples/borobudur-60s/plan.json -t 8 -t 29 -t 44 -o out
 pnpm dalang log      proyekku/        # garis waktu pipeline + agent + biaya
 pnpm dalang providers:check           # cek kunci & endpoint provider ke layanan asli
+pnpm dalang cloud:check examples/borobudur-60s/plan.json   # cek render cloud + estimasi biaya
+pnpm dalang render   proyekku/plan.json --target lambda    # render di AWS (butuh setup Lambda)
 
 pnpm studio:remotion      # Remotion Studio (alat pengembang preset/template)
 ```
@@ -310,7 +335,8 @@ packages/
   agent/      runtime agent: AI SDK v7, registry models.dev, tools §6.2, guardrails
   studio/     UI hybrid 3 panel (Vite+React+Player) + server Hono/SSE single-writer
   templates/  preset Remotion terkurasi (documentary-01, tutorial-01) + 6 font vendored
-  renderer/   RenderTarget lokal: staging, bundling, profil draft|final
+  renderer/   RenderTarget lokal + port RenderTarget: staging, bundling, profil
+  render-lambda/  RenderTarget cloud (Remotion Lambda): unggah aset, pantau, unduh
   cli/        dalang studio | chat | validate | generate | still | render | log |
               providers:check
 examples/
@@ -363,7 +389,12 @@ Kontrak-kontrak penting yang SUDAH ditegakkan kode (bukan prompt):
       demo `examples/tutorial-studio` dari screenshot nyata Dalang Studio.
       *Catatan: grounding live butuh API key model vision; screen recording
       (deteksi klik, auto-zoom kursor) belum dibangun.*
-- [ ] **Fase 5 — RenderTarget cloud**, publish integrations.
+- [~] **Fase 5 — RenderTarget cloud** (ADR-0019): port `RenderTarget`, target
+      Remotion Lambda (unggah aset ber-checksum, URL bertanda tangan, estimasi
+      biaya pra-render, `--target lambda`, `cloud:check`), gerbang paritas aset
+      di CI. *Catatan: jalur AWS-nya belum pernah dijalankan terhadap akun
+      sungguhan — lihat "Batas yang dinyatakan" di ADR-0019.* Publish
+      integrations & template marketplace belum dibangun.
 
 Tugas riset R-2…R-6 & R-8…R-11 (PRD §14) belum diputuskan — masing-masing akan
 menghasilkan ADR sebelum implementasinya, mengikuti pola R-1/R-7 yang sudah ada
