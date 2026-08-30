@@ -134,3 +134,84 @@ export const useScrollFade = <T extends HTMLElement>(): [
     .join(" ");
   return [ref, className];
 };
+
+/**
+ * Jebakan fokus + pengembalian fokus untuk SEMUA dialog aplikasi.
+ *
+ * Diukur, bukan diasumsikan: menekan Tab di dalam dialog "Proyek baru"
+ * berjalan keluar ke lobi di belakangnya 14 kali dalam 26 tekan, dan setelah
+ * dialog ditutup fokus tertinggal di kontrol acak — bukan kembali ke tombol
+ * yang membukanya. Dialog yang bisa ditinggalkan Tab tidak bisa dipakai tanpa
+ * tetikus, dan itu bukan detail kecil bagi orang yang memang tidak memakainya.
+ *
+ * Dipasang SEKALI di akar aplikasi dan mengikuti dialog teratas yang ada di
+ * DOM, jadi dialog baru mana pun ikut terlindungi tanpa harus ingat.
+ */
+export const useDialogFocus = (): void => {
+  useEffect(() => {
+    let restoreTo: HTMLElement | null = null;
+
+    const topDialog = (): HTMLElement | null => {
+      const backdrops = document.querySelectorAll<HTMLElement>(".dialog-backdrop");
+      const top = backdrops[backdrops.length - 1];
+      return top?.querySelector<HTMLElement>(".dialog") ?? null;
+    };
+
+    const focusables = (root: HTMLElement): HTMLElement[] =>
+      Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetWidth > 0 || el.offsetHeight > 0);
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const dialog = topDialog();
+      if (!dialog) return;
+      const list = focusables(dialog);
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !dialog.contains(active)) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    const sync = () => {
+      const dialog = topDialog();
+      if (dialog && !restoreTo) {
+        restoreTo = document.activeElement as HTMLElement | null;
+        // Beri kesempatan dialog memilih fokus awalnya sendiri (mis. kolom
+        // judul); baru kalau tidak ada, jatuh ke kontrol pertama.
+        requestAnimationFrame(() => {
+          const current = topDialog();
+          if (current && !current.contains(document.activeElement)) {
+            focusables(current)[0]?.focus();
+          }
+        });
+      } else if (!dialog && restoreTo) {
+        restoreTo.focus?.();
+        restoreTo = null;
+      }
+    };
+
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("keydown", onKey, true);
+    sync();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, []);
+};

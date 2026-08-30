@@ -356,6 +356,7 @@ const NewProjectDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
         type="button"
         className="dialog-scrim"
         aria-label="Tutup dialog"
+        tabIndex={-1}
         onClick={onClose}
       />
       <div

@@ -9,7 +9,13 @@ import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useState } from "react";
 import type { ExportSettingsLite } from "../shared/api-types";
-import { RadioCard, Segmented, useEscape, useScrollFade } from "./components/controls";
+import {
+  RadioCard,
+  Segmented,
+  useDialogFocus,
+  useEscape,
+  useScrollFade,
+} from "./components/controls";
 import {
   IconChat,
   IconCheck,
@@ -806,6 +812,10 @@ const ConfirmDialog: React.FC = () => {
 export const App: React.FC = () => {
   const state = useStudio();
   const { chatOpen, inspectorOpen } = useUi();
+
+  // Berlaku untuk SEMUA dialog, termasuk yang di lobi: Tab tidak boleh keluar
+  // ke latar, dan fokus kembali ke tombol yang membukanya saat ditutup.
+  useDialogFocus();
 
   // Pintasan editor.
   //
