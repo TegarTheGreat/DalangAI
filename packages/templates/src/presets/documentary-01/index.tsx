@@ -85,13 +85,14 @@ export const DocumentaryPreset: React.FC<{
   const series: ReactNode[] = [];
   plan.scenes.forEach((scene, index) => {
     if (index > 0) {
-      // Jenis transisi milik scene SEBELUMNYA (transisi keluar, ADR-0011).
+      // Jenis & durasi transisi milik scene SEBELUMNYA (keluar, ADR-0011/0013).
       const type = plan.scenes[index - 1]?.transition.type ?? "cross-fade";
+      const frames = layout.boundaryFrames[index - 1] ?? TRANSITION_FRAMES;
       series.push(
         <TransitionSeries.Transition
           key={`transition-${index}`}
           presentation={presentationFor(type)}
-          timing={linearTiming({ durationInFrames: TRANSITION_FRAMES })}
+          timing={linearTiming({ durationInFrames: frames })}
         />,
       );
     }
@@ -106,7 +107,13 @@ export const DocumentaryPreset: React.FC<{
           scene={scene}
           sceneIndex={index}
           plan={plan}
-          asset={plan.renderState.resolvedAssets[scene.id]}
+          asset={
+            // Tipe solid selalu latar prosedural, meski sisa aset resolved
+            // masih tercatat di renderState (kontrak Backdrop).
+            scene.visual.type === "solid"
+              ? undefined
+              : plan.renderState.resolvedAssets[scene.id]
+          }
           metrics={metrics}
           theme={theme}
           durationInFrames={durationInFrames}

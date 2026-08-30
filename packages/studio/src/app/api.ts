@@ -128,8 +128,24 @@ export const api = {
   },
 
   /** Langganan broadcast antar-panel; kembalikan fungsi stop. */
-  subscribeEvents: (onEvent: (event: StudioEvent) => void): (() => void) => {
+  uploadAsset: (sceneId: string, filename: string, dataUrl: string) =>
+    request<{ ok: true; file: string; summary: string }>("/api/assets/upload", {
+      method: "POST",
+      body: JSON.stringify({ sceneId, filename, dataUrl }),
+    }),
+
+  /**
+   * SSE liveness: EventSource menyambung ulang otomatis; `onStatus`
+   * melaporkan putus/tersambung agar UI bisa menyegarkan state (event yang
+   * terlewat saat putus) dan menunjukkan indikator koneksi.
+   */
+  subscribeEvents: (
+    onEvent: (event: StudioEvent) => void,
+    onStatus?: (connected: boolean) => void,
+  ): (() => void) => {
     const source = new EventSource("/api/events");
+    source.onopen = () => onStatus?.(true);
+    source.onerror = () => onStatus?.(false);
     const names: StudioEvent["type"][] = [
       "hello",
       "plan-updated",

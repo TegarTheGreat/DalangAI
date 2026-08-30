@@ -268,7 +268,8 @@
           },
           "transition": {
             "default": {
-              "type": "cross-fade"
+              "type": "cross-fade",
+              "durationFrames": 15
             },
             "type": "object",
             "properties": {
@@ -284,6 +285,12 @@
                   "wipe-down",
                   "none"
                 ]
+              },
+              "durationFrames": {
+                "default": 15,
+                "type": "integer",
+                "minimum": 6,
+                "maximum": 24
               }
             },
             "additionalProperties": false
@@ -320,6 +327,33 @@
                     "top",
                     "center",
                     "bottom"
+                  ]
+                },
+                "align": {
+                  "default": "center",
+                  "type": "string",
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                },
+                "size": {
+                  "default": "m",
+                  "type": "string",
+                  "enum": [
+                    "s",
+                    "m",
+                    "l"
+                  ]
+                },
+                "emphasis": {
+                  "default": "none",
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "box",
+                    "underline"
                   ]
                 },
                 "startFrac": {

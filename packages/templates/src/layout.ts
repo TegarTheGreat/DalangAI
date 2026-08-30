@@ -16,40 +16,50 @@ export const FPS = 30;
 /** ID of the single scene-plan-driven composition registered in Root.tsx. */
 export const COMPOSITION_ID = "Dalang";
 
-/** Crossfade length between scenes. Scenes are always longer than this (core clamps to MIN_SCENE_SEC). */
+/** Default crossfade length between scenes (ADR-0013: per-scene via transition.durationFrames). */
 export const TRANSITION_FRAMES = 15;
+/** Upper bound (mirrors core MAX_TRANSITION_FRAMES) — scenes always outlast two overlaps. */
+const MAX_BOUNDARY_FRAMES = 24;
 
 export interface FrameLayout {
   /** Frames per scene, index-aligned with plan.scenes. */
   sceneFrames: number[];
   /** Global start frame of each scene, transitions overlapped. */
   sceneStarts: number[];
+  /** Overlap frames per boundary i→i+1 (= scene i's exit transition). */
+  boundaryFrames: number[];
   totalFrames: number;
 }
 
 export const computeFrameLayout = (plan: ScenePlan): FrameLayout => {
   const { timings } = computeTimeline(plan);
-  const minFrames = TRANSITION_FRAMES * 2 + 6;
+  const minFrames = MAX_BOUNDARY_FRAMES * 2 + 6;
   const sceneFrames = timings.map((timing) =>
     Math.max(Math.round(timing.durationSec * FPS), minFrames),
   );
+  const boundaryFrames = plan.scenes
+    .slice(0, -1)
+    .map((scene) => scene.transition.durationFrames);
 
   const sceneStarts: number[] = [];
   let cursor = 0;
   sceneFrames.forEach((frames, index) => {
     sceneStarts.push(cursor);
     cursor += frames;
-    if (index < sceneFrames.length - 1) cursor -= TRANSITION_FRAMES;
+    if (index < sceneFrames.length - 1) {
+      cursor -= boundaryFrames[index] ?? TRANSITION_FRAMES;
+    }
   });
 
-  return { sceneFrames, sceneStarts, totalFrames: cursor };
+  return { sceneFrames, sceneStarts, boundaryFrames, totalFrames: cursor };
 };
 
 /** Index of the scene considered "active" at a global frame (transition midpoint rule). */
 export const activeSceneIndex = (layout: FrameLayout, frame: number): number => {
   for (let i = layout.sceneStarts.length - 1; i >= 0; i--) {
     const start = layout.sceneStarts[i] ?? 0;
-    const threshold = i === 0 ? 0 : start + TRANSITION_FRAMES / 2;
+    const overlap = layout.boundaryFrames[i - 1] ?? TRANSITION_FRAMES;
+    const threshold = i === 0 ? 0 : start + overlap / 2;
     if (frame >= threshold) return i;
   }
   return 0;

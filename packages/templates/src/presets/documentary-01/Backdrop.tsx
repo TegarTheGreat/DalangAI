@@ -67,9 +67,49 @@ const AssetLayer: React.FC<{
   return <Img src={staticFile(asset.file)} style={style} />;
 };
 
+/** Varian seni prosedural (ADR-0013) — dipilih lewat visual.variant. */
+const PROCEDURAL_VARIANTS = ["duotone", "rays", "topo", "grid"] as const;
+type ProceduralVariant = (typeof PROCEDURAL_VARIANTS)[number];
+
+const variantOf = (scene: Scene): ProceduralVariant =>
+  (PROCEDURAL_VARIANTS as readonly string[]).includes(scene.visual.variant ?? "")
+    ? (scene.visual.variant as ProceduralVariant)
+    : "duotone";
+
+/** Lapisan seni tambahan di atas dasar duotone, per varian. */
+const variantArt = (
+  variant: ProceduralVariant,
+  seedA: number,
+  seedB: number,
+  duotone: [string, string],
+): React.CSSProperties | null => {
+  switch (variant) {
+    case "rays":
+      return {
+        backgroundImage: `repeating-conic-gradient(from ${Math.round(seedA * 360)}deg at ${20 + seedB * 60}% ${18 + seedA * 20}%, rgba(245,240,230,0.045) 0deg 7deg, transparent 7deg 24deg)`,
+      };
+    case "topo":
+      return {
+        backgroundImage: `repeating-radial-gradient(90% 70% at ${25 + seedA * 50}% ${30 + seedB * 40}%, transparent 0 46px, rgba(245,240,230,0.05) 46px 48px)`,
+      };
+    case "grid":
+      return {
+        backgroundImage: [
+          `linear-gradient(rgba(245,240,230,0.045) 1.5px, transparent 1.5px)`,
+          `linear-gradient(90deg, rgba(245,240,230,0.045) 1.5px, transparent 1.5px)`,
+          `radial-gradient(120% 100% at 50% 40%, transparent 40%, ${duotone[0]}55 100%)`,
+        ].join(", "),
+        backgroundSize: "72px 72px, 72px 72px, 100% 100%",
+      };
+    case "duotone":
+      return null;
+  }
+};
+
 /**
- * Deterministic duotone gradient art. Seeded by scene id, so the same plan
- * always renders the same frame (PRD §4: deterministic pipeline).
+ * Deterministic gradient art. Seeded by scene id, so the same plan always
+ * renders the same frame (PRD §4: deterministic pipeline). `visual.variant`
+ * memilih bahasa grafis: duotone (default) | rays | topo | grid (ADR-0013).
  */
 export const ProceduralBackdrop: React.FC<{
   scene: Scene;
@@ -78,16 +118,17 @@ export const ProceduralBackdrop: React.FC<{
   durationInFrames: number;
 }> = ({ scene, sceneIndex, theme, durationInFrames }) => {
   const frame = useCurrentFrame();
-  const duotone = theme.duotones[sceneIndex % theme.duotones.length] ?? [
+  const duotone = (theme.duotones[sceneIndex % theme.duotones.length] ?? [
     "#131A33",
     "#3A2A18",
-  ];
+  ]) as [string, string];
   const seedA = random(`${scene.id}-a`);
   const seedB = random(`${scene.id}-b`);
   const ax = 12 + seedA * 30;
   const ay = 8 + seedB * 24;
   const bx = 62 + seedB * 28;
   const by = 64 + seedA * 26;
+  const art = variantArt(variantOf(scene), seedA, seedB, duotone);
 
   return (
     <AbsoluteFill
@@ -112,7 +153,9 @@ export const ProceduralBackdrop: React.FC<{
             `radial-gradient(140% 120% at 50% 120%, rgba(0,0,0,0.55) 0%, transparent 55%)`,
           ].join(", "),
         }}
-      />
+      >
+        {art ? <AbsoluteFill style={art} /> : null}
+      </AbsoluteFill>
       {/* Oversized ring for quiet structure */}
       <div
         style={{

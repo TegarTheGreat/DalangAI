@@ -75,6 +75,8 @@ export interface StudioState {
   assetSearch: AssetSearchState | null;
   renderProgress: RenderProgress | null;
   toast: string | null;
+  /** Status SSE: false = terputus, EventSource sedang menyambung ulang. */
+  connected: boolean;
 }
 
 type Listener = () => void;
@@ -92,6 +94,7 @@ const emptyState: StudioState = {
   assetSearch: null,
   renderProgress: null,
   toast: null,
+  connected: true,
 };
 
 export class StudioClient {
@@ -132,9 +135,32 @@ export class StudioClient {
   // -- lifecycle -------------------------------------------------------------
 
   async start(): Promise<void> {
-    this.stopEvents = api.subscribeEvents((event) => this.onEvent(event));
+    this.stopEvents = api.subscribeEvents(
+      (event) => this.onEvent(event),
+      (connected) => {
+        const wasConnected = this.state.connected;
+        if (connected === wasConnected) return;
+        this.set({ connected });
+        if (connected && !wasConnected) {
+          // Tersambung ulang: segarkan state — event saat putus tak terkirim.
+          void this.refresh();
+          this.toast("Tersambung kembali — state disegarkan");
+        }
+      },
+    );
     await this.refresh();
     this.set({ loading: false });
+  }
+
+  /** Unggah gambar lokal ke scene (server menulis file + patch + pin). */
+  async uploadAsset(sceneId: string, filename: string, dataUrl: string): Promise<void> {
+    try {
+      const { file } = await api.uploadAsset(sceneId, filename, dataUrl);
+      this.toast(`Gambar terpasang dan ter-pin: ${file}`);
+      await this.refresh();
+    } catch (error) {
+      this.failure(error);
+    }
   }
 
   stop(): void {

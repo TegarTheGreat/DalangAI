@@ -3,6 +3,7 @@ export * from "./db";
 export * from "./fs-utils";
 export * from "./generate";
 export * from "./hash";
+export * from "./image-dims";
 export * from "./load-plan";
 export * from "./materialize";
 export * from "./ports";

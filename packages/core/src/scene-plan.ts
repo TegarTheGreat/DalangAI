@@ -97,9 +97,20 @@ export const TRANSITION_TYPES = [
 export const transitionTypeSchema = z.enum(TRANSITION_TYPES);
 export type TransitionType = z.infer<typeof transitionTypeSchema>;
 
+/** Batas durasi transisi (frame @30fps) — ADR-0013. */
+export const MIN_TRANSITION_FRAMES = 6;
+export const MAX_TRANSITION_FRAMES = 24;
+
 /** Transisi KELUAR dari scene ini (batas ke scene berikutnya). */
 export const transitionSchema = z.strictObject({
   type: transitionTypeSchema.default("cross-fade"),
+  /** Durasi tumpang-tindih transisi; default 15 menjaga plan lama identik. */
+  durationFrames: z
+    .number()
+    .int()
+    .min(MIN_TRANSITION_FRAMES)
+    .max(MAX_TRANSITION_FRAMES)
+    .default(15),
 });
 export type Transition = z.infer<typeof transitionSchema>;
 
@@ -107,6 +118,13 @@ export const TEXT_ROLES = ["headline", "subline", "kicker", "quote"] as const;
 export const textRoleSchema = z.enum(TEXT_ROLES);
 export const TEXT_POSITIONS = ["top", "center", "bottom"] as const;
 export const textPositionSchema = z.enum(TEXT_POSITIONS);
+// ADR-0013: pengayaan gaya teks — semua default mempertahankan render lama.
+export const TEXT_ALIGNS = ["left", "center", "right"] as const;
+export const textAlignSchema = z.enum(TEXT_ALIGNS);
+export const TEXT_SIZES = ["s", "m", "l"] as const;
+export const textSizeSchema = z.enum(TEXT_SIZES);
+export const TEXT_EMPHASES = ["none", "box", "underline"] as const;
+export const textEmphasisSchema = z.enum(TEXT_EMPHASES);
 
 /** Teks overlay di atas visual (di bawah caption); gaya dari theme preset. */
 export const textOverlaySchema = z.strictObject({
@@ -114,6 +132,12 @@ export const textOverlaySchema = z.strictObject({
   content: z.string().min(1),
   role: textRoleSchema.default("headline"),
   position: textPositionSchema.default("center"),
+  /** Perataan horizontal blok teks (ADR-0013). */
+  align: textAlignSchema.default("center"),
+  /** Skala relatif terhadap ukuran dasar peran (ADR-0013). */
+  size: textSizeSchema.default("m"),
+  /** Penekanan: kotak berlatar atau garis bawah aksen (ADR-0013). */
+  emphasis: textEmphasisSchema.default("none"),
   /** Jendela tampil, fraksi 0–1 dari durasi scene. */
   startFrac: normalized01.default(0),
   endFrac: normalized01.default(1),
@@ -163,7 +187,7 @@ export const sceneSchema = z.strictObject({
   /** "auto" = narration length + padding; number = fixed seconds. */
   duration: z.union([z.literal("auto"), finitePositive]).default("auto"),
   /** Transisi keluar ke scene berikutnya (ADR-0011). */
-  transition: transitionSchema.default({ type: "cross-fade" }),
+  transition: transitionSchema.default({ type: "cross-fade", durationFrames: 15 }),
   /** Teks overlay (maks 3) di atas visual (ADR-0011). */
   texts: z.array(textOverlaySchema).max(3).default([]),
   annotations: z.array(annotationSchema).default([]),

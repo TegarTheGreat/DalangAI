@@ -4,6 +4,7 @@ import type { AspectMetrics } from "../../layout";
 import type { StepInfo } from "./annotate";
 import { ScreenshotStage } from "./ScreenshotStage";
 import { TutCaptions } from "./TutCaptions";
+import { TutTexts } from "./TutTexts";
 import type { TutTheme } from "./theme";
 
 /** Kertas ber-titik grid — latar semua scene tutorial. */
@@ -99,6 +100,12 @@ export const StepScene: React.FC<{
       debug={debug}
     />
     {step ? <StepChip info={step} metrics={metrics} theme={theme} /> : null}
+    <TutTexts
+      scene={scene}
+      metrics={metrics}
+      theme={theme}
+      durationInFrames={durationInFrames}
+    />
     <TutCaptions
       scene={scene}
       plan={plan}

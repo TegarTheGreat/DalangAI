@@ -1,11 +1,14 @@
 import { ASPECT_RATIOS } from "@dalang/core";
+import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { useEffect, useState } from "react";
-import { RadioCard, useEscape } from "./components/controls";
+import { RadioCard, Segmented, useEscape } from "./components/controls";
 import {
   IconChat,
+  IconCheck,
   IconExport,
   IconImage,
   IconMic,
+  IconPalette,
   IconRedo,
   IconSliders,
   IconSpinner,
@@ -97,10 +100,164 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   );
 };
 
-const Header: React.FC = () => {
+/**
+ * Dialog Gaya proyek (ADR-0013): identitas visual global lewat setMeta —
+ * preset gaya, warna aksen/dasar, dan font ter-bundle. Semua patch user
+ * biasa: tercatat, bisa di-undo, terlihat agent.
+ */
+const STYLE_PRESETS = ["documentary-01", "tutorial-01"] as const;
+
+const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
+  open,
+  onClose,
+}) => {
   const { project } = useStudio();
+  const plan = project?.plan ?? null;
+  const [stylePreset, setStylePreset] = useState<string>("documentary-01");
+  const [accent, setAccent] = useState("#e4a64c");
+  const [primary, setPrimary] = useState("#0b0e17");
+  const [fontDisplay, setFontDisplay] = useState("");
+  const [fontBody, setFontBody] = useState("");
+  useEscape(open, onClose);
+
+  useEffect(() => {
+    if (!open || !plan) return;
+    const tokens = plan.meta.tokens ?? {};
+    setStylePreset(plan.meta.stylePreset);
+    setAccent(
+      tokens.accent ?? (plan.meta.stylePreset === "tutorial-01" ? "#2e5fd7" : "#e4a64c"),
+    );
+    setPrimary(
+      tokens.primary ?? (plan.meta.stylePreset === "tutorial-01" ? "#f4f2ec" : "#0b0e17"),
+    );
+    setFontDisplay(tokens.fontDisplay ?? "");
+    setFontBody(tokens.fontBody ?? "");
+  }, [open, plan]);
+
+  if (!open || !plan) return null;
+
+  const save = () => {
+    onClose();
+    void studioClient.applyPatch(
+      [
+        {
+          op: "setMeta",
+          patch: {
+            stylePreset,
+            tokens: {
+              accent,
+              primary,
+              ...(fontDisplay ? { fontDisplay } : {}),
+              ...(fontBody ? { fontBody } : {}),
+            },
+          },
+        },
+      ],
+      "Gaya proyek diperbarui",
+    );
+  };
+
+  return (
+    <div className="dialog-backdrop">
+      <div className="dialog brief-dialog">
+        <h3>Gaya proyek</h3>
+        <p>
+          Identitas visual global — berlaku ke preview dan render, dan terlihat agent.
+        </p>
+        <div className="brief-form">
+          <div className="field">
+            <span>Preset gaya</span>
+            <Segmented
+              grow
+              options={STYLE_PRESETS}
+              value={
+                (STYLE_PRESETS as readonly string[]).includes(stylePreset)
+                  ? (stylePreset as (typeof STYLE_PRESETS)[number])
+                  : "documentary-01"
+              }
+              label={(preset) =>
+                preset === "tutorial-01" ? "Tutorial (terang)" : "Dokumenter (gelap)"
+              }
+              onChange={setStylePreset}
+            />
+          </div>
+          <div className="field-row">
+            <label className="field">
+              <span>Warna aksen</span>
+              <input
+                type="color"
+                value={accent}
+                onChange={(event) => setAccent(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Warna dasar</span>
+              <input
+                type="color"
+                value={primary}
+                onChange={(event) => setPrimary(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="field-row">
+            <label className="field">
+              <span>Font display</span>
+              <select
+                value={fontDisplay}
+                onChange={(event) => setFontDisplay(event.target.value)}
+              >
+                <option value="">Bawaan preset</option>
+                {FONT_CHOICES.map((choice) => (
+                  <option key={choice.family} value={choice.family}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Font body</span>
+              <select
+                value={fontBody}
+                onChange={(event) => setFontBody(event.target.value)}
+              >
+                <option value="">Bawaan preset</option>
+                {FONT_CHOICES.map((choice) => (
+                  <option key={choice.family} value={choice.family}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="brief-actions">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                onClose();
+                void studioClient.applyPatch(
+                  [{ op: "setMeta", patch: { tokens: null } }],
+                  "Gaya kembali ke bawaan preset",
+                );
+              }}
+            >
+              Reset token
+            </button>
+            <button type="button" className="primary" onClick={save}>
+              Terapkan gaya
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Header: React.FC = () => {
+  const { project, connected } = useStudio();
   const { chatOpen, inspectorOpen } = useUi();
   const [exportOpen, setExportOpen] = useState(false);
+  const [styleOpen, setStyleOpen] = useState(false);
   const plan = project?.plan ?? null;
   const busyLabel = project?.busy.mutation
     ? `${BUSY_LABEL[project.busy.mutation] ?? "Memproses"}…`
@@ -168,6 +325,17 @@ const Header: React.FC = () => {
           <IconSliders />
           <span>Properti</span>
         </button>
+        <button
+          type="button"
+          className="tool"
+          disabled={!plan}
+          onClick={() => setStyleOpen(true)}
+          data-tip="Gaya proyek: preset, warna, font"
+          data-tip-bottom=""
+        >
+          <IconPalette />
+          <span>Gaya</span>
+        </button>
         <span className="divider" />
         <button
           type="button"
@@ -220,6 +388,23 @@ const Header: React.FC = () => {
         </button>
         <span className="divider" />
         {project ? (
+          connected ? (
+            <span
+              className="save-chip"
+              data-tip="Realtime & autosave: tiap perubahan langsung tersimpan ke plan.json dan disiarkan ke semua panel/tab"
+              data-tip-bottom=""
+            >
+              <IconCheck />
+              Tersimpan
+            </span>
+          ) : (
+            <span className="save-chip off">
+              <IconSpinner />
+              Menyambung…
+            </span>
+          )
+        ) : null}
+        {project ? (
           <span
             className="cost-chip"
             data-tip="Total biaya tercatat proyek (LLM + TTS)"
@@ -241,6 +426,7 @@ const Header: React.FC = () => {
         </button>
       </div>
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      <StyleDialog open={styleOpen} onClose={() => setStyleOpen(false)} />
     </header>
   );
 };

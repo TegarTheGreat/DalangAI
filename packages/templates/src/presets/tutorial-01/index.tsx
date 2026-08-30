@@ -99,7 +99,11 @@ const SceneRouter: React.FC<{
       <StepScene
         scene={scene}
         plan={plan}
-        asset={plan.renderState.resolvedAssets[scene.id]}
+        asset={
+          scene.visual.type === "solid"
+            ? undefined
+            : plan.renderState.resolvedAssets[scene.id]
+        }
         metrics={metrics}
         theme={theme}
         durationInFrames={durationInFrames}
@@ -136,11 +140,12 @@ export const TutorialPreset: React.FC<{
   plan.scenes.forEach((scene, index) => {
     if (index > 0) {
       const type = plan.scenes[index - 1]?.transition.type ?? "cross-fade";
+      const frames = layout.boundaryFrames[index - 1] ?? TRANSITION_FRAMES;
       series.push(
         <TransitionSeries.Transition
           key={`transition-${index}`}
           presentation={presentationFor(type)}
-          timing={linearTiming({ durationInFrames: TRANSITION_FRAMES })}
+          timing={linearTiming({ durationInFrames: frames })}
         />,
       );
     }

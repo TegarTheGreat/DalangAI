@@ -24,7 +24,10 @@ const basePlan = () =>
 describe("ADR-0011: default mundur-kompatibel", () => {
   it("plan lama tanpa field baru terparse dengan default netral", () => {
     const plan = basePlan();
-    expect(plan.scenes[0]?.transition).toEqual({ type: "cross-fade" });
+    expect(plan.scenes[0]?.transition).toEqual({
+      type: "cross-fade",
+      durationFrames: 15, // ADR-0013 menambah field ini dengan default kompatibel
+    });
     expect(plan.scenes[0]?.texts).toEqual([]);
     expect(plan.scenes[0]?.visual.filter).toBeUndefined();
   });

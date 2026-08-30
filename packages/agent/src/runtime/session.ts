@@ -33,6 +33,15 @@ import { AgentEventLog } from "./agent-log";
  */
 
 const HISTORY_LIMIT = 40;
+export const PRUNE_MARKER =
+  "[Sistem: riwayat lama dipangkas otomatis — panggil getProjectState bila butuh keadaan proyek terkini.]";
+
+/** Buang pesan `tool` yatim di kepala riwayat (hasil pemotongan lama). */
+const dropOrphanToolHead = (messages: ModelMessage[]): ModelMessage[] => {
+  let start = 0;
+  while (start < messages.length && messages[start]?.role === "tool") start += 1;
+  return start === 0 ? messages : messages.slice(start);
+};
 
 export class ProjectSession {
   readonly paths: ProjectPaths;
@@ -97,12 +106,28 @@ export class ProjectSession {
   private loadHistory(): ModelMessage[] {
     try {
       if (existsSync(this.historyPath)) {
-        return JSON.parse(readFileSync(this.historyPath, "utf8")) as ModelMessage[];
+        const raw = JSON.parse(readFileSync(this.historyPath, "utf8")) as ModelMessage[];
+        return dropOrphanToolHead(raw);
       }
     } catch {
       // riwayat korup → mulai bersih
     }
     return [];
+  }
+
+  /**
+   * Pangkas riwayat melebihi HISTORY_LIMIT (keandalan konteks panjang):
+   * potongan tidak boleh menyisakan pesan `tool` yatim di depan (provider
+   * menolak tool-result tanpa tool-call-nya), dan pemangkasan ditandai satu
+   * pesan sistem agar model tahu konteks lama sudah tidak utuh.
+   */
+  pruneHistory(): void {
+    if (this.history.length <= HISTORY_LIMIT) return;
+    const pruned = dropOrphanToolHead(this.history.slice(-HISTORY_LIMIT));
+    if (pruned[0] !== undefined && pruned[0].content !== PRUNE_MARKER) {
+      pruned.unshift({ role: "user", content: PRUNE_MARKER });
+    }
+    this.history = pruned;
   }
 
   persist(): void {
@@ -115,7 +140,8 @@ export class ProjectSession {
       }
     }
     atomicWriteFile(this.patchLogPath, JSON.stringify(this.patchLog.toJSON()));
-    atomicWriteFile(this.historyPath, JSON.stringify(this.history.slice(-HISTORY_LIMIT)));
+    this.pruneHistory();
+    atomicWriteFile(this.historyPath, JSON.stringify(this.history));
   }
 
   private hashDisk(): string | null {

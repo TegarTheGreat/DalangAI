@@ -8,14 +8,19 @@ import type {
 } from "@dalang/core";
 import {
   FILTER_PRESETS,
+  MAX_TRANSITION_FRAMES,
+  MIN_TRANSITION_FRAMES,
   MOTIONS,
+  TEXT_ALIGNS,
+  TEXT_EMPHASES,
   TEXT_POSITIONS,
   TEXT_ROLES,
+  TEXT_SIZES,
   TRANSITION_TYPES,
   VISUAL_TYPES,
   visualFilterSchema,
 } from "@dalang/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Segmented, Switch } from "../components/controls";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
 import { uiStore } from "../ui-state";
@@ -70,6 +75,27 @@ const POSITION_LABEL: Record<string, string> = {
   top: "Atas",
   center: "Tengah",
   bottom: "Bawah",
+};
+
+const ALIGN_LABEL: Record<string, string> = {
+  left: "Kiri",
+  center: "Tengah",
+  right: "Kanan",
+};
+const SIZE_LABEL: Record<string, string> = { s: "S", m: "M", l: "L" };
+const EMPHASIS_LABEL: Record<string, string> = {
+  none: "Polos",
+  box: "Kotak",
+  underline: "Garis",
+};
+
+/** Varian seni prosedural (ADR-0013) untuk scene solid/stock belum ter-resolve. */
+const ART_VARIANTS = ["duotone", "rays", "topo", "grid"] as const;
+const ART_LABEL: Record<string, string> = {
+  duotone: "Duotone",
+  rays: "Sinar",
+  topo: "Kontur",
+  grid: "Grid",
 };
 
 /** Slider dengan label nilai; commit patch saat dilepas (bukan tiap piksel). */
@@ -471,6 +497,7 @@ const AnotasiTab: React.FC<{ scene: Scene; stylePreset: string }> = ({
 const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
   const { project } = useStudio();
   const busy = project?.busy.mutation !== null;
+  const uploadRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState(scene.visual.query ?? "");
   useEffect(() => setQuery(scene.visual.query ?? ""), [scene]);
 
@@ -516,6 +543,37 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             ))}
           </select>
         </label>
+        <div className="btn-row">
+          <input
+            ref={uploadRef}
+            type="file"
+            accept="image/png,image/jpeg"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") {
+                    void studioClient.uploadAsset(scene.id, file.name, reader.result);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }
+              event.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="ghost with-icon"
+            disabled={busy}
+            onClick={() => uploadRef.current?.click()}
+            data-tip="PNG/JPEG maks 8MB — terpasang & ter-pin ke scene ini"
+          >
+            <IconPlus />
+            Unggah gambar
+          </button>
+        </div>
         <label className="field">
           <span>Kata kunci pencarian aset (bahasa Inggris)</span>
           <input
@@ -596,6 +654,33 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           }
         />
       </section>
+
+      {scene.visual.type === "solid" || scene.visual.type === "stock" ? (
+        <section className="prop-group">
+          <h4>Seni prosedural</h4>
+          <p className="group-hint">
+            Bahasa grafis latar saat scene belum punya aset (atau tipe solid) —
+            deterministik per scene.
+          </p>
+          <Segmented
+            grow
+            options={ART_VARIANTS}
+            value={
+              (ART_VARIANTS as readonly string[]).includes(scene.visual.variant ?? "")
+                ? (scene.visual.variant as (typeof ART_VARIANTS)[number])
+                : "duotone"
+            }
+            disabled={busy}
+            label={(variant) => ART_LABEL[variant] ?? variant}
+            onChange={(variant) =>
+              patch(
+                [{ op: "updateScene", id: scene.id, patch: { visual: { variant } } }],
+                `Seni ${ART_LABEL[variant]}`,
+              )
+            }
+          />
+        </section>
+      ) : null}
 
       <section className="prop-group">
         <div className="group-head">
@@ -703,6 +788,9 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                   content: "Teks baru",
                   role: "headline",
                   position: "center",
+                  align: "center",
+                  size: "m",
+                  emphasis: "none",
                   startFrac: 0,
                   endFrac: 1,
                 },
@@ -763,6 +851,47 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                 )
               }
             />
+            <div className="text-item-row">
+              <Segmented
+                options={TEXT_ALIGNS}
+                value={text.align}
+                disabled={busy}
+                label={(align) => ALIGN_LABEL[align] ?? align}
+                onChange={(align) =>
+                  patchTexts(
+                    scene.texts.map((entry, i) =>
+                      i === index ? { ...entry, align } : entry,
+                    ),
+                  )
+                }
+              />
+              <Segmented
+                options={TEXT_SIZES}
+                value={text.size}
+                disabled={busy}
+                label={(size) => SIZE_LABEL[size] ?? size}
+                onChange={(size) =>
+                  patchTexts(
+                    scene.texts.map((entry, i) =>
+                      i === index ? { ...entry, size } : entry,
+                    ),
+                  )
+                }
+              />
+            </div>
+            <Segmented
+              options={TEXT_EMPHASES}
+              value={text.emphasis}
+              disabled={busy}
+              label={(emphasis) => EMPHASIS_LABEL[emphasis] ?? emphasis}
+              onChange={(emphasis) =>
+                patchTexts(
+                  scene.texts.map((entry, i) =>
+                    i === index ? { ...entry, emphasis } : entry,
+                  ),
+                )
+              }
+            />
             <button
               type="button"
               className="ghost danger with-icon"
@@ -808,7 +937,18 @@ const TransisiTab: React.FC<{ scene: Scene; isLast: boolean }> = ({ scene, isLas
             disabled={busy}
             onClick={() =>
               void studioClient.applyPatch(
-                [{ op: "updateScene", id: scene.id, patch: { transition: { type } } }],
+                [
+                  {
+                    op: "updateScene",
+                    id: scene.id,
+                    patch: {
+                      transition: {
+                        type,
+                        durationFrames: scene.transition.durationFrames,
+                      },
+                    },
+                  },
+                ],
                 `Transisi: ${TRANSITION_LABEL[type]}`,
               )
             }
@@ -821,6 +961,29 @@ const TransisiTab: React.FC<{ scene: Scene; isLast: boolean }> = ({ scene, isLas
           </button>
         ))}
       </div>
+      <SliderRow
+        label="Durasi"
+        min={MIN_TRANSITION_FRAMES}
+        max={MAX_TRANSITION_FRAMES}
+        step={1}
+        value={scene.transition.durationFrames}
+        neutral={15}
+        format={(value) => `${(value / 30).toFixed(2)}s`}
+        onCommit={(durationFrames) =>
+          void studioClient.applyPatch(
+            [
+              {
+                op: "updateScene",
+                id: scene.id,
+                patch: {
+                  transition: { type: scene.transition.type, durationFrames },
+                },
+              },
+            ],
+            `Durasi transisi ${(durationFrames / 30).toFixed(2)}s`,
+          )
+        }
+      />
     </section>
   );
 };

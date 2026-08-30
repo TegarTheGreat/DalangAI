@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -114,7 +114,27 @@ Yang sudah berjalan:
     yang sama dengan CLI; media tersaji traversal-safe + Range 206
     (ADR-0010). Tanpa API key, chat nonaktif dengan alasan jelas — panel
     manual tetap berfungsi penuh.
-- **Kualitas terjaga otomatis**: 204 unit test (kontrak lock/pin/undo, timing
+- **Pengayaan editor 2 (ADR-0013)** — teks & rupa yang lebih kaya, studio
+  yang terasa hidup:
+  - **Teks bergaya**: perataan kiri/tengah/kanan, ukuran S/M/L, penekanan
+    chip berlatar atau garis bawah aksen — semantik sama di kedua preset;
+    teks seposisi mengalir rapi dalam satu kolom.
+  - **Tempo transisi per scene** (`durationFrames` 6–24) lewat slider Durasi;
+    **4 varian seni prosedural** (duotone/sinar/kontur/grid) untuk scene
+    tanpa aset; **4 font variable ter-bundle** (Fraunces, Inter, Space
+    Grotesk, Lora — OFL, offline) dipilih dari dialog **Gaya proyek**
+    bersama token warna aksen/dasar (satu op `setMeta`, undoable).
+  - **Unggah gambar sendiri** dari panel Visual: tersimpan ke
+    `assets/unggah-*`, terpasang ter-pin + beralih tipe `image` dalam satu
+    batch patch yang bisa di-undo.
+  - **Terasa hidup tanpa refresh**: setiap patch autosave server-side dan
+    disiarkan SSE ke semua tab; chip "Tersimpan / Menyambung" di topbar,
+    putus koneksi terdeteksi realtime, reconnect otomatis menyegarkan state
+    — terverifikasi Playwright tanpa reload halaman.
+  - **Agent lebih handal**: riwayat sesi panjang dipangkas aman (marker +
+    drop kepala `tool` yatim yang ditolak provider), system prompt mengenal
+    seluruh perangkat baru.
+- **Kualitas terjaga otomatis**: 250 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -127,7 +147,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 204 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 250 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -168,7 +188,7 @@ packages/
   providers/  adapter TTS (ElevenLabs/Edge/silence) & stock (Pexels/Pixabay)
   agent/      runtime agent: AI SDK v7, registry models.dev, tools §6.2, guardrails
   studio/     UI hybrid 3 panel (Vite+React+Player) + server Hono/SSE single-writer
-  templates/  preset Remotion terkurasi (documentary-01) + font vendored
+  templates/  preset Remotion terkurasi (documentary-01, tutorial-01) + 4 font vendored
   renderer/   RenderTarget lokal: staging, bundling, profil draft|final
   cli/        dalang studio | chat | validate | generate | still | render | log
 examples/

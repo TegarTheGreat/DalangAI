@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./video": "./src/DalangVideo.tsx",
     "./paths": "./src/paths.ts",
-    "./layout": "./src/layout.ts"
+    "./layout": "./src/layout.ts",
+    "./fonts": "./src/fonts.ts"
   },
   "scripts": {
     "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",

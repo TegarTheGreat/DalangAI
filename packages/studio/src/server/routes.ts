@@ -1,6 +1,13 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PatchError, patchOpSchema } from "@dalang/core";
-import { materializeCandidate, runAssetStage, runTtsStage } from "@dalang/pipeline";
+import { PatchError, patchOpSchema, setResolvedAsset } from "@dalang/core";
+import {
+  contentHash,
+  imageDims,
+  materializeCandidate,
+  runAssetStage,
+  runTtsStage,
+} from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -355,6 +362,94 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
       }
     }
     return c.json({ error: `Tidak ada kandidat untuk "${query}"` }, 404);
+  });
+
+  // Upload gambar/screenshot lokal dari UI (ADR-0013): file ditulis ke
+  // assets/, renderState diisi langsung (source "local"), lalu patch USER
+  // replaceAsset + (bila perlu) alih tipe visual — satu batch, bisa di-undo.
+  const uploadBody = z.object({
+    sceneId: z.string().min(1),
+    filename: z.string().min(1).max(120),
+    dataUrl: z.string().max(12_000_000),
+  });
+  const UPLOAD_RE = /^data:image\/(png|jpe?g);base64,([A-Za-z0-9+/=]+)$/;
+
+  app.post("/api/assets/upload", async (c) => {
+    const body = uploadBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const scene = plan.scenes.find((s) => s.id === body.data.sceneId);
+    if (!scene) return c.json({ error: `Scene ${body.data.sceneId} tidak ada` }, 400);
+    if (scene.locked) return c.json({ error: "Scene terkunci" }, 400);
+    const match = body.data.dataUrl.match(UPLOAD_RE);
+    if (!match) {
+      return c.json({ error: "Hanya PNG/JPEG (data URL base64) yang diterima" }, 400);
+    }
+    const bytes = Buffer.from(match[2] ?? "", "base64");
+    if (bytes.byteLength === 0 || bytes.byteLength > 8 * 1024 * 1024) {
+      return c.json({ error: "Ukuran file harus > 0 dan <= 8MB" }, 400);
+    }
+    const ext = match[1] === "png" ? "png" : "jpg";
+    const safeBase =
+      body.data.filename
+        .toLowerCase()
+        .replace(/\.[a-z0-9]+$/, "")
+        .replace(/[^a-z0-9-_]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 48) || "gambar";
+    const hash = contentHash({ kind: "upload", bytes: bytes.byteLength, safeBase }).slice(
+      0,
+      8,
+    );
+    const relPath = `assets/unggah-${hash}-${safeBase}.${ext}`;
+
+    try {
+      const startedAt = Date.now();
+      const result = await store.runExclusive("pick", async () => {
+        mkdirSync(join(session.paths.planDir, "assets"), { recursive: true });
+        writeFileSync(join(session.paths.planDir, relPath), bytes);
+        const dims = imageDims(bytes);
+        const current = session.plan;
+        if (!current) throw new Error("Plan hilang di tengah upload");
+        session.plan = setResolvedAsset(current, body.data.sceneId, {
+          file: relPath,
+          kind: "image",
+          source: "local",
+          license: "milik user (unggahan studio)",
+          ...(dims ? { width: dims.width, height: dims.height } : {}),
+        });
+        const ops: Parameters<typeof session.applyUserPatch>[0] = [
+          {
+            op: "replaceAsset",
+            sceneId: body.data.sceneId,
+            assetId: relPath,
+            pinned: true,
+          },
+        ];
+        if (scene.visual.type !== "image" && scene.visual.type !== "screenshot") {
+          ops.push({
+            op: "updateScene",
+            id: body.data.sceneId,
+            patch: { visual: { type: "image" } },
+          });
+        }
+        const { summary } = session.applyUserPatch(ops);
+        return { summary };
+      });
+      logUiEvent(
+        "uploadAsset",
+        { sceneId: body.data.sceneId, filename: body.data.filename },
+        { file: relPath, bytes: bytes.byteLength },
+        0,
+        Date.now() - startedAt,
+      );
+      store.notifyPlan("pick");
+      return c.json({ ok: true, file: relPath, summary: result.summary });
+    } catch (error) {
+      if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
+      return c.json(errorPayload(error), 400);
+    }
   });
 
   app.post("/api/stock/pick", async (c) => {

@@ -7,12 +7,11 @@ import {
   TEXT_POSITIONS,
   TEXT_SIZE_FACTOR,
 } from "../../text-overlay-model";
-import type { DocTheme } from "./theme";
+import type { TutTheme } from "./theme";
 
 /**
- * ADR-0011: teks overlay per scene — di atas visual, di bawah caption.
- * Gaya mengikuti bahasa preset (Fraunces untuk headline/quote, Inter untuk
- * kicker/subline); masuk-keluar dianimasikan fade + rise deterministik.
+ * Teks overlay tema terang (ADR-0013) — semantik role/align/size/emphasis
+ * sama dengan documentary-01, warna mengikuti kertas tutorial.
  */
 
 const ENTER_FRAMES = 14;
@@ -20,14 +19,13 @@ const EXIT_FRAMES = 10;
 
 const roleStyle = (
   role: TextOverlay["role"],
-  theme: DocTheme,
+  theme: TutTheme,
   metrics: AspectMetrics,
   sizeFactor: number,
 ): React.CSSProperties => {
   const base: React.CSSProperties = {
     margin: 0,
     maxWidth: "82%",
-    textShadow: "0 2px 18px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.7)",
     textWrap: "balance",
   };
   switch (role) {
@@ -36,28 +34,26 @@ const roleStyle = (
         ...base,
         fontFamily: theme.fontDisplay,
         fontWeight: 640,
-        fontSize: metrics.titleFontSize * 0.62 * sizeFactor,
+        fontSize: metrics.titleFontSize * 0.5 * sizeFactor,
         lineHeight: 1.08,
-        letterSpacing: "-0.01em",
         color: theme.ink,
       };
     case "subline":
       return {
         ...base,
         fontFamily: theme.fontBody,
-        fontWeight: 500,
-        fontSize: metrics.titleFontSize * 0.26 * sizeFactor,
-        lineHeight: 1.35,
-        color: theme.ink,
-        opacity: 0.92,
+        fontWeight: 540,
+        fontSize: metrics.titleFontSize * 0.24 * sizeFactor,
+        lineHeight: 1.4,
+        color: theme.inkSoft,
       };
     case "kicker":
       return {
         ...base,
         fontFamily: theme.fontBody,
-        fontWeight: 700,
-        fontSize: metrics.titleFontSize * 0.17 * sizeFactor,
-        letterSpacing: "0.34em",
+        fontWeight: 760,
+        fontSize: metrics.titleFontSize * 0.16 * sizeFactor,
+        letterSpacing: "0.3em",
         textTransform: "uppercase",
         color: theme.accent,
       };
@@ -66,9 +62,9 @@ const roleStyle = (
         ...base,
         fontFamily: theme.fontDisplay,
         fontStyle: "italic",
-        fontWeight: 480,
-        fontSize: metrics.titleFontSize * 0.4 * sizeFactor,
-        lineHeight: 1.25,
+        fontWeight: 500,
+        fontSize: metrics.titleFontSize * 0.34 * sizeFactor,
+        lineHeight: 1.3,
         color: theme.ink,
       };
   }
@@ -80,21 +76,21 @@ const positionStyle = (
 ): React.CSSProperties => {
   switch (position) {
     case "top":
-      return { justifyContent: "flex-start", paddingTop: metrics.marginTop * 1.9 };
+      return { justifyContent: "flex-start", paddingTop: metrics.marginTop * 1.5 };
     case "center":
       return { justifyContent: "center" };
     case "bottom":
       return {
         justifyContent: "flex-end",
-        paddingBottom: metrics.captionBottom + metrics.marginTop * 1.2,
+        paddingBottom: metrics.captionBottom + metrics.marginTop,
       };
   }
 };
 
-export const TextsOverlay: React.FC<{
+export const TutTexts: React.FC<{
   scene: Scene;
   metrics: AspectMetrics;
-  theme: DocTheme;
+  theme: TutTheme;
   durationInFrames: number;
 }> = ({ scene, metrics, theme, durationInFrames }) => {
   const frame = useCurrentFrame();
@@ -142,11 +138,14 @@ export const TextsOverlay: React.FC<{
                     ...align.self,
                     ...align.block,
                     ...emphasisStyle(text.emphasis, {
-                      boxBg: "rgba(7, 9, 15, 0.78)",
+                      boxBg: theme.card,
                       accent: theme.accent,
                     }),
+                    ...(text.emphasis === "box"
+                      ? { boxShadow: "0 10px 30px rgba(29, 33, 41, 0.14)" }
+                      : {}),
                     opacity: Math.min(enter, exit),
-                    transform: `translateY(${(1 - enter) * 26}px)`,
+                    transform: `translateY(${(1 - enter) * 22}px)`,
                   }}
                 >
                   {text.content}

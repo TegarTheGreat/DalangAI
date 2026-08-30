@@ -166,6 +166,22 @@ export const IconSend: React.FC = () => (
   </Icon>
 );
 
+export const IconCheck: React.FC = () => (
+  <Icon>
+    <path d="m4.5 12.5 5 5 10-11" />
+  </Icon>
+);
+
+/** Palet pelukis — gaya/identitas visual proyek. */
+export const IconPalette: React.FC = () => (
+  <Icon>
+    <path d="M12 3a9 9 0 1 0 .05 18h1.6a2.1 2.1 0 0 0 1.5-3.58l-.5-.5A1.9 1.9 0 0 1 16 13.7h2.8A2.2 2.2 0 0 0 21 11.5 8.7 8.7 0 0 0 12 3Z" />
+    <circle cx="7.6" cy="10.4" r="1.3" fill="currentColor" stroke="none" />
+    <circle cx="10.8" cy="7.2" r="1.3" fill="currentColor" stroke="none" />
+    <circle cx="15.2" cy="7.5" r="1.3" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
 export const IconSpinner: React.FC = () => (
   <Icon className="spin">
     <path d="M12 3a9 9 0 1 0 9 9" />
