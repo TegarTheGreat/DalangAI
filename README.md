@@ -8,7 +8,14 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) · Fase 3, 2, 1, 0 selesai
+
+![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
+
+*Lobi (`pnpm dalang studio`): tiap proyek adalah satu folder biasa berisi
+`plan.json`. Kartunya memakai warna aksen proyeknya sendiri dan rasio
+aslinya; yang sudah pernah diekspor memutar ekspor terakhirnya saat disorot.
+Durasi yang tertulis sama persis dengan berkas hasil render.*
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -75,6 +82,24 @@ Yang sudah berjalan:
   - **Sadar editan manual**: file plan yang diubah di luar chat terdeteksi
     per giliran dan disuntikkan ke konteks agent (PRD §5.2); riwayat +
     undo/redo (`/undo`, `/redo`) bertahan lintas restart.
+- **Lobi & manajemen proyek (ADR-0020)** — `dalang studio`:
+  - **Daftar proyek** dengan sampul berwarna aksen proyeknya, rasio, jumlah
+    scene, durasi (angka yang sama dengan hasil ekspor), dan jumlah ekspor.
+    Kartu yang sudah pernah diekspor **memutar ekspor terakhirnya** saat
+    disorot; yang belum menampilkan sampul yang dihasilkan dari judul + aksen.
+  - **Proyek baru** (judul, rasio, gaya, format konten) lahir dengan satu
+    kartu judul supaya editor tidak membuka ke layar kosong; **ganti judul**,
+    **duplikat** (tanpa cache/riwayat/ledger biaya proyek asal), dan **buang**
+    yang MEMINDAHKAN folder ke `.trash/` — bukan menghapus.
+  - Sebuah proyek tetap **folder biasa berisi `plan.json`** — bisa disalin,
+    di-zip, dan di-commit. Lobi hanya membaca folder, bukan basis data;
+    proyek dengan plan rusak tetap didaftar, ditandai.
+  - Berpindah proyek ditolak selama ada ekspor atau job berjalan.
+- **Gerbang tata letak (ADR-0020)** — `pnpm --filter @dalang/studio gate:layout`
+  membuka studio di 15 lebar layar (380-1920) dan menolak kontrol header yang
+  saling menindih, kontrol yang tergunting habis, tab yang terpotong di wadah
+  tak-tergulir, dan halaman yang bisa digeser ke samping. Memakai Chromium
+  yang sama dengan render smoke test.
 - **UI hybrid (Fase 3)** — `dalang studio`:
   - **Perangkat sinematik lewat kontrak data (ADR-0011)**: filter per scene
     (6 preset + cerah/kontras/saturasi/opacity), transisi per scene
@@ -288,13 +313,14 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 492 unit test (8 paket) — tanpa browser & jaringan
+pnpm test                 # 523 unit test (8 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
-pnpm dalang studio proyekku/          # UI hybrid 3 panel di browser — Fase 3
+pnpm dalang studio                    # lobi: daftar proyek di folder ini — ADR-0020
+pnpm dalang studio proyekku/          # langsung buka satu proyek (lobinya folder induk)
 pnpm dalang chat proyekku/            # chat agent di terminal — Fase 2
-pnpm dalang validate examples/borobudur-60s/plan.json
+pnpm dalang validate examples/borobudur-60s          # folder atau plan.json, sama saja
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
@@ -306,6 +332,9 @@ pnpm dalang cloud:check examples/borobudur-60s/plan.json   # cek render cloud + 
 pnpm dalang render   proyekku/plan.json --target lambda    # render di AWS (butuh setup Lambda)
 
 pnpm studio:remotion      # Remotion Studio (alat pengembang preset/template)
+
+pnpm --filter @dalang/studio gate:layout   # geometri UI di 15 lebar layar (ADR-0020)
+pnpm --filter @dalang/renderer asset-url-parity  # paritas aset lokal vs URL (ADR-0019)
 ```
 
 `dalang studio` menyajikan app yang sudah ter-build

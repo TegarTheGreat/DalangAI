@@ -3035,6 +3035,9 @@ button.ghost.danger.confirm {
 .new-card {
   display: flex;
   flex-direction: column;
+  /* Aturan dasar tombol memakai white-space: nowrap; tanpa ini keterangan
+     ubin meluber keluar dari garis putus-putusnya. */
+  white-space: normal;
   align-items: center;
   justify-content: center;
   gap: 9px;
