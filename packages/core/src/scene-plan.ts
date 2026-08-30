@@ -228,6 +228,54 @@ export const captionSchema = z.strictObject({
 });
 export type Caption = z.infer<typeof captionSchema>;
 
+/**
+ * Grafis tempelan di atas visual (ADR-0018): ikon dari pustaka terbuka, atau
+ * stiker dari pustaka GIF. Posisinya memakai JANGKAR + geseran relatif, bukan
+ * koordinat mutlak, supaya satu nilai yang sama tetap benar di 16:9, 9:16,
+ * maupun 1:1 tanpa dihitung ulang.
+ */
+export const GRAPHIC_ANCHORS = [
+  "kiri-atas",
+  "tengah-atas",
+  "kanan-atas",
+  "kiri-tengah",
+  "tengah",
+  "kanan-tengah",
+  "kiri-bawah",
+  "tengah-bawah",
+  "kanan-bawah",
+] as const;
+export const graphicAnchorSchema = z.enum(GRAPHIC_ANCHORS);
+export type GraphicAnchor = (typeof GRAPHIC_ANCHORS)[number];
+
+export const GRAPHIC_ANIMS = ["diam", "pop", "apung", "putar", "denyut"] as const;
+export const graphicAnimSchema = z.enum(GRAPHIC_ANIMS);
+export type GraphicAnim = (typeof GRAPHIC_ANIMS)[number];
+
+export const graphicSchema = z.strictObject({
+  id: z.string().min(1),
+  /**
+   * Rujukan sumber: "iconify:<set>:<nama>" untuk ikon, atau id aset yang sudah
+   * ada di renderState.graphicAssets untuk stiker/gambar.
+   */
+  ref: z.string().min(1),
+  anchor: graphicAnchorSchema.default("kanan-bawah"),
+  /** Tinggi grafis sebagai fraksi tinggi frame. */
+  size: z.number().min(0.02).max(0.6).default(0.12),
+  /** Geseran dari jangkar, fraksi lebar/tinggi frame. */
+  offsetX: z.number().min(-0.5).max(0.5).default(0),
+  offsetY: z.number().min(-0.5).max(0.5).default(0),
+  rotate: z.number().min(-180).max(180).default(0),
+  opacity: normalized01.default(1),
+  /** Warna ikon; null = warna aksen preset. Diabaikan untuk stiker gambar. */
+  color: hexColorSchema.nullable().default(null),
+  anim: graphicAnimSchema.default("pop"),
+  /** Jendela tampil, fraksi 0-1 dari durasi scene. */
+  startFrac: normalized01.default(0),
+  endFrac: normalized01.default(1),
+});
+export type Graphic = z.infer<typeof graphicSchema>;
+
 export const sceneSchema = z.strictObject({
   id: z.string().min(1),
   /** Hard contract: agents are rejected at the code level when touching a locked scene. */
@@ -249,6 +297,8 @@ export const sceneSchema = z.strictObject({
   /** Teks overlay (maks 3) di atas visual (ADR-0011). */
   texts: z.array(textOverlaySchema).max(3).default([]),
   annotations: z.array(annotationSchema).default([]),
+  /** Ikon/stiker tempelan (maks 4) di atas visual (ADR-0018). */
+  graphics: z.array(graphicSchema).max(4).default([]),
 });
 export type Scene = z.infer<typeof sceneSchema>;
 export type SceneInput = z.input<typeof sceneSchema>;
@@ -298,9 +348,27 @@ export const musicSchema = z.strictObject({
 });
 export type Music = z.infer<typeof musicSchema>;
 
+/**
+ * Satu bunyi tempelan (ADR-0018). Ditambatkan ke SCENE, bukan ke garis waktu
+ * mutlak: kalau scene digeser, dipotong, atau durasinya berubah, bunyinya ikut
+ * — itu perilaku yang diharapkan editor, dan mencegah cue jadi yatim.
+ */
+export const sfxCueSchema = z.strictObject({
+  id: z.string().min(1),
+  /** "pustaka:<id>" (ter-bundle) atau id aset yang sudah diunduh. */
+  assetId: z.string().min(1),
+  sceneId: z.string().min(1),
+  /** Detik dari awal scene. */
+  atSec: z.number().min(0).finite().default(0),
+  volume: normalized01.default(0.6),
+});
+export type SfxCue = z.infer<typeof sfxCueSchema>;
+
 export const audioSchema = z.strictObject({
   voice: voiceSchema.optional(),
   music: musicSchema.optional(),
+  /** Efek suara bertambat scene (ADR-0018). */
+  sfx: z.array(sfxCueSchema).max(24).default([]),
 });
 export type Audio = z.infer<typeof audioSchema>;
 
@@ -357,6 +425,10 @@ export type ResolvedAsset = z.infer<typeof resolvedAssetSchema>;
 export const renderStateSchema = z.strictObject({
   narrationAudio: z.record(z.string(), narrationAudioSchema).default({}),
   resolvedAssets: z.record(z.string(), resolvedAssetSchema).default({}),
+  /** Berkas nyata untuk grafis tempelan, dikunci id grafis (ADR-0018). */
+  graphicAssets: z.record(z.string(), resolvedAssetSchema).default({}),
+  /** Berkas nyata untuk cue efek suara, dikunci id cue (ADR-0018). */
+  sfxAssets: z.record(z.string(), resolvedAssetSchema).default({}),
 });
 export type RenderState = z.infer<typeof renderStateSchema>;
 
@@ -371,11 +443,17 @@ export const scenePlanSchema = z
     version: z.literal(SCHEMA_VERSION),
     projectId: z.string().min(1),
     meta: metaSchema,
-    audio: audioSchema.default({}),
+    // Gotcha zod (ketiga kalinya, lihat ADR-0013/0016): `.default(obj)`
+    // memakai objek APA ADANYA — default field di dalamnya TIDAK diterapkan,
+    // jadi objek ini harus ditulis lengkap. Kali ini TypeScript menangkapnya
+    // saat kompilasi karena `sfx` wajib setelah default.
+    audio: audioSchema.default({ sfx: [] }),
     scenes: z.array(sceneSchema).min(1),
     renderState: renderStateSchema.default({
       narrationAudio: {},
       resolvedAssets: {},
+      graphicAssets: {},
+      sfxAssets: {},
     }),
   })
   .superRefine((plan, ctx) => {

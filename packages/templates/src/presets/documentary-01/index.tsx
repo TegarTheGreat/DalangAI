@@ -13,13 +13,16 @@ import {
   type AspectMetrics,
   aspectMetrics,
   computeFrameLayout,
+  FPS,
   TRANSITION_FRAMES,
 } from "../../layout";
 import { buildMusicVolume, resolveMusicFile } from "../../music";
+import { placeSfxCues } from "../../sfx";
 import { presentationFor, timingFor } from "../../transitions";
 import { Backdrop } from "./Backdrop";
 import { BodyScene } from "./BodyScene";
 import { Chrome } from "./Chrome";
+import { GraphicsOverlay } from "./GraphicsOverlay";
 import { OutroScene } from "./OutroScene";
 import { FilmGrain, ReadabilityGradients, Vignette } from "./Overlays";
 import { TextsOverlay } from "./TextsOverlay";
@@ -58,6 +61,14 @@ const SceneRouter: React.FC<{
       {content}
       <TextsOverlay
         scene={scene}
+        metrics={props.metrics}
+        theme={props.theme}
+        durationInFrames={props.durationInFrames}
+      />
+      {/* Grafis di ATAS teks: ikon/stiker adalah aksen paling depan (ADR-0018). */}
+      <GraphicsOverlay
+        scene={scene}
+        plan={plan}
         metrics={props.metrics}
         theme={props.theme}
         durationInFrames={props.durationInFrames}
@@ -136,6 +147,16 @@ export const DocumentaryPreset: React.FC<{
       <FilmGrain />
       <Chrome plan={plan} layout={layout} metrics={metrics} theme={theme} />
       {musicFile ? <Audio src={staticFile(musicFile)} loop volume={musicVolume} /> : null}
+      {/* Efek suara (ADR-0018): posisinya diturunkan dari scene, jadi ikut
+          bergeser saat susunan berubah. */}
+      {placeSfxCues(plan, layout, FPS).map((cue) => (
+        <Audio
+          key={cue.cueId}
+          src={staticFile(cue.file)}
+          from={cue.fromFrame}
+          volume={cue.volume}
+        />
+      ))}
     </AbsoluteFill>
   );
 };

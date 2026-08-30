@@ -17,7 +17,15 @@ describe("scene-plan schema v0", () => {
     });
     expect(plan.scenes[0]?.visual.assetId).toBeNull();
     expect(plan.scenes[0]?.visual.pinned).toBe(false);
-    expect(plan.renderState).toEqual({ narrationAudio: {}, resolvedAssets: {} });
+    // ADR-0018: grafis & efek suara punya lumbung berkasnya sendiri.
+    expect(plan.renderState).toEqual({
+      narrationAudio: {},
+      resolvedAssets: {},
+      graphicAssets: {},
+      sfxAssets: {},
+    });
+    expect(plan.scenes[0]?.graphics).toEqual([]);
+    expect(plan.audio.sfx).toEqual([]);
   });
 
   it("rejects duplicate scene ids", () => {

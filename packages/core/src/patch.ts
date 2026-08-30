@@ -5,6 +5,7 @@ import {
   captionPositionSchema,
   designTokensSchema,
   getSceneIndex,
+  graphicSchema,
   type Meta,
   metaSchema,
   motionSchema,
@@ -13,6 +14,7 @@ import {
   type ScenePlan,
   scenePlanSchema,
   sceneSchema,
+  sfxCueSchema,
   textOverlaySchema,
   textSizeSchema,
   transitionSchema,
@@ -83,6 +85,8 @@ export const sceneUpdateSchema = z.strictObject({
   texts: z.array(textOverlaySchema).max(3).optional(),
   /** Replaces the whole array. */
   annotations: z.array(annotationSchema).optional(),
+  /** Menggantikan seluruh larik grafis tempelan (ADR-0018). */
+  graphics: z.array(graphicSchema).max(4).optional(),
 });
 export type SceneUpdate = z.infer<typeof sceneUpdateSchema>;
 
@@ -101,6 +105,8 @@ export type MetaUpdate = z.infer<typeof metaUpdateSchema>;
 export const audioUpdateSchema = z.strictObject({
   voice: voiceSchema.nullable().optional(),
   music: musicSchema.nullable().optional(),
+  /** Menggantikan seluruh larik cue efek suara (ADR-0018). */
+  sfx: z.array(sfxCueSchema).max(24).optional(),
 });
 export type AudioUpdate = z.infer<typeof audioUpdateSchema>;
 

@@ -79,7 +79,9 @@
       "additionalProperties": false
     },
     "audio": {
-      "default": {},
+      "default": {
+        "sfx": []
+      },
       "type": "object",
       "properties": {
         "voice": {
@@ -127,6 +129,45 @@
             "assetId"
           ],
           "additionalProperties": false
+        },
+        "sfx": {
+          "default": [],
+          "maxItems": 24,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "assetId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sceneId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "atSec": {
+                "default": 0,
+                "type": "number",
+                "minimum": 0
+              },
+              "volume": {
+                "default": 0.6,
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "id",
+              "assetId",
+              "sceneId"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
@@ -546,6 +587,109 @@
               ],
               "additionalProperties": false
             }
+          },
+          "graphics": {
+            "default": [],
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "anchor": {
+                  "default": "kanan-bawah",
+                  "type": "string",
+                  "enum": [
+                    "kiri-atas",
+                    "tengah-atas",
+                    "kanan-atas",
+                    "kiri-tengah",
+                    "tengah",
+                    "kanan-tengah",
+                    "kiri-bawah",
+                    "tengah-bawah",
+                    "kanan-bawah"
+                  ]
+                },
+                "size": {
+                  "default": 0.12,
+                  "type": "number",
+                  "minimum": 0.02,
+                  "maximum": 0.6
+                },
+                "offsetX": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": -0.5,
+                  "maximum": 0.5
+                },
+                "offsetY": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": -0.5,
+                  "maximum": 0.5
+                },
+                "rotate": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "opacity": {
+                  "default": 1,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "color": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{3,8}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anim": {
+                  "default": "pop",
+                  "type": "string",
+                  "enum": [
+                    "diam",
+                    "pop",
+                    "apung",
+                    "putar",
+                    "denyut"
+                  ]
+                },
+                "startFrac": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "endFrac": {
+                  "default": 1,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "id",
+                "ref"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -558,7 +702,9 @@
     "renderState": {
       "default": {
         "narrationAudio": {},
-        "resolvedAssets": {}
+        "resolvedAssets": {},
+        "graphicAssets": {},
+        "sfxAssets": {}
       },
       "type": "object",
       "properties": {
@@ -616,6 +762,116 @@
           }
         },
         "resolvedAssets": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "image",
+                  "video",
+                  "audio"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceUrl": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "license": {
+                "type": "string"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "durationSec": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "file",
+              "kind",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "graphicAssets": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "image",
+                  "video",
+                  "audio"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceUrl": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "license": {
+                "type": "string"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "durationSec": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "file",
+              "kind",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sfxAssets": {
           "default": {},
           "type": "object",
           "propertyNames": {
