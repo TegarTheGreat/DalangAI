@@ -249,3 +249,21 @@ export const IconCopy: React.FC = () => (
     <path d="M15 6.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h.5" />
   </Icon>
 );
+
+/** Lompat ke batas scene sebelumnya: garis batas + panah balik. */
+export const IconPrevScene: React.FC = () => (
+  <Icon>
+    <path d="M18.5 5.5v13" />
+    <path d="M14.5 12H5.5" />
+    <path d="m9.5 7.5-4 4.5 4 4.5" />
+  </Icon>
+);
+
+/** Lompat ke batas scene berikutnya. */
+export const IconNextScene: React.FC = () => (
+  <Icon>
+    <path d="M5.5 5.5v13" />
+    <path d="M9.5 12h9" />
+    <path d="m14.5 7.5 4 4.5-4 4.5" />
+  </Icon>
+);

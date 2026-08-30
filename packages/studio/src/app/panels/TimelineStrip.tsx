@@ -2,7 +2,16 @@ import { MIN_SCENE_SEC, type Scene, type ScenePlan } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { Thumbnail } from "@remotion/player";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { IconLock, IconPause, IconPlay, IconPlus, IconSplit } from "../icons";
+import { useScrollFade } from "../components/controls";
+import {
+  IconLock,
+  IconNextScene,
+  IconPause,
+  IconPlay,
+  IconPlus,
+  IconPrevScene,
+  IconSplit,
+} from "../icons";
 import { type PlanMeta, planMeta } from "../model/plan-meta";
 import { deriveSceneStatus } from "../model/scene-status";
 import {
@@ -260,7 +269,9 @@ export const TimelineStrip: React.FC = () => {
     side: "before" | "after";
   } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Tepi gulir yang memudar: klip terakhir yang teriris rata di tepi terbaca
+  // seperti tampilan rusak, bukan seperti "masih ada lanjutannya".
+  const [scrollRef, scrollFade] = useScrollFade<HTMLDivElement>();
   const scrubbing = useRef(false);
 
   const meta = useMemo(() => (plan ? planMeta(plan) : null), [plan]);
@@ -319,6 +330,31 @@ export const TimelineStrip: React.FC = () => {
     return null;
   })();
 
+  /**
+   * Batas scene di kiri/kanan playhead. Navigasi antar-scene adalah kontrol
+   * transport baku di editor mana pun, dan datanya sudah ada — tanpa ini
+   * satu-satunya cara berpindah scene adalah menyeret playhead dengan mata.
+   */
+  const boundaries = meta.sceneStarts;
+  const prevBoundary = (() => {
+    for (let i = boundaries.length - 1; i >= 0; i--) {
+      const start = boundaries[i] ?? 0;
+      // Ambang 2 frame: menekan "sebelumnya" tepat di awal scene harus
+      // melompat ke scene sebelumnya, bukan diam di tempat.
+      if (start < frame - 2) return start;
+    }
+    return frame > 0 ? 0 : null;
+  })();
+  const nextBoundary = boundaries.find((start) => start > frame + 2) ?? null;
+
+  const activeSceneIndex = (() => {
+    for (let i = boundaries.length - 1; i >= 0; i--) {
+      if (frame >= (boundaries[i] ?? 0)) return i;
+    }
+    return 0;
+  })();
+  const activeScene = plan.scenes[activeSceneIndex];
+
   const addAtEnd = () => {
     const id = `sc-${Date.now().toString(36)}`;
     void studioClient.applyPatch(
@@ -338,11 +374,35 @@ export const TimelineStrip: React.FC = () => {
       <div className="transport">
         <button
           type="button"
+          className="mini step-btn"
+          disabled={prevBoundary === null}
+          data-tip="Scene sebelumnya"
+          onClick={() => {
+            playback.requestPause();
+            if (prevBoundary !== null) playback.requestSeek(prevBoundary);
+          }}
+        >
+          <IconPrevScene />
+        </button>
+        <button
+          type="button"
           className="transport-play"
           onClick={() => playback.requestToggle()}
           data-tip={playing ? "Jeda (Spasi)" : "Putar (Spasi)"}
         >
           {playing ? <IconPause /> : <IconPlay />}
+        </button>
+        <button
+          type="button"
+          className="mini step-btn"
+          disabled={nextBoundary === null}
+          data-tip="Scene berikutnya"
+          onClick={() => {
+            playback.requestPause();
+            if (nextBoundary !== null) playback.requestSeek(nextBoundary);
+          }}
+        >
+          <IconNextScene />
         </button>
         <span className="transport-time">
           {formatTime(frame, meta.fps)}
@@ -364,6 +424,22 @@ export const TimelineStrip: React.FC = () => {
         >
           <IconSplit />
         </button>
+        <span className="transport-spacer" />
+        {/* Scene di bawah playhead. Bentangan tengah transport tadinya
+            ~1100px kekosongan di pita yang paling sering dilihat; yang
+            mengisinya harus keterangan yang memang dicari orang saat
+            menggeser playhead, bukan hiasan. */}
+        {activeScene ? (
+          <button
+            type="button"
+            className="transport-scene"
+            onClick={() => studioClient.selectScene(activeScene.id)}
+            data-tip="Pilih scene ini di panel Properti"
+          >
+            <span className="transport-scene-no">{activeSceneIndex + 1}</span>
+            <span className="transport-scene-id">{activeScene.id}</span>
+          </button>
+        ) : null}
         <span className="transport-spacer" />
         <div className="zoom-group">
           <button
@@ -404,7 +480,7 @@ export const TimelineStrip: React.FC = () => {
             Musik
           </span>
         </div>
-        <div className="tl-scroll" ref={scrollRef}>
+        <div className={`tl-scroll ${scrollFade}`} ref={scrollRef}>
           <div className="tl-canvas" ref={canvasRef} style={{ width: width + 80 }}>
             <div
               className="tl-ruler"
