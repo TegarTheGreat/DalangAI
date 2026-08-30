@@ -6,7 +6,8 @@ bisa mengarahkan dan mengambil alih elemen mana pun. "Cursor untuk video",
 bukan "Midjourney untuk video".
 
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
-Keputusan teknis: [docs/decisions/](docs/decisions/)
+Keputusan teknis: [docs/decisions/](docs/decisions/) ·
+Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
 ## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) · Fase 3, 2, 1, 0 selesai
 
@@ -428,3 +429,8 @@ Kontrak-kontrak penting yang SUDAH ditegakkan kode (bukan prompt):
 Tugas riset R-2…R-6 & R-8…R-11 (PRD §14) belum diputuskan — masing-masing akan
 menghasilkan ADR sebelum implementasinya, mengikuti pola R-1/R-7 yang sudah ada
 di `docs/decisions/`.
+
+Fase 6 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
+inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,
+format interchange, ASR), lengkap dengan celah beserta buktinya, risiko yang
+harus diputuskan, dan daftar yang sengaja TIDAK dikerjakan.
