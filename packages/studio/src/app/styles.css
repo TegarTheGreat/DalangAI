@@ -71,6 +71,18 @@ body,
 #root {
   height: 100%;
 }
+/*
+ * Cangkang aplikasi tidak pernah menggulir dokumennya sendiri — semua area
+ * yang bisa digulir ada di dalam panel. Tanpa aturan ini, tooltip CSS
+ * ([data-tip]::after, absolut dan nowrap) ikut memperbesar area gulir setiap
+ * leluhurnya, dan seluruh HALAMAN jadi bisa digeser ke samping 32px di semua
+ * lebar layar. Ditemukan dengan mengukur, bukan dengan melihat.
+ */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 
 body {
   margin: 0;
@@ -293,12 +305,20 @@ input[type="color"]::-webkit-color-swatch {
   background: var(--panel);
   border-bottom: 1px solid var(--line);
   min-height: 52px;
+  /* Pagar terakhir: apa pun yang terjadi pada isinya, tidak ada satu kontrol
+     pun yang boleh menggambar di atas kontrol lain. Sebelum ini header
+     bertumpuk sendiri di SETIAP lebar laptop (1440 ke bawah) karena zona kiri
+     menyusut sampai nol sementara isinya meluap keluar tanpa dipotong. */
+  overflow: hidden;
 }
 .topbar-left {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Zona kiri yang mengalah; zona aksi tidak pernah menyusut (di bawah). */
+  flex: 0 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 .brand-mark {
   font-family: var(--serif);
@@ -344,6 +364,7 @@ input[type="color"]::-webkit-color-swatch {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
 }
 .divider {
   width: 1px;
@@ -1026,6 +1047,11 @@ input[type="color"]::-webkit-color-swatch {
 
 .tl-scroll {
   flex: 1;
+  /* Tanpa ini, min-width:auto milik flex membuat penggulir menolak menyusut
+     di bawah lebar isinya: timeline sepanjang 55 detik lalu MELEBARKAN
+     dokumen, dan seluruh halaman ikut bisa digulir mendatar. Timeline harus
+     menggulir di dalam dirinya sendiri. */
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -1458,138 +1484,6 @@ input[type="color"]::-webkit-color-swatch {
 
 /* Antara 1100-1440px header sudah padat (brand + judul + rasio + 9 aksi):
    judul yang tersisa 1-2 huruf lebih buruk daripada tidak ada judul. */
-@media (max-width: 1440px) {
-  .project-title {
-    display: none;
-  }
-}
-
-@media (max-width: 1360px) {
-  .workspace {
-    grid-template-columns: 290px minmax(0, 1fr) 310px;
-  }
-  .shell.inspector-closed .workspace {
-    grid-template-columns: 290px minmax(0, 1fr) 0;
-  }
-  .shell.chat-closed .workspace {
-    grid-template-columns: 0 minmax(0, 1fr) 310px;
-  }
-}
-
-/* Di layar sempit, panel samping menjadi laci melayang di atas panggung. */
-@media (max-width: 1100px) {
-  .workspace,
-  .shell.chat-closed .workspace,
-  .shell.inspector-closed .workspace,
-  .shell.chat-closed.inspector-closed .workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .workspace .chat-panel,
-  .workspace .inspector-panel {
-    position: fixed;
-    top: 52px;
-    bottom: 0;
-    width: min(360px, 88vw);
-    z-index: 30;
-    box-shadow: var(--shadow);
-    display: flex;
-  }
-  .workspace .chat-panel {
-    left: 0;
-  }
-  .workspace .inspector-panel {
-    right: 0;
-  }
-  .shell.chat-closed .chat-panel,
-  .shell.inspector-closed .inspector-panel {
-    display: none;
-  }
-  /* Label tombol disembunyikan, tapi lencana jumlah tetap terlihat —
-     ia informasi, bukan label. */
-  .topbar .tool span:not(.tool-badge) {
-    display: none;
-  }
-  .workspace .panel-head .drawer-close {
-    display: inline-flex;
-  }
-}
-
-/* Ponsel: header bisa digulir, target sentuh lebih besar, timeline ringkas. */
-@media (max-width: 720px) {
-  .project-title,
-  .cost-chip,
-  .busy-chip,
-  .brand-sub,
-  .topbar-actions .divider {
-    display: none;
-  }
-  .topbar {
-    padding: 6px 10px;
-    gap: 8px;
-  }
-  .topbar-left {
-    flex-shrink: 0;
-  }
-  .topbar-actions {
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-  /* Aksi utama selalu terlihat walau toolbar digulir. */
-  .topbar-actions .primary {
-    position: sticky;
-    right: 0;
-    box-shadow: -10px 0 14px rgba(13, 14, 18, 0.9);
-  }
-  .topbar-actions::-webkit-scrollbar {
-    display: none;
-  }
-  button {
-    padding: 9px 12px;
-  }
-  button.tool {
-    padding: 9px 10px;
-  }
-  .stage {
-    padding: 10px;
-  }
-  .tl-gutter {
-    width: 40px;
-  }
-  .tl-gutter-label {
-    padding: 0 5px;
-  }
-  .tl-track.video {
-    height: 52px;
-  }
-  .tl-gutter-label:nth-of-type(2) {
-    height: 52px;
-  }
-  .tl-track.audio {
-    height: 18px;
-  }
-  .tl-gutter-label:nth-of-type(3) {
-    height: 18px;
-  }
-  .tl-track.audio.mix {
-    height: 16px;
-  }
-  .tl-gutter-label:nth-of-type(4) {
-    height: 16px;
-  }
-  .zoom-group input[type="range"] {
-    width: 70px;
-  }
-  .workspace .chat-panel,
-  .workspace .inspector-panel {
-    width: 100vw;
-  }
-  .dialog {
-    padding: 16px;
-  }
-}
 
 /* -- kontrol properti bertab (ADR-0011) ------------------------------------ */
 
@@ -1604,6 +1498,7 @@ input[type="color"]::-webkit-color-swatch {
   gap: 0;
   padding: 8px 12px 0;
   border-bottom: 1px solid var(--line);
+
   /* Enam tab tidak selalu muat di panel sempit; menggulir jauh lebih baik
      daripada membungkus (baris kedua membuat tab aktif melompat posisi). */
   overflow-x: auto;
@@ -1611,6 +1506,33 @@ input[type="color"]::-webkit-color-swatch {
 }
 .tab-bar::-webkit-scrollbar {
   display: none;
+}
+/* Tepi yang memudar HANYA di sisi yang benar-benar menyembunyikan isi. Tab
+   terakhir yang terpotong rata tanpa isyarat terbaca seperti bug ("Anotas"),
+   sedangkan memudarkan tepi yang tidak menyembunyikan apa-apa juga bohong. */
+.scroll-fade-end {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+.scroll-fade-start {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px);
+  mask-image: linear-gradient(90deg, transparent, #000 28px);
+}
+.scroll-fade-start.scroll-fade-end {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent
+  );
 }
 .tab {
   /* flex-none: tab tidak boleh menyusut saat tab-bar menggulir. */
@@ -3333,4 +3255,338 @@ button.ghost.danger.confirm {
 .dialog-backdrop > .dialog {
   position: relative;
   z-index: 1;
+}
+
+/* == Responsif ============================================================ */
+/* SEMUA aturan responsif duduk di AKHIR berkas, setelah aturan dasarnya.
+   Sebelumnya blok ini ada di tengah, dan aturan dasar yang ditulis
+   belakangan (.segmented) memenangkan `display` pada kekhususan yang sama —
+   sakelar rasio tetap tampil di 820px meski media query menyuruhnya
+   sembunyi. Urutan berkas adalah bagian dari kontraknya. */
+
+/* Tangga penyusutan header, diukur (bukan ditebak) dengan gerbang tata letak
+   `pnpm --filter @dalang/studio gate:layout`: tiap ambang adalah lebar tempat
+   susunan sebelumnya mulai tidak muat. */
+@media (max-width: 1440px) {
+  .topbar .project-title {
+    display: none;
+  }
+  /* Label rasio jadi glyph saja — bentuknya sudah menjelaskan dirinya.
+     Selektor disandarkan pada .topbar, bukan pada urutan berkas: aturan dasar
+     .segmented ditulis SETELAH blok ini dan akan memenangkan `display` pada
+     kekhususan yang sama. Pernah terjadi — rasio tetap tampil di 820px. */
+  .topbar .ratio-switch .seg {
+    font-size: 0;
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+  /* Label perkakas jadi tooltip; lencana jumlah tetap terlihat karena ia
+     informasi, bukan label. */
+  .topbar .tool span:not(.tool-badge) {
+    display: none;
+  }
+}
+
+@media (max-width: 1360px) {
+  .workspace {
+    grid-template-columns: 290px minmax(0, 1fr) 310px;
+  }
+  .shell.inspector-closed .workspace {
+    grid-template-columns: 290px minmax(0, 1fr) 0;
+  }
+  .shell.chat-closed .workspace {
+    grid-template-columns: 0 minmax(0, 1fr) 310px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .workspace,
+  .shell.chat-closed .workspace,
+  .shell.inspector-closed .workspace,
+  .shell.chat-closed.inspector-closed .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace .chat-panel,
+  .workspace .inspector-panel {
+    position: fixed;
+    top: 52px;
+    bottom: 0;
+    width: min(360px, 88vw);
+    z-index: 30;
+    box-shadow: var(--shadow);
+    display: flex;
+  }
+  .workspace .chat-panel {
+    left: 0;
+  }
+  .workspace .inspector-panel {
+    right: 0;
+  }
+  .shell.chat-closed .chat-panel,
+  .shell.inspector-closed .inspector-panel {
+    display: none;
+  }
+  .workspace .panel-head .drawer-close {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 1080px) {
+  /* Rasio pindah sepenuhnya ke dialog Gaya (tempat aslinya sebagai setelan
+     proyek); chip biaya dan sub-merek mengalah lebih dulu daripada perkakas. */
+  .topbar .ratio-switch,
+  .topbar .brand-sub,
+  .topbar .cost-chip {
+    display: none;
+  }
+  .topbar .save-chip {
+    padding: 5px 8px;
+  }
+  .topbar .save-chip span {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar .project-title,
+  .topbar .cost-chip,
+  .topbar .busy-chip,
+  .topbar .brand-sub,
+  .topbar-actions .divider {
+    display: none;
+  }
+  .topbar {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .topbar-left {
+    flex-shrink: 0;
+  }
+  .topbar-actions {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Aksi utama selalu terlihat walau toolbar digulir. */
+  .topbar-actions .primary {
+    position: sticky;
+    right: 0;
+    box-shadow: -10px 0 14px rgba(13, 14, 18, 0.9);
+  }
+  .topbar-actions::-webkit-scrollbar {
+    display: none;
+  }
+  button {
+    padding: 9px 12px;
+  }
+  button.tool {
+    padding: 9px 10px;
+  }
+  .stage {
+    padding: 10px;
+  }
+  .tl-gutter {
+    width: 40px;
+  }
+  .tl-gutter-label {
+    padding: 0 5px;
+  }
+  .tl-track.video {
+    height: 52px;
+  }
+  .tl-gutter-label:nth-of-type(2) {
+    height: 52px;
+  }
+  .tl-track.audio {
+    height: 18px;
+  }
+  .tl-gutter-label:nth-of-type(3) {
+    height: 18px;
+  }
+  .tl-track.audio.mix {
+    height: 16px;
+  }
+  .tl-gutter-label:nth-of-type(4) {
+    height: 16px;
+  }
+  .zoom-group input[type="range"] {
+    width: 70px;
+  }
+  .workspace .chat-panel,
+  .workspace .inspector-panel {
+    width: 100vw;
+  }
+  .dialog {
+    padding: 16px;
+  }
+}
+
+/* == Panduan mode tanpa model ============================================== */
+
+.offline-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 0 8px;
+}
+.offline-title {
+  margin: 6px 0 -4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.offline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.offline-list li {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 10px 11px;
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.offline-list li:hover {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+.offline-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--accent);
+}
+.offline-list strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 650;
+  margin-bottom: 2px;
+}
+.offline-list p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.offline-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+.offline-hint code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* == Gerak ================================================================= */
+/* Gerak dipakai untuk MENJELASKAN, bukan menghias: laci masuk dari sisinya
+   sendiri, dialog naik sedikit dari bawah, toast datang dari tepi tempat ia
+   akan berada. Semuanya di bawah 240ms — di atas itu terasa lambat, bukan
+   halus. */
+
+@keyframes drawer-in-left {
+  from {
+    opacity: 0;
+    translate: -14px 0;
+  }
+}
+@keyframes drawer-in-right {
+  from {
+    opacity: 0;
+    translate: 14px 0;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+    scale: 0.985;
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: -50% 12px;
+  }
+}
+
+.chat-panel {
+  animation: drawer-in-left 180ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.inspector-panel {
+  animation: drawer-in-right 180ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.dialog-backdrop {
+  animation: backdrop-in 140ms ease both;
+}
+.dialog {
+  animation: dialog-in 200ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.toast {
+  animation: toast-in 200ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.project-card {
+  animation: dialog-in 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/*
+ * Hormati setelan sistem. Ini bukan formalitas: gerak yang tidak diminta bisa
+ * memicu pusing dan mual pada sebagian orang, dan editor video dipakai
+ * berjam-jam. Yang dimatikan hanya PERGESERAN — indikator yang berputar tetap
+ * berputar, karena ia menyampaikan "masih berjalan".
+ */
+@media (prefers-reduced-motion: reduce) {
+  .chat-panel,
+  .inspector-panel,
+  .dialog,
+  .dialog-backdrop,
+  .toast,
+  .project-card,
+  .empty-art span {
+    animation: none;
+  }
+  .project-card,
+  .project-card:hover,
+  .new-card:hover:not(:disabled) {
+    transform: none;
+  }
+  .project-card:hover .card-frame {
+    scale: 1;
+  }
+  /* Selektor universal berkekhususan 0,0,0 tidak bisa mengalahkan transition
+     yang ditulis di kelas, jadi tanpa penanda prioritas di bawah setelan
+     aksesibilitas ini tidak berlaku sama sekali. Pola baku reduced-motion. */
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: pola baku reduced-motion */
+    transition-duration: 0.01ms !important;
+  }
 }

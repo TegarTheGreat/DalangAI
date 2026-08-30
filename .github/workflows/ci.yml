@@ -47,6 +47,14 @@ jobs:
       - name: Build app studio (Vite)
         run: pnpm --filter @dalang/studio build
 
+      # Geometri header/panel di 15 lebar layar nyata. Ini menangkap kelas bug
+      # yang TIDAK menggagalkan tes mana pun: kontrol yang saling menindih atau
+      # tergunting habis — DOM benar, komponen ter-render, semua hijau, tapi
+      # kotaknya bertumpuk. Memakai Chromium yang sama dengan render smoke test.
+      - name: Layout gate (studio UI)
+        timeout-minutes: 6
+        run: pnpm --filter @dalang/studio gate:layout
+
       - name: Validate demo scene-plan
         run: pnpm dalang validate examples/borobudur-60s/plan.json
 

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Kontrol dasar buatan sendiri — tanpa dependensi UI eksternal, dengan
@@ -91,3 +91,46 @@ export const RadioCard: React.FC<{
     </span>
   </button>
 );
+
+/**
+ * Kelas tepi-memudar untuk wadah yang bisa digulir mendatar.
+ *
+ * Isi yang terpotong rata di tepi wadah terbaca seperti bug, bukan seperti
+ * "masih ada lagi" — tapi memudarkan tepi yang tidak menyembunyikan apa pun
+ * sama-sama menyesatkan. Karena itu keadaannya diukur, bukan diasumsikan:
+ * satu ResizeObserver + satu listener gulir, dan hanya sisi yang benar-benar
+ * menyimpan isi yang dipudarkan.
+ */
+export const useScrollFade = <T extends HTMLElement>(): [
+  React.RefObject<T | null>,
+  string,
+] => {
+  const ref = useRef<T>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measure = () => {
+      const max = node.scrollWidth - node.clientWidth;
+      setEdges({ start: node.scrollLeft > 1, end: max > 1 && node.scrollLeft < max - 1 });
+    };
+    measure();
+    node.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    for (const child of Array.from(node.children)) observer.observe(child);
+    return () => {
+      node.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  });
+
+  const className = [
+    edges.start ? "scroll-fade-start" : "",
+    edges.end ? "scroll-fade-end" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return [ref, className];
+};

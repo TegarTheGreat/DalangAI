@@ -1,7 +1,16 @@
 import { ASPECT_RATIOS } from "@dalang/core";
 import { useEffect, useRef, useState } from "react";
 import { Segmented, Switch, useEscape } from "../components/controls";
-import { IconImage, IconSend, IconSparkles, IconX } from "../icons";
+import {
+  IconExport,
+  IconImage,
+  IconMic,
+  IconSend,
+  IconSliders,
+  IconSparkles,
+  IconSticker,
+  IconX,
+} from "../icons";
 import type { ChatMessage } from "../store";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
@@ -271,6 +280,81 @@ const Bubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
   );
 };
 
+/**
+ * Panel chat saat tidak ada model.
+ *
+ * Sebelumnya ruang ini berisi satu kotak peringatan lalu enam ratus piksel
+ * kekosongan dan sebuah komposer mati — panel terbesar aplikasi memberi tahu
+ * apa yang TIDAK bisa dilakukan, lalu diam. Padahal seluruh editor manual
+ * berfungsi penuh tanpa model; yang dibutuhkan orang di sini adalah jalan
+ * masuk ke bagian yang bekerja, bukan pengumuman.
+ */
+const OfflineGuide: React.FC<{ reason: string; hasPlan: boolean }> = ({
+  reason,
+  hasPlan,
+}) => (
+  <div className="offline-guide">
+    <div className="notice-warn">
+      <strong>Chat nonaktif</strong>
+      <p>{reason}</p>
+    </div>
+
+    <h3 className="offline-title">Yang tetap bisa dikerjakan sekarang</h3>
+    <ul className="offline-list">
+      <li>
+        <span className="offline-glyph" aria-hidden>
+          <IconSliders />
+        </span>
+        <div>
+          <strong>Sunting tiap scene</strong>
+          <p>Naskah, durasi, visual, teks bergaya, transisi, grafis, anotasi.</p>
+        </div>
+      </li>
+      <li>
+        <span className="offline-glyph" aria-hidden>
+          <IconMic />
+        </span>
+        <div>
+          <strong>Suara &amp; aset otomatis</strong>
+          <p>Voiceover dan footage stock berjalan dari toolbar, tanpa model chat.</p>
+        </div>
+      </li>
+      <li>
+        <span className="offline-glyph" aria-hidden>
+          <IconSticker />
+        </span>
+        <div>
+          <strong>Pustaka media</strong>
+          <p>Ikon, stiker, dan efek suara berlisensi terbuka — tanpa kunci API.</p>
+        </div>
+      </li>
+      <li>
+        <span className="offline-glyph" aria-hidden>
+          <IconExport />
+        </span>
+        <div>
+          <strong>Ekspor penuh</strong>
+          <p>MP4/H.265/WebM/ProRes, 540p sampai 1080p, mutu bisa dipilih.</p>
+        </div>
+      </li>
+    </ul>
+
+    {hasPlan ? null : (
+      <p className="offline-hint">
+        Proyek ini masih kosong. Tambah scene pertama dari panel Properti, atau susun
+        plan.json langsung — berkasnya milikmu.
+      </p>
+    )}
+
+    <h3 className="offline-title">Menyalakan chat</h3>
+    <p className="offline-hint">
+      Isi salah satu kunci provider di <code>.env</code> lalu jalankan ulang{" "}
+      <code>dalang studio</code>. Dalang tidak terikat satu vendor — kunci mana pun yang
+      ada di environment yang dipakai.
+    </p>
+  </div>
+);
+
 export const ChatPanel: React.FC = () => {
   const { chat, chatBusy, project, pendingImages } = useStudio();
   const [draft, setDraft] = useState("");
@@ -328,16 +412,10 @@ export const ChatPanel: React.FC = () => {
           Tutup
         </button>
       </div>
-      {chatDisabled ? (
-        <div className="notice-warn">
-          <strong>Chat nonaktif</strong>
-          <p>
-            {chatDisabled}. Panel preview, timeline, dan properti tetap berfungsi penuh.
-          </p>
-        </div>
-      ) : null}
       <div className="chat-scroll" ref={scrollRef}>
-        {chat.length === 0 ? (
+        {chatDisabled ? (
+          <OfflineGuide reason={chatDisabled} hasPlan={plan !== null} />
+        ) : chat.length === 0 ? (
           plan ? (
             <div className="chat-empty">
               Minta revisi apa pun — “persingkat scene 2”, “ganti aset scene 4”, “render
@@ -379,90 +457,92 @@ export const ChatPanel: React.FC = () => {
           ))}
         </div>
       ) : null}
-      <div className="composer">
-        {pendingImages.length > 0 ? (
-          <div className="attach-row">
-            {pendingImages.map((src, index) => (
-              <span key={src.slice(-24)} className="attach-chip">
-                <img src={src} alt="lampiran" />
+      {chatDisabled ? null : (
+        <div className="composer">
+          {pendingImages.length > 0 ? (
+            <div className="attach-row">
+              {pendingImages.map((src, index) => (
+                <span key={src.slice(-24)} className="attach-chip">
+                  <img src={src} alt="lampiran" />
+                  <button
+                    type="button"
+                    className="attach-remove"
+                    onClick={() => studioClient.removeImage(index)}
+                    data-tip="Hapus lampiran"
+                  >
+                    <IconX />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <textarea
+            className="composer-input"
+            value={draft}
+            placeholder={
+              chatDisabled
+                ? "Chat nonaktif (butuh API key)"
+                : chatBusy
+                  ? "Agent sedang bekerja…"
+                  : "Tulis pesan untuk agent…"
+            }
+            disabled={chatBusy || chatDisabled !== null}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                send();
+              }
+            }}
+            rows={2}
+          />
+          <div className="composer-bar">
+            <div className="composer-tools">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                hidden
+                onChange={(event) => pickFiles(event.target.files)}
+              />
+              {plan ? (
                 <button
                   type="button"
-                  className="attach-remove"
-                  onClick={() => studioClient.removeImage(index)}
-                  data-tip="Hapus lampiran"
+                  className="icon-btn"
+                  disabled={chatBusy}
+                  onClick={() => setBriefOpen(true)}
+                  data-tip="Brief baru (form terstruktur)"
                 >
-                  <IconX />
+                  <IconSparkles />
                 </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
-        <textarea
-          className="composer-input"
-          value={draft}
-          placeholder={
-            chatDisabled
-              ? "Chat nonaktif (butuh API key)"
-              : chatBusy
-                ? "Agent sedang bekerja…"
-                : "Tulis pesan untuk agent…"
-          }
-          disabled={chatBusy || chatDisabled !== null}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              send();
-            }
-          }}
-          rows={2}
-        />
-        <div className="composer-bar">
-          <div className="composer-tools">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              multiple
-              hidden
-              onChange={(event) => pickFiles(event.target.files)}
-            />
-            {plan ? (
+              ) : null}
               <button
                 type="button"
                 className="icon-btn"
-                disabled={chatBusy}
-                onClick={() => setBriefOpen(true)}
-                data-tip="Brief baru (form terstruktur)"
+                disabled={chatBusy || chatDisabled !== null || vision === false}
+                onClick={() => fileRef.current?.click()}
+                data-tip={
+                  vision === false
+                    ? "Model aktif tidak menerima gambar — pilih model vision lewat DALANG_MODEL"
+                    : "Lampirkan gambar (referensi visual untuk agent)"
+                }
               >
-                <IconSparkles />
+                <IconImage />
               </button>
-            ) : null}
+            </div>
             <button
               type="button"
-              className="icon-btn"
-              disabled={chatBusy || chatDisabled !== null || vision === false}
-              onClick={() => fileRef.current?.click()}
-              data-tip={
-                vision === false
-                  ? "Model aktif tidak menerima gambar — pilih model vision lewat DALANG_MODEL"
-                  : "Lampirkan gambar (referensi visual untuk agent)"
-              }
+              className="primary composer-send"
+              disabled={chatBusy || draft.trim() === ""}
+              onClick={send}
+              data-tip="Kirim (Enter)"
             >
-              <IconImage />
+              <IconSend />
             </button>
           </div>
-          <button
-            type="button"
-            className="primary composer-send"
-            disabled={chatBusy || chatDisabled !== null || draft.trim() === ""}
-            onClick={send}
-            data-tip="Kirim (Enter)"
-          >
-            <IconSend />
-          </button>
         </div>
-      </div>
+      )}
       <BriefDialog
         open={briefOpen}
         onClose={() => setBriefOpen(false)}

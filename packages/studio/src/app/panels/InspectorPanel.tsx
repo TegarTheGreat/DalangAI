@@ -24,7 +24,7 @@ import {
   visualFilterSchema,
 } from "@dalang/core";
 import { useEffect, useRef, useState } from "react";
-import { Segmented, Switch } from "../components/controls";
+import { Segmented, Switch, useScrollFade } from "../components/controls";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
@@ -1272,6 +1272,7 @@ const TransisiTab: React.FC<{ scene: Scene; isLast: boolean }> = ({ scene, isLas
 export const InspectorPanel: React.FC = () => {
   const { project, selectedSceneId } = useStudio();
   const [tab, setTab] = useState<Tab>("scene");
+  const [tabBarRef, tabFade] = useScrollFade<HTMLDivElement>();
   const plan = project?.plan ?? null;
   const index = plan?.scenes.findIndex((scene) => scene.id === selectedSceneId) ?? -1;
   const scene = index >= 0 ? plan?.scenes[index] : undefined;
@@ -1308,7 +1309,7 @@ export const InspectorPanel: React.FC = () => {
               }
             />
           </div>
-          <div className="tab-bar">
+          <div className={`tab-bar ${tabFade}`} ref={tabBarRef}>
             {(
               [
                 ["scene", "Scene"],

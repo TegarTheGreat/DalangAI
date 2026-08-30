@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "gate:layout": "tsx scripts/layout-gate.mts"
   },
   "dependencies": {
     "@dalang/agent": "workspace:*",
@@ -35,6 +36,8 @@
     "@vitejs/plugin-react": "6.1.1",
     "typescript": "5.9.3",
     "vite": "8.2.2",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "@remotion/renderer": "4.0.518",
+    "tsx": "4.23.12"
   }
 }

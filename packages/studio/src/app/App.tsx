@@ -1,9 +1,15 @@
-import { ASPECT_RATIOS, allRecipes, critiquePlan, recipeFor } from "@dalang/core";
+import {
+  ASPECT_RATIOS,
+  type AspectRatio,
+  allRecipes,
+  critiquePlan,
+  recipeFor,
+} from "@dalang/core";
 import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useState } from "react";
 import type { ExportSettingsLite } from "../shared/api-types";
-import { RadioCard, Segmented, useEscape } from "./components/controls";
+import { RadioCard, Segmented, useEscape, useScrollFade } from "./components/controls";
 import {
   IconChat,
   IconCheck,
@@ -48,6 +54,12 @@ const RATIO_GLYPH: Record<(typeof ASPECT_RATIOS)[number], string> = {
   "16:9": "r169",
   "9:16": "r916",
   "1:1": "r11",
+};
+
+const RATIO_HINT: Record<AspectRatio, string> = {
+  "16:9": "Lanskap · YouTube",
+  "9:16": "Tegak · Reels, Shorts",
+  "1:1": "Persegi · feed",
 };
 
 /**
@@ -234,6 +246,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
 }) => {
   const { project } = useStudio();
   const plan = project?.plan ?? null;
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
   const [stylePreset, setStylePreset] = useState<string>("documentary-01");
   const [format, setFormat] = useState<string>("bebas");
   const [accent, setAccent] = useState("#e4a64c");
@@ -246,6 +259,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   useEffect(() => {
     if (!open || !plan) return;
     const tokens = plan.meta.tokens ?? {};
+    setAspectRatio(plan.meta.aspectRatio);
     setStylePreset(plan.meta.stylePreset);
     setFormat(plan.meta.format);
     setAccent(
@@ -273,6 +287,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
         {
           op: "setMeta",
           patch: {
+            aspectRatio,
             stylePreset,
             format,
             tokens: {
@@ -308,6 +323,28 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
           Identitas visual global — berlaku ke preview dan render, dan terlihat agent.
         </p>
         <div className="brief-form">
+          {/* Rasio hidup di sini, bukan hanya di header: di layar sempit
+              header melepasnya lebih dulu, dan sebuah setelan proyek tidak
+              boleh menghilang bersama ruang layar. */}
+          <div className="field">
+            <span>Rasio</span>
+            <div className="ratio-choices">
+              {ASPECT_RATIOS.map((ratio) => (
+                <button
+                  key={ratio}
+                  type="button"
+                  className={
+                    ratio === aspectRatio ? "ratio-choice active" : "ratio-choice"
+                  }
+                  onClick={() => setAspectRatio(ratio)}
+                >
+                  <span className={`ratio-glyph ${RATIO_GLYPH[ratio]}`} aria-hidden />
+                  <strong>{ratio}</strong>
+                  <small>{RATIO_HINT[ratio]}</small>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="field">
             <span>Format konten</span>
             <select value={format} onChange={(event) => setFormat(event.target.value)}>
@@ -506,6 +543,7 @@ const Header: React.FC = () => {
   const [exportOpen, setExportOpen] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
   const [critiqueOpen, setCritiqueOpen] = useState(false);
+  const [actionsRef, actionsFade] = useScrollFade<HTMLDivElement>();
   const plan = project?.plan ?? null;
   const noteCount = plan ? critiquePlan(plan).length : 0;
   const busyLabel = project?.busy.mutation
@@ -563,7 +601,7 @@ const Header: React.FC = () => {
         ) : null}
       </div>
 
-      <div className="topbar-actions">
+      <div className={`topbar-actions ${actionsFade}`} ref={actionsRef}>
         <button
           type="button"
           className={chatOpen ? "tool active" : "tool"}
