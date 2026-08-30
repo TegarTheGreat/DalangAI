@@ -191,6 +191,15 @@ export const IconPalette: React.FC = () => (
   </Icon>
 );
 
+/** Papan jepit bercentang — catatan sutradara atas draft. */
+export const IconClipboard: React.FC = () => (
+  <Icon>
+    <path d="M9 4.5H7.5A1.5 1.5 0 0 0 6 6v13.5A1.5 1.5 0 0 0 7.5 21h9a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H15" />
+    <rect x="9" y="3" width="6" height="3" rx="1" />
+    <path d="m9.5 13 1.8 1.8L15 11" />
+  </Icon>
+);
+
 export const IconSpinner: React.FC = () => (
   <Icon className="spin">
     <path d="M12 3a9 9 0 1 0 9 9" />

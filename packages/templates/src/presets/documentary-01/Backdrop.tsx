@@ -7,6 +7,7 @@ import {
   random,
   staticFile,
   useCurrentFrame,
+  useVideoConfig,
 } from "remotion";
 import { easeDolly, kf } from "../../anim";
 import { motionTransform } from "../../motion-model";
@@ -25,6 +26,7 @@ const AssetLayer: React.FC<{
   durationInFrames: number;
 }> = ({ asset, scene, durationInFrames }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
   // Easing dolly (ADR-0014/0015): gerak kamera settle di awal/akhir; semua
   // matematika transform hidup di motion-model (murni & diuji).
   const progress = interpolate(frame, [0, Math.max(durationInFrames, 1)], [0, 1], {
@@ -47,6 +49,9 @@ const AssetLayer: React.FC<{
         src={staticFile(asset.file)}
         muted
         playbackRate={scene.visual.speed}
+        // ADR-0017: titik masuk di rekaman sumber — satu video panjang bisa
+        // dipakai berkali-kali dengan potongan berbeda per scene.
+        trimBefore={Math.round(scene.visual.trimStartSec * fps)}
         style={style}
       />
     );

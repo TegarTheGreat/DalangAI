@@ -61,6 +61,8 @@ export const sceneUpdateSchema = z.strictObject({
       filter: visualFilterSchema.nullable().optional(),
       /** ADR-0015. */
       speed: z.number().min(0.25).max(4).optional(),
+      /** ADR-0017: titik masuk di aset video sumber. */
+      trimStartSec: z.number().min(0).finite().optional(),
       flipH: z.boolean().optional(),
       focusX: z.number().min(0).max(1).optional(),
       focusY: z.number().min(0).max(1).optional(),
@@ -90,6 +92,8 @@ export const metaUpdateSchema = z.strictObject({
   targetDuration: z.union([z.literal("auto"), finitePositive]).optional(),
   language: z.string().optional(),
   stylePreset: z.string().optional(),
+  /** ADR-0017: format konten yang memilih resep struktur. */
+  format: z.string().optional(),
   tokens: designTokensSchema.nullable().optional(),
 });
 export type MetaUpdate = z.infer<typeof metaUpdateSchema>;

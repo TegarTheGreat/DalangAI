@@ -322,6 +322,12 @@ input[type="color"]::-webkit-color-swatch {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Judul adalah satu-satunya bagian topbar yang boleh menyusut — tapi ada
+     dasarnya: satu huruf plus elipsis lebih buruk daripada tidak ada judul,
+     jadi ia berhenti menyusut di lebar yang masih terbaca dan disembunyikan
+     media query di bawah bila header sudah terlalu padat. */
+  min-width: 11ch;
+  flex-shrink: 1;
 }
 .busy-chip {
   display: inline-flex;
@@ -1380,6 +1386,14 @@ input[type="color"]::-webkit-color-swatch {
 
 /* -- responsif ------------------------------------------------------------- */
 
+/* Antara 1100-1440px header sudah padat (brand + judul + rasio + 9 aksi):
+   judul yang tersisa 1-2 huruf lebih buruk daripada tidak ada judul. */
+@media (max-width: 1440px) {
+  .project-title {
+    display: none;
+  }
+}
+
 @media (max-width: 1360px) {
   .workspace {
     grid-template-columns: 290px minmax(0, 1fr) 310px;
@@ -1420,7 +1434,9 @@ input[type="color"]::-webkit-color-swatch {
   .shell.inspector-closed .inspector-panel {
     display: none;
   }
-  .topbar .tool span {
+  /* Label tombol disembunyikan, tapi lencana jumlah tetap terlihat —
+     ia informasi, bukan label. */
+  .topbar .tool span:not(.tool-badge) {
     display: none;
   }
   .workspace .panel-head .drawer-close {
@@ -1582,6 +1598,11 @@ input[type="color"]::-webkit-color-swatch {
 }
 .ratio-switch {
   margin-left: 12px;
+  /* Di header, membungkus ke baris kedua membuat kontrol menjuntai keluar
+     topbar (terlihat di gerbang visual ADR-0017). Judul proyek yang mengalah
+     dengan elipsis, bukan kontrol yang pecah barisnya. */
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 .ratio-switch .seg {
   font-variant-numeric: tabular-nums;
@@ -2042,14 +2063,14 @@ input[type="color"]::-webkit-color-swatch {
   margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--ink-dim);
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 .field-hint {
   margin: 6px 0 0;
   font-size: 11.5px;
   line-height: 1.5;
-  color: var(--ink-dim);
+  color: var(--text-dim);
 }
 
 /* Baris label + switch di Inspector (ADR-0015) */
@@ -2060,7 +2081,7 @@ input[type="color"]::-webkit-color-swatch {
   gap: 10px;
   padding: 6px 0 2px;
   font-size: 12.5px;
-  color: var(--ink-soft);
+  color: var(--text);
 }
 
 /* Chip aksi cepat di chat */
@@ -2162,4 +2183,101 @@ input[type="color"]::-webkit-color-swatch {
   padding: 2px 7px;
   z-index: 6;
   white-space: nowrap;
+}
+
+/* Catatan sutradara (ADR-0017): kritik mesin yang terlihat manusia. */
+.tool-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 2px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.note-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg-deep);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.note-recipe-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.note-clean {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  color: var(--text);
+}
+.note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.note-item {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.note-item.saran {
+  border-left-color: var(--line-strong);
+}
+.note-item.perhatian {
+  border-left-color: var(--warn);
+}
+.note-level {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding-top: 2px;
+  color: var(--text-dim);
+}
+.note-item.perhatian .note-level {
+  color: var(--warn);
+}
+.note-body {
+  color: var(--text);
+}
+.note-jump {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-size: 11px;
 }

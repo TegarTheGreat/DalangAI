@@ -50,6 +50,10 @@
           "default": "documentary-01",
           "type": "string"
         },
+        "format": {
+          "default": "bebas",
+          "type": "string"
+        },
         "tokens": {
           "type": "object",
           "properties": {
@@ -243,6 +247,11 @@
                 "type": "number",
                 "minimum": 0.25,
                 "maximum": 4
+              },
+              "trimStartSec": {
+                "default": 0,
+                "type": "number",
+                "minimum": 0
               },
               "flipH": {
                 "default": false,
@@ -645,6 +654,10 @@
                 "exclusiveMinimum": 0
               },
               "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "durationSec": {
                 "type": "number",
                 "exclusiveMinimum": 0
               }

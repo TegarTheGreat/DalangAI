@@ -229,6 +229,28 @@ export const makeDeps = (
     ttsChainFor: overrides.ttsChainFor ?? (() => [fakeTts()]),
     stockChain: overrides.stockChain ?? (() => [fakeStock()]),
     renderVideo: overrides.renderVideo ?? render,
+    videoMetadata:
+      overrides.videoMetadata ??
+      (async (file) =>
+        file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null),
+    detectSilence:
+      overrides.detectSilence ??
+      (async (file) =>
+        file.endsWith(".mp4")
+          ? {
+              durationSec: 600,
+              silences: [
+                { startSec: 0, endSec: 0.8 },
+                { startSec: 64.2, endSec: 65.1 },
+                { startSec: 402, endSec: 402.6 },
+              ],
+              audible: [
+                { startSec: 0.8, endSec: 64.2 },
+                { startSec: 65.1, endSec: 402 },
+                { startSec: 402.6, endSec: 600 },
+              ],
+            }
+          : null),
     volumeModel: overrides.volumeModel,
     onToolActivity: () => {},
   };

@@ -7,7 +7,7 @@ import {
   resolveModel,
 } from "@dalang/agent";
 import { buildStockChain, buildTtsChain } from "@dalang/providers";
-import { renderPlanToVideo } from "@dalang/renderer";
+import { detectSilence, probeLocalVideo, renderPlanToVideo } from "@dalang/renderer";
 import { startStudioServer, studioAppDistDir } from "@dalang/studio/server";
 import { type Command, InvalidArgumentError } from "commander";
 
@@ -76,6 +76,8 @@ export const registerStudioCommand = (program: Command): void => {
             ttsChainFor: (provider) => buildTtsChain({ provider }),
             stockChain: () => buildStockChain(),
             renderVideo: (renderOptions) => renderPlanToVideo(renderOptions),
+            probeVideo: probeLocalVideo,
+            detectSilence,
             ...(orchestrator ? { orchestrator } : {}),
             ...(chatDisabledReason ? { chatDisabledReason } : {}),
             ...(volumeModel ? { volumeModel } : {}),

@@ -1,3 +1,14 @@
+import { computeTimeline } from "./durations";
+import { type FormatRecipe, isBodyScene, recipeFor } from "./format-recipe";
+import {
+  HEDGING_ID,
+  KLISE_ID,
+  lexicalOverlap,
+  opensWithConnector,
+  PENGISI_ID,
+  phrasesFound,
+  proseStats,
+} from "./prose";
 import type { Scene, ScenePlan } from "./scene-plan";
 
 /**
@@ -137,15 +148,234 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
     });
   }
 
-  // 9. Tutup dengan outro.
+  // 9. Tutup dengan outro (kecuali format yang memang tidak memakainya).
+  const recipe = recipeFor(plan.meta.format);
   const last = scenes[scenes.length - 1];
-  if (last && last.visual.type !== "template-anim") {
+  if (recipe.needsOutro && last && last.visual.type !== "template-anim") {
     notes.push({
       code: "outro-hilang",
       level: "saran",
       sceneId: last.id,
       message:
         "Scene terakhir bukan kartu template-anim. Outro (CTA/kredit) membuat video terasa selesai, bukan terpotong.",
+    });
+  }
+
+  notes.push(...critiqueFormat(plan, recipe));
+  notes.push(...critiqueProse(plan, recipe));
+  return notes;
+};
+
+/** Ambang detektor prosa — lihat catatan kalibrasi di `prose.ts`. */
+const MAX_SENTENCE_WORDS = 25;
+const MIN_BURSTINESS = 0.18;
+const MIN_SENTENCES_FOR_RHYTHM = 6;
+const MAX_ADJACENT_OVERLAP = 0.5;
+
+/**
+ * Detektor "generic" (ADR-0017): pola PERMUKAAN bahasa yang membuat naskah
+ * terdengar seperti mesin — klise, hedging, kalimat seragam, pengulangan
+ * gagasan antar scene. Semuanya deterministik dan bebas model.
+ */
+const critiqueProse = (plan: ScenePlan, recipe: FormatRecipe): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
+  const body = plan.scenes.filter(isBodyScene);
+  const script = plan.scenes.map((scene) => scene.narration).join(" ");
+  // Naskah sangat pendek tidak punya cukup data untuk ukuran statistik.
+  if (wordCount(script) < 25) return notes;
+
+  const stats = proseStats(script);
+
+  const kliseHits = phrasesFound(script, KLISE_ID);
+  if (kliseHits.length > 0) {
+    notes.push({
+      code: "naskah-klise",
+      level: "perhatian",
+      message:
+        `Frasa klise terdeteksi: "${kliseHits.slice(0, 3).join('", "')}". ` +
+        "Ini penanda paling cepat dikenali bahwa naskah ditulis mesin — ganti dengan pernyataan konkret yang khusus untuk topik ini.",
+    });
+  }
+
+  const hedgeHits = phrasesFound(script, HEDGING_ID);
+  if (stats.hedgingPer100 > 1.2 && hedgeHits.length >= 2) {
+    notes.push({
+      code: "naskah-ragu",
+      level: "saran",
+      message:
+        `Kata pagar terlalu sering (${stats.hedgingPer100.toFixed(1)} per 100 kata: "${hedgeHits.slice(0, 3).join('", "')}"). ` +
+        "Narasi yang terus berjaga-jaga terdengar tidak yakin; sebutkan angka atau syaratnya, atau nyatakan langsung.",
+    });
+  }
+
+  const fillerHits = phrasesFound(script, PENGISI_ID);
+  if (fillerHits.length > 0) {
+    notes.push({
+      code: "naskah-pengisi",
+      level: "saran",
+      message:
+        `Kata pengisi lisan ikut tertulis: "${fillerHits.slice(0, 3).join('", "')}". ` +
+        "TTS akan membacakannya sebagai kata sungguhan — buang dari naskah.",
+    });
+  }
+
+  if (stats.longestSentenceWords > MAX_SENTENCE_WORDS) {
+    notes.push({
+      code: "kalimat-panjang",
+      level: "saran",
+      message:
+        `Kalimat terpanjang ${stats.longestSentenceWords} kata (batas nyaman untuk narasi lisan ${MAX_SENTENCE_WORDS}). ` +
+        "Penonton tidak bisa mengulang kalimat yang didengar — pecah jadi dua.",
+    });
+  }
+
+  if (stats.sentences >= MIN_SENTENCES_FOR_RHYTHM && stats.burstiness < MIN_BURSTINESS) {
+    notes.push({
+      code: "irama-datar",
+      level: "saran",
+      message:
+        `Panjang kalimat nyaris seragam (burstiness ${stats.burstiness.toFixed(2)}, sehat di atas ${MIN_BURSTINESS}). ` +
+        "Keseragaman itulah yang membuat narasi terdengar dibacakan mesin. Selingi kalimat sangat pendek di antara yang panjang.",
+    });
+  }
+
+  // Dua scene isi berurutan yang mengatakan hal yang sama dengan kata berbeda.
+  for (let index = 1; index < body.length; index += 1) {
+    const previous = body[index - 1] as Scene;
+    const current = body[index] as Scene;
+    const overlap = lexicalOverlap(previous.narration, current.narration);
+    if (overlap > MAX_ADJACENT_OVERLAP) {
+      notes.push({
+        code: "narasi-berulang",
+        level: "perhatian",
+        sceneId: current.id,
+        message:
+          `Scene ${current.id} mengulang gagasan ${previous.id} (${Math.round(overlap * 100)}% kata isi sama). ` +
+          "Satu ide per scene: gabungkan keduanya, atau majukan argumennya.",
+      });
+      break;
+    }
+  }
+
+  // Klip harus berdiri sendiri: pembuka yang menggantung menuntut konteks
+  // yang tidak dimiliki penonton.
+  if (recipe.format === "klip") {
+    const first = body[0];
+    const connector = first ? opensWithConnector(first.narration) : null;
+    if (first && connector) {
+      notes.push({
+        code: "klip-menggantung",
+        level: "perhatian",
+        sceneId: first.id,
+        message:
+          `Klip dibuka dengan "${connector}" — penghubung yang premisnya ada di luar klip. ` +
+          "Mulai dari kalimat yang utuh sendiri; penonton tidak menonton bagian sebelumnya.",
+      });
+    }
+  }
+
+  return notes;
+};
+
+/**
+ * Kritik terhadap RESEP format (ADR-0017). Hanya berlaku bila `meta.format`
+ * diisi selain "bebas" — memaksa struktur yang sesuai jenis konten, bukan
+ * satu kerangka untuk semuanya.
+ */
+const critiqueFormat = (plan: ScenePlan, recipe: FormatRecipe): DirectorNote[] => {
+  if (recipe.format === "bebas") return [];
+  const notes: DirectorNote[] = [];
+  const scenes = plan.scenes;
+  const body = scenes.filter(isBodyScene);
+
+  if (scenes.length < recipe.minScenes || scenes.length > recipe.maxScenes) {
+    notes.push({
+      code: "format-jumlah-scene",
+      level: "perhatian",
+      message:
+        `Format "${recipe.format}" enaknya ${recipe.minScenes}-${recipe.maxScenes} scene, ` +
+        `sekarang ${scenes.length}. Kerangkanya: ${recipe.kerangka}`,
+    });
+  }
+
+  const { totalSec } = computeTimeline(plan);
+  if (totalSec < recipe.minTotalSec || totalSec > recipe.maxTotalSec) {
+    notes.push({
+      code: "format-durasi",
+      level: "perhatian",
+      message:
+        `Durasi ${totalSec.toFixed(0)} detik di luar rentang wajar format "${recipe.format}" ` +
+        `(${recipe.minTotalSec}-${recipe.maxTotalSec} detik).`,
+    });
+  }
+
+  if (recipe.needsTitle && scenes[0] && scenes[0].visual.type !== "template-anim") {
+    notes.push({
+      code: "format-tanpa-pembuka",
+      level: "saran",
+      sceneId: scenes[0].id,
+      message: `Format "${recipe.format}" membuka dengan kartu judul (template-anim variant "title").`,
+    });
+  }
+
+  if (recipe.needsHookText) {
+    const firstBody = body[0];
+    if (firstBody && firstBody.texts.length === 0) {
+      notes.push({
+        code: "format-hook-tanpa-teks",
+        level: "perhatian",
+        sceneId: firstBody.id,
+        message:
+          `Format "${recipe.format}" hidup dari hook yang TERLIHAT. Beri satu teks penahan ` +
+          "di scene isi pertama (kicker/headline), bukan mengandalkan narasi saja.",
+      });
+    }
+  }
+
+  // Kepadatan narasi per scene isi terhadap rentang resep.
+  const offenders = body.filter((scene) => {
+    const words = wordCount(scene.narration);
+    return (
+      words > 0 && (words < recipe.minWordsPerScene || words > recipe.maxWordsPerScene)
+    );
+  });
+  if (offenders.length > Math.max(1, Math.floor(body.length / 3))) {
+    notes.push({
+      code: "format-panjang-narasi",
+      level: "saran",
+      message:
+        `${offenders.length} scene isi di luar ${recipe.minWordsPerScene}-${recipe.maxWordsPerScene} ` +
+        `kata yang enak untuk format "${recipe.format}". Satu ide per scene; pecah yang kepanjangan.`,
+    });
+  }
+
+  // Tutorial: langkah harus terbaca berurutan lewat narasi imperatif.
+  if (recipe.format === "tutorial" && body.length >= 2) {
+    const imperative = body.filter((scene) =>
+      /^(buka|klik|pilih|ketik|isi|tekan|geser|salin|simpan|jalankan|pasang|atur|tambah|hapus|masuk|unduh)/i.test(
+        scene.narration.trim(),
+      ),
+    );
+    if (imperative.length < Math.ceil(body.length / 2)) {
+      notes.push({
+        code: "format-langkah-tidak-imperatif",
+        level: "saran",
+        message:
+          "Tutorial paling mudah diikuti bila tiap langkah dimulai kata kerja perintah " +
+          '("Buka…", "Klik…", "Pilih…") — sekarang sebagian besar scene tidak begitu.',
+      });
+    }
+  }
+
+  // Klip: tidak boleh dibuka basa-basi kartu judul.
+  if (recipe.format === "klip" && scenes[0]?.visual.type === "template-anim") {
+    notes.push({
+      code: "format-klip-basa-basi",
+      level: "perhatian",
+      sceneId: scenes[0].id,
+      message:
+        "Klip pendek tidak punya waktu untuk kartu judul — mulai langsung dari hook, " +
+        "penonton memutuskan dalam 3 detik.",
     });
   }
 

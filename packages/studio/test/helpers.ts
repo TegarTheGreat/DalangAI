@@ -143,6 +143,16 @@ export const makeStudio = (
         ),
       ],
       stockChain: () => [fakeStock()],
+      probeVideo: async (_planPath, file) =>
+        file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null,
+      detectSilence: async (_planPath, file) =>
+        file.endsWith(".mp4")
+          ? {
+              durationSec: 600,
+              silences: [{ startSec: 0, endSec: 0.8 }],
+              audible: [{ startSec: 0.8, endSec: 600 }],
+            }
+          : null,
       renderVideo: async ({ outputLocation }) => {
         if (overrides?.renderDelayMs) {
           await new Promise((resolve) => setTimeout(resolve, overrides.renderDelayMs));

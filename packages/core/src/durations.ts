@@ -1,4 +1,5 @@
 import type { Scene, ScenePlan, WordTimestamp } from "./scene-plan";
+import { countSyllables, SYLLABLES_PER_SECOND } from "./syllables";
 
 /**
  * Deterministic timing resolution (PRD §7: AI plans, execution is
@@ -7,13 +8,18 @@ import type { Scene, ScenePlan, WordTimestamp } from "./scene-plan";
  *
  * Rules for `duration: "auto"`:
  *  1. If TTS audio exists for the scene → audio duration + padding.
- *  2. Else → estimate from narration word count (Indonesian conversational
- *     pace ≈ 2.4 words/sec at speed 1.0).
+ *  2. Else → estimate from narration SYLLABLE count (ADR-0017). Indonesian
+ *     word length varies enormously through affixation, so counting words
+ *     underestimates affix-heavy or number-bearing narration; see
+ *     `syllables.ts` for the measured basis.
  *  3. Text-free scenes (e.g. template-anim without narration) get a fixed
  *     sensible default.
  */
 
-/** Estimated speaking pace used before TTS has run. */
+/**
+ * Legacy word-based pace, kept only as a documented reference point for the
+ * calibration note in `syllables.ts`. Timing no longer uses it.
+ */
 export const WORDS_PER_SECOND = 2.4;
 /** Breathing room appended after the narration ends. */
 export const SCENE_PADDING_SEC = 0.7;
@@ -27,9 +33,9 @@ export const countWords = (text: string): number =>
   text.trim().split(/\s+/).filter(Boolean).length;
 
 export const estimateNarrationSeconds = (narration: string, speed = 1): number => {
-  const words = countWords(narration);
-  if (words === 0) return 0;
-  return words / (WORDS_PER_SECOND * speed);
+  const syllables = countSyllables(narration);
+  if (syllables === 0) return 0;
+  return syllables / (SYLLABLES_PER_SECOND * speed);
 };
 
 export const resolveSceneDurationSec = (scene: Scene, plan: ScenePlan): number => {

@@ -1,4 +1,4 @@
-import { ASPECT_RATIOS } from "@dalang/core";
+import { ASPECT_RATIOS, allRecipes, critiquePlan, recipeFor } from "@dalang/core";
 import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useState } from "react";
@@ -7,6 +7,7 @@ import { RadioCard, Segmented, useEscape } from "./components/controls";
 import {
   IconChat,
   IconCheck,
+  IconClipboard,
   IconExport,
   IconImage,
   IconMic,
@@ -232,6 +233,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const { project } = useStudio();
   const plan = project?.plan ?? null;
   const [stylePreset, setStylePreset] = useState<string>("documentary-01");
+  const [format, setFormat] = useState<string>("bebas");
   const [accent, setAccent] = useState("#e4a64c");
   const [primary, setPrimary] = useState("#0b0e17");
   const [fontDisplay, setFontDisplay] = useState("");
@@ -243,6 +245,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
     if (!open || !plan) return;
     const tokens = plan.meta.tokens ?? {};
     setStylePreset(plan.meta.stylePreset);
+    setFormat(plan.meta.format);
     setAccent(
       tokens.accent ?? (plan.meta.stylePreset === "tutorial-01" ? "#2e5fd7" : "#e4a64c"),
     );
@@ -269,6 +272,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
           op: "setMeta",
           patch: {
             stylePreset,
+            format,
             tokens: {
               accent,
               primary,
@@ -302,6 +306,17 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
           Identitas visual global — berlaku ke preview dan render, dan terlihat agent.
         </p>
         <div className="brief-form">
+          <div className="field">
+            <span>Format konten</span>
+            <select value={format} onChange={(event) => setFormat(event.target.value)}>
+              {allRecipes().map((recipe) => (
+                <option key={recipe.format} value={recipe.format}>
+                  {recipe.label}
+                </option>
+              ))}
+            </select>
+            <p className="field-hint">{recipeFor(format).kerangka}</p>
+          </div>
           <div className="field">
             <span>Preset gaya</span>
             <Segmented
@@ -408,12 +423,84 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   );
 };
 
+/**
+ * Catatan sutradara (ADR-0014/0017) untuk MANUSIA, bukan cuma untuk agent.
+ * Dihitung di browser dari plan yang sedang tampil — jadi selalu sinkron
+ * dengan editan terakhir tanpa perjalanan ke server. Sifatnya saran: tidak
+ * ada yang otomatis diubah, pengarah yang memutuskan.
+ */
+const CritiqueDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
+  open,
+  onClose,
+}) => {
+  const { project } = useStudio();
+  const plan = project?.plan ?? null;
+  useEscape(open, onClose);
+  if (!open || !plan) return null;
+
+  const recipe = recipeFor(plan.meta.format);
+  const notes = critiquePlan(plan);
+  return (
+    <div className="dialog-backdrop">
+      <div className="dialog brief-dialog">
+        <h3>Catatan sutradara</h3>
+        <p>
+          Pemeriksaan mesin atas draft — pola yang biasanya membuat video terasa generic.
+          Semuanya saran; tidak ada yang diubah otomatis.
+        </p>
+        <div className="note-recipe">
+          <span className="note-recipe-label">Format {recipe.label}</span>
+          <span>{recipe.kerangka}</span>
+        </div>
+        {notes.length === 0 ? (
+          <p className="note-clean">
+            <IconCheck /> Tidak ada temuan. Draft lolos semua kaidah yang bisa diperiksa
+            mesin.
+          </p>
+        ) : (
+          <ul className="note-list">
+            {notes.map((note) => (
+              <li key={note.code} className={`note-item ${note.level}`}>
+                <span className="note-level">
+                  {note.level === "perhatian" ? "Perhatian" : "Saran"}
+                </span>
+                <span className="note-body">
+                  {note.message}
+                  {note.sceneId ? (
+                    <button
+                      type="button"
+                      className="note-jump"
+                      onClick={() => {
+                        onClose();
+                        studioClient.selectScene(note.sceneId as string);
+                      }}
+                    >
+                      Buka {note.sceneId}
+                    </button>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="brief-actions">
+          <button type="button" className="primary" onClick={onClose}>
+            Tutup
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Header: React.FC = () => {
   const { project, connected } = useStudio();
   const { chatOpen, inspectorOpen } = useUi();
   const [exportOpen, setExportOpen] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [critiqueOpen, setCritiqueOpen] = useState(false);
   const plan = project?.plan ?? null;
+  const noteCount = plan ? critiquePlan(plan).length : 0;
   const busyLabel = project?.busy.mutation
     ? `${BUSY_LABEL[project.busy.mutation] ?? "Memproses"}…`
     : project?.busy.render
@@ -485,11 +572,23 @@ const Header: React.FC = () => {
           className="tool"
           disabled={!plan}
           onClick={() => setStyleOpen(true)}
-          data-tip="Gaya proyek: preset, warna, font"
+          data-tip="Gaya proyek: format konten, preset, warna, font"
           data-tip-bottom=""
         >
           <IconPalette />
           <span>Gaya</span>
+        </button>
+        <button
+          type="button"
+          className="tool"
+          disabled={!plan}
+          onClick={() => setCritiqueOpen(true)}
+          data-tip="Catatan sutradara: pemeriksaan mesin atas draft"
+          data-tip-bottom=""
+        >
+          <IconClipboard />
+          <span>Catatan</span>
+          {noteCount > 0 ? <span className="tool-badge">{noteCount}</span> : null}
         </button>
         <span className="divider" />
         <button
@@ -582,6 +681,7 @@ const Header: React.FC = () => {
       </div>
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
       <StyleDialog open={styleOpen} onClose={() => setStyleOpen(false)} />
+      <CritiqueDialog open={critiqueOpen} onClose={() => setCritiqueOpen(false)} />
     </header>
   );
 };

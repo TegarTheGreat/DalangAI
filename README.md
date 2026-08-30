@@ -8,7 +8,7 @@ bukan "Midjourney untuk video".
 Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) · Fase 3, 2, 1, 0 selesai
 
 ![Dalang Studio — 3 panel: chat agent, preview @remotion/player, timeline/inspector](docs/media/studio-borobudur.jpg)
 
@@ -182,7 +182,38 @@ Yang sudah berjalan:
   - **6 font ter-bundle** (OFL, offline): Fraunces, Inter, Space Grotesk,
     Lora, **Plus Jakarta Sans** (karya Tokotype — foundry Indonesia), dan
     **Anton** (display berat untuk judul menghentak).
-- **Kualitas terjaga otomatis**: 296 unit test (kontrak lock/pin/undo, timing
+- **Agent berkerajinan (ADR-0017)** — jawaban atas "agentnya masih terlalu
+  umum": bentuk yang berbeda per jenis konten, diperiksa mesin.
+  - **6 resep format konten** (bebas, edukasi, tutorial, klip, berita,
+    cerita) — masing-masing punya kerangka beat, rentang scene/durasi, dan
+    aturan struktur. Satu sumber dipakai DUA arah: menyusun system prompt
+    agent *dan* memeriksa hasilnya, jadi nasihat dan pemeriksa tidak pernah
+    berbeda pendapat.
+  - **`critiqueDraft`** — agent memeriksa kerjanya sendiri terhadap resep itu
+    sebelum lanjut ke suara/aset/render. Loopnya berubah dari *tulis lalu
+    harap* menjadi *tulis, periksa, perbaiki*, dengan pemeriksa yang bukan
+    model.
+  - **Mengklip rekaman panjang**: `ingestVideo` membaca durasi/dimensi
+    rekaman lewat ffprobe, `visual.trimStartSec` memilih titik masuk, dan
+    satu rekaman bisa dipakai banyak scene dengan titik berbeda —
+    podcast 40 menit jadi beberapa klip vertikal. `findCutPoints` mencari
+    **jeda hening** (ffmpeg, -35 dB / 0,35 dtk) supaya potongan jatuh di
+    jeda alami, bukan di tengah napas.
+    *Batas jujur: agent tidak bisa mendengar ISI rekaman — hening menunjukkan
+    di mana memotong, bukan apa yang layak dipotong. Untuk memilih momen ia
+    diperintahkan meminta transkrip, bukan menebak.*
+  - **Detektor "generic"** — klise, kata pagar, kata pengisi, kalimat di atas
+    25 kata, pengulangan gagasan antar scene, dan **irama datar**
+    (keseragaman panjang kalimat: penanda terkuat naskah mesin). Semuanya
+    leksikal/statistik, tanpa model, tanpa biaya token.
+  - **Durasi diestimasi dari SUKU KATA**, bukan jumlah kata — Bahasa
+    Indonesia berafiks berat, jadi "dan" dan "mempertanggungjawabkan" tidak
+    boleh dihitung sama, dan angka ("2024" = 8 suku kata) tidak boleh
+    diabaikan.
+  - **Catatan sutradara terlihat manusia**: tombol berlencana di header
+    membuka daftar temuan berperingkat dengan kerangka format yang sedang
+    dipakai — dihitung di browser, jadi selalu sinkron dengan editan terakhir.
+- **Kualitas terjaga otomatis**: 333 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -195,7 +226,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 296 unit test (7 paket) — tanpa browser & jaringan
+pnpm test                 # 333 unit test (7 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

@@ -69,6 +69,10 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
     ttsChainFor: options.deps.ttsChainFor,
     stockChain: options.deps.stockChain,
     renderVideo: options.deps.renderVideo,
+    // ADR-0017: agent membaca durasi rekaman sumber lewat probe milik CLI,
+    // dengan planPath sesi ini — paket studio tidak mengimpor renderer.
+    videoMetadata: (file) => options.deps.probeVideo(session.paths.planPath, file),
+    detectSilence: (file) => options.deps.detectSilence(session.paths.planPath, file),
     ...(options.deps.volumeModel ? { volumeModel: options.deps.volumeModel } : {}),
     onToolActivity: (line) => bridge?.onActivity(line),
   };

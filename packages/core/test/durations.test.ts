@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   computeTimeline,
+  countSyllables,
+  countWords,
   estimateNarrationSeconds,
   estimateWordTimestamps,
   MIN_SCENE_SEC,
@@ -9,6 +11,7 @@ import {
   resolveSceneDurationSec,
   SCENE_PADDING_SEC,
   SILENT_SCENE_SEC,
+  SYLLABLES_PER_SECOND,
 } from "../src/index";
 import { makePlan } from "./fixtures";
 
@@ -34,14 +37,39 @@ describe("duration resolution (deterministic)", () => {
     );
   });
 
-  it("auto estimates from word count before TTS exists", () => {
+  // ADR-0017: estimasi pindah dari jumlah KATA ke jumlah SUKU KATA, karena
+  // panjang kata Bahasa Indonesia sangat bervariasi lewat afiksasi.
+  it("auto estimates from syllable count before TTS exists", () => {
     const plan = makePlan();
-    const scene = plan.scenes[0]!; // 5 kata
+    const scene = plan.scenes[0]!;
     const estimated = estimateNarrationSeconds(scene.narration);
-    expect(estimated).toBeCloseTo(5 / 2.4, 5);
+    expect(estimated).toBeCloseTo(
+      countSyllables(scene.narration) / SYLLABLES_PER_SECOND,
+      5,
+    );
     expect(resolveSceneDurationSec(scene, plan)).toBeCloseTo(
       Math.max(MIN_SCENE_SEC, NARRATION_LEAD_IN_SEC + estimated + SCENE_PADDING_SEC),
       5,
+    );
+  });
+
+  it("narasi berafiks berat diberi waktu lebih daripada narasi berkata pendek", () => {
+    // Jumlah KATA sama persis (6); jumlah suku kata jauh berbeda. Estimasi
+    // lama memberi durasi identik — itulah yang diperbaiki ADR-0017.
+    const pendek = "Ia tahu ada dua hal.";
+    const panjang =
+      "Pertanggungjawaban keberlanjutan memerlukan pengawasan berkesinambungan.";
+    expect(countWords(pendek)).toBe(countWords(panjang));
+    expect(estimateNarrationSeconds(panjang)).toBeGreaterThan(
+      estimateNarrationSeconds(pendek) * 1.8,
+    );
+  });
+
+  it("angka dihitung sebagai kata terucap, bukan diabaikan", () => {
+    // "2024" dibacakan "dua ribu dua puluh empat" — 8 suku kata.
+    expect(countSyllables("2024")).toBe(8);
+    expect(estimateNarrationSeconds("Tahun 2024.")).toBeGreaterThan(
+      estimateNarrationSeconds("Tahun."),
     );
   });
 

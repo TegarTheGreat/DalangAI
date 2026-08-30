@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { patchOpSchema, type ScenePlanInput, scenePlanSchema } from "@dalang/core";
+import {
+  critiquePlan,
+  patchOpSchema,
+  recipeFor,
+  type ScenePlanInput,
+  scenePlanSchema,
+  setResolvedAsset,
+} from "@dalang/core";
 import {
   materializeCandidate,
   runAssetStage,
@@ -45,6 +52,24 @@ export interface AgentDeps {
   }) => Promise<RenderVideoResult>;
   /** Model tier-2 (murah/multimodal) untuk researchTopic & analyzeImage. */
   volumeModel?: ResolvedModel;
+  /**
+   * Baca metadata video lokal (ADR-0017) — path relatif folder plan.
+   * null = tidak terbaca/tidak didukung. Di-inject supaya paket agent tidak
+   * bergantung pada renderer (dan tes bisa memberi fake).
+   */
+  videoMetadata: (
+    fileRelativeToPlan: string,
+  ) => Promise<{ durationSec: number; width: number; height: number } | null>;
+  /**
+   * Cari jeda hening di rekaman (ADR-0017) — path relatif folder plan.
+   * Mengukur amplitudo, BUKAN makna: memberi titik potong alami, bukan
+   * pilihan momen. null = tidak terbaca.
+   */
+  detectSilence: (fileRelativeToPlan: string) => Promise<{
+    durationSec: number;
+    silences: Array<{ startSec: number; endSec: number }>;
+    audible: Array<{ startSec: number; endSec: number }>;
+  } | null>;
   onToolActivity?: (line: string) => void;
 }
 
@@ -108,6 +133,156 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
   };
 
   return {
+    // ADR-0017: kritik-diri DELIBERAT. Catatan sutradara memang sudah
+    // disuntikkan pasif ke konteks, tapi memanggilnya sebagai tool memaksa
+    // model berhenti dan membaca kelemahan rencananya sendiri sebelum lanjut.
+    critiqueDraft: tool({
+      description:
+        "Periksa scene-plan saat ini terhadap kaidah sutradara DAN resep format (meta.format). Panggil SETELAH menyusun/merevisi draft, sebelum lanjut ke suara/aset/render. Kembalikan daftar catatan; perbaiki yang 'perhatian' dulu, atau jelaskan singkat kenapa sengaja diabaikan.",
+      inputSchema: z.object({}),
+      execute: (input) =>
+        run("critiqueDraft", input, async () => {
+          const plan = requirePlan();
+          const recipe = recipeFor(plan.meta.format);
+          const notes = critiquePlan(plan);
+          return {
+            ok: true,
+            format: recipe.format,
+            kerangkaFormat: recipe.kerangka,
+            jumlahCatatan: notes.length,
+            catatan: notes.map((note) => ({
+              kode: note.code,
+              level: note.level,
+              sceneId: note.sceneId ?? null,
+              pesan: note.message,
+            })),
+            bersih: notes.length === 0,
+          };
+        }),
+    }),
+
+    // ADR-0017: pintu masuk kemampuan MENGKLIP — daftarkan rekaman panjang
+    // sebagai aset, lalu tiap scene memotongnya lewat visual.trimStartSec.
+    ingestVideo: tool({
+      description:
+        "Daftarkan file VIDEO lokal di folder proyek (mis. 'assets/podcast.mp4') sebagai aset scene, dan baca durasi + dimensinya. Dipakai untuk MENGKLIP rekaman panjang: panggil sekali per scene, lalu set visual.trimStartSec (detik) dan duration scene lewat applyPatch untuk memilih potongan. Aset ini ter-pin.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        file: z
+          .string()
+          .min(1)
+          .describe("Path relatif terhadap folder plan, mis. 'assets/podcast.mp4'"),
+      }),
+      execute: (input) =>
+        run("ingestVideo", input, async () => {
+          const plan = requirePlan();
+          if (!plan.scenes.some((scene) => scene.id === input.sceneId)) {
+            return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          }
+          const meta = await deps.videoMetadata(input.file);
+          if (!meta) {
+            return {
+              ok: false,
+              error: `Tidak bisa membaca video "${input.file}" — pastikan path relatif terhadap folder plan dan formatnya didukung`,
+            };
+          }
+          session.plan = setResolvedAsset(plan, input.sceneId, {
+            file: input.file,
+            kind: "video",
+            source: "local",
+            license: "milik user (rekaman sumber)",
+            width: meta.width,
+            height: meta.height,
+            durationSec: meta.durationSec,
+          });
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "replaceAsset",
+              sceneId: input.sceneId,
+              assetId: input.file,
+              pinned: true,
+            },
+            {
+              op: "updateScene",
+              id: input.sceneId,
+              patch: { visual: { type: "image" } },
+            },
+          ]);
+          return {
+            ok: true,
+            file: input.file,
+            durasiDetik: Number(meta.durationSec.toFixed(2)),
+            lebar: meta.width,
+            tinggi: meta.height,
+            ringkasanPerubahan: summary,
+            catatan:
+              "Pilih potongan lewat applyPatch: visual.trimStartSec = detik mulai, dan duration scene = panjang potongan.",
+          };
+        }),
+    }),
+
+    // ADR-0017: agent tidak bisa MENDENGAR isi rekaman, tapi bisa tahu di mana
+    // orang berhenti bicara. Itu cukup untuk menempatkan batas potong pada
+    // jeda alami alih-alih di tengah napas.
+    findCutPoints: tool({
+      description:
+        "Cari jeda hening di rekaman lokal untuk dipakai sebagai titik potong ALAMI (batas kalimat penutur). Kembalikan daftar jeda + rentang bersuara. PENTING: ini mengukur suara/hening, BUKAN isi — ia tidak tahu apa yang dibicarakan, jadi jangan memakainya untuk menebak momen menarik. Untuk memilih momen, minta transkrip atau penanda waktu ke user.",
+      inputSchema: z.object({
+        file: z
+          .string()
+          .min(1)
+          .describe("Path relatif terhadap folder plan, mis. 'assets/podcast.mp4'"),
+        sekitarDetik: z
+          .number()
+          .min(0)
+          .optional()
+          .describe(
+            "Bila diisi, kembalikan hanya jeda terdekat di sekitar detik ini (untuk merapikan satu batas potong).",
+          ),
+      }),
+      execute: (input) =>
+        run("findCutPoints", input, async () => {
+          requirePlan();
+          const report = await deps.detectSilence(input.file);
+          if (!report) {
+            return {
+              ok: false,
+              error: `Tidak bisa membaca audio "${input.file}" — pastikan path relatif terhadap folder plan dan berkasnya punya jalur audio`,
+            };
+          }
+          // Titik potong = tengah tiap jeda; di situlah pemotongan paling
+          // tidak terdengar.
+          const cuts = report.silences.map((span) =>
+            Number(((span.startSec + span.endSec) / 2).toFixed(2)),
+          );
+          const near =
+            input.sekitarDetik === undefined
+              ? null
+              : [...cuts].sort(
+                  (a, b) =>
+                    Math.abs(a - (input.sekitarDetik as number)) -
+                    Math.abs(b - (input.sekitarDetik as number)),
+                )[0];
+
+          return {
+            ok: true,
+            file: input.file,
+            durasiDetik: Number(report.durationSec.toFixed(2)),
+            jumlahJeda: report.silences.length,
+            // Batasi supaya rekaman panjang tidak membanjiri konteks.
+            titikPotongDetik: cuts.slice(0, 60),
+            rentangBersuara: report.audible.slice(0, 40),
+            ...(near === undefined || near === null
+              ? {}
+              : { titikTerdekat: near, geserDari: input.sekitarDetik }),
+            catatan:
+              report.silences.length === 0
+                ? "Tidak ada jeda terdeteksi — rekaman mungkin bermusik/berdesir terus. Potongan harus ditentukan dari transkrip."
+                : "Pakai titik potong ini untuk visual.trimStartSec dan akhir potongan, supaya potongan tidak jatuh di tengah kata. Isi potongan tetap perlu transkrip dari user.",
+          };
+        }),
+    }),
+
     getProjectState: tool({
       description:
         "Baca keadaan proyek terkini: ringkasan scene-plan, perubahan terakhir (patch log), status suara/aset per scene, dan total biaya. Panggil ini bila ragu dengan keadaan.",

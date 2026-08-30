@@ -52,9 +52,14 @@ describe("computeFrameLayout", () => {
     const plan = parseScenePlan(demoPlan);
     const layout = computeFrameLayout(plan);
     // ADR-0014: tempo transisi demo bervariasi (10-24 frame per batas).
-    expect(layout.sceneFrames).toEqual([150, 241, 216, 216, 229, 216, 241, 135]);
-    expect(layout.totalFrames).toBe(1525);
-    expect(layout.totalFrames / FPS).toBeCloseTo(50.8, 1);
+    // ADR-0017: angka bergeser naik saat estimasi durasi pindah dari jumlah
+    // KATA ke jumlah SUKU KATA. Nilai lama memuat tiga scene yang kebetulan
+    // sama persis (216, 216, 216) — tanda bahwa hitungan kata tidak bisa
+    // membedakan narasi yang panjang ucapannya berbeda. Nilai baru semuanya
+    // berbeda karena mengukur apa yang benar-benar diucapkan.
+    expect(layout.sceneFrames).toEqual([150, 244, 223, 286, 229, 255, 244, 135]);
+    expect(layout.totalFrames).toBe(1647);
+    expect(layout.totalFrames / FPS).toBeCloseTo(54.9, 1);
   });
 });
 

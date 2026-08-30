@@ -195,6 +195,12 @@ export const visualSchema = z.strictObject({
   filter: visualFilterSchema.optional(),
   /** Kecepatan putar aset VIDEO (ADR-0015); 1 = normal, diabaikan utk gambar. */
   speed: z.number().min(0.25).max(4).default(1),
+  /**
+   * Titik mulai di dalam aset VIDEO sumber, detik (ADR-0017) — inti kemampuan
+   * mengklip: satu rekaman panjang bisa dipakai berkali-kali dengan titik
+   * masuk berbeda per scene. Diabaikan untuk gambar.
+   */
+  trimStartSec: z.number().min(0).finite().default(0),
   /** Cermin horizontal aset (ADR-0015) — membalik arah pandang footage. */
   flipH: z.boolean().default(false),
   /** Titik fokus crop `cover` (ADR-0015), fraksi 0-1; 0.5/0.5 = tengah. */
@@ -269,6 +275,11 @@ export const metaSchema = z.strictObject({
   language: z.string().default("id"),
   /** References a curated Remotion template (PRD §8.3). */
   stylePreset: z.string().default("documentary-01"),
+  /**
+   * Format konten (ADR-0017) — memilih RESEP struktur yang dipakai agent dan
+   * diperiksa `critiquePlan`. "bebas" = tanpa kerangka baku.
+   */
+  format: z.string().default("bebas"),
   tokens: designTokensSchema.optional(),
 });
 export type Meta = z.infer<typeof metaSchema>;
@@ -335,6 +346,11 @@ export const resolvedAssetSchema = z.strictObject({
   license: z.string().optional(),
   width: finitePositive.optional(),
   height: finitePositive.optional(),
+  /**
+   * Panjang aset video/audio sumber, detik (ADR-0017). Dibutuhkan agent untuk
+   * memilih potongan yang sah lewat `visual.trimStartSec`.
+   */
+  durationSec: finitePositive.optional(),
 });
 export type ResolvedAsset = z.infer<typeof resolvedAssetSchema>;
 

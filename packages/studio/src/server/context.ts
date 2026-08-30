@@ -20,6 +20,23 @@ export interface StudioDeps {
     settings?: Partial<ExportSettings>;
   }) => Promise<RenderVideoResult>;
   /**
+   * Baca metadata video lokal (ADR-0017): (planPath, path relatif) -> info.
+   * Di-inject supaya paket studio tidak bergantung pada @dalang/renderer.
+   */
+  probeVideo: (
+    planPath: string,
+    fileRelativeToPlan: string,
+  ) => Promise<{ durationSec: number; width: number; height: number } | null>;
+  /** Cari jeda hening di rekaman (ADR-0017): (planPath, path relatif) -> jeda. */
+  detectSilence: (
+    planPath: string,
+    fileRelativeToPlan: string,
+  ) => Promise<{
+    durationSec: number;
+    silences: Array<{ startSec: number; endSec: number }>;
+    audible: Array<{ startSec: number; endSec: number }>;
+  } | null>;
+  /**
    * Model orkestrator chat. Boleh kosong (mis. API key belum diset): panel
    * manual tetap berfungsi penuh; endpoint chat menjawab 503 dengan
    * `chatDisabledReason` dan UI menampilkannya apa adanya.
