@@ -28,6 +28,7 @@ import {
 import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
+import { registerProvidersCheckCommand } from "./providers-check";
 import { registerStudioCommand } from "./studio";
 
 /**
@@ -390,6 +391,8 @@ program
 registerChatCommand(program);
 registerLogCommand(program);
 registerStudioCommand(program);
+
+registerProvidersCheckCommand(program);
 
 program.parseAsync().catch((error: unknown) => {
   console.error(`\nGAGAL: ${error instanceof Error ? error.message : String(error)}`);

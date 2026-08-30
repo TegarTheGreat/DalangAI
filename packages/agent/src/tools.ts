@@ -430,7 +430,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           const chain = deps.stockChain();
           if (chain.length === 0) {
             throw new Error(
-              "Tidak ada provider stock — set PEXELS_API_KEY dan/atau PIXABAY_API_KEY",
+              "Tidak ada provider stock — set PEXELS_API_KEY dan/atau PIXABAY_API_KEY (foto/video berlisensi jelas), atau GIPHY_API_KEY / TENOR_API_KEY (GIF/stiker, hak pakainya perlu diperiksa)",
             );
           }
           const orientation =

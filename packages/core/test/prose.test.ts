@@ -233,3 +233,74 @@ describe("klip yang menggantung", () => {
     expect(codes(planWith(pendek, "klip"))).toContain("klip-menggantung");
   });
 });
+
+describe("hak pakai aset (ADR-0018)", () => {
+  const withAsset = (license: string, source: string) =>
+    parseScenePlan({
+      version: 1,
+      projectId: "uji-aset",
+      meta: { title: "Uji Aset" },
+      scenes: [
+        {
+          id: "s0",
+          narration: "Batu itu disusun tanpa semen sama sekali.",
+          visual: { type: "image" },
+          duration: 6,
+        },
+      ],
+      renderState: {
+        narrationAudio: {},
+        resolvedAssets: {
+          s0: { file: "assets/a.mp4", kind: "video", source, license },
+        },
+      },
+    });
+
+  it("aset bertanda PERIKSA HAK PAKAI ditegur sebagai perhatian", () => {
+    const plan = withAsset(
+      "GIPHY API — konten unggahan pihak ketiga; PERIKSA HAK PAKAI sebelum publikasi",
+      "giphy",
+    );
+    const note = critiquePlan(plan).find((n) => n.code === "aset-hak-pakai");
+    expect(note?.level).toBe("perhatian");
+    expect(note?.message).toContain("giphy");
+    expect(note?.sceneId).toBe("s0");
+  });
+
+  it("aset berlisensi jelas TIDAK ditegur", () => {
+    const plan = withAsset("Pexels License", "pexels");
+    expect(critiquePlan(plan).map((n) => n.code)).not.toContain("aset-hak-pakai");
+  });
+
+  it("satu catatan saja walau banyak aset, dengan sumber diurut", () => {
+    const plan = parseScenePlan({
+      version: 1,
+      projectId: "uji-aset-2",
+      meta: { title: "Uji Aset" },
+      scenes: [
+        { id: "a", narration: "Satu.", visual: { type: "image" }, duration: 4 },
+        { id: "b", narration: "Dua.", visual: { type: "image" }, duration: 4 },
+      ],
+      renderState: {
+        narrationAudio: {},
+        resolvedAssets: {
+          a: {
+            file: "x.mp4",
+            kind: "video",
+            source: "tenor",
+            license: "Tenor — PERIKSA HAK PAKAI",
+          },
+          b: {
+            file: "y.mp4",
+            kind: "video",
+            source: "giphy",
+            license: "GIPHY — PERIKSA HAK PAKAI",
+          },
+        },
+      },
+    });
+    const notes = critiquePlan(plan).filter((n) => n.code === "aset-hak-pakai");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.message).toContain("2 aset dari giphy, tenor");
+  });
+});

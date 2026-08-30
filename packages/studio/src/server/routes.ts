@@ -367,7 +367,10 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     const chain = deps.stockChain();
     if (chain.length === 0) {
       return c.json(
-        { error: "Tidak ada provider stock — set PEXELS_API_KEY / PIXABAY_API_KEY" },
+        {
+          error:
+            "Tidak ada provider stock — set PEXELS_API_KEY / PIXABAY_API_KEY (foto & video berlisensi jelas), atau GIPHY_API_KEY / TENOR_API_KEY (GIF & stiker, hak pakainya perlu diperiksa)",
+        },
         400,
       );
     }

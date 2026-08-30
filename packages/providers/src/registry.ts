@@ -1,7 +1,9 @@
 import type { StockProvider, TtsProvider } from "@dalang/pipeline";
 import type { FetchImpl } from "./http";
+import { createGiphyStock } from "./stock/giphy";
 import { createPexelsStock } from "./stock/pexels";
 import { createPixabayStock } from "./stock/pixabay";
+import { createTenorStock } from "./stock/tenor";
 import { createEdgeTts } from "./tts/edge";
 import { createElevenLabsTts } from "./tts/elevenlabs";
 import { createSilenceTts } from "./tts/silence";
@@ -21,6 +23,9 @@ export interface ProviderEnv {
   ELEVENLABS_MODEL_ID?: string;
   PEXELS_API_KEY?: string;
   PIXABAY_API_KEY?: string;
+  /** GIF & stiker (ADR-0018) — opsional, isinya perlu ditinjau hak pakai. */
+  GIPHY_API_KEY?: string;
+  TENOR_API_KEY?: string;
 }
 
 export const KNOWN_TTS_PROVIDERS = ["elevenlabs", "edge", "silence"] as const;
@@ -73,6 +78,13 @@ export const buildTtsChain = ({
   return chain;
 };
 
+/**
+ * Urutan rantai stock adalah keputusan produk, bukan selera (ADR-0018):
+ * Pexels dan Pixabay lebih dulu karena lisensinya JELAS boleh dipakai
+ * komersial. GIPHY dan Tenor menyusul di belakang karena isinya unggahan
+ * pihak ketiga yang hak ciptanya milik pengunggah — berguna, tapi tidak boleh
+ * menjadi pilihan otomatis pertama untuk video yang akan dipublikasikan.
+ */
 export const buildStockChain = ({
   env = process.env as ProviderEnv,
   fetchImpl,
@@ -86,6 +98,37 @@ export const buildStockChain = ({
   }
   if (env.PIXABAY_API_KEY) {
     chain.push(createPixabayStock({ apiKey: env.PIXABAY_API_KEY, fetchImpl }));
+  }
+  if (env.GIPHY_API_KEY) {
+    chain.push(createGiphyStock({ apiKey: env.GIPHY_API_KEY, fetchImpl }));
+  }
+  if (env.TENOR_API_KEY) {
+    chain.push(createTenorStock({ apiKey: env.TENOR_API_KEY, fetchImpl }));
+  }
+  return chain;
+};
+
+/**
+ * Rantai khusus GIF/stiker — dipakai pencarian yang MEMANG meminta gerak
+ * pendek berulang, terpisah dari rantai stock utama supaya foto/video
+ * berlisensi jelas tidak pernah tergeser olehnya.
+ */
+export const buildGifChain = ({
+  env = process.env as ProviderEnv,
+  fetchImpl,
+  stickers = false,
+}: {
+  env?: ProviderEnv;
+  fetchImpl?: FetchImpl;
+  stickers?: boolean;
+} = {}): StockProvider[] => {
+  const kind = stickers ? ("stickers" as const) : ("gifs" as const);
+  const chain: StockProvider[] = [];
+  if (env.GIPHY_API_KEY) {
+    chain.push(createGiphyStock({ apiKey: env.GIPHY_API_KEY, kind, fetchImpl }));
+  }
+  if (env.TENOR_API_KEY) {
+    chain.push(createTenorStock({ apiKey: env.TENOR_API_KEY, kind, fetchImpl }));
   }
   return chain;
 };

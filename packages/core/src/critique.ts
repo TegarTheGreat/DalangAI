@@ -161,9 +161,46 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
     });
   }
 
+  // 10. Aset yang hak pakainya belum jelas (ADR-0018).
+  notes.push(...critiqueAssetRights(plan));
+
   notes.push(...critiqueFormat(plan, recipe));
   notes.push(...critiqueProse(plan, recipe));
   return notes;
+};
+
+/**
+ * Penanda pada lisensi aset yang berarti "boleh dicari lewat API, BELUM tentu
+ * boleh dipublikasikan". Provider yang isinya unggahan pihak ketiga (GIPHY,
+ * Tenor) menulis penanda ini apa adanya ke plan, sehingga pemeriksaan ini
+ * tidak perlu tahu nama providernya — cukup membaca lisensi yang tercatat.
+ */
+const RIGHTS_REVIEW_MARK = "PERIKSA HAK PAKAI";
+
+/**
+ * Aset dari pustaka GIF/stiker adalah karya orang lain. Punya API resmi
+ * memberi jalur pencarian yang sah, bukan hak menyiarkan ulang. Kritik ini
+ * memastikan keputusan itu diambil sadar oleh manusia, bukan lolos diam-diam
+ * karena asetnya kebetulan mudah didapat.
+ */
+const critiqueAssetRights = (plan: ScenePlan): DirectorNote[] => {
+  const flagged = Object.entries(plan.renderState.resolvedAssets).filter(([, asset]) =>
+    (asset.license ?? "").includes(RIGHTS_REVIEW_MARK),
+  );
+  if (flagged.length === 0) return [];
+
+  const sources = [...new Set(flagged.map(([, asset]) => asset.source))].sort();
+  return [
+    {
+      code: "aset-hak-pakai",
+      level: "perhatian",
+      sceneId: flagged[0]?.[0],
+      message:
+        `${flagged.length} aset dari ${sources.join(", ")} dipakai. Isinya unggahan pihak ketiga ` +
+        "yang hak ciptanya milik pengunggah — API resminya memberi jalur pencarian, BUKAN hak siar ulang. " +
+        "Untuk video yang dipublikasikan (apalagi dimonetisasi), pastikan haknya, atau ganti dengan aset berlisensi jelas.",
+    },
+  ];
 };
 
 /** Ambang detektor prosa — lihat catatan kalibrasi di `prose.ts`. */
