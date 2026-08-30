@@ -40,9 +40,17 @@ const DEMO = process.argv[2]
   ? resolve(repoRoot, process.argv[2])
   : join(repoRoot, "examples", "borobudur-60s");
 
-/** Lebar nyata: ponsel, tablet, laptop 13"/14"/16", dan monitor lebar. */
+/**
+ * Lebar nyata: ponsel, tablet, laptop 13"/14"/16", dan monitor lebar.
+ *
+ * 1680/1536/1512 ada karena cacat pernah bersembunyi PERSIS di antara dua
+ * ambang yang diuji: di 1450-1600px segmen rasio "1:1" tergunting, sementara
+ * 1600 dan 1440 keduanya bersih. Daftar yang hanya berisi ambang media query
+ * hanya menguji tempat yang sudah dipikirkan.
+ */
 const WIDTHS = [
-  1920, 1600, 1440, 1366, 1280, 1200, 1100, 1024, 960, 900, 820, 768, 600, 420, 380,
+  1920, 1680, 1600, 1536, 1512, 1440, 1366, 1280, 1200, 1100, 1024, 960, 900, 820, 768,
+  600, 420, 380,
 ];
 
 interface Report {

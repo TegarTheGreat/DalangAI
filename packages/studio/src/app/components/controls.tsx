@@ -93,6 +93,46 @@ export const RadioCard: React.FC<{
 );
 
 /**
+ * Versi tegak dari useScrollFade: memudarkan tepi ATAS/BAWAH wadah yang bisa
+ * digulir. Kalimat yang teriris rata di tepi panel terbaca seperti tampilan
+ * rusak; tepi yang memudar mengatakan "masih ada lanjutannya". Sama seperti
+ * versi mendatar, keadaannya diukur — tepi yang tidak menyembunyikan apa pun
+ * tidak dipudarkan.
+ */
+export const useScrollFadeY = <T extends HTMLElement>(): [
+  React.RefObject<T | null>,
+  string,
+] => {
+  const ref = useRef<T>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measure = () => {
+      const max = node.scrollHeight - node.clientHeight;
+      setEdges({ start: node.scrollTop > 1, end: max > 1 && node.scrollTop < max - 1 });
+    };
+    measure();
+    node.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    for (const child of Array.from(node.children)) observer.observe(child);
+    return () => {
+      node.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  });
+
+  return [
+    ref,
+    [edges.start ? "fade-y-start" : "", edges.end ? "fade-y-end" : ""]
+      .filter(Boolean)
+      .join(" "),
+  ];
+};
+
+/**
  * Kelas tepi-memudar untuk wadah yang bisa digulir mendatar.
  *
  * Isi yang terpotong rata di tepi wadah terbaca seperti bug, bukan seperti

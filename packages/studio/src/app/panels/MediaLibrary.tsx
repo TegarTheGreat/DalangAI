@@ -104,7 +104,9 @@ const SearchBox: React.FC<{
   placeholder: string;
   busy: boolean;
   onSearch: (query: string) => void;
-}> = ({ placeholder, busy, onSearch }) => {
+  /** Keterangan perilaku yang tidak perlu dibaca ulang tiap kali. */
+  title?: string;
+}> = ({ placeholder, busy, onSearch, title }) => {
   const [draft, setDraft] = useState("");
   const submit = () => {
     const query = draft.trim();
@@ -116,6 +118,7 @@ const SearchBox: React.FC<{
         type="text"
         value={draft}
         placeholder={placeholder}
+        {...(title ? { title } : {})}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") submit();
@@ -400,11 +403,20 @@ export const GrafisTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
             setError(null);
           }}
         />
+        {/* Sumber di satu baris; peringatan hak pakai stiker BUKAN dipendekkan
+            jadi prosa abu-abu yang mudah dilewati — ia dipisah sebagai catatan
+            bertanda, karena isinya soal risiko hukum, bukan tip. */}
         <p className="group-hint">
           {source === "ikon"
-            ? "Iconify — tanpa kunci API, sudah disaring hanya lisensi yang aman untuk video komersial. Kata kunci bahasa Inggris memberi hasil jauh lebih kaya."
-            : "GIPHY/Tenor — butuh GIPHY_API_KEY atau TENOR_API_KEY. Punya API resmi berarti boleh mencari dan menampilkan, BUKAN otomatis boleh menyiarkan ulang di video: periksa hak pakainya sebelum publikasi."}
+            ? "Iconify · tanpa kunci API · lisensi aman untuk komersial. Kata kunci Inggris memberi hasil jauh lebih kaya."
+            : "GIPHY/Tenor · butuh GIPHY_API_KEY atau TENOR_API_KEY."}
         </p>
+        {source === "stiker" ? (
+          <p className="lib-warn">
+            API resmi berarti boleh mencari dan menampilkan — BUKAN otomatis boleh
+            menyiarkan ulang di video. Periksa hak pakainya sebelum publikasi.
+          </p>
+        ) : null}
         <SearchBox
           placeholder={source === "ikon" ? "mis. arrow, check, map" : "mis. wow, clap"}
           busy={busy}
@@ -412,22 +424,35 @@ export const GrafisTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
         />
         {error ? <p className="lib-error">{error}</p> : null}
 
+        {/* Tiga kontrol yang saling terkait, masing-masing berlabel dan rata
+            pada tepi kiri yang SAMA. Sebelumnya pad jangkar duduk di kolom
+            kiri sementara gerak, warna, dan keterangannya menjorok 72px ke
+            dalam — tiga perataan berbeda dalam satu blok. */}
         <div className="lib-placement">
-          <AnchorPad value={anchor} onChange={setAnchor} />
-          <div className="lib-placement-controls">
+          <div className="field">
+            <span>Posisi</span>
+            <AnchorPad value={anchor} onChange={setAnchor} />
+          </div>
+          <div className="field">
+            <span>Gerak</span>
             <Segmented
               options={GRAPHIC_ANIMS}
               value={anim}
               label={(value) => ANIM_LABEL[value]}
               onChange={setAnim}
             />
-            {source === "ikon" ? <Swatches value={color} onChange={setColor} /> : null}
-            <span className="meta-line wrap">
-              Posisi &amp; gerak untuk tempelan berikutnya:{" "}
-              {ANCHOR_LABEL[anchor].toLowerCase()}, {ANIM_LABEL[anim].toLowerCase()}
-            </span>
           </div>
+          {source === "ikon" ? (
+            <div className="field">
+              <span>Warna</span>
+              <Swatches value={color} onChange={setColor} />
+            </div>
+          ) : null}
         </div>
+        <span className="meta-line wrap">
+          Tempelan berikutnya: {ANCHOR_LABEL[anchor].toLowerCase()},{" "}
+          {ANIM_LABEL[anim].toLowerCase()}
+        </span>
 
         {full ? (
           <p className="lib-error">
@@ -596,11 +621,12 @@ export const SfxSection: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
           ))}
         </ul>
       ) : null}
-      <p className="group-hint">
-        Openverse (CC0 / domain publik) — tanpa kunci API. Waktu dihitung dari AWAL scene,
-        jadi bunyinya ikut bergeser bila susunan scene berubah.
-      </p>
+      {/* Satu baris sumber; perilaku waktunya (ikut bergeser bila susunan
+          scene berubah) dipindah ke tooltip kolom cari — ia keterangan
+          perilaku, bukan sesuatu yang perlu dibaca setiap kali. */}
+      <p className="group-hint">Openverse · CC0 / domain publik · tanpa kunci API.</p>
       <SearchBox
+        title="Waktu cue dihitung dari AWAL scene, jadi bunyinya ikut bergeser bila susunan scene berubah"
         placeholder="mis. whoosh, click, chime"
         busy={busy}
         onSearch={(query) => void search(query)}

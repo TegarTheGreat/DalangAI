@@ -47,14 +47,32 @@
     }
   }
 
+  // Tergunting oleh WADAHNYA SENDIRI, bukan hanya oleh topbar. Zona kiri
+  // memakai overflow:hidden, jadi sebuah kontrol bisa hilang separuh di
+  // dalamnya sementara kotaknya masih jauh di dalam topbar — persis yang
+  // terjadi pada segmen rasio "1:1" di 1450-1600px, dan lolos dari
+  // pemeriksaan yang cuma membandingkan dengan topbar.
   const bar = document.querySelector(".topbar");
   const barRect = bar ? rect(bar) : { left: 0, right: 0 };
-  const clippedTools = controls
+  const clipRect = (el) => {
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+      const style = getComputedStyle(node);
+      if (style.overflowX === "hidden" || style.overflowX === "clip") return rect(node);
+      if (style.overflowX === "auto" || style.overflowX === "scroll") return null;
+      node = node.parentElement;
+    }
+    return barRect;
+  };
+  // Termasuk isi kontrol majemuk (segmen sakelar rasio), bukan cuma wadahnya.
+  const clipCandidates = [...controls, ...document.querySelectorAll(".topbar .seg")];
+  const clippedTools = clipCandidates
     .filter((el) => {
-      const scroller = el.closest(".topbar-actions");
-      if (scroller && getComputedStyle(scroller).overflowX === "auto") return false;
+      const box = clipRect(el);
+      if (!box) return false;
       const r = rect(el);
-      return r.right > barRect.right + 1 || r.left < barRect.left - 1;
+      if (r.width === 0) return false;
+      return r.right > box.right + 1 || r.left < box.left - 1;
     })
     .map(name);
 

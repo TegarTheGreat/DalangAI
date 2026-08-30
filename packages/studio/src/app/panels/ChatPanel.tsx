@@ -1,6 +1,6 @@
 import { ASPECT_RATIOS } from "@dalang/core";
 import { useEffect, useRef, useState } from "react";
-import { Segmented, Switch, useEscape } from "../components/controls";
+import { Segmented, Switch, useEscape, useScrollFadeY } from "../components/controls";
 import {
   IconExport,
   IconImage,
@@ -296,7 +296,10 @@ const OfflineGuide: React.FC<{ reason: string; hasPlan: boolean }> = ({
   <div className="offline-guide">
     <div className="notice-warn">
       <strong>Chat nonaktif</strong>
-      <p>{reason}</p>
+      {/* Alasan dari server memuat daftar nama env var yang panjang; ditaruh
+          di elemen bergulir sendiri supaya ia tidak mendorong seluruh panduan
+          di bawahnya sampai terpotong di tepi panel. */}
+      <p className="notice-reason">{reason}</p>
     </div>
 
     <h3 className="offline-title">Yang tetap bisa dikerjakan sekarang</h3>
@@ -348,9 +351,9 @@ const OfflineGuide: React.FC<{ reason: string; hasPlan: boolean }> = ({
 
     <h3 className="offline-title">Menyalakan chat</h3>
     <p className="offline-hint">
-      Isi salah satu kunci provider di <code>.env</code> lalu jalankan ulang{" "}
-      <code>dalang studio</code>. Dalang tidak terikat satu vendor — kunci mana pun yang
-      ada di environment yang dipakai.
+      Isi satu kunci provider di <code>.env</code>, jalankan ulang{" "}
+      <code>dalang studio</code>. Kunci mana pun yang ada di environment dipakai — Dalang
+      tidak terikat satu vendor.
     </p>
   </div>
 );
@@ -359,7 +362,7 @@ export const ChatPanel: React.FC = () => {
   const { chat, chatBusy, project, pendingImages } = useStudio();
   const [draft, setDraft] = useState("");
   const [briefOpen, setBriefOpen] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollRef, scrollFade] = useScrollFadeY<HTMLDivElement>();
   const fileRef = useRef<HTMLInputElement>(null);
   const plan = project?.plan ?? null;
   const chatDisabled = project?.models.chatDisabled ?? null;
@@ -412,7 +415,7 @@ export const ChatPanel: React.FC = () => {
           Tutup
         </button>
       </div>
-      <div className="chat-scroll" ref={scrollRef}>
+      <div className={`chat-scroll ${scrollFade}`} ref={scrollRef}>
         {chatDisabled ? (
           <OfflineGuide reason={chatDisabled} hasPlan={plan !== null} />
         ) : chat.length === 0 ? (

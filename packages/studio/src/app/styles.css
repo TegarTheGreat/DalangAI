@@ -496,7 +496,9 @@ input[type="color"]::-webkit-color-swatch {
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 14px;
+  /* Bantalan bawah lebih besar: tanpa itu kalimat terakhir menempel persis di
+     tepi panel dan terbaca seperti terpotong, bukan seperti bisa digulir. */
+  padding: 14px 14px 22px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -780,10 +782,12 @@ input[type="color"]::-webkit-color-swatch {
 .inspector-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 14px;
+  /* Jarak antar bagian diatur SEPENUHNYA oleh .prop-group (padding + garis),
+     bukan oleh gap di sini. Dua sumber jarak yang bertumpuk membuat ritmenya
+     berbeda-beda: ada bagian yang rapat, ada yang berjarak 28px. */
+  padding: 0 14px 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 .inspector-title {
   display: flex;
@@ -823,16 +827,22 @@ input[type="color"]::-webkit-color-swatch {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  padding: 16px 0;
+  /* --line (#262a35) di atas --panel (#14161c) nyaris tak terbaca, jadi
+     bagian-bagian panel tampak mengambang tanpa struktur. Garis pemisah harus
+     benar-benar terlihat untuk melakukan tugasnya. */
+  border-top: 1px solid var(--line-strong);
+}
+.prop-group:first-child {
+  border-top: 0;
 }
 .prop-group h4 {
-  margin: 0;
+  margin: 0 0 2px;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--text-dim);
 }
 .field {
   display: flex;
@@ -848,10 +858,16 @@ input[type="color"]::-webkit-color-swatch {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+/* Grid dua kolom, bukan flex-wrap: dengan flex tiap tombol selebar labelnya
+   sendiri, jadi "Hapus" jauh lebih sempit daripada "Sisip scene" dan barisnya
+   terbaca bergerigi. */
 .btn-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 7px;
-  flex-wrap: wrap;
+}
+.btn-row > * {
+  min-width: 0;
 }
 .inspector-save {
   display: flex;
@@ -1026,10 +1042,10 @@ input[type="color"]::-webkit-color-swatch {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--text-dim);
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 10px;
   /* Satu baris: label yang membungkus di gutter sempit menabrak label track
      di bawahnya dan keduanya jadi tak terbaca. */
   white-space: nowrap;
@@ -1059,6 +1075,9 @@ input[type="color"]::-webkit-color-swatch {
   position: relative;
   min-width: 100%;
   padding-bottom: 8px;
+  /* Ruang napas di ujung: tanpa ini klip terakhir dan tombol tambah-scene
+     menempel persis di tepi penggulir dan terbaca seperti terpotong. */
+  padding-right: 16px;
 }
 /* Garis grid vertikal tipis di tick berlabel — membaca waktu lintas track. */
 .grid-line {
@@ -1369,12 +1388,16 @@ input[type="color"]::-webkit-color-swatch {
     rgba(232, 163, 61, 0.18) 5px 8px
   );
 }
+/* Slot narasi yang belum terisi: bidang redup dengan garis putus-putus HALUS.
+   Sebelumnya hanya garis putus-putus di atas kekosongan, dan sederet kotak
+   kosong di sepanjang track terbaca seperti tampilan yang rusak, bukan seperti
+   "belum ada suaranya". */
 .audio-block.belum,
 .audio-block.proses,
 .audio-block.error {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.022);
   border-style: dashed;
-  border-color: var(--line-strong);
+  border-color: var(--line);
 }
 .audio-block.error {
   border-color: var(--error);
@@ -1517,6 +1540,30 @@ input[type="color"]::-webkit-color-swatch {
 .scroll-fade-start {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px);
   mask-image: linear-gradient(90deg, transparent, #000 28px);
+}
+.fade-y-end {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent);
+}
+.fade-y-start {
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 26px);
+  mask-image: linear-gradient(180deg, transparent, #000 26px);
+}
+.fade-y-start.fade-y-end {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent,
+    #000 26px,
+    #000 calc(100% - 26px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent,
+    #000 26px,
+    #000 calc(100% - 26px),
+    transparent
+  );
 }
 .scroll-fade-start.scroll-fade-end {
   -webkit-mask-image: linear-gradient(
@@ -2311,6 +2358,18 @@ input[type="color"]::-webkit-color-swatch {
   line-height: 1.5;
   color: var(--error);
 }
+/* Peringatan hak pakai: bertanda, bukan prosa abu-abu di antara prosa abu-abu
+   lain. Isinya soal risiko hukum — ia harus terbaca berbeda. */
+.lib-warn {
+  margin: 0;
+  padding: 8px 10px 8px 11px;
+  border-left: 2px solid var(--warn);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: rgba(232, 163, 61, 0.07);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
 
 /*
  * Pad jangkar 3x3. Sengaja peta, bukan dropdown: posisi grafis adalah
@@ -2390,17 +2449,18 @@ input[type="color"]::-webkit-color-swatch {
     0 0 0 3px var(--accent);
 }
 
+/* Tiga bidang berlabel yang bertumpuk, masing-masing selebar panel. Dicoba
+   berdampingan lebih dulu: kolom kanan hanya ~310px sementara lima segmen
+   gerak butuh ~330px, jadi kontrolnya selalu pecah dua baris dan tepi
+   bawahnya bergerigi. Menumpuk memberi tiap kontrol lebar penuh dan satu
+   tepi kiri yang sama. */
 .lib-placement {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.lib-placement-controls {
-  display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
+  gap: 10px;
+}
+.lib-placement .segmented {
+  flex-wrap: nowrap;
 }
 
 /* Grid ikon: kotak sama sisi, ikon di tengah, tanpa potongan. */
@@ -3276,10 +3336,18 @@ button.ghost.danger.confirm {
 /* Tangga penyusutan header, diukur (bukan ditebak) dengan gerbang tata letak
    `pnpm --filter @dalang/studio gate:layout`: tiap ambang adalah lebar tempat
    susunan sebelumnya mulai tidak muat. */
-@media (max-width: 1440px) {
+/* Judul pergi lebih dulu daripada kontrol. Di 1450-1600px zona kiri terlalu
+   sempit untuk merek + Proyek + judul + sakelar rasio berlabel, dan karena
+   judul menolak menyusut di bawah 11ch, yang TERGUNTING justru segmen "1:1" —
+   sebuah kontrol, bukan sekadar keterangan. Judul adalah satu-satunya bagian
+   header yang bisa hilang tanpa kehilangan kemampuan. */
+@media (max-width: 1600px) {
   .topbar .project-title {
     display: none;
   }
+}
+
+@media (max-width: 1440px) {
   /* Label rasio jadi glyph saja — bentuknya sudah menjelaskan dirinya.
      Selektor disandarkan pada .topbar, bukan pada urutan berkas: aturan dasar
      .segmented ditulis SETELAH blok ini dan akan memenangkan `display` pada
@@ -3439,6 +3507,13 @@ button.ghost.danger.confirm {
   flex-direction: column;
   gap: 14px;
   padding: 2px 0 8px;
+}
+/* Nama env var panjang tanpa spasi; ia harus boleh patah di mana saja supaya
+   tidak melebarkan kartunya. TIDAK dibatasi tingginya: memotong daftar di
+   tengah baris terbaca seperti teks rusak, dan panelnya sendiri sudah bisa
+   digulir. */
+.notice-reason {
+  overflow-wrap: anywhere;
 }
 .offline-title {
   margin: 6px 0 -4px;
