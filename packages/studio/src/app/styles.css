@@ -2395,6 +2395,34 @@ input[type="color"]::-webkit-color-swatch {
   font-size: 11px;
 }
 
+/* Dua aksi utama lobi berdampingan; Impor sekunder, Proyek baru primer. */
+.lobby-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.interop-block input[type="file"] {
+  width: 100%;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 9px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg-deep);
+  cursor: pointer;
+}
+.interop-block input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 5px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
 /* Ekspor garis waktu ke editor lain (ADR-0023). Dipisah garis dari setelan
    render di atasnya: keduanya sama-sama "ekspor" tapi menghasilkan hal yang
    sama sekali berbeda — video jadi versus garis waktu untuk difinishing. */

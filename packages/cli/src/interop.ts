@@ -4,6 +4,7 @@ import { parseScenePlan } from "@dalang/core";
 import {
   buildEditTimeline,
   formatInteropNotes,
+  fromFcpxml,
   fromOtio,
   otioToJson,
   toFcpxml,
@@ -83,7 +84,7 @@ export const registerInteropCommands = (program: Command): void => {
 
   program
     .command("import")
-    .argument("<berkas>", "berkas .otio yang mau dijadikan scene-plan")
+    .argument("<berkas>", "berkas .otio atau .fcpxml yang mau dijadikan scene-plan")
     .requiredOption(
       "-o, --out <folder>",
       "folder proyek tujuan (plan.json ditulis di sini)",
@@ -95,24 +96,31 @@ export const registerInteropCommands = (program: Command): void => {
     .action((berkas: string, options: { out: string; judul?: string }) => {
       const source = resolve(berkas);
       const projectDir = resolve(options.out);
-      let document: unknown;
+      const raw = readFileSync(source, "utf8");
+      // Bentuknya yang menentukan, bukan namanya: berkas dari perkakas lain
+      // sering tiba dengan ekstensi yang salah atau tanpa ekstensi sama
+      // sekali, dan menolaknya karena namanya adalah menolak berkas yang
+      // sebenarnya bisa dibaca.
+      const looksXml = raw.trimStart().startsWith("<");
+      let result: ReturnType<typeof fromOtio>;
       try {
-        document = JSON.parse(readFileSync(source, "utf8"));
+        result = looksXml
+          ? fromFcpxml(raw, {
+              projectDir,
+              ...(options.judul ? { title: options.judul } : {}),
+            })
+          : fromOtio(JSON.parse(raw), {
+              projectDir,
+              ...(options.judul ? { title: options.judul } : {}),
+            });
       } catch (error) {
         process.exitCode = 1;
         console.error(
-          `Tidak bisa membaca ${source} sebagai JSON: ${error instanceof Error ? error.message : String(error)}`,
+          `Tidak bisa mengimpor ${source}: ${error instanceof Error ? error.message : String(error)}`,
         );
-        console.error(
-          "  Perintah ini hanya membaca .otio (JSON). FCPXML belum didukung.",
-        );
+        console.error("  Yang didukung: .otio (OpenTimelineIO) dan .fcpxml (Final Cut).");
         return;
       }
-
-      const result = fromOtio(document, {
-        projectDir,
-        ...(options.judul ? { title: options.judul } : {}),
-      });
       // Divalidasi ulang lewat skema sebelum ditulis: hasil impor berasal dari
       // berkas asing, dan plan.json yang tidak sah lebih buruk daripada impor
       // yang gagal dengan jelas.

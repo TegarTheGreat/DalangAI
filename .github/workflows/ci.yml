@@ -99,6 +99,9 @@ jobs:
         run: |
           python3 -m pip install --quiet --disable-pip-version-check opentimelineio otio-fcpx-xml-adapter
           pnpm --filter @dalang/interop gate:interop
+          # Kedua contoh, bukan satu: tutorial-studio memakai anotasi dan
+          # preset lain, dan cabang "scene tanpa aset" berperilaku berbeda.
+          pnpm --filter @dalang/interop gate:interop examples/tutorial-studio/plan.json
 
       - name: Asset URL parity gate
         timeout-minutes: 8

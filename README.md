@@ -362,9 +362,10 @@ Yang sudah berjalan:
     caption karaoke, teks bergaya, Ken Burns, filter, anotasi. Daftarnya ikut
     masuk ke dalam berkasnya juga, karena berkas ekspor sering berpindah tangan
     tanpa log yang menyertainya.
-  - `dalang import <berkas.otio>` menghasilkan KERANGKA scene-plan: urutan,
-    durasi, dan titik masuk yang benar, naskah kosong — dan catatannya bilang
-    begitu.
+  - `dalang import <berkas>` membaca **.otio dan .fcpxml** jadi KERANGKA
+    scene-plan: urutan, durasi, dan titik masuk yang benar, naskah kosong — dan
+    catatannya bilang begitu. Ada juga di lobi Studio (tombol **Impor**).
+    Bentuk berkasnya yang menentukan pembacanya, bukan ekstensinya.
   - Potongan diletakkan di TENGAH tumpang-tindih transisi, titik yang sama
     dipakai Dalang untuk berpindah scene; memakai awalnya akan menggeser seluruh
     ekspor setengah transisi terhadap videonya sendiri.
@@ -376,7 +377,25 @@ Yang sudah berjalan:
     sudah agent; yang tidak dipunyainya adalah timeline. Render hanya kalau
     dijalankan dengan `--izinkan-render`.
   - Pagar ruang kerja: satu folder akar, semua path diperiksa (termasuk symlink).
-- **Kualitas terjaga otomatis**: 720 unit test (kontrak lock/pin/undo, timing
+
+  Memasangnya di klien MCP (contoh Claude Code, `.mcp.json`):
+
+  ```json
+  {
+    "mcpServers": {
+      "dalang": {
+        "command": "pnpm",
+        "args": ["dalang", "mcp", "/path/ke/folder/video"],
+        "cwd": "/path/ke/DalangAI"
+      }
+    }
+  }
+  ```
+
+  Tambahkan `"--hanya-baca"` ke `args` kalau agent lain cukup boleh membaca,
+  atau `"--izinkan-render"` kalau ia juga boleh merender frame (lambat).
+  Transportnya stdio, jadi klien MCP mana pun bisa memakainya.
+- **Kualitas terjaga otomatis**: 733 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -389,7 +408,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 720 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 733 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -401,7 +420,7 @@ pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS
 pnpm dalang transcribe examples/podcast   # transkripsi rekaman -> renderState (ADR-0021)
 pnpm dalang review examples/borobudur-60s # render frame -> nilai dengan model vision (ADR-0022)
 pnpm dalang export examples/borobudur-60s --format otio     # garis waktu -> Resolve/Premiere/FCP
-pnpm dalang import rough.otio -o proyekku/                  # OTIO -> kerangka scene-plan
+pnpm dalang import rough.otio -o proyekku/                  # OTIO/FCPXML -> kerangka scene-plan
 pnpm dalang mcp ~/video                   # server MCP: timeline sebagai tool untuk agent lain
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
@@ -530,8 +549,8 @@ di `docs/decisions/`.
       kerangka scene-plan, dan **server MCP** yang menyajikan garis waktu ke
       agent lain tanpa memberinya akses ke uang penggunanya. Gerbang CI baru
       memakai pustaka OpenTimelineIO resmi untuk membaca ulang keluaran kita.
-      *Catatan: belum pernah dibuka di Resolve/Premiere/Final Cut sungguhan, dan
-      impor FCPXML tidak dikerjakan — lihat "Batas yang dinyatakan" di ADR-0023.*
+      *Catatan: belum pernah dibuka di Resolve/Premiere/Final Cut sungguhan —
+      lihat "Batas yang dinyatakan" di ADR-0023.*
 
 Fase 9 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

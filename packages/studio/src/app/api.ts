@@ -128,6 +128,17 @@ export const api = {
       { method: "POST", body: JSON.stringify(input) },
     ),
 
+  importTimeline: (isi: string, judul?: string) =>
+    request<{
+      ok: true;
+      project: WorkspaceProjectLite;
+      workspace: WorkspacePayload;
+      catatan: string[];
+    }>("/api/workspace/import", {
+      method: "POST",
+      body: JSON.stringify({ isi, ...(judul ? { judul } : {}) }),
+    }),
+
   renameProject: (id: string, title: string) =>
     request<{ ok: true; workspace: WorkspacePayload }>("/api/workspace/rename", {
       method: "POST",

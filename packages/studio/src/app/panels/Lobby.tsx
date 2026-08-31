@@ -5,6 +5,7 @@ import { RadioCard, Segmented, useEscape } from "../components/controls";
 import {
   IconCheck,
   IconCopy,
+  IconDownload,
   IconFilm,
   IconFolder,
   IconPlus,
@@ -457,11 +458,115 @@ const NewProjectDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
 
 type SortKey = "terbaru" | "judul" | "durasi";
 
+/**
+ * Impor berkas interchange jadi proyek baru (ADR-0023).
+ *
+ * Berkasnya dibaca DI PERAMBAN lalu dikirim sebagai teks: .otio dan .fcpxml
+ * berukuran kilobyte, dan jalur JSON yang sudah ada jauh lebih sedikit
+ * permukaannya daripada penanganan unggahan biner.
+ *
+ * Catatan impor ditampilkan di dialog dan TIDAK ditutup otomatis: daftar
+ * "yang tidak ikut" adalah alasan utama dialog ini ada.
+ */
+const ImportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
+  open,
+  onClose,
+}) => {
+  const { switching } = useStudio();
+  const [nama, setNama] = useState<string | null>(null);
+  const [catatan, setCatatan] = useState<string[] | null>(null);
+  const [galat, setGalat] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEscape(open, onClose);
+
+  useEffect(() => {
+    if (!open) {
+      setNama(null);
+      setCatatan(null);
+      setGalat(null);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const pilih = (file: File | undefined) => {
+    if (!file) return;
+    setNama(file.name);
+    setCatatan(null);
+    setGalat(null);
+    file
+      .text()
+      .then((isi) => studioClient.importTimeline(isi))
+      .then((notes) => {
+        if (notes) setCatatan(notes);
+      })
+      .catch((error: unknown) => {
+        setGalat(error instanceof Error ? error.message : String(error));
+      });
+  };
+
+  return (
+    <div className="dialog-backdrop">
+      <button
+        type="button"
+        className="dialog-scrim"
+        aria-label="Tutup dialog"
+        tabIndex={-1}
+        onClick={onClose}
+      />
+      <div className="dialog brief-dialog">
+        <h3>Impor garis waktu</h3>
+        <p>
+          Berkas .otio (OpenTimelineIO) atau .fcpxml (Final Cut) jadi proyek baru.
+          Hasilnya kerangka: urutan dan durasi benar, naskah kosong.
+        </p>
+        <div className="interop-block">
+          <span className="interop-label">Pilih berkas</span>
+          <p className="interop-desc">
+            Aset TIDAK ikut tersalin. Yang berada di luar folder ruang kerja tidak
+            dirujuk, dan scene-nya dibiarkan kosong.
+          </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".otio,.fcpxml,application/json,text/xml"
+            disabled={switching !== null}
+            onChange={(event) => pilih(event.target.files?.[0])}
+          />
+          {nama ? <p className="interop-file">{nama}</p> : null}
+          {galat ? (
+            <div className="notice-warn interop-notice">
+              <strong>Impor gagal</strong>
+              <p>{galat}</p>
+            </div>
+          ) : null}
+          {catatan ? (
+            <div className="interop-result">
+              <span className="interop-label">Catatan impor</span>
+              <ul className="interop-notes">
+                {catatan.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+        <div className="brief-actions">
+          <button type="button" className="primary" onClick={onClose}>
+            {catatan ? "Selesai" : "Tutup"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const Lobby: React.FC = () => {
   const { workspace, switching } = useStudio();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("terbaru");
   const [newOpen, setNewOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const projects = workspace?.projects ?? [];
   const visible = useMemo(() => {
@@ -498,14 +603,25 @@ export const Lobby: React.FC = () => {
             <span title={workspace?.root ?? ""}>{workspace?.root ?? "—"}</span>
           </p>
         </div>
-        <button
-          type="button"
-          className="primary with-icon lg"
-          onClick={() => setNewOpen(true)}
-        >
-          <IconPlus />
-          Proyek baru
-        </button>
+        <div className="lobby-actions">
+          <button
+            type="button"
+            className="with-icon lg"
+            onClick={() => setImportOpen(true)}
+            data-tip="Impor .otio atau .fcpxml dari editor lain"
+          >
+            <IconDownload />
+            Impor
+          </button>
+          <button
+            type="button"
+            className="primary with-icon lg"
+            onClick={() => setNewOpen(true)}
+          >
+            <IconPlus />
+            Proyek baru
+          </button>
+        </div>
       </div>
 
       {projects.length > 0 ? (
@@ -589,6 +705,8 @@ export const Lobby: React.FC = () => {
       )}
 
       <NewProjectDialog open={newOpen} onClose={() => setNewOpen(false)} />
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 };

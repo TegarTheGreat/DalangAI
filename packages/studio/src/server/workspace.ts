@@ -216,6 +216,34 @@ export const createProject = (root: string, input: NewProjectInput): WorkspacePr
 };
 
 /**
+ * Proyek baru dari berkas interchange (ADR-0023).
+ *
+ * Dipisah dari `createProject` karena bahan bakunya berbeda: yang ini tidak
+ * membuat plan dari brief melainkan MENERIMA plan yang sudah jadi dari
+ * pembaca interop, lalu tetap memvalidasinya. Yang sama, dan memang harus
+ * sama: slug unik, folder, dan penulisan atomik.
+ */
+export const createProjectFromPlan = (
+  root: string,
+  title: string,
+  planInput: unknown,
+): WorkspaceProject => {
+  const clean = title.trim();
+  if (clean === "") throw new Error("Judul proyek tidak boleh kosong");
+  mkdirSync(root, { recursive: true });
+  const id = uniqueSlug(root, clean);
+  const dir = join(root, id);
+  mkdirSync(dir, { recursive: true });
+  // Divalidasi lewat parse: isinya berasal dari berkas asing, dan plan.json
+  // tidak sah lebih buruk daripada impor yang gagal dengan jelas.
+  const plan = parseScenePlan(planInput);
+  atomicWriteFile(join(dir, "plan.json"), `${JSON.stringify(plan, null, 2)}\n`);
+  const created = readProject(root, id);
+  if (!created) throw new Error(`Proyek ${id} gagal dibuat`);
+  return created;
+};
+
+/**
  * Tentukan mode dari satu argumen path: folder berisi plan.json = buka proyek
  * itu; folder lain = workspace (lobi). Aturan ini menjaga
  * `dalang studio proyekku/` tetap bekerja seperti sebelumnya.

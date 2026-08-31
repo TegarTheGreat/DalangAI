@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { fromFcpxml, fromOtio } from "@dalang/interop";
 import { templatesPublicDir } from "@dalang/templates/paths";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -8,6 +9,7 @@ import type { WorkspacePayload } from "../shared/api-types";
 import { type CreateStudioOptions, createStudioApp, type Studio } from "./app";
 import {
   createProject,
+  createProjectFromPlan,
   duplicateProject,
   listProjects,
   projectIdOf,
@@ -37,6 +39,11 @@ const newProjectBody = z.object({
   format: z.string().min(1).max(32),
 });
 const idBody = z.object({ id: z.string().min(1) });
+const importBody = z.object({
+  /** Isi berkas .otio (JSON) atau .fcpxml (XML), apa adanya. */
+  isi: z.string().min(2).max(24_000_000),
+  judul: z.string().min(1).max(120).optional(),
+});
 const WORKSPACE_RENDER =
   /^\/api\/workspace\/render\/[^/]+\/\.dalang\/renders\/[^/]+\.(mp4|webm|mov)$/;
 const renameBody = z.object({ id: z.string().min(1), title: z.string().min(1).max(120) });
@@ -172,6 +179,55 @@ export class StudioHost {
           ok: true,
           project: this.lite(project),
           workspace: this.payload(),
+        });
+      } catch (error) {
+        return c.json(errorPayload(error), 400);
+      }
+    });
+
+    /**
+     * Proyek baru dari berkas interchange (ADR-0023).
+     *
+     * Isinya dikirim sebagai teks, bukan multipart: .otio dan .fcpxml adalah
+     * berkas teks berukuran kilobyte, dan jalur JSON yang sudah ada jauh lebih
+     * sedikit permukaannya daripada penanganan unggahan biner.
+     *
+     * Aset TIDAK ikut. Berkas interchange menunjuk berkas di mesin asalnya,
+     * dan menyalinnya diam-diam ke folder proyek adalah kejutan bergigabyte —
+     * jadi impor menghasilkan kerangka, dan catatannya mengatakan itu.
+     */
+    app.post("/api/workspace/import", async (c) => {
+      const body = importBody.safeParse(await c.req.json().catch(() => null));
+      if (!body.success) return c.json({ error: "Body tidak valid: butuh { isi }" }, 400);
+      try {
+        this.assertIdle();
+        const raw = body.data.isi;
+        // Bentuknya yang menentukan, bukan namanya: berkas dari perkakas lain
+        // sering tiba dengan ekstensi yang salah.
+        const looksXml = raw.trimStart().startsWith("<");
+        const projectDir = this.workspaceRoot;
+        const result = looksXml
+          ? fromFcpxml(raw, {
+              projectDir,
+              ...(body.data.judul ? { title: body.data.judul } : {}),
+            })
+          : fromOtio(JSON.parse(raw), {
+              projectDir,
+              ...(body.data.judul ? { title: body.data.judul } : {}),
+            });
+        const project = createProjectFromPlan(
+          this.workspaceRoot,
+          body.data.judul ?? result.plan.meta.title,
+          result.plan,
+        );
+        this.openPlan(project.planPath);
+        return c.json({
+          ok: true,
+          project: this.lite(project),
+          workspace: this.payload(),
+          // Sama seperti ekspor: yang tidak ikut menyeberang HARUS sampai ke
+          // orangnya, bukan berhenti di server.
+          catatan: result.notes.map((note) => note.detail),
         });
       } catch (error) {
         return c.json(errorPayload(error), 400);

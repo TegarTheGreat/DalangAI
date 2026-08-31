@@ -25,6 +25,8 @@ import { fileURLToPath } from "node:url";
 import { parseScenePlan } from "@dalang/core";
 import { activeSceneIndex, computeFrameLayout } from "@dalang/templates/layout";
 import { toFcpxml } from "../src/fcpxml";
+import { fromFcpxml } from "../src/from-fcpxml";
+import { fromOtio } from "../src/from-otio";
 import { otioToJson } from "../src/otio";
 import { buildEditTimeline } from "../src/timeline";
 
@@ -38,6 +40,8 @@ const timeline = buildEditTimeline(plan, { planPath: demo });
 const out = mkdtempSync(join(tmpdir(), "dalang-interop-gate-"));
 const otioPath = join(out, "gate.otio");
 const fcpxPath = join(out, "gate.fcpxml");
+const refOtioPath = join(out, "ref.otio");
+const refFcpxPath = join(out, "ref.fcpxml");
 writeFileSync(otioPath, otioToJson(timeline));
 writeFileSync(fcpxPath, toFcpxml(timeline));
 
@@ -113,15 +117,51 @@ out["otio_ranges"] = [
     for c in video[0] if isinstance(c, otio.schema.Clip)
 ] if video else []
 
+# Arah KEDUA: implementasi rujukan MENULIS, pembaca kami yang membaca.
+# Berkas yang ditulis pustaka resmi adalah contoh terbaik dari "berkas yang
+# datang dari perkakas lain" — dan itu justru kasus yang harus dilayani impor.
+ref_otio, ref_fcpx = sys.argv[3], sys.argv[4]
+otio.adapters.write_to_file(tl, ref_otio)
+
+# PENULIS fcpx_xml rujukan menuntut available_range ada di tiap klip; ia
+# melempar AttributeError kalau None. Kami sengaja menulis None untuk gambar
+# diam yang panjang sumbernya tidak diketahui (lihat ADR-0023 butir 4), jadi
+# nilainya diisi DI SINI SAJA — semata untuk memperoleh berkas tulisan rujukan
+# yang bisa dibaca balik. Ini keterbatasan penulis rujukan, bukan berkas kami:
+# PEMBACA rujukan menerima berkas kami apa adanya.
+for c in tl.find_children(descended_from_type=otio.schema.Clip):
+    mr = c.media_reference
+    if getattr(mr, "available_range", "x") is None:
+        mr.available_range = otio.opentime.TimeRange(
+            otio.opentime.RationalTime(0, c.source_range.duration.rate),
+            c.source_range.duration,
+        )
+otio.adapters.write_to_file(tl, ref_fcpx, "fcpx_xml")
+ref = otio.adapters.read_from_file(ref_fcpx, "fcpx_xml")
+ref_tl = ref if isinstance(ref, otio.schema.Timeline) else list(
+    ref.find_children(descended_from_type=otio.schema.Timeline)
+)[0]
+ref_video = [t for t in ref_tl.tracks if t.kind == otio.schema.TrackKind.Video]
+out["ref_fcpx_durations"] = [
+    round(c.trimmed_range_in_parent().duration.value
+          / c.trimmed_range_in_parent().duration.rate, 3)
+    for c in (ref_video[0] if ref_video else [])
+    if isinstance(c, otio.schema.Clip)
+]
+
 print(json.dumps(out))
 `;
 
 let report: Record<string, unknown>;
 try {
-  const stdout = execFileSync("python3", ["-c", probe, otioPath, fcpxPath], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const stdout = execFileSync(
+    "python3",
+    ["-c", probe, otioPath, fcpxPath, refOtioPath, refFcpxPath],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
   report = JSON.parse(stdout) as Record<string, unknown>;
 } catch (error) {
   console.error(
@@ -190,11 +230,67 @@ const compareRanges = (key: string, label: string) => {
 compareRanges("otio_ranges", ".otio");
 compareRanges("fcpx_ranges", ".fcpxml");
 
+/**
+ * Arah kedua: berkas yang DITULIS implementasi rujukan dibaca pembaca kami.
+ *
+ * Pengujian impor dengan berkas yang kita tulis sendiri hanya membuktikan dua
+ * modul kita saling setuju. Berkas dari pustaka resmi adalah contoh nyata
+ * "berkas yang datang dari perkakas lain" — persis kasus yang impor ada untuk
+ * melayaninya.
+ */
+const bacaBalik = (): void => {
+  const refDurations = Array.isArray(report.ref_fcpx_durations)
+    ? (report.ref_fcpx_durations as number[])
+    : [];
+  try {
+    const dariOtio = fromOtio(JSON.parse(readFileSync(refOtioPath, "utf8")), {
+      projectDir: out,
+    });
+    if (dariOtio.plan.scenes.length !== expectedClips) {
+      problems.push(
+        `impor .otio tulisan rujukan: ${dariOtio.plan.scenes.length} scene, seharusnya ${expectedClips}`,
+      );
+    }
+  } catch (error) {
+    problems.push(
+      `impor .otio tulisan rujukan gagal: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  try {
+    const dariFcpx = fromFcpxml(readFileSync(refFcpxPath, "utf8"), { projectDir: out });
+    const durations = dariFcpx.plan.scenes.map((scene) => Number(scene.duration));
+    if (durations.length !== refDurations.length) {
+      problems.push(
+        `impor .fcpxml tulisan rujukan: ${durations.length} scene, rujukan membaca ${refDurations.length}`,
+      );
+    } else {
+      durations.forEach((duration, index) => {
+        // Toleransi satu frame: rujukan dan kami membulatkan pecahan rasional
+        // di tempat yang sedikit berbeda, dan menuntut kesamaan bit adalah
+        // menuntut hal yang bukan inti persoalannya.
+        if (Math.abs(duration - (refDurations[index] as number)) > 1 / timeline.fps) {
+          problems.push(
+            `impor .fcpxml scene ${index + 1}: ${duration}s, rujukan membaca ${refDurations[index]}s`,
+          );
+        }
+      });
+    }
+  } catch (error) {
+    problems.push(
+      `impor .fcpxml tulisan rujukan gagal: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+bacaBalik();
+
 console.log(`Gerbang interop atas ${demo}`);
 console.log(
   `  .otio   ${num("otio_clips")} klip · ${num("otio_transitions")} peralihan · ${num("otio_frames")} frame · ${num("otio_audio_tracks")} trek audio`,
 );
 console.log(`  .fcpxml ${num("fcpx_clips")} klip terbaca adapter rujukan`);
+console.log(
+  `  balik   pembaca kami atas berkas tulisan rujukan: ${(report.ref_fcpx_durations as number[] | undefined)?.length ?? 0} klip fcpxml`,
+);
 
 if (problems.length > 0) {
   console.error("\nGERBANG INTEROP GAGAL:");

@@ -246,6 +246,30 @@ export class StudioClient {
     }
   }
 
+  /**
+   * Impor berkas interchange jadi proyek baru (ADR-0023).
+   *
+   * Catatan impornya dikembalikan, bukan cuma di-toast: daftar "yang tidak
+   * ikut" bisa panjang, dan toast yang hilang dalam tiga detik adalah cara
+   * paling efektif untuk membuat orang mengira impornya utuh.
+   */
+  async importTimeline(isi: string, judul?: string): Promise<string[] | null> {
+    if (this.state.switching) return null;
+    this.set({ switching: "baru" });
+    try {
+      const { project, workspace, catatan } = await api.importTimeline(isi, judul);
+      this.set({ workspace, project: null, selectedSceneId: null, chat: [] });
+      await this.enterEditor();
+      this.toast(`Diimpor jadi "${project.title}" — folder ${project.id}`);
+      return catatan;
+    } catch (error) {
+      this.failure(error);
+      return null;
+    } finally {
+      this.set({ switching: null });
+    }
+  }
+
   async backToLobby(): Promise<void> {
     try {
       const { workspace } = await api.closeProject();

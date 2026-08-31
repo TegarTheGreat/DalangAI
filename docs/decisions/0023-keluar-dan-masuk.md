@@ -85,7 +85,7 @@ id-nya berbeda antar versi dan tidak berarti apa-apa di Resolve. Adapter FCPXML
 resmi OpenTimelineIO pun menandai transisi "tidak didukung" di matriks
 fiturnya. Naskah tiap scene tetap ikut, sebagai `<marker>`.
 
-### 6. Impor menghasilkan KERANGKA, dan mengatakannya
+### 6. Impor membaca KEDUA format, dan menghasilkan kerangka
 
 Berkas OTIO hanya tahu klip, waktu, dan berkas. Ia tidak tahu naskah, gaya,
 format konten, atau maksud. Jadi hasil impor adalah kerangka: urutan, durasi,
@@ -95,6 +95,29 @@ mengatakan itu apa adanya, lalu menunjuk langkah berikutnya.
 Aset di LUAR folder proyek tidak dirujuk. Path relatif yang keluar dari proyek
 akan gagal saat render dan saat proyeknya dipindah; yang ditawarkan adalah
 kebenarannya, bukan tautan yang rusak.
+
+**Amandemen (31 Agustus 2026): FCPXML ikut dibaca.** Versi pertama ADR ini
+menolak impor FCPXML dengan alasan "membaca separuhnya lebih berbahaya
+daripada tidak membacanya" — dan alasannya benar, tapi kesimpulannya keliru.
+Yang berbahaya bukan pembaca yang tidak lengkap, melainkan pembaca yang DIAM
+soal ketidaklengkapannya. Begitu kaidahnya dibalik jadi "yang tidak dimengerti
+DIHITUNG dan DILAPORKAN", membaca FCPXML jadi hal yang sama amannya dengan
+membaca OTIO.
+
+Yang dibaca: spine UTAMA sebuah sequence, dalam bentuk `<asset-clip ref>`
+maupun `<clip><video ref></clip>`, dengan berkas sumber dari atribut `src`
+(FCPXML <= 1.8) maupun elemen `<media-rep>` (>= 1.9). Yang dilaporkan
+hitungannya: klip di lane (connected clip — Dalang baru punya satu jalur
+video, roadmap §9.2), gap, elemen yang waktunya tidak sah, dan versi FCPXML di
+luar yang diuji.
+
+Kedua pembaca berbagi satu `clipsToPlan`: begitu keduanya menjawab "klip apa,
+berapa lama, dari berkas mana, mulai detik ke berapa", sisanya persis sama —
+dan menuliskannya dua kali berarti dua tempat yang bisa menyimpang.
+
+Impor juga TIDAK lagi hanya di CLI: lobi Studio punya tombol **Impor**, dan
+berkasnya dikenali dari BENTUKNYA, bukan dari ekstensinya — berkas dari
+perkakas lain sering tiba dengan nama yang salah.
 
 ### 7. Server MCP memberi TIMELINE, bukan otak kedua
 
@@ -166,6 +189,32 @@ kotaknya. Pemeriksaan itu dibuktikan menyala: dengan `max-height` dilepas, ia
 melaporkan dialog Gaya keluar layar di 420px dan 380px. Batasnya dinyatakan di
 bawah.
 
+**Pembaca FCPXML diuji terhadap bacaan implementasi rujukan atas berkas yang
+SAMA.** Contoh resmi adapter `otio-fcpx-xml-adapter` dibaca oleh keduanya:
+adapter rujukan memulihkan enam item di trek video utamanya (IMG_0715 10s,
+compound_clip_1 30s, IMG_0233 10s, IMG_0687 10s, IMG_0268 10s, compound_clip_1
+10s), dan pembaca kami menghasilkan enam scene dengan urutan dan durasi yang
+persis sama — termasuk penomoran ulang id untuk nama yang kembar.
+
+**Gerbang interop kini menguji DUA arah.** Selain "penulis kami dibaca
+rujukan", pustaka rujukan sekarang MENULIS .otio dan .fcpxml, lalu pembaca
+kami membacanya. Berkas dari pustaka resmi adalah contoh terbaik dari "berkas
+yang datang dari perkakas lain" — persis kasus yang impor ada untuk
+melayaninya. Arah baru ini juga dibuktikan menyala: durasi impor yang digeser
+setengah detik menghasilkan lima keluhan.
+
+**Penulis FCPXML rujukan menolak berkas yang PEMBACA-nya terima.** Ia melempar
+`AttributeError` pada klip yang `available_range`-nya None — nilai yang kami
+tulis dengan sengaja untuk gambar diam (butir 4). Gerbang mengisinya HANYA di
+dalam skrip Python-nya, semata untuk memperoleh berkas tulisan rujukan yang
+bisa dibaca balik. Itu keterbatasan penulis rujukan, bukan cacat berkas kami.
+
+**Parser XML mengubah atribut jadi array, dan semua klip jadi tak terbaca.**
+`isArray: () => true` di fast-xml-parser berlaku untuk atribut juga, sehingga
+`offset` menjadi `["0s"]` dan tiap klip gagal diurai — pembaca FCPXML pertama
+menghasilkan nol scene dari berkas yang isinya enam. Argumen keempat
+(`isAttribute`) yang membedakannya.
+
 **Server MCP diuji lewat klien MCP sungguhan** di atas transport in-memory,
 bukan dengan memanggil fungsinya langsung. Yang paling mudah salah di server
 MCP bukan logikanya melainkan kontraknya: skema input yang tidak bisa
@@ -181,11 +230,14 @@ salah di tes lain, lewat pesan validasi yang datang dari sisi klien.
   pustaka OpenTimelineIO resmi dan adapter FCPXML resmi membaca kedua berkas
   dan memulihkan posisi klip yang tepat. Yang belum: apakah ketiga aplikasi itu
   menerima berkasnya tanpa keluhan, dan apakah tautan asetnya tersambung.
-- **Impor hanya OTIO, tidak FCPXML.** Bukan kemalasan: OTIO berbentuk JSON
-  dengan skema bernomor yang bisa divalidasi, sedangkan FCPXML punya lusinan
-  bentuk sah yang sama (`clip`, `asset-clip`, `ref-clip`, `spine` bersarang,
-  `lane`) yang perlu ditafsirkan satu per satu. Membaca separuhnya lalu diam
-  soal sisanya lebih berbahaya daripada tidak membacanya sama sekali.
+- **Impor FCPXML membaca spine UTAMA saja.** Connected clip di lane
+  (overlay, PiP, audio tempelan), `<ref-clip>` yang menunjuk klip majemuk, dan
+  `<spine>` bersarang tidak dipulihkan — semuanya dihitung dan disebut di
+  catatan impor. Batas sebenarnya bukan di pembacanya melainkan di skema
+  Dalang: garis waktu Dalang baru punya satu jalur video (roadmap §9.2).
+- **Pembaca FCPXML diuji terhadap 1.8 dan bentuk `<media-rep>` 1.9+**, bukan
+  terhadap seluruh rentang versi. Berkas berversi lain tetap dibaca, dengan
+  catatan yang menyebut versinya dan menyarankan memeriksa hasilnya.
 - **Ekspor memakai path absolut.** Berkasnya hanya berguna di mesin yang memuat
   proyeknya; memindahkan proyek memutus semua tautan. Ini disebutkan di CLI dan
   di Studio, dan itulah alasan Studio menulis berkasnya di samping plan.json
@@ -213,6 +265,9 @@ salah di tes lain, lewat pesan validasi yang datang dari sisi klien.
 
 ## Alternatif yang ditolak
 
+- ~~**Tidak membaca FCPXML sama sekali.**~~ DICABUT di amandemen 31 Agustus
+  2026 — lihat butir 6. Alasan aslinya (setengah pembacaan yang diam itu
+  berbahaya) tetap benar; yang berubah adalah pembacanya tidak lagi diam.
 - **Menulis EDL.** Ditolak: EDL tidak bisa membawa banyak trek, penanda, atau
   path aset yang bermakna — ia akan kehilangan lebih banyak daripada OTIO tanpa
   menambah satu pun pembaca yang belum terjangkau.
