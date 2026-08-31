@@ -46,6 +46,13 @@ export interface StudioDeps {
   ) => Promise<string>;
   /** Rantai ASR (ADR-0021); boleh kosong = tidak ada jalur transkripsi. */
   asrChain: () => AsrProvider[];
+  /** Render frame komposisi untuk tinjauan agent (ADR-0022). */
+  renderStills: (options: {
+    planPath: string;
+    frames: number[];
+    outDir: string;
+    scale: number;
+  }) => Promise<string[]>;
   /** Cari jeda hening di rekaman (ADR-0017): (planPath, path relatif) -> jeda. */
   detectSilence: (
     planPath: string,

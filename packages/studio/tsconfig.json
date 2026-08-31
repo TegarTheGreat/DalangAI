@@ -8,6 +8,7 @@
     "test/**/*",
     "scripts/**/*",
     "vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "scripts"
   ]
 }

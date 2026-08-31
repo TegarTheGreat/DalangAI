@@ -35,6 +35,7 @@ import {
 } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
 import type { RenderVideoResult } from "@dalang/renderer";
+import { pickReviewFrames } from "@dalang/templates/review-frames";
 import { generateText, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { ResolvedModel } from "./models/resolve";
@@ -47,6 +48,7 @@ import {
   parseVerification,
   verifyPrompt,
 } from "./vision/grounding";
+import { parseReviewFindings, reviewPrompt } from "./vision/review";
 
 /**
  * Tools §6.2 — jendela agent ke sistem. Setiap tool:
@@ -110,6 +112,17 @@ export interface AgentDeps {
     silences: Array<{ startSec: number; endSec: number }>;
     audible: Array<{ startSec: number; endSec: number }>;
   } | null>;
+  /**
+   * Render beberapa FRAME komposisi jadi berkas gambar (ADR-0022).
+   * Di-inject seperti renderVideo supaya paket agent tidak bergantung pada
+   * renderer, dan tes bisa memberi fake tanpa membuka browser.
+   */
+  renderStills: (options: {
+    planPath: string;
+    frames: number[];
+    outDir: string;
+    scale: number;
+  }) => Promise<string[]>;
   /**
    * Rantai ASR (ADR-0021). Rantai KOSONG adalah keadaan sah dan sering —
    * mesin tanpa whisper.cpp dan tanpa kunci API — dan harus dikabarkan apa
@@ -1245,6 +1258,148 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             file: result.outputLocation,
             durasiSec: result.durationSec,
             ukuranMB: Number((result.sizeBytes / 1024 / 1024).toFixed(1)),
+          };
+        }),
+    }),
+
+    // ADR-0022: sampai fase ini agent menilai plan-nya lewat STRUKTUR saja —
+    // critiqueDraft membaca JSON, analyzeImage melihat aset SUMBER. Tak satu
+    // pun pernah melihat frame jadi: teks yang tertimpa, caption yang hilang
+    // di atas footage terang, grafis yang keluar bingkai. Tool ini yang
+    // menutup loop itu.
+    reviewRender: tool({
+      description:
+        "LIHAT hasil render sendiri: render beberapa frame kunci lalu nilai dengan model vision, digabung dengan kritik struktur. Panggil SETELAH plan cukup lengkap (aset ter-resolve), untuk menemukan masalah yang tidak terbaca dari JSON — teks tertimpa/terpotong, kontras caption, komposisi. Jumlah tinjauan per giliran dibatasi; pakai temuannya untuk applyPatch, jangan meninjau berulang tanpa memperbaiki apa pun.",
+      inputSchema: z.object({
+        maxFrame: z
+          .number()
+          .int()
+          .min(1)
+          .max(8)
+          .optional()
+          .describe("Berapa frame ditinjau (bawaan 4). Tiap frame berbiaya."),
+        perhatian: z
+          .string()
+          .optional()
+          .describe("Hal khusus yang diminta user untuk diperiksa."),
+      }),
+      execute: (input) =>
+        run("reviewRender", input, async () => {
+          const plan = requirePlan();
+          const volume = deps.volumeModel;
+          if (!volume) {
+            return {
+              ok: false,
+              error:
+                "Model vision tidak tersedia — tinjauan render butuh model tier-volume yang menerima gambar. Sampaikan ini ke user; JANGAN mengarang penilaian atas frame yang tidak pernah kamu lihat.",
+            };
+          }
+          if (volume.info && !volume.info.imageInput) {
+            return {
+              ok: false,
+              error: `Model ${volume.key} tidak menerima input gambar — pilih model vision untuk tier volume.`,
+            };
+          }
+          if (!guards.claimReviewRender()) {
+            // Jatah habis: berhenti, bukan mencoba lagi. Inilah yang membuat
+            // loop "render -> lihat -> perbaiki" berhingga.
+            return {
+              ok: false,
+              error: `Jatah tinjauan render giliran ini habis (${guards.config.reviewRenderCap}x). Terapkan dulu temuan sebelumnya lewat applyPatch, lalu tinjau lagi di giliran berikutnya.`,
+            };
+          }
+
+          const frames = pickReviewFrames(plan, { max: input.maxFrame ?? 4 });
+          session.persist();
+          const outDir = join(session.paths.dalangDir, "review");
+          let files: string[];
+          try {
+            files = await deps.renderStills({
+              planPath: session.paths.planPath,
+              frames: frames.map((item) => item.frame),
+              outDir,
+              // Seperempat ukuran: cukup untuk menilai tata letak dan
+              // keterbacaan, dan jauh lebih murah dikirim ke model.
+              scale: 0.25,
+            });
+          } catch (error) {
+            return {
+              ok: false,
+              error: `Render frame tinjauan gagal: ${error instanceof Error ? error.message : String(error)}`,
+            };
+          }
+
+          const images = files.map((file) => readFileSync(file));
+          const result = await generateText({
+            model: volume.model,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  ...images.map((bytes) => ({
+                    type: "image" as const,
+                    image: bytes,
+                    mediaType: "image/png",
+                  })),
+                  { type: "text" as const, text: reviewPrompt(frames, input.perhatian) },
+                ],
+              },
+            ],
+          });
+          guards.addLlmUsage(volume.info, result.totalUsage);
+          session.events.record({
+            turn: session.turn,
+            kind: "llm",
+            name: `review:${volume.key}`,
+            input: { frames: frames.length },
+            output: { chars: result.text.length },
+            costUsd: null,
+          });
+
+          const parsed = parseReviewFindings(result.text);
+          // Nomor scene dari model dipetakan balik ke id — temuan tanpa id
+          // tidak bisa dipakai applyPatch, dan nomor bisa saja meleset.
+          const byNumber = new Map(
+            plan.scenes.map((scene, index) => [index + 1, scene.id]),
+          );
+          const temuanGambar = parsed.findings.map((finding) => ({
+            level: finding.level,
+            masalah: finding.masalah,
+            ...(finding.saran !== "" ? { saran: finding.saran } : {}),
+            ...(finding.scene !== undefined && byNumber.has(finding.scene)
+              ? { sceneId: byNumber.get(finding.scene) as string, scene: finding.scene }
+              : {}),
+          }));
+
+          // ADR-0022 §7.3: satu laporan, dua sudut. Kritik struktur melihat
+          // yang tidak terlihat di gambar (musik hilang, irama datar), gambar
+          // melihat yang tidak terbaca dari JSON.
+          const struktur = critiquePlan(plan).map((note) => ({
+            kode: note.code,
+            level: note.level,
+            ...(note.sceneId ? { sceneId: note.sceneId } : {}),
+            pesan: note.message,
+          }));
+
+          return {
+            ok: true,
+            frameDitinjau: frames.map((item) => ({
+              scene: item.sceneNumber,
+              sceneId: item.sceneId,
+              frame: item.frame,
+              alasanDipilih: item.reason,
+            })),
+            temuanGambar,
+            temuanStruktur: struktur,
+            bersih: temuanGambar.length === 0 && struktur.length === 0,
+            sisaJatahTinjauan: guards.reviewRendersLeft,
+            ...(parsed.unparsed
+              ? {
+                  peringatan:
+                    "Model vision tidak menjawab dalam bentuk yang bisa diurai — TIDAK ADA temuan gambar yang sah. Jangan menganggap ini berarti gambarnya bersih.",
+                }
+              : {}),
+            ...(parsed.dropped > 0 ? { temuanDibuang: parsed.dropped } : {}),
           };
         }),
     }),

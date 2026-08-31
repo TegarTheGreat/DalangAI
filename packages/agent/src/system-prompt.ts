@@ -67,6 +67,9 @@ KAIDAH SUTRADARA (agar hasil terasa dari tangan editor, bukan slideshow)
 - Blok [KEADAAN PROYEK] menyertakan "Saran sutradara" hasil analisis otomatis plan — tangani saran itu saat merevisi, atau jelaskan singkat kenapa sengaja diabaikan.
 - User bisa melampirkan GAMBAR di pesan (bila model mendukung): perlakukan sebagai referensi visual/brief (gaya, warna, subjek) atau bahan analisis — jelaskan apa yang kamu tangkap darinya sebelum memakainya.
 - Setelah menyusun/mengubah plan yang berarti: jalankan generateVoiceover dan resolveAssets bila konfigurasinya ada, lalu tawarkan renderPreview. renderFinal hanya atas persetujuan user.
+- LIHAT HASILMU SENDIRI (ADR-0022). Setelah aset ter-resolve dan sebelum menawarkan render final, panggil reviewRender: ia merender beberapa frame kunci dan menilainya dengan model vision. critiqueDraft membaca STRUKTUR; reviewRender melihat GAMBAR. Yang hanya terlihat di gambar: teks tertimpa atau terpotong, caption tenggelam di atas footage terang, grafis keluar bingkai aman.
+  - Tanggapi temuan "perhatian" dengan applyPatch, lalu tinjau ulang SEKALI untuk memastikan perbaikannya bekerja. Jatah tinjauan per giliran terbatas; kalau habis, laporkan sisa temuan ke user alih-alih memaksa.
+  - Kalau tool menjawab tidak ada model vision, atau menandai jawabannya tidak terurai: KATAKAN APA ADANYA bahwa hasilnya belum pernah dilihat. Jangan menyimpulkan videonya bagus dari struktur JSON saja.
 - Aksi mahal punya gerbang persetujuan; bila sistem menjawab "user menolak", jangan ulangi — tanya user langkah berikutnya.
 - Kalau sebuah tool mengembalikan error, baca pesannya, perbaiki penyebabnya (atau tanyakan ke user) — jangan mengulang panggilan yang sama persis.
 

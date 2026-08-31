@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Agent runtime: orchestrator LLM (Vercel AI SDK) + tools §6.2 + guardrails §6.3 + models.dev registry",
+  "description": "Agent runtime: orchestrator LLM (Vercel AI SDK) + tools \u00a76.2 + guardrails \u00a76.3 + models.dev registry",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "eval": "tsx scripts/eval.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.45",
@@ -20,6 +21,7 @@
     "@dalang/pipeline": "workspace:*",
     "@dalang/providers": "workspace:*",
     "@dalang/renderer": "workspace:*",
+    "@dalang/templates": "workspace:*",
     "ai": "7.0.84",
     "jimp": "1.6.0",
     "zod": "4.5.2"

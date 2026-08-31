@@ -22,6 +22,16 @@ export interface GuardrailConfig {
   ttsSceneGate: number;
   /** Budget keras per proyek (USD) — PRD §13. */
   projectBudgetUsd: number;
+  /**
+   * Batas tinjauan render per giliran (ADR-0022).
+   *
+   * Loop "render -> lihat -> perbaiki -> render lagi" adalah pola yang paling
+   * mudah berputar tanpa ujung: tiap putaran memberi model gambar baru untuk
+   * dikomentari, dan selalu ada yang bisa dikomentari. Step cap saja tidak
+   * cukup karena satu putaran memakai beberapa step. Batas ini yang membuat
+   * putarannya berhingga.
+   */
+  reviewRenderCap: number;
 }
 
 export const DEFAULT_GUARDRAILS: GuardrailConfig = {
@@ -30,6 +40,7 @@ export const DEFAULT_GUARDRAILS: GuardrailConfig = {
   approvalGateUsd: 0.1,
   ttsSceneGate: 5,
   projectBudgetUsd: 5,
+  reviewRenderCap: 3,
 };
 
 /**
@@ -53,6 +64,7 @@ export class Guardrails {
   private llmCostUnknown = false;
   private toolCostTurnUsd = 0;
   private sessionCostUsd = 0;
+  private reviewRendersThisTurn = 0;
 
   constructor(
     config: Partial<GuardrailConfig> = {},
@@ -66,6 +78,21 @@ export class Guardrails {
     this.llmCostTurnUsd = 0;
     this.toolCostTurnUsd = 0;
     this.llmCostUnknown = false;
+    this.reviewRendersThisTurn = 0;
+  }
+
+  /**
+   * Klaim satu jatah tinjauan render (ADR-0022). `false` = jatah giliran ini
+   * habis; pemanggilnya harus BERHENTI meninjau, bukan mencoba lagi.
+   */
+  claimReviewRender(): boolean {
+    if (this.reviewRendersThisTurn >= this.config.reviewRenderCap) return false;
+    this.reviewRendersThisTurn += 1;
+    return true;
+  }
+
+  get reviewRendersLeft(): number {
+    return Math.max(0, this.config.reviewRenderCap - this.reviewRendersThisTurn);
   }
 
   addLlmUsage(

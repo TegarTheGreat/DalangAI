@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ScenePlanInput } from "@dalang/core";
@@ -247,6 +247,12 @@ export const approvalRecorder = (answer: boolean): ApprovalRecorder => {
   };
 };
 
+/** PNG 1x1 yang SAH — dibaca tool lalu dikirim sebagai gambar. */
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 export const makeDeps = (
   overrides: Partial<AgentDeps> & { approvalAnswer?: boolean } = {},
 ): {
@@ -269,6 +275,19 @@ export const makeDeps = (
     // Rantai ASR bawaan KOSONG: itu keadaan mesin polos, dan yang paling
     // sering. Tes yang membutuhkan transkripsi menyuntikkan rantainya sendiri.
     asrChain: overrides.asrChain ?? (() => []),
+    // Render frame palsu: menulis PNG 1x1 yang SAH, bukan berkas kosong —
+    // tool membacanya lalu mengirimnya sebagai gambar, jadi berkas rusak akan
+    // menguji jalur yang salah.
+    renderStills:
+      overrides.renderStills ??
+      (async ({ frames, outDir }) => {
+        mkdirSync(outDir, { recursive: true });
+        return frames.map((frame) => {
+          const file = join(outDir, `frame-${frame}.png`);
+          writeFileSync(file, PNG_1X1);
+          return file;
+        });
+      }),
     detectSilence:
       overrides.detectSilence ??
       (async (file) =>

@@ -67,6 +67,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
     videoMetadata: (file) => options.deps.probeVideo(session.paths.planPath, file),
     detectSilence: (file) => options.deps.detectSilence(session.paths.planPath, file),
     asrChain: () => options.deps.asrChain(),
+    renderStills: (stills) => options.deps.renderStills(stills),
     stickerChain: options.deps.stickerChain,
     iconProvider: options.deps.iconProvider,
     sfxChain: options.deps.sfxChain,

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   loadModelRegistry,
@@ -17,6 +17,7 @@ import {
 import {
   detectSilence,
   probeLocalVideo,
+  renderPlanStills,
   renderPlanToVideo,
   saveMediaToProject,
 } from "@dalang/renderer";
@@ -95,6 +96,16 @@ export const registerStudioCommand = (program: Command): void => {
             stockChain: () => buildStockChain(),
             stickerChain: () => buildGifChain({ stickers: true }),
             asrChain: () => buildAsrChain(),
+            renderStills: async ({ planPath, frames, outDir, scale }) => {
+              mkdirSync(outDir, { recursive: true });
+              await renderPlanStills({
+                planPath,
+                frames,
+                outputLocationFor: (frame) => join(outDir, `review-${frame}.png`),
+                scale,
+              });
+              return frames.map((frame) => join(outDir, `review-${frame}.png`));
+            },
             renderVideo: (renderOptions) => renderPlanToVideo(renderOptions),
             probeVideo: probeLocalVideo,
             detectSilence,

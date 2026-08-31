@@ -9,6 +9,7 @@
     "./video": "./src/DalangVideo.tsx",
     "./paths": "./src/paths.ts",
     "./layout": "./src/layout.ts",
+    "./review-frames": "./src/review-frames.ts",
     "./fonts": "./src/fonts.ts",
     "./music": "./src/music.ts"
   },

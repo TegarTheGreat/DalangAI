@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   type AgentDeps,
@@ -24,6 +25,7 @@ import {
 import {
   detectSilence,
   probeLocalVideo,
+  renderPlanStills,
   renderPlanToVideo,
   saveMediaToProject,
 } from "@dalang/renderer";
@@ -158,6 +160,17 @@ export const registerChatCommand = (program: Command): void => {
           videoMetadata: (file) => probeLocalVideo(session.paths.planPath, file),
           detectSilence: (file) => detectSilence(session.paths.planPath, file),
           asrChain: () => buildAsrChain(),
+          renderStills: async ({ planPath, frames, outDir, scale }) => {
+            mkdirSync(outDir, { recursive: true });
+            const files = frames.map((frame) => join(outDir, `review-${frame}.png`));
+            await renderPlanStills({
+              planPath,
+              frames,
+              outputLocationFor: (frame) => join(outDir, `review-${frame}.png`),
+              scale,
+            });
+            return files;
+          },
           iconProvider: () => buildIconProvider(),
           sfxChain: () => buildSfxChain(),
           saveMedia: (media) =>

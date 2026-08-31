@@ -18,6 +18,10 @@ export const stubDeps = (): StudioDeps => ({
   stickerChain: () => [],
   // Tanpa jalur ASR: itu keadaan mesin polos, dan cukup untuk gerbang tata letak.
   asrChain: () => [],
+  // Gerbang tata letak tidak meninjau render; cukup dilarang berjalan.
+  renderStills: async () => {
+    throw new Error("stub: tinjauan render tidak dipakai gerbang tata letak");
+  },
   iconProvider: () => ({
     id: "stub",
     label: "stub",

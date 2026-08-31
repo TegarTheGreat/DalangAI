@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -325,7 +325,26 @@ Yang sudah berjalan:
     GAGAL DENGAN PESAN, bukan menghasilkan transkrip kosong diam-diam. Jalur
     offline-nya juga belum dijalankan di sini karena binari whisper.cpp tidak
     terpasang di container ini.*
-- **Kualitas terjaga otomatis**: 616 unit test (kontrak lock/pin/undo, timing
+- **Agent melihat hasil rendernya sendiri (ADR-0022)** — sebelum ini agent
+  menilai kerjanya lewat JSON saja:
+  - `reviewRender` merender beberapa frame KUNCI lalu menilainya dengan model
+    vision, dan menggabungkannya dengan kritik struktur dalam satu laporan.
+    Framenya dipilih dengan alasan: momen paling ramai di tiap scene (di
+    situlah tata letak bertabrakan), pembuka lebih dulu.
+  - Loopnya dibatasi di KODE (`reviewRenderCap`, bawaan 3 per giliran), bukan
+    di prompt — "render, lihat, perbaiki, ulangi" adalah pola yang paling
+    mudah berputar tanpa ujung.
+  - Jawaban model yang tidak bisa diurai ditandai peringatan, **tidak** pernah
+    dilaporkan sebagai "bersih".
+  - **Suite eval** (`pnpm --filter @dalang/agent eval`): lima brief bersumbu
+    berbeda, skor 0-100 dari kepatuhan brief + kerajinan. Ini yang membuat
+    perubahan prompt/model bisa dibandingkan dengan angka, bukan kesan.
+    `-- --self-check` menguji rangkanya tanpa model.
+  - *Batas jujur: tinjauan vision belum pernah dijalankan terhadap model
+    sungguhan (repo ini tanpa kunci API), dan skor eval mengukur KEPATUHAN
+    serta KERAJINAN — bukan apakah naskahnya menarik. Plan membosankan yang
+    rapi bisa mendapat 100.*
+- **Kualitas terjaga otomatis**: 665 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -338,7 +357,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 616 unit test (8 paket) — tanpa browser & jaringan
+pnpm test                 # 665 unit test (8 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -462,7 +481,14 @@ di `docs/decisions/`.
       dijalankan terhadap layanan/binari sungguhan — lihat "Batas yang
       dinyatakan" di ADR-0021.*
 
-Fase 7 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
+- [x] **Fase 7 — Agent melihat hasil kerjanya** (ADR-0022): tool
+      `reviewRender` (render frame kunci -> vision -> temuan terstruktur),
+      pemilihan frame berbasis momen paling ramai, batas loop di kode, laporan
+      gabungan gambar + struktur, dan suite eval berskor. *Catatan: jalur
+      vision belum dijalankan terhadap model sungguhan — lihat "Batas yang
+      dinyatakan" di ADR-0022.*
+
+Fase 8 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,
 format interchange, ASR), lengkap dengan celah beserta buktinya, risiko yang
 harus diputuskan, dan daftar yang sengaja TIDAK dikerjakan.
