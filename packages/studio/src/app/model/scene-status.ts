@@ -24,7 +24,7 @@ export interface SceneStatus {
 const runFor = (
   runs: StageRunLite[],
   sceneId: string,
-  stage: "tts" | "assets" | "asr",
+  stage: "tts" | "assets" | "asr" | "loudness",
 ): StageRunLite | undefined =>
   runs.find((run) => run.sceneId === sceneId && run.stage === stage);
 
@@ -34,7 +34,7 @@ export const deriveSceneStatus = (
   runs: StageRunLite[],
   busy: BusyState,
 ): SceneStatus => {
-  const processing = (stage: "tts" | "assets" | "asr") =>
+  const processing = (stage: "tts" | "assets" | "asr" | "loudness") =>
     (stage === "tts" && busy.mutation === "tts") ||
     (stage === "assets" && (busy.mutation === "assets" || busy.mutation === "pick"));
 

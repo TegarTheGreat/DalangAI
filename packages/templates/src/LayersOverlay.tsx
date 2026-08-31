@@ -3,6 +3,7 @@ import { Video } from "@remotion/media";
 import { Img, interpolate, Sequence, useCurrentFrame, useVideoConfig } from "remotion";
 import { easeDolly } from "./anim";
 import { useAssetSrc } from "./asset-src";
+import { buildClipVolume, type DuckWindow, isSilent } from "./audio-model";
 import { filterToCss } from "./filters";
 import type { GraphicFrame } from "./graphic-model";
 import { layerBoxStyle, layerMotion, layerWindow } from "./layer-model";
@@ -32,7 +33,20 @@ export const LayersOverlay: React.FC<{
   /** Warna bingkai bawaan bila `layer.borderColor` kosong. */
   accent: string;
   durationInFrames: number;
-}> = ({ scene, plan, metrics, accent, durationInFrames }) => {
+  /** Frame GLOBAL awal scene — ducking hidup di waktu global (ADR-0026). */
+  sceneStartFrame: number;
+  ducks: readonly DuckWindow[];
+  fps: number;
+}> = ({
+  scene,
+  plan,
+  metrics,
+  accent,
+  durationInFrames,
+  sceneStartFrame,
+  ducks,
+  fps,
+}) => {
   if (scene.layers.length === 0) return null;
 
   return (
@@ -55,6 +69,16 @@ export const LayersOverlay: React.FC<{
               metrics={metrics}
               accent={accent}
               windowFrames={frames}
+              volume={buildClipVolume({
+                audio: layer.visual.audio,
+                lufs: asset.lufs,
+                channels: asset.channels,
+                targetLufs: plan.meta.loudnessTarget,
+                startFrame: sceneStartFrame + from,
+                frames,
+                fps,
+                ducks,
+              })}
             />
           </Sequence>
         );
@@ -69,7 +93,8 @@ const LayerItem: React.FC<{
   metrics: AspectMetrics;
   accent: string;
   windowFrames: number;
-}> = ({ layer, asset, metrics, accent, windowFrames }) => {
+  volume: (frame: number) => number;
+}> = ({ layer, asset, metrics, accent, windowFrames, volume }) => {
   // Di dalam Sequence, frame sudah relatif terhadap awal jendela tampil.
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -102,8 +127,8 @@ const LayerItem: React.FC<{
       {asset.kind === "video" ? (
         <Video
           src={assetSrc(asset.file)}
-          muted={layer.visual.volume <= 0}
-          volume={layer.visual.volume}
+          muted={isSilent(layer.visual.audio)}
+          volume={volume}
           playbackRate={layer.visual.speed}
           trimBefore={Math.round(layer.visual.trimStartSec * fps)}
           style={mediaStyle}

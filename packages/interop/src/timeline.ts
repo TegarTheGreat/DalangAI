@@ -408,6 +408,50 @@ export const buildEditTimeline = (
     });
   }
 
+  // --- Trek audio tambahan (ADR-0026) -------------------------------------
+  const trackClips: EditClip[] = [];
+  const trekTanpaDurasi: string[] = [];
+  for (const track of plan.audio.tracks) {
+    const asset = plan.renderState.trackAssets[track.id];
+    if (!asset) continue;
+    if (asset.durationSec === undefined) {
+      // Alasan yang sama dengan efek suara: klip NLE wajib punya panjang, dan
+      // panjang karangan di garis waktu lebih menyesatkan daripada klip hilang.
+      trekTanpaDurasi.push(track.id);
+      continue;
+    }
+    const sceneIndex = track.sceneId
+      ? plan.scenes.findIndex((scene) => scene.id === track.sceneId)
+      : -1;
+    if (track.sceneId && sceneIndex < 0) continue;
+    const anchor = sceneIndex >= 0 ? (layout.sceneStarts[sceneIndex] ?? 0) : 0;
+    trackClips.push({
+      kind: "clip",
+      sceneId: track.sceneId,
+      name: track.id,
+      startFrame: anchor + secToFrames(track.atSec),
+      durationFrames: Math.max(1, secToFrames(asset.durationSec)),
+      url: fileUrlFor(planDir, asset.file),
+      media: "audio",
+      sourceStartSec: 0,
+      sourceDurationSec: asset.durationSec,
+      markers: [],
+    });
+  }
+  tracks.push(...layOnLanes(trackClips, "Trek", "audio"));
+  if (trekTanpaDurasi.length > 0) {
+    notes.push({
+      code: "trek-tanpa-durasi",
+      detail: `Trek audio tanpa panjang tercatat dilewati (${trekTanpaDurasi.join(", ")}).`,
+    });
+  }
+  if (trackClips.length > 0) {
+    notes.push({
+      code: "trek-amplop",
+      detail: `${trackClips.length} trek audio diekspor sebagai klip, tapi amplopnya (volume, fade, ducking, normalisasi kenyaringan) TIDAK ikut — itu otomatisasi milik render, bukan properti klip. Klipnya akan berbunyi rata di editor tujuan.`,
+    });
+  }
+
   // --- Catatan: yang tidak punya padanan di format mana pun ---------------
   if (unresolved.length > 0) {
     notes.push({
@@ -462,6 +506,19 @@ export const buildEditTimeline = (
     notes.push({
       code: "anotasi",
       detail: `${annotations} anotasi tutorial (zoom/sorot/panah/blur) tidak ikut.`,
+    });
+  }
+  const bersuara =
+    countScenes(plan, (scene) => scene.visual.audio.volume > 0) +
+    plan.scenes.reduce(
+      (sum, scene) =>
+        sum + scene.layers.filter((layer) => layer.visual.audio.volume > 0).length,
+      0,
+    );
+  if (bersuara > 0) {
+    notes.push({
+      code: "audio-klip-amplop",
+      detail: `${bersuara} klip bersuara diekspor dengan audionya utuh, tapi volume, fade, ducking di bawah narasi, dan normalisasi kenyaringannya TIDAK ikut — semuanya otomatisasi milik render. Atur ulang levelnya di editor tujuan.`,
     });
   }
   const speedy = countScenes(plan, (scene) => scene.visual.speed !== 1);

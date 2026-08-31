@@ -10,6 +10,7 @@ import {
   type PatchOpInput,
   type Scene,
   type ScenePlan,
+  SILENT_CLIP_AUDIO,
   uniqueLayerId,
   type VideoLayer,
 } from "@dalang/core";
@@ -17,6 +18,7 @@ import { useState } from "react";
 import { Segmented } from "../components/controls";
 import { IconFilm, IconTrash } from "../icons";
 import { studioClient, useStudio } from "../use-studio";
+import { ClipAudioControls } from "./ClipAudioControls";
 import { SliderRow } from "./InspectorPanel";
 import { ANCHOR_LABEL, AnchorPad } from "./MediaLibrary";
 
@@ -89,7 +91,7 @@ export const LapisanTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
             flipH: false,
             focusX: 0.5,
             focusY: 0.5,
-            volume: 0,
+            audio: SILENT_CLIP_AUDIO,
           },
           anchor: "kanan-bawah",
           width: 0.34,
@@ -418,18 +420,12 @@ const LayerCard: React.FC<{
                 )
               }
             />
-            {/* Suara lapisan: satu angka gain. Amplop fade dan normalisasi
-              kenyaringan adalah §9.4 — dan mengaku begitu lebih baik daripada
-              menaruh slider yang tidak melakukan apa yang namanya janjikan. */}
-            <SliderRow
-              label="Suara"
-              min={0}
-              max={1}
-              step={0.05}
-              value={layer.visual.volume}
-              neutral={0}
-              format={(value) => (value === 0 ? "bisu" : percent(value))}
-              onCommit={(volume) => updateVisual({ volume }, `Suara lapisan ${layer.id}`)}
+            <ClipAudioControls
+              audio={layer.visual.audio}
+              lufs={asset?.lufs}
+              channels={asset?.channels}
+              targetLufs={plan.meta.loudnessTarget}
+              onChange={(audio) => updateVisual({ audio }, `Suara lapisan ${layer.id}`)}
             />
           </div>
         </div>

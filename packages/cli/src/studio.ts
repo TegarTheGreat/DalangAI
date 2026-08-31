@@ -17,6 +17,7 @@ import {
 import {
   detectSilence,
   probeLocalVideo,
+  remotionAudioProbe,
   renderPlanStills,
   renderPlanToVideo,
   saveMediaToProject,
@@ -108,6 +109,8 @@ export const registerStudioCommand = (program: Command): void => {
             },
             renderVideo: (renderOptions) => renderPlanToVideo(renderOptions),
             probeVideo: probeLocalVideo,
+            // ADR-0026: tanpa ini hanya berkas WAV yang bisa diukur.
+            audioProbe: remotionAudioProbe,
             detectSilence,
             iconProvider: () => buildIconProvider(),
             sfxChain: () => buildSfxChain(),

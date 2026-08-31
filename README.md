@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -415,12 +415,31 @@ Yang sudah berjalan:
     serta sisipannya;
   - bisa diseret & diubah ukurannya langsung di kanvas, punya kartu sendiri di
     panel Properti, dan bar sendiri di timeline;
-  - `visual.volume` (bawaan 0 = bisu) memberi B-roll suara alaminya; amplop
-    fade, ducking, dan normalisasi kenyaringan adalah §9.4 dan **belum ada**;
+  - `visual.audio` (bawaan bisu) memberi B-roll suara alaminya, dengan amplop
+    penuh sejak ADR-0026;
   - diekspor sebagai trek video tambahan (OTIO) / connected clip lane (FCPXML),
     dan lane dari berkas orang lain kini **dipulihkan** jadi lapisan — batas
     ADR-0023 soal connected clip dicabut.
-- **Kualitas terjaga otomatis**: 797 unit test (kontrak lock/pin/undo, timing
+- **Audio per klip (ADR-0026)** — satu bentuk amplop untuk semua yang berbunyi:
+  suara aset visual, suara lapisan, dan trek audio tambahan:
+  - `volume`, fade masuk/keluar, ducking di bawah narasi, dan normalisasi
+    kenyaringan — satu implementasi, satu panel kendali, jadi tidak ada panel
+    yang diam-diam kehilangan sakelar ducking;
+  - kenyaringan diukur dengan pengukur **EBU R128 / ITU-R BS.1770-4** yang
+    ditulis sendiri — tanpa ffmpeg, tanpa biner tambahan — dan koefisien
+    penapis K dihitung ulang per laju cuplik, bukan dipakai apa adanya dari
+    tabel 48 kHz;
+  - normalisasi **per klip**, bukan per program: tiap sumber dibawa ke
+    `meta.loudnessTarget` (bawaan -16 LUFS) sebelum volumenya diterapkan, jadi
+    `volume` selalu berarti hal yang sama;
+  - berkas **mono** dikoreksi 3,01 LU karena campurannya stereo — tanpa itu
+    narasi mendarat 3 dB di atas sasaran sementara musik stereo mendarat tepat;
+  - belum diukur berarti penguatan 1, **bukan tebakan**; berkas yang kodeknya
+    tidak bisa didekode di mesin ini dilewati dengan alasan yang disebutkan;
+  - `audio.tracks` (maks 8) untuk ambience, wawancara, atau lagu berlisensi;
+  - diverifikasi lewat render sungguhan: sumber mono dan stereo sama-sama
+    mendarat di -16,00 LUFS.
+- **Kualitas terjaga otomatis**: 874 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -433,7 +452,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 797 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 874 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -579,9 +598,11 @@ di `docs/decisions/`.
 
 - [~] **Fase 9 — Editor yang terasa seperti editor**: §9.1 (manipulasi langsung
       di kanvas) selesai lewat ADR-0024, §9.2 (multi-track video) lewat
-      ADR-0025. §9.3 (keyframe sembarang), §9.4 (audio per klip: fade, ducking,
-      normalisasi EBU R128), dan §9.5 (proxy) BELUM dikerjakan — §9.3 menuntut
-      model animasi baru dan ADR tersendiri.
+      ADR-0025, §9.4 (audio per klip) lewat ADR-0026. §9.3 (keyframe sembarang)
+      dan §9.5 (proxy) BELUM dikerjakan — §9.3 menuntut model animasi baru dan
+      ADR tersendiri.
+      *Batas §9.4: AAC/MP4 tidak terukur pada Chromium tanpa kodek proprietary;
+      campuran akhirnya tidak diukur — selengkapnya di "Batas" ADR-0026.*
 
 Sisa Fase 9 dan Fase 10 ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

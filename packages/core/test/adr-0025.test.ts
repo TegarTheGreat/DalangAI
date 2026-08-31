@@ -57,7 +57,8 @@ describe("skema lapisan", () => {
       endFrac: 1,
     });
     // Bawaan bisu: seluruh perilaku sebelum ADR ini tidak berubah.
-    expect(layer.visual.volume).toBe(0);
+    // (ADR-0026 mengganti angka gain tunggal ini dengan amplop penuh.)
+    expect(layer.visual.audio.volume).toBe(0);
   });
 
   /**

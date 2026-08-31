@@ -167,6 +167,9 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   // 11. Lapisan video (ADR-0025).
   notes.push(...critiqueLayers(plan));
 
+  // 12. Audio per klip (ADR-0026).
+  notes.push(...critiqueAudio(plan));
+
   notes.push(...critiqueFormat(plan, recipe));
   notes.push(...critiqueProse(plan, recipe));
   return notes;
@@ -206,6 +209,69 @@ const critiqueLayers = (plan: ScenePlan): DirectorNote[] => {
         });
       }
     }
+  }
+  return notes;
+};
+
+/**
+ * Audio per klip (ADR-0026): dua hal yang hanya terdengar, tidak terlihat.
+ *
+ * PERTAMA, klip yang volumenya dinaikkan tapi berkasnya belum pernah diukur
+ * tidak ikut dinormalisasi. Di JSON semuanya tampak beres; di video, satu klip
+ * jauh lebih keras atau lebih pelan daripada yang lain tanpa sebab yang bisa
+ * dilihat siapa pun.
+ *
+ * KEDUA, suara klip yang tidak di-duck akan menabrak narasi. Itu keputusan yang
+ * sah — musik pembuka tanpa narasi, misalnya — tapi hampir selalu tidak
+ * disengaja, jadi ia disebutkan sebagai saran, bukan dipaksakan.
+ */
+const critiqueAudio = (plan: ScenePlan): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
+  const target = plan.meta.loudnessTarget;
+
+  const belumDiukur: string[] = [];
+  const tanpaDuck: string[] = [];
+  const check = (
+    audio: { volume: number; ducking: boolean },
+    lufs: number | undefined,
+    label: string,
+  ) => {
+    if (audio.volume <= 0) return;
+    if (target !== null && lufs === undefined) belumDiukur.push(label);
+    if (!audio.ducking) tanpaDuck.push(label);
+  };
+
+  for (const scene of plan.scenes) {
+    check(
+      scene.visual.audio,
+      plan.renderState.resolvedAssets[scene.id]?.lufs,
+      `aset ${scene.id}`,
+    );
+    for (const layer of scene.layers) {
+      check(
+        layer.visual.audio,
+        plan.renderState.layerAssets[layer.id]?.lufs,
+        `lapisan ${layer.id}`,
+      );
+    }
+  }
+  for (const track of plan.audio.tracks) {
+    check(track.audio, plan.renderState.trackAssets[track.id]?.lufs, `trek ${track.id}`);
+  }
+
+  if (belumDiukur.length > 0) {
+    notes.push({
+      code: "audio-belum-diukur",
+      level: "perhatian",
+      message: `Berbunyi tapi kenyaringannya belum terukur: ${belumDiukur.join(", ")}. Jalankan tahap aset supaya keduanya ikut disamakan ke ${target} LUFS — tanpa itu, klip ini dipakai apa adanya dan bisa jauh lebih keras atau pelan daripada sisanya.`,
+    });
+  }
+  if (tanpaDuck.length > 0) {
+    notes.push({
+      code: "audio-tanpa-ducking",
+      level: "saran",
+      message: `Berbunyi tanpa mengecil di bawah narasi: ${tanpaDuck.join(", ")}. Kalau itu memang disengaja, biarkan; kalau tidak, suaranya akan menabrak narasi persis saat narasinya paling penting.`,
+    });
   }
   return notes;
 };

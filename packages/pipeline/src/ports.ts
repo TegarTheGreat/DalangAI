@@ -186,3 +186,38 @@ export interface SfxProvider {
   search(query: string, limit: number): Promise<SfxCandidate[]>;
   download(candidate: SfxCandidate): Promise<Uint8Array>;
 }
+
+/**
+ * Pengubah media apa pun jadi WAV PCM (ADR-0026).
+ *
+ * PORT, bukan panggilan langsung, dengan alasan yang sama seperti `RenderTarget`
+ * di ADR-0019: satu-satunya perkakas yang bisa membongkar mp4/mp3 di tumpukan
+ * ini hidup di paket renderer (Remotion), dan pipeline TIDAK boleh bergantung
+ * pada renderer — arah dependensinya justru sebaliknya. Pemanggil (CLI,
+ * Studio) yang menyuntikkan implementasinya.
+ *
+ * Kalau portnya tidak diberikan, tahap pengukuran melewati berkas yang bukan
+ * WAV dan MENGATAKANNYA, bukan menebak angkanya.
+ */
+/**
+ * Hasil satu upaya ekstraksi PCM.
+ *
+ * "Tidak bisa didekode" adalah NILAI, bukan lemparan. Kodek yang tidak
+ * didukung bukan kerusakan — ia keadaan normal yang harus bisa dilaporkan apa
+ * adanya ke pengguna ("klip ini tidak diukur, jadi tidak dinormalisasi"),
+ * bukan galat yang membuat tahapnya terlihat rusak.
+ */
+export type AudioProbeResult = { ok: true } | { ok: false; reason: string };
+
+export interface AudioProbe {
+  id: string;
+  /**
+   * Menulis WAV PCM dari sebuah berkas media.
+   *
+   * Mengembalikan `{ ok: false, reason }` kalau sumbernya tidak bisa didekode
+   * di lingkungan ini — mis. AAC pada Chromium tanpa kodek proprietary.
+   */
+  toWav(sourcePath: string, wavPath: string): Promise<AudioProbeResult>;
+  /** Melepas sumber daya (browser) setelah semua pengukuran selesai. */
+  close?(): Promise<void>;
+}

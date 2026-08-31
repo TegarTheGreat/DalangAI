@@ -638,6 +638,40 @@ export const TimelineStrip: React.FC = () => {
                   </span>
                 </span>
               ) : null}
+              {/* Trek audio tambahan (ADR-0026) di baris yang sama dengan
+                  musik: keduanya bunyi yang bukan narasi, dan memisahkannya ke
+                  baris keempat hanya menambah tinggi timeline tanpa menambah
+                  apa yang bisa dibaca. */}
+              {plan.audio.tracks.map((track) => {
+                const asset = plan.renderState.trackAssets[track.id];
+                const index = track.sceneId
+                  ? plan.scenes.findIndex((scene) => scene.id === track.sceneId)
+                  : -1;
+                if (track.sceneId && index < 0) return null;
+                const anchor = index >= 0 ? (boxes[index]?.x ?? 0) : 0;
+                const x = anchor + track.atSec * pxPerSec;
+                const w = asset?.durationSec
+                  ? Math.max(6, asset.durationSec * pxPerSec)
+                  : 24;
+                return (
+                  <button
+                    key={track.id}
+                    type="button"
+                    className={asset ? "track-bar" : "track-bar kosong"}
+                    style={{ left: x, width: w }}
+                    onClick={() =>
+                      track.sceneId ? studioClient.selectScene(track.sceneId) : undefined
+                    }
+                    title={`Trek ${track.id} · volume ${Math.round(
+                      track.audio.volume * 100,
+                    )}%${track.loop ? " · diulang" : ""}${
+                      asset ? "" : " · berkas belum ada, tidak berbunyi"
+                    }`}
+                  >
+                    <span className="layer-bar-label">{track.id}</span>
+                  </button>
+                );
+              })}
               {plan.audio.sfx.map((cue) => {
                 const index = plan.scenes.findIndex((scene) => scene.id === cue.sceneId);
                 if (index < 0) return null;

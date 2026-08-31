@@ -9,7 +9,9 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { AudioTracks } from "../../AudioTracks";
 import { useAssetSrc } from "../../asset-src";
+import { type DuckWindow, duckWindows, narrationVolume } from "../../audio-model";
 import { ensureFontsLoaded } from "../../fonts";
 import { GraphicsOverlay } from "../../GraphicsOverlay";
 import { LayersOverlay } from "../../LayersOverlay";
@@ -18,6 +20,7 @@ import {
   activeSceneIndex,
   aspectMetrics,
   computeFrameLayout,
+  FPS,
   type FrameLayout,
   TRANSITION_FRAMES,
 } from "../../layout";
@@ -85,10 +88,27 @@ const SceneRouter: React.FC<{
   durationInFrames: number;
   step: StepInfo | undefined;
   debug: boolean;
-}> = ({ scene, plan, metrics, theme, durationInFrames, step, debug }) => {
+  /** Frame GLOBAL awal scene; ducking dan fade hidup di waktu global (ADR-0026). */
+  sceneStartFrame: number;
+  ducks: readonly DuckWindow[];
+}> = ({
+  scene,
+  plan,
+  metrics,
+  theme,
+  durationInFrames,
+  step,
+  debug,
+  sceneStartFrame,
+  ducks,
+}) => {
   const { fps } = useVideoConfig();
   const assetSrc = useAssetSrc();
   const narrationAudio = plan.renderState.narrationAudio[scene.id];
+  // CATATAN (ADR-0026): visual dasar preset ini selalu digambar sebagai GAMBAR
+  // (ScreenshotStage memakai <Img>), jadi `visual.audio` tidak punya pemutar
+  // untuk dipasangi di sini. Lapisan video dan trek audio tambahan tetap
+  // berbunyi seperti di preset lain — keduanya punya pemutarnya sendiri.
 
   let content: ReactNode;
   if (scene.visual.type === "template-anim") {
@@ -129,6 +149,9 @@ const SceneRouter: React.FC<{
         metrics={metrics}
         accent={theme.accent}
         durationInFrames={durationInFrames}
+        sceneStartFrame={sceneStartFrame}
+        ducks={ducks}
+        fps={fps}
       />
       {/* Tempelan berlaku untuk KEDUA preset (ADR-0018): grafis yang tersimpan
           di plan harus muncul apa pun gaya yang dipakai, kalau tidak proyek
@@ -144,6 +167,7 @@ const SceneRouter: React.FC<{
         <Audio
           src={assetSrc(narrationAudio.file)}
           from={Math.round(NARRATION_LEAD_IN_SEC * fps)}
+          volume={narrationVolume(plan, narrationAudio)}
         />
       ) : null}
     </AbsoluteFill>
@@ -162,7 +186,11 @@ export const TutorialPreset: React.FC<{
 
   // Musik latar (ADR-0014): bed di-loop + ducking di bawah narasi.
   const musicFile = plan.audio.music ? resolveMusicFile(plan.audio.music.assetId) : null;
-  const musicVolume = useMemo(() => buildMusicVolume(plan, layout), [plan, layout]);
+  const ducks = useMemo(() => duckWindows(plan, layout), [plan, layout]);
+  const musicVolume = useMemo(
+    () => buildMusicVolume(plan, layout, FPS, musicFile?.lufs, musicFile?.channels),
+    [plan, layout, musicFile],
+  );
   const assetSrc = useAssetSrc();
   // Bed pustaka ikut ter-bundle bersama komposisi (aset situs); musik unggahan
   // milik proyek (aset plan). Keduanya dialamatkan berbeda di render cloud.
@@ -197,6 +225,8 @@ export const TutorialPreset: React.FC<{
           durationInFrames={durationInFrames}
           step={steps.get(scene.id)}
           debug={debug}
+          sceneStartFrame={layout.sceneStarts[index] ?? 0}
+          ducks={ducks}
         />
       </TransitionSeries.Sequence>,
     );
@@ -207,6 +237,8 @@ export const TutorialPreset: React.FC<{
       <TransitionSeries>{series}</TransitionSeries>
       <Chrome plan={plan} layout={layout} metrics={metrics} theme={theme} />
       {musicFile ? <Audio src={musicSrc(musicFile)} loop volume={musicVolume} /> : null}
+      {/* Trek audio tambahan (ADR-0026) — di akar komposisi, seperti musik. */}
+      <AudioTracks plan={plan} layout={layout} fps={FPS} ducks={ducks} />
     </AbsoluteFill>
   );
 };

@@ -1,6 +1,7 @@
 import type { AgentDeps, Guardrails, ResolvedModel } from "@dalang/agent";
 import type {
   AsrProvider,
+  AudioProbe,
   IconProvider,
   SfxProvider,
   StockProvider,
@@ -35,6 +36,12 @@ export interface StudioDeps {
     planPath: string,
     fileRelativeToPlan: string,
   ) => Promise<{ durationSec: number; width: number; height: number } | null>;
+  /**
+   * Pengubah media jadi WAV untuk tahap ukur kenyaringan (ADR-0026).
+   * Di-inject dengan alasan yang sama seperti `probeVideo`: paket studio tidak
+   * boleh bergantung pada @dalang/renderer. Tanpa ini hanya WAV yang terukur.
+   */
+  audioProbe?: () => AudioProbe;
   /** Pustaka ikon terbuka (ADR-0018) — tanpa kunci. */
   iconProvider: () => IconProvider;
   /** Pustaka efek suara berlisensi terbuka (ADR-0018). */

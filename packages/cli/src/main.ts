@@ -28,6 +28,7 @@ import {
   type ProgressEvent,
   type RenderProfile,
   type RenderTargetProgress,
+  remotionAudioProbe,
   renderPlanStills,
   renderPlanToVideo,
   resolveExportSettings,
@@ -391,6 +392,8 @@ program
         planPath: absPlan,
         ttsProviders,
         stockProviders,
+        // ADR-0026: tanpa port ini hanya berkas WAV yang bisa diukur.
+        audioProbe: remotionAudioProbe(),
         force: options.force,
         log: {
           info: (message) => console.log(message),
@@ -401,6 +404,7 @@ program
       console.log("");
       printStageResults("TTS", summary.tts);
       printStageResults("Aset", summary.assets);
+      printStageResults("Kenyaringan", summary.loudness);
       console.log(
         `\n  ${summary.planChanged ? "renderState ditulis ke" : "Tidak ada perubahan pada"} ${summary.planPath}` +
           (summary.totalCostUsd > 0

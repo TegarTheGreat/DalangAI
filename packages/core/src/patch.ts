@@ -2,7 +2,9 @@ import { z } from "zod";
 import {
   annotationSchema,
   aspectRatioSchema,
+  audioTrackSchema,
   captionPositionSchema,
+  clipAudioSchema,
   designTokensSchema,
   getSceneIndex,
   graphicSchema,
@@ -70,8 +72,8 @@ export const sceneUpdateSchema = z.strictObject({
       flipH: z.boolean().optional(),
       focusX: z.number().min(0).max(1).optional(),
       focusY: z.number().min(0).max(1).optional(),
-      /** ADR-0025: gain audio aset video; 0 = bisu. */
-      volume: z.number().min(0).max(1).optional(),
+      /** ADR-0026: amplop audio klip (volume, fade, ducking, normalisasi). */
+      audio: clipAudioSchema.optional(),
     })
     .optional(),
   caption: z
@@ -114,6 +116,8 @@ export const metaUpdateSchema = z.strictObject({
   stylePreset: z.string().optional(),
   /** ADR-0017: format konten yang memilih resep struktur. */
   format: z.string().optional(),
+  /** ADR-0026: sasaran kenyaringan klip (LUFS); null mematikan normalisasi. */
+  loudnessTarget: z.number().min(-40).max(-5).nullable().optional(),
   tokens: designTokensSchema.nullable().optional(),
 });
 export type MetaUpdate = z.infer<typeof metaUpdateSchema>;
@@ -123,6 +127,8 @@ export const audioUpdateSchema = z.strictObject({
   music: musicSchema.nullable().optional(),
   /** Menggantikan seluruh larik cue efek suara (ADR-0018). */
   sfx: z.array(sfxCueSchema).max(24).optional(),
+  /** Menggantikan seluruh larik trek audio tambahan (ADR-0026). */
+  tracks: z.array(audioTrackSchema).max(8).optional(),
 });
 export type AudioUpdate = z.infer<typeof audioUpdateSchema>;
 

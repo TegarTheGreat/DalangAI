@@ -1,3 +1,4 @@
+export * from "./audio-probe";
 export * from "./browser";
 export * from "./bundle-cache";
 export * from "./fingerprint";

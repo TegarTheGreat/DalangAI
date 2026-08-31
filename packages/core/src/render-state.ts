@@ -111,6 +111,54 @@ export const setSfxAsset = (
   return next;
 };
 
+/** Berkas nyata untuk satu trek audio tambahan (ADR-0026), dikunci ID TREK. */
+export const setTrackAsset = (
+  plan: ScenePlan,
+  trackId: string,
+  asset: ResolvedAsset,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  next.renderState.trackAssets[trackId] = resolvedAssetSchema.parse(asset);
+  return next;
+};
+
+/**
+ * Hasil ukur kenyaringan satu berkas (ADR-0026), ditulis ke SEMUA entri
+ * renderState yang menunjuk berkas itu.
+ *
+ * Dikunci PATH BERKAS, bukan id pemakainya: satu rekaman yang dipakai lima
+ * scene diukur sekali, dan mengukurnya ulang per pemakai hanya membakar waktu
+ * untuk mendapat angka yang sama persis.
+ */
+export const setLoudness = (
+  plan: ScenePlan,
+  file: string,
+  lufs: number,
+  channels?: number,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  for (const store of [
+    next.renderState.resolvedAssets,
+    next.renderState.layerAssets,
+    next.renderState.sfxAssets,
+    next.renderState.trackAssets,
+  ]) {
+    for (const asset of Object.values(store)) {
+      if (asset.file === file) {
+        asset.lufs = lufs;
+        if (channels !== undefined) asset.channels = channels;
+      }
+    }
+  }
+  for (const audio of Object.values(next.renderState.narrationAudio)) {
+    if (audio.file === file) {
+      audio.lufs = lufs;
+      if (channels !== undefined) audio.channels = channels;
+    }
+  }
+  return next;
+};
+
 /**
  * Transkrip satu berkas rekaman (ADR-0021), dikunci PATH BERKAS relatif-plan.
  *
@@ -141,16 +189,18 @@ export const setTranscript = (
  */
 export const orphanMediaAssetIds = (
   plan: ScenePlan,
-): { graphics: string[]; layers: string[]; sfx: string[] } => {
+): { graphics: string[]; layers: string[]; sfx: string[]; tracks: string[] } => {
   const graphicIds = new Set(plan.scenes.flatMap((s) => s.graphics.map((g) => g.id)));
   const layerIds = new Set(plan.scenes.flatMap((s) => s.layers.map((l) => l.id)));
   const cueIds = new Set(plan.audio.sfx.map((cue) => cue.id));
+  const trackIds = new Set(plan.audio.tracks.map((track) => track.id));
   return {
     graphics: Object.keys(plan.renderState.graphicAssets).filter(
       (id) => !graphicIds.has(id),
     ),
     layers: Object.keys(plan.renderState.layerAssets).filter((id) => !layerIds.has(id)),
     sfx: Object.keys(plan.renderState.sfxAssets).filter((id) => !cueIds.has(id)),
+    tracks: Object.keys(plan.renderState.trackAssets).filter((id) => !trackIds.has(id)),
   };
 };
 

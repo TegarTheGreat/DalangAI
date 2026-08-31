@@ -6,6 +6,8 @@ export * from "./generate";
 export * from "./hash";
 export * from "./image-dims";
 export * from "./load-plan";
+export * from "./loudness";
+export * from "./loudness-stage";
 export * from "./materialize";
 export * from "./ports";
 export * from "./project-paths";

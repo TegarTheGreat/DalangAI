@@ -300,6 +300,7 @@ describe("aset media yatim", () => {
       graphics: ["yatim"],
       layers: [],
       sfx: ["cue-yatim"],
+      tracks: [],
     });
   });
 

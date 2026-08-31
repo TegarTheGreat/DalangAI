@@ -5,7 +5,8 @@ import { PipelineDb } from "./db";
 import { atomicWriteFile } from "./fs-utils";
 import { stableStringify } from "./hash";
 import { readPlanFile } from "./load-plan";
-import type { StockProvider, TtsProvider } from "./ports";
+import { runLoudnessStage } from "./loudness-stage";
+import type { AudioProbe, StockProvider, TtsProvider } from "./ports";
 import { projectPaths } from "./project-paths";
 import {
   consoleLogger,
@@ -29,6 +30,12 @@ export interface GenerateOptions {
   planPath: string;
   ttsProviders: TtsProvider[];
   stockProviders: StockProvider[];
+  /**
+   * Pengubah media jadi WAV untuk tahap ukur kenyaringan (ADR-0026). Tanpa
+   * ini hanya berkas WAV yang bisa diukur, dan sisanya dilaporkan dilewati —
+   * bukan dinormalisasi berdasarkan angka karangan.
+   */
+  audioProbe?: AudioProbe;
   force?: boolean;
   log?: StageLogger;
 }
@@ -39,6 +46,8 @@ export interface GenerateSummary {
   planChanged: boolean;
   tts: SceneStageResult[];
   assets: SceneStageResult[];
+  /** Hasil ukur kenyaringan per BERKAS (ADR-0026), bukan per scene. */
+  loudness: SceneStageResult[];
   errorCount: number;
   totalCostUsd: number;
 }
@@ -47,6 +56,7 @@ export const generatePlan = async ({
   planPath,
   ttsProviders,
   stockProviders,
+  audioProbe,
   force = false,
   log = consoleLogger,
 }: GenerateOptions): Promise<GenerateSummary> => {
@@ -75,7 +85,18 @@ export const generatePlan = async ({
       log,
     });
 
-    const finalPlan = assetOutcome.plan;
+    // Ukur SETELAH aset ter-resolve: sebelum itu belum ada berkas untuk diukur.
+    log.info("→ Tahap kenyaringan");
+    const loudnessOutcome = await runLoudnessStage({
+      paths,
+      plan: assetOutcome.plan,
+      db,
+      ...(audioProbe ? { probe: audioProbe } : {}),
+      force,
+      log,
+    });
+
+    const finalPlan = loudnessOutcome.plan;
     const planChanged = stableStringify(finalPlan) !== stableStringify(original);
     if (planChanged) {
       atomicWriteFile(paths.planPath, `${JSON.stringify(finalPlan, null, 2)}\n`);
@@ -92,6 +113,11 @@ export const generatePlan = async ({
       planChanged,
       tts: ttsOutcome.results,
       assets: assetOutcome.results,
+      loudness: loudnessOutcome.results,
+      // Tahap kenyaringan SENGAJA tidak ikut dihitung sebagai kegagalan:
+      // berkas yang gagal diukur cuma berarti klip itu tidak dinormalisasi,
+      // dan videonya tetap bisa dirender. Alasannya tetap dilaporkan per
+      // baris — dilewati diam-diam adalah yang tidak boleh, bukan dilewati.
       errorCount: countErrors(ttsOutcome.results) + countErrors(assetOutcome.results),
       totalCostUsd,
     };

@@ -62,7 +62,7 @@ export interface TranscriptSummary {
 
 export interface StageRunLite {
   sceneId: string;
-  stage: "tts" | "assets" | "asr";
+  stage: "tts" | "assets" | "asr" | "loudness";
   status: "running" | "done" | "error";
   provider: string | null;
   fallback: boolean;
@@ -314,7 +314,7 @@ export type StudioEvent =
   | { type: "busy"; busy: BusyState }
   | {
       type: "stage-results";
-      stage: "tts" | "assets" | "asr";
+      stage: "tts" | "assets" | "asr" | "loudness";
       results: { sceneId: string; status: string; detail: string }[];
     }
   | {

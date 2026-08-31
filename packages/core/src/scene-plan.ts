@@ -184,6 +184,51 @@ export type TextOverlay = z.infer<typeof textOverlaySchema>;
 // Scene
 // ---------------------------------------------------------------------------
 
+/**
+ * Amplop audio satu klip (ADR-0026, roadmap §9.4).
+ *
+ * SATU bentuk untuk semua yang berbunyi dan bukan narasi: suara alami visual
+ * dasar, suara lapisan, dan trek audio tambahan. Menyalin empat field yang
+ * sama ke tiga tempat berarti tiga tempat yang akan menyimpang — dan yang
+ * pertama menyimpang tidak akan ketahuan sampai seseorang mendengar satu
+ * sisipan yang tidak ikut mengecil di bawah narasi.
+ *
+ * ADR-0025 sengaja hanya memberi satu angka gain dan menyatakan amplopnya
+ * sebagai utang §9.4. Ini pelunasannya: `visual.volume` diganti `visual.audio`.
+ */
+export const clipAudioSchema = z.strictObject({
+  /** Gain akhir setelah normalisasi; 0 (bawaan) = bisu. */
+  volume: normalized01.default(0),
+  fadeInSec: z.number().min(0).max(10).default(0),
+  fadeOutSec: z.number().min(0).max(10).default(0),
+  /**
+   * Mengecil otomatis di bawah scene bernarasi, sama seperti musik sejak
+   * ADR-0014. Bawaannya HIDUP: begitu seseorang menaikkan volume klip, yang
+   * hampir selalu ia maksud adalah "terdengar, tapi jangan menutupi suara".
+   */
+  ducking: z.boolean().default(true),
+  /**
+   * Ikut normalisasi kenyaringan ke `meta.loudnessTarget`. Dimatikan untuk
+   * bunyi yang memang harus tetap pelan atau keras apa adanya.
+   */
+  normalize: z.boolean().default(true),
+});
+export type ClipAudio = z.infer<typeof clipAudioSchema>;
+
+/**
+ * Objek `clipAudio` LENGKAP untuk dipakai `.default()`.
+ *
+ * Gotcha zod (lihat ADR-0013/0016/0025): `.default(obj)` memakai objek APA
+ * ADANYA — default field di dalamnya TIDAK diterapkan.
+ */
+export const SILENT_CLIP_AUDIO: ClipAudio = {
+  volume: 0,
+  fadeInSec: 0,
+  fadeOutSec: 0,
+  ducking: true,
+  normalize: true,
+};
+
 export const visualSchema = z.strictObject({
   type: visualTypeSchema,
   /** Search query (stock) or generation prompt (generated). */
@@ -218,15 +263,13 @@ export const visualSchema = z.strictObject({
   focusX: normalized01.default(0.5),
   focusY: normalized01.default(0.5),
   /**
-   * Gain audio aset VIDEO (ADR-0025); 0 (bawaan) = bisu, seperti seluruh
-   * perilaku sebelum ADR ini. Diabaikan untuk gambar.
+   * Suara aset VIDEO (ADR-0025 sebagai satu angka, ADR-0026 sebagai amplop
+   * penuh); `volume` 0 = bisu, dan itu bawaannya. Diabaikan untuk gambar.
    *
    * Ada di `visual` — bukan hanya di lapisan — supaya B-roll bersuara alami
-   * memakai field yang sama entah ia jadi visual dasar atau lapisan di
-   * atasnya. Amplop fade dan normalisasi kenyaringan adalah §9.4, bukan ini:
-   * yang di sini hanya satu angka gain.
+   * memakai bentuk yang sama entah ia jadi visual dasar atau lapisan.
    */
-  volume: normalized01.default(0),
+  audio: clipAudioSchema.default(SILENT_CLIP_AUDIO),
 });
 export type Visual = z.infer<typeof visualSchema>;
 
@@ -421,6 +464,16 @@ export const metaSchema = z.strictObject({
    * diperiksa `critiquePlan`. "bebas" = tanpa kerangka baku.
    */
   format: z.string().default("bebas"),
+  /**
+   * Sasaran kenyaringan KLIP dalam LUFS (ADR-0026). Tiap sumber yang punya
+   * hasil ukur dinaikkan/diturunkan supaya duduk di angka ini SEBELUM
+   * `volume` klipnya diterapkan, sehingga rekaman keras dan rekaman pelan
+   * tidak lagi menuntut penataan volume satu per satu.
+   *
+   * Ini normalisasi PER KLIP, bukan per program: campuran akhirnya tidak
+   * diukur (lihat "Batas yang dinyatakan" ADR-0026). `null` mematikannya.
+   */
+  loudnessTarget: z.number().min(-40).max(-5).nullable().default(-16),
   tokens: designTokensSchema.optional(),
 });
 export type Meta = z.infer<typeof metaSchema>;
@@ -436,6 +489,15 @@ export const musicSchema = z.strictObject({
   assetId: z.string().min(1),
   volume: normalized01.default(0.15),
   ducking: z.boolean().default(true),
+  /**
+   * Panjang fade masuk/keluar bed musik (ADR-0026). Sebelum ini keduanya
+   * konstanta di dalam preset (1 detik masuk, 2 detik keluar); bawaannya
+   * sengaja sama persis, jadi plan lama berbunyi identik.
+   */
+  fadeInSec: z.number().min(0).max(10).default(1),
+  fadeOutSec: z.number().min(0).max(10).default(2),
+  /** Ikut normalisasi kenyaringan ke `meta.loudnessTarget`. */
+  normalize: z.boolean().default(true),
 });
 export type Music = z.infer<typeof musicSchema>;
 
@@ -455,11 +517,52 @@ export const sfxCueSchema = z.strictObject({
 });
 export type SfxCue = z.infer<typeof sfxCueSchema>;
 
+/**
+ * Trek audio tambahan (ADR-0026, roadmap §9.4): ambience, rekaman wawancara,
+ * lagu berlisensi yang bukan bed — apa pun yang berbunyi dan bukan narasi,
+ * bukan musik latar, bukan efek satu-ketukan.
+ *
+ * TAMBATANNYA DUA MACAM, dan bedanya penting. `sceneId` terisi = mulai
+ * `atSec` detik setelah scene itu mulai, jadi ia ikut bergeser saat susunan
+ * berubah (pola yang sama dengan cue efek suara). `sceneId` null = mulai
+ * `atSec` detik dari AWAL VIDEO, untuk bunyi yang memang milik keseluruhan.
+ */
+export const audioTrackSchema = z.strictObject({
+  id: z.string().min(1),
+  /**
+   * Path berkas relatif-plan; berkas nyatanya dicatat di renderState.
+   *
+   * Boleh KOSONG, dan itu berarti "berkasnya belum dipilih": trek yang baru
+   * dibuat di UI belum punya berkas, dan menolak menyimpannya berarti tombol
+   * "tambah trek" tidak bisa berbuat apa-apa. Trek tanpa berkas tidak
+   * berbunyi, dan setiap permukaan mengatakannya.
+   */
+  assetId: z.string().default(""),
+  /** Scene tambatan; null = ditambatkan ke awal video. */
+  sceneId: z.string().nullable().default(null),
+  atSec: z.number().min(0).finite().default(0),
+  /** Diulang sampai jendelanya penuh — untuk ambience pendek. */
+  loop: z.boolean().default(false),
+  audio: clipAudioSchema.default({
+    // Trek yang sengaja ditambahkan orang jelas dimaksudkan terdengar, jadi
+    // bawaannya BUKAN bisu — berbeda dari suara aset visual yang bawaannya
+    // memang harus diam supaya plan lama tidak tiba-tiba berbunyi.
+    volume: 0.5,
+    fadeInSec: 0.5,
+    fadeOutSec: 1,
+    ducking: true,
+    normalize: true,
+  }),
+});
+export type AudioTrack = z.infer<typeof audioTrackSchema>;
+
 export const audioSchema = z.strictObject({
   voice: voiceSchema.optional(),
   music: musicSchema.optional(),
   /** Efek suara bertambat scene (ADR-0018). */
   sfx: z.array(sfxCueSchema).max(24).default([]),
+  /** Trek audio tambahan (ADR-0026). */
+  tracks: z.array(audioTrackSchema).max(8).default([]),
 });
 export type Audio = z.infer<typeof audioSchema>;
 
@@ -490,6 +593,18 @@ export const narrationAudioSchema = z.strictObject({
   wordTimestamps: z.array(wordTimestampSchema).optional(),
   /** Set when a fallback TTS provider was used; surfaced in the UI per scene. */
   fallbackQuality: z.boolean().optional(),
+  /** Kenyaringan terintegrasi hasil ukur, LUFS (ADR-0026). */
+  lufs: z.number().finite().optional(),
+  /**
+   * Jumlah kanal sumbernya saat diukur (ADR-0026).
+   *
+   * Disimpan bersama `lufs` karena keduanya baru berarti bersama-sama: sumber
+   * MONO yang diputar di campuran stereo terdengar 3 LU lebih keras daripada
+   * angka ukurnya, sebab dua kanal identik menjumlahkan DAYA. Tanpa angka ini
+   * narasi mono akan mendarat 3 dB di atas sasaran sementara musik stereo
+   * mendarat tepat — persis ketimpangan yang seharusnya dihapus normalisasi.
+   */
+  channels: z.number().int().min(1).max(8).optional(),
 });
 export type NarrationAudio = z.infer<typeof narrationAudioSchema>;
 
@@ -510,6 +625,24 @@ export const resolvedAssetSchema = z.strictObject({
    * memilih potongan yang sah lewat `visual.trimStartSec`.
    */
   durationSec: finitePositive.optional(),
+  /**
+   * Kenyaringan terintegrasi hasil ukur, LUFS (ADR-0026, EBU R128).
+   *
+   * TIDAK ADA artinya "belum pernah diukur", dan itu dibedakan dari "diukur
+   * dan hasilnya sunyi": berkas tanpa hasil ukur TIDAK dinormalisasi, bukan
+   * dinormalisasi dengan angka karangan.
+   */
+  lufs: z.number().finite().optional(),
+  /**
+   * Jumlah kanal sumbernya saat diukur (ADR-0026).
+   *
+   * Disimpan bersama `lufs` karena keduanya baru berarti bersama-sama: sumber
+   * MONO yang diputar di campuran stereo terdengar 3 LU lebih keras daripada
+   * angka ukurnya, sebab dua kanal identik menjumlahkan DAYA. Tanpa angka ini
+   * narasi mono akan mendarat 3 dB di atas sasaran sementara musik stereo
+   * mendarat tepat — persis ketimpangan yang seharusnya dihapus normalisasi.
+   */
+  channels: z.number().int().min(1).max(8).optional(),
 });
 export type ResolvedAsset = z.infer<typeof resolvedAssetSchema>;
 
@@ -574,6 +707,8 @@ export const renderStateSchema = z.strictObject({
   layerAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /** Berkas nyata untuk cue efek suara, dikunci id cue (ADR-0018). */
   sfxAssets: z.record(z.string(), resolvedAssetSchema).default({}),
+  /** Berkas nyata untuk trek audio tambahan, dikunci id trek (ADR-0026). */
+  trackAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /**
    * Transkrip, dikunci PATH BERKAS relatif-plan — bukan id scene (ADR-0021).
    * Satu rekaman panjang yang dipakai lima scene ditranskrip sekali, dan
@@ -598,7 +733,7 @@ export const scenePlanSchema = z
     // memakai objek APA ADANYA — default field di dalamnya TIDAK diterapkan,
     // jadi objek ini harus ditulis lengkap. Kali ini TypeScript menangkapnya
     // saat kompilasi karena `sfx` wajib setelah default.
-    audio: audioSchema.default({ sfx: [] }),
+    audio: audioSchema.default({ sfx: [], tracks: [] }),
     scenes: z.array(sceneSchema).min(1),
     renderState: renderStateSchema.default({
       narrationAudio: {},
@@ -606,6 +741,7 @@ export const scenePlanSchema = z
       graphicAssets: {},
       layerAssets: {},
       sfxAssets: {},
+      trackAssets: {},
       transcripts: {},
     }),
   })
@@ -622,24 +758,64 @@ export const scenePlanSchema = z
       seen.add(scene.id);
     });
 
-    // Id lapisan harus unik SE-PLAN, bukan se-scene (ADR-0025): berkasnya
-    // dikunci per id di `renderState.layerAssets`, jadi dua lapisan bernama
-    // sama di scene berbeda akan berbagi satu berkas — dan menghapus salah
-    // satunya mencabut berkas milik yang lain. Persis pelajaran yang sama
-    // dengan id grafis/cue di ADR-0018.
-    const layerIds = new Set<string>();
-    plan.scenes.forEach((scene, sceneIndex) => {
-      scene.layers.forEach((layer, layerIndex) => {
-        if (layerIds.has(layer.id)) {
+    /**
+     * Setiap ruang id yang dipakai sebagai KUNCI di renderState harus unik
+     * SE-PLAN — bukan se-scene.
+     *
+     * Alasannya sama untuk keempatnya: berkasnya dikunci per id di
+     * `renderState.*Assets`, jadi dua benda bernama sama berbagi satu entri.
+     * Yang terjadi kemudian tidak kelihatan sebagai galat: benda kedua diam-
+     * diam memakai berkas milik yang pertama, dan menghapus salah satunya
+     * mencabut berkas milik yang lain.
+     *
+     * Ditulis satu kali sebagai gelung karena ditulis empat kali berarti tiga
+     * kesempatan untuk lupa. Aturan lapisan (ADR-0025) memang lahir lebih
+     * dulu; saat trek audio (ADR-0026) ditambahkan, ternyata grafis dan cue
+     * SFX tidak pernah punya penjagaan yang sama walau dikunci dengan cara
+     * yang persis sama sejak ADR-0018.
+     */
+    const perScene: {
+      field: "layers" | "graphics";
+      label: string;
+      items: (scene: Scene) => { id: string }[];
+    }[] = [
+      { field: "layers", label: "lapisan", items: (scene) => scene.layers },
+      { field: "graphics", label: "grafis", items: (scene) => scene.graphics },
+    ];
+    for (const { field, label, items } of perScene) {
+      const ids = new Set<string>();
+      plan.scenes.forEach((scene, sceneIndex) => {
+        items(scene).forEach((item, itemIndex) => {
+          if (ids.has(item.id)) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["scenes", sceneIndex, field, itemIndex, "id"],
+              message: `Id ${label} "${item.id}" dipakai lebih dari sekali — id ${label} harus unik di seluruh plan`,
+            });
+          }
+          ids.add(item.id);
+        });
+      });
+    }
+
+    const perPlan: { field: "sfx" | "tracks"; label: string; items: { id: string }[] }[] =
+      [
+        { field: "sfx", label: "cue SFX", items: plan.audio.sfx },
+        { field: "tracks", label: "trek audio", items: plan.audio.tracks },
+      ];
+    for (const { field, label, items } of perPlan) {
+      const ids = new Set<string>();
+      items.forEach((item, index) => {
+        if (ids.has(item.id)) {
           ctx.addIssue({
             code: "custom",
-            path: ["scenes", sceneIndex, "layers", layerIndex, "id"],
-            message: `Id lapisan "${layer.id}" dipakai lebih dari sekali — id lapisan harus unik di seluruh plan`,
+            path: ["audio", field, index, "id"],
+            message: `Id ${label} "${item.id}" dipakai lebih dari sekali — id ${label} harus unik di seluruh plan`,
           });
         }
-        layerIds.add(layer.id);
+        ids.add(item.id);
       });
-    });
+    }
   });
 
 export type ScenePlan = z.infer<typeof scenePlanSchema>;

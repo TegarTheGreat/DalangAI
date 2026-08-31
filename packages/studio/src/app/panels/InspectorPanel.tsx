@@ -28,6 +28,7 @@ import { Segmented, Switch, useScrollFade } from "../components/controls";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
+import { AudioTab } from "./AudioTab";
 import { LapisanTab } from "./LayersTab";
 import { GrafisTab, SfxSection } from "./MediaLibrary";
 import { TranscriptTab } from "./TranscriptTab";
@@ -48,6 +49,7 @@ type Tab =
   | "transkrip"
   | "grafis"
   | "lapisan"
+  | "audio"
   | "transisi"
   | "anotasi";
 
@@ -1330,6 +1332,7 @@ export const InspectorPanel: React.FC = () => {
                 ["transkrip", "Transkrip"],
                 ["grafis", "Grafis"],
                 ["lapisan", "Lapisan"],
+                ["audio", "Audio"],
                 ["transisi", "Transisi"],
                 ["anotasi", "Anotasi"],
               ] as const
@@ -1350,6 +1353,9 @@ export const InspectorPanel: React.FC = () => {
                 {key === "lapisan" && scene.layers.length > 0 ? (
                   <span className="tab-count">{scene.layers.length}</span>
                 ) : null}
+                {key === "audio" && plan.audio.tracks.length > 0 ? (
+                  <span className="tab-count">{plan.audio.tracks.length}</span>
+                ) : null}
                 {key === "anotasi" && scene.annotations.length > 0 ? (
                   <span className="tab-count">{scene.annotations.length}</span>
                 ) : null}
@@ -1365,6 +1371,7 @@ export const InspectorPanel: React.FC = () => {
             {tab === "transkrip" ? <TranscriptTab plan={plan} scene={scene} /> : null}
             {tab === "grafis" ? <GrafisTab plan={plan} scene={scene} /> : null}
             {tab === "lapisan" ? <LapisanTab plan={plan} scene={scene} /> : null}
+            {tab === "audio" ? <AudioTab plan={plan} scene={scene} /> : null}
             {tab === "transisi" ? (
               <TransisiTab scene={scene} isLast={index === plan.scenes.length - 1} />
             ) : null}

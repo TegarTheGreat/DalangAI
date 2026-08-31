@@ -60,6 +60,8 @@ export const planAssetFiles = (plan: ScenePlan): string[] => {
     // ADR-0025: lapisan video juga punya lumbung berkasnya sendiri.
     ...live(plan.renderState.layerAssets, orphans.layers),
     ...live(plan.renderState.sfxAssets, orphans.sfx),
+    // ADR-0026: trek audio tambahan juga punya lumbung berkasnya sendiri.
+    ...live(plan.renderState.trackAssets, orphans.tracks),
   ];
   // Musik proyek (ADR-0014): file milik plan ikut di-stage; id "pustaka:*"
   // sudah ada di public templates, tidak perlu disalin.

@@ -253,6 +253,9 @@ importers:
       '@dalang/core':
         specifier: workspace:*
         version: link:../core
+      '@dalang/pipeline':
+        specifier: workspace:*
+        version: link:../pipeline
       '@dalang/templates':
         specifier: workspace:*
         version: link:../templates

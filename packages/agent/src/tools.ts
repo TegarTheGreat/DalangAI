@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   critiquePlan,
@@ -24,6 +24,7 @@ import {
   uniqueGraphicId,
   uniqueLayerId,
   uniqueSfxCueId,
+  uniqueTrackId,
 } from "@dalang/core";
 import type { IconProvider, SfxProvider } from "@dalang/pipeline";
 import {
@@ -1225,7 +1226,14 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
                     visual: {
                       type: "stock",
                       ...(input.query ? { query: input.query } : {}),
-                      volume: input.volume,
+                      // ADR-0026: suara klip kini amplop, bukan satu angka.
+                      audio: {
+                        volume: input.volume,
+                        fadeInSec: input.volume > 0 ? 0.3 : 0,
+                        fadeOutSec: input.volume > 0 ? 0.5 : 0,
+                        ducking: true,
+                        normalize: true,
+                      },
                     },
                     anchor: input.anchor,
                     width: input.width,
@@ -1276,6 +1284,107 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           // Entri berkasnya SENGAJA ditinggal di renderState: undo yang
           // mengembalikan lapisan ini harus mengembalikannya utuh, dan
           // `orphanMediaAssetIds` sudah menjaganya tidak ikut dipentaskan.
+          return { ok: true, ringkasanPerubahan: summary };
+        }),
+    }),
+
+    /**
+     * Trek audio tambahan (ADR-0026). Berkasnya harus SUDAH ada di folder
+     * proyek — tool ini menambatkannya ke garis waktu, bukan mengunduhnya:
+     * mengambil audio dari internet punya urusan hak pakainya sendiri, dan
+     * mencampurnya ke sini akan menyembunyikan keputusan itu.
+     */
+    addAudioTrack: tool({
+      description:
+        "Tambatkan berkas audio yang SUDAH ada di folder proyek ke garis waktu sebagai trek tambahan (ambience, rekaman, lagu). Maks 8. Berkasnya perlu di-resolve lewat resolveAssets supaya panjang dan kenyaringannya terukur — tanpa itu trek tidak berbunyi.",
+      inputSchema: z.object({
+        file: z
+          .string()
+          .min(1)
+          .describe("Path relatif di folder proyek, mis. assets/ambience.wav"),
+        sceneId: z
+          .string()
+          .nullable()
+          .default(null)
+          .describe("Scene tambatan; null = dihitung dari awal video."),
+        atSec: z.number().min(0).default(0),
+        loop: z.boolean().default(false),
+        volume: z.number().min(0).max(1).default(0.5),
+        fadeInSec: z.number().min(0).max(10).default(0.5),
+        fadeOutSec: z.number().min(0).max(10).default(1),
+        ducking: z
+          .boolean()
+          .default(true)
+          .describe("Mengecil di bawah narasi. Matikan hanya kalau memang disengaja."),
+      }),
+      execute: (input) =>
+        run("addAudioTrack", input, async () => {
+          const plan = requirePlan();
+          if (plan.audio.tracks.length >= 8) {
+            return { ok: false, error: "Sudah ada 8 trek audio (batas maksimum)" };
+          }
+          if (input.sceneId && !plan.scenes.some((s) => s.id === input.sceneId)) {
+            return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          }
+          const absolute = join(session.paths.planDir, input.file);
+          if (!existsSync(absolute)) {
+            return {
+              ok: false,
+              error: `Berkas ${input.file} tidak ada di folder proyek — unggah dulu, jangan tambatkan berkas hantu`,
+            };
+          }
+          const trackId = uniqueTrackId(plan, `trek-${idSlug(input.file)}`);
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "setAudio",
+              patch: {
+                tracks: [
+                  ...plan.audio.tracks,
+                  {
+                    id: trackId,
+                    assetId: input.file,
+                    sceneId: input.sceneId,
+                    atSec: input.atSec,
+                    loop: input.loop,
+                    audio: {
+                      volume: input.volume,
+                      fadeInSec: input.fadeInSec,
+                      fadeOutSec: input.fadeOutSec,
+                      ducking: input.ducking,
+                      normalize: true,
+                    },
+                  },
+                ],
+              },
+            },
+          ]);
+          return {
+            ok: true,
+            trackId,
+            langkahBerikutnya:
+              "panggil resolveAssets supaya panjang dan kenyaringan berkasnya terukur",
+            ringkasanPerubahan: summary,
+          };
+        }),
+    }),
+
+    removeAudioTrack: tool({
+      description: "Hapus satu trek audio tambahan dari garis waktu.",
+      inputSchema: z.object({ trackId: z.string().min(1) }),
+      execute: (input) =>
+        run("removeAudioTrack", input, async () => {
+          const plan = requirePlan();
+          if (!plan.audio.tracks.some((track) => track.id === input.trackId)) {
+            return { ok: false, error: `Trek ${input.trackId} tidak ada` };
+          }
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "setAudio",
+              patch: {
+                tracks: plan.audio.tracks.filter((track) => track.id !== input.trackId),
+              },
+            },
+          ]);
           return { ok: true, ringkasanPerubahan: summary };
         }),
     }),

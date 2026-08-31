@@ -21,6 +21,7 @@ import {
   materializeCandidate,
   runAsrStage,
   runAssetStage,
+  runLoudnessStage,
   runTtsStage,
 } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
@@ -269,12 +270,25 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           log: { info: () => {}, warn: () => {} },
         }),
       );
-      session.plan = outcome.plan;
+      // ADR-0026: ukur SETELAH aset ter-resolve, di panggilan yang sama.
+      // Tombol terpisah "ukur kenyaringan" hanya menciptakan satu langkah lagi
+      // yang bisa dilupakan orang — dan klip yang belum diukur tidak
+      // dinormalisasi tanpa ada yang tahu kenapa.
+      const loudness = await store.runExclusive("assets", () =>
+        runLoudnessStage({
+          paths: session.paths,
+          plan: outcome.plan,
+          db: session.db,
+          ...(deps.audioProbe ? { probe: deps.audioProbe() } : {}),
+          log: { info: () => {}, warn: () => {} },
+        }),
+      );
+      session.plan = loudness.plan;
       session.persist();
       logUiEvent(
         "resolveAssets",
         { sceneIds: body.data.sceneIds ?? null },
-        { scenes: outcome.results.length },
+        { scenes: outcome.results.length, berkasDiukur: loudness.results.length },
         0,
         Date.now() - startedAt,
       );
@@ -288,7 +302,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           detail: r.detail,
         })),
       });
-      return c.json({ ok: true, results: outcome.results });
+      return c.json({ ok: true, results: outcome.results, loudness: loudness.results });
     } catch (error) {
       if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
       return c.json(errorPayload(error), 500);

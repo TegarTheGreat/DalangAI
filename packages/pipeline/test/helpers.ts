@@ -37,6 +37,43 @@ export const basicPlan = (overrides: Partial<ScenePlanInput> = {}): ScenePlanInp
   ...overrides,
 });
 
+/**
+ * WAV 16-bit mono 1 detik berisi nada pelan.
+ *
+ * Bukan empat byte acak seperti sebelumnya: sejak ADR-0026 pipeline benar-benar
+ * MEMBACA berkas narasi untuk mengukur kenyaringannya, jadi fixture yang bukan
+ * WAV sah membuat tahap ukur gagal pada alur yang seharusnya mulus — dan
+ * fixture yang sah justru membuat jalur itu ikut teruji.
+ */
+export const tinyWav = (seconds = 1, sampleRate = 8000): Uint8Array => {
+  const frames = seconds * sampleRate;
+  const bytes = new Uint8Array(44 + frames * 2);
+  const view = new DataView(bytes.buffer);
+  const ascii = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  ascii(0, "RIFF");
+  view.setUint32(4, 36 + frames * 2, true);
+  ascii(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, "data");
+  view.setUint32(40, frames * 2, true);
+  for (let i = 0; i < frames; i++) {
+    view.setInt16(
+      44 + i * 2,
+      Math.round(6000 * Math.sin((2 * Math.PI * 440 * i) / sampleRate)),
+      true,
+    );
+  }
+  return bytes;
+};
+
 export interface FakeTts extends TtsProvider {
   calls: string[];
 }
@@ -56,7 +93,7 @@ export const fakeTts = (
         return Promise.reject(new Error(`${id} sengaja gagal`));
       }
       return Promise.resolve({
-        audio: new Uint8Array([1, 2, 3, 4]),
+        audio: tinyWav(),
         format: "wav" as const,
         durationSec: 2.5,
         wordTimestamps: [{ word: "Kata", startSec: 0, endSec: 0.5 }],

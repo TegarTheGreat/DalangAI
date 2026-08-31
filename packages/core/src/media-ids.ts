@@ -56,3 +56,13 @@ export const uniqueLayerId = (plan: ScenePlan, base: string): string =>
     ]),
     idSlug(base),
   );
+
+/** Id trek audio tambahan yang belum dipakai plan MAUPUN renderState (ADR-0026). */
+export const uniqueTrackId = (plan: ScenePlan, base: string): string =>
+  unique(
+    new Set([
+      ...plan.audio.tracks.map((track) => track.id),
+      ...Object.keys(plan.renderState.trackAssets),
+    ]),
+    idSlug(base),
+  );

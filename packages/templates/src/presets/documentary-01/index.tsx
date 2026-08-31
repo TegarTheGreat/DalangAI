@@ -8,7 +8,14 @@ import { Audio } from "@remotion/media";
 import { TransitionSeries } from "@remotion/transitions";
 import { type ReactNode, useMemo } from "react";
 import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
+import { AudioTracks } from "../../AudioTracks";
 import { useAssetSrc } from "../../asset-src";
+import {
+  buildClipVolume,
+  type DuckWindow,
+  duckWindows,
+  narrationVolume,
+} from "../../audio-model";
 import { ensureFontsLoaded } from "../../fonts";
 import { GraphicsOverlay } from "../../GraphicsOverlay";
 import { LayersOverlay } from "../../LayersOverlay";
@@ -45,18 +52,32 @@ const SceneRouter: React.FC<{
   theme: DocTheme;
   durationInFrames: number;
   debug: boolean;
+  /** Frame GLOBAL awal scene; ducking dan fade hidup di waktu global (ADR-0026). */
+  sceneStartFrame: number;
+  ducks: readonly DuckWindow[];
 }> = (props) => {
-  const { scene, plan } = props;
+  const { scene, plan, sceneStartFrame, ducks } = props;
   const { fps } = useVideoConfig();
   const assetSrc = useAssetSrc();
   const narrationAudio = plan.renderState.narrationAudio[scene.id];
+  // Suara aset visual dasar: amplop yang sama dengan lapisan dan trek.
+  const assetVolume = buildClipVolume({
+    audio: scene.visual.audio,
+    lufs: plan.renderState.resolvedAssets[scene.id]?.lufs,
+    channels: plan.renderState.resolvedAssets[scene.id]?.channels,
+    targetLufs: plan.meta.loudnessTarget,
+    startFrame: sceneStartFrame,
+    frames: props.durationInFrames,
+    fps,
+    ducks,
+  });
 
   let content: ReactNode;
   if (scene.visual.type === "template-anim") {
     const variant = scene.visual.variant ?? "title";
     content = variant === "outro" ? <OutroScene {...props} /> : <TitleScene {...props} />;
   } else {
-    content = <BodyScene {...props} />;
+    content = <BodyScene {...props} volume={assetVolume} />;
   }
 
   return (
@@ -71,6 +92,9 @@ const SceneRouter: React.FC<{
         metrics={props.metrics}
         accent={props.theme.accent}
         durationInFrames={props.durationInFrames}
+        sceneStartFrame={sceneStartFrame}
+        ducks={ducks}
+        fps={fps}
       />
       <TextsOverlay
         scene={scene}
@@ -92,6 +116,7 @@ const SceneRouter: React.FC<{
         <Audio
           src={assetSrc(narrationAudio.file)}
           from={Math.round(NARRATION_LEAD_IN_SEC * fps)}
+          volume={narrationVolume(plan, narrationAudio)}
         />
       ) : null}
     </AbsoluteFill>
@@ -109,7 +134,11 @@ export const DocumentaryPreset: React.FC<{
 
   // Musik latar (ADR-0014): bed di-loop + ducking di bawah narasi.
   const musicFile = plan.audio.music ? resolveMusicFile(plan.audio.music.assetId) : null;
-  const musicVolume = useMemo(() => buildMusicVolume(plan, layout), [plan, layout]);
+  const ducks = useMemo(() => duckWindows(plan, layout), [plan, layout]);
+  const musicVolume = useMemo(
+    () => buildMusicVolume(plan, layout, FPS, musicFile?.lufs, musicFile?.channels),
+    [plan, layout, musicFile],
+  );
   const assetSrc = useAssetSrc();
   // Bed pustaka ikut ter-bundle bersama komposisi (aset situs); musik unggahan
   // milik proyek (aset plan). Keduanya dialamatkan berbeda di render cloud.
@@ -152,6 +181,8 @@ export const DocumentaryPreset: React.FC<{
           theme={theme}
           durationInFrames={durationInFrames}
           debug={debug}
+          sceneStartFrame={layout.sceneStarts[index] ?? 0}
+          ducks={ducks}
         />
       </TransitionSeries.Sequence>,
     );
@@ -165,6 +196,8 @@ export const DocumentaryPreset: React.FC<{
       <FilmGrain />
       <Chrome plan={plan} layout={layout} metrics={metrics} theme={theme} />
       {musicFile ? <Audio src={musicSrc(musicFile)} loop volume={musicVolume} /> : null}
+      {/* Trek audio tambahan (ADR-0026) — di akar komposisi, seperti musik. */}
+      <AudioTracks plan={plan} layout={layout} fps={FPS} ducks={ducks} />
       {/* Efek suara (ADR-0018): posisinya diturunkan dari scene, jadi ikut
           bergeser saat susunan berubah. */}
       {placeSfxCues(plan, layout, FPS).map((cue) => (

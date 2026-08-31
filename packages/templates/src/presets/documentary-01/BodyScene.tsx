@@ -15,7 +15,19 @@ export const BodyScene: React.FC<{
   theme: DocTheme;
   durationInFrames: number;
   debug: boolean;
-}> = ({ scene, sceneIndex, plan, asset, metrics, theme, durationInFrames, debug }) => {
+  /** Amplop volume suara aset (ADR-0026). */
+  volume?: ((frame: number) => number) | undefined;
+}> = ({
+  scene,
+  sceneIndex,
+  plan,
+  asset,
+  metrics,
+  theme,
+  durationInFrames,
+  debug,
+  volume,
+}) => {
   const unresolved =
     !asset &&
     (scene.visual.type === "stock" ||
@@ -31,6 +43,7 @@ export const BodyScene: React.FC<{
         asset={asset}
         theme={theme}
         durationInFrames={durationInFrames}
+        volume={volume}
       />
       <CaptionsOverlay
         scene={scene}

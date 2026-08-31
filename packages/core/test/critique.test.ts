@@ -52,7 +52,14 @@ describe("critiquePlan", () => {
 
   it("musik terpasang menghilangkan saran musik", () => {
     const plan = basePlan();
-    plan.audio.music = { assetId: "pustaka:tenang", volume: 0.15, ducking: true };
+    plan.audio.music = {
+      assetId: "pustaka:tenang",
+      volume: 0.15,
+      ducking: true,
+      fadeInSec: 1,
+      fadeOutSec: 2,
+      normalize: true,
+    };
     expect(codes(plan)).not.toContain("musik-hening");
   });
 

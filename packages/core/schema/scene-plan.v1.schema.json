@@ -54,6 +54,19 @@
           "default": "bebas",
           "type": "string"
         },
+        "loudnessTarget": {
+          "default": -16,
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": -40,
+              "maximum": -5
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tokens": {
           "type": "object",
           "properties": {
@@ -80,7 +93,8 @@
     },
     "audio": {
       "default": {
-        "sfx": []
+        "sfx": [],
+        "tracks": []
       },
       "type": "object",
       "properties": {
@@ -121,6 +135,22 @@
               "maximum": 1
             },
             "ducking": {
+              "default": true,
+              "type": "boolean"
+            },
+            "fadeInSec": {
+              "default": 1,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "fadeOutSec": {
+              "default": 2,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "normalize": {
               "default": true,
               "type": "boolean"
             }
@@ -165,6 +195,83 @@
               "id",
               "assetId",
               "sceneId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "tracks": {
+          "default": [],
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "assetId": {
+                "default": "",
+                "type": "string"
+              },
+              "sceneId": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "atSec": {
+                "default": 0,
+                "type": "number",
+                "minimum": 0
+              },
+              "loop": {
+                "default": false,
+                "type": "boolean"
+              },
+              "audio": {
+                "default": {
+                  "volume": 0.5,
+                  "fadeInSec": 0.5,
+                  "fadeOutSec": 1,
+                  "ducking": true,
+                  "normalize": true
+                },
+                "type": "object",
+                "properties": {
+                  "volume": {
+                    "default": 0,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "fadeInSec": {
+                    "default": 0,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10
+                  },
+                  "fadeOutSec": {
+                    "default": 0,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10
+                  },
+                  "ducking": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "normalize": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id"
             ],
             "additionalProperties": false
           }
@@ -310,11 +417,44 @@
                 "minimum": 0,
                 "maximum": 1
               },
-              "volume": {
-                "default": 0,
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1
+              "audio": {
+                "default": {
+                  "volume": 0,
+                  "fadeInSec": 0,
+                  "fadeOutSec": 0,
+                  "ducking": true,
+                  "normalize": true
+                },
+                "type": "object",
+                "properties": {
+                  "volume": {
+                    "default": 0,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "fadeInSec": {
+                    "default": 0,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10
+                  },
+                  "fadeOutSec": {
+                    "default": 0,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10
+                  },
+                  "ducking": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "normalize": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "required": [
@@ -835,11 +975,44 @@
                       "minimum": 0,
                       "maximum": 1
                     },
-                    "volume": {
-                      "default": 0,
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 1
+                    "audio": {
+                      "default": {
+                        "volume": 0,
+                        "fadeInSec": 0,
+                        "fadeOutSec": 0,
+                        "ducking": true,
+                        "normalize": true
+                      },
+                      "type": "object",
+                      "properties": {
+                        "volume": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "fadeInSec": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        "fadeOutSec": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        "ducking": {
+                          "default": true,
+                          "type": "boolean"
+                        },
+                        "normalize": {
+                          "default": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -977,6 +1150,7 @@
         "graphicAssets": {},
         "layerAssets": {},
         "sfxAssets": {},
+        "trackAssets": {},
         "transcripts": {}
       },
       "type": "object",
@@ -1025,6 +1199,14 @@
               },
               "fallbackQuality": {
                 "type": "boolean"
+              },
+              "lufs": {
+                "type": "number"
+              },
+              "channels": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
               }
             },
             "required": [
@@ -1079,6 +1261,14 @@
               "durationSec": {
                 "type": "number",
                 "exclusiveMinimum": 0
+              },
+              "lufs": {
+                "type": "number"
+              },
+              "channels": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
               }
             },
             "required": [
@@ -1134,6 +1324,14 @@
               "durationSec": {
                 "type": "number",
                 "exclusiveMinimum": 0
+              },
+              "lufs": {
+                "type": "number"
+              },
+              "channels": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
               }
             },
             "required": [
@@ -1189,6 +1387,14 @@
               "durationSec": {
                 "type": "number",
                 "exclusiveMinimum": 0
+              },
+              "lufs": {
+                "type": "number"
+              },
+              "channels": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
               }
             },
             "required": [
@@ -1244,6 +1450,77 @@
               "durationSec": {
                 "type": "number",
                 "exclusiveMinimum": 0
+              },
+              "lufs": {
+                "type": "number"
+              },
+              "channels": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              }
+            },
+            "required": [
+              "file",
+              "kind",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "trackAssets": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "image",
+                  "video",
+                  "audio"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceUrl": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "license": {
+                "type": "string"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "durationSec": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "lufs": {
+                "type": "number"
+              },
+              "channels": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
               }
             },
             "required": [

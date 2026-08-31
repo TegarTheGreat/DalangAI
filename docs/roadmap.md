@@ -247,7 +247,19 @@ terbuka — batas ADR-0023 soal connected clip dicabut. Batas yang tersisa ada d
 "Batas yang dinyatakan" ADR-0025 (maks 2 lapisan, sisipan lintas scene ditulis
 dua kali, suara cuma satu angka gain).
 
-Sisanya (§9.3–§9.5) belum; §9.3 menuntut model animasi baru dan ADR tersendiri.
+**§9.4 sudah dikerjakan** (ADR-0026): satu bentuk amplop audio — volume, fade
+masuk/keluar, ducking, normalisasi — dipakai suara aset visual, suara lapisan,
+dan trek audio tambahan; utang `visual.volume` milik ADR-0025 lunas. Kenyaringan
+diukur dengan pengukur EBU R128 / ITU-R BS.1770-4 yang ditulis sendiri (tanpa
+ffmpeg), tiap klip dibawa ke `meta.loudnessTarget` sebelum volumenya
+diterapkan, dan narasi ikut disamakan. Berkas mono dikoreksi 3,01 LU karena
+campurannya stereo. Diverifikasi lewat render sungguhan: sumber mono dan stereo
+sama-sama mendarat di -16,00 LUFS. Batasnya ada di "Batas" ADR-0026 — yang
+terbesar: AAC/MP4 tidak terukur pada Chromium tanpa kodek proprietary, dan
+klip seperti itu dilewati dengan alasan yang disebutkan, bukan ditebak.
+
+Sisanya (§9.3 dan §9.5) belum; §9.3 menuntut model animasi baru dan ADR
+tersendiri.
 
 > Membuka: pekerjaan yang hari ini harus dilakukan lewat form.
 
@@ -256,7 +268,7 @@ Sisanya (§9.3–§9.5) belum; §9.3 menuntut model animasi baru dan ADR tersend
 | 9.1 | Manipulasi langsung di kanvas: seret/ubah ukuran teks & grafis di preview | Lapisan interaksi di atas Player; koordinat → patch op |
 | 9.2 | Multi-track video: overlay/PiP/B-roll sebagai lapisan | Perubahan skema besar → ADR |
 | 9.3 | Keyframe sembarang untuk properti | Model animasi baru |
-| 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | — |
+| 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | Selesai (ADR-0026) |
 | 9.5 | Proxy + penanganan rekaman panjang | Terkait 6.x |
 
 **Catatan urutan:** 9.1 memberi rasa paling besar per biaya. 9.2 memang yang

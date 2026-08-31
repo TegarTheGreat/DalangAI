@@ -1,4 +1,5 @@
-import type { ScenePlan } from "@dalang/core";
+import { loudnessGain, type ScenePlan } from "@dalang/core";
+import { cosRamp, duckAt, duckWindows } from "./audio-model";
 import type { FrameLayout } from "./layout";
 
 /**
@@ -7,6 +8,12 @@ import type { FrameLayout } from "./layout";
  *  - fade-in/fade-out global,
  *  - DUCKING otomatis di bawah scene bernarasi (ramp kosinus halus),
  * semuanya deterministik per frame — preview Player dan render final identik.
+ *
+ * Sejak ADR-0026 fade dan ducking-nya BUKAN lagi rumus milik berkas ini:
+ * keduanya dipinjam dari `audio-model`, yang juga melayani suara aset visual,
+ * lapisan, dan trek audio tambahan. Panjang fade juga tidak lagi konstanta —
+ * ia datang dari `music.fadeInSec`/`fadeOutSec`, dengan bawaan yang sama
+ * persis seperti konstanta lamanya.
  */
 
 export interface BundledMusic {
@@ -14,6 +21,22 @@ export interface BundledMusic {
   /** Path relatif public dir templates (dipakai staticFile). */
   file: string;
   label: string;
+  /**
+   * Kenyaringan terintegrasi bed ini, LUFS (ADR-0026).
+   *
+   * Angkanya DIUKUR, bukan ditaksir: bed pustaka disintesis deterministik dan
+   * ikut di repo, jadi nilainya tetap selamanya — dan sebuah test mengukur
+   * ulang berkasnya lalu menuntut angka ini cocok. Dengan begitu bed pustaka
+   * tidak perlu melewati tahap ukur sama sekali.
+   */
+  lufs: number;
+  /**
+   * Kanal berkasnya. Bed pustaka MONO, dan itu bukan detail sepele: di
+   * campuran stereo ia terdengar 3,01 LU lebih keras daripada angka ukurnya,
+   * jadi tanpa keterangan ini setiap bed akan dinormalisasi 3 dB terlalu
+   * keras terhadap sasaran proyek.
+   */
+  channels: number;
 }
 
 /**
@@ -21,8 +44,20 @@ export interface BundledMusic {
  * LICENSE.md). Dirujuk dari plan sebagai assetId "pustaka:<id>".
  */
 export const BUNDLED_MUSIC: readonly BundledMusic[] = [
-  { id: "tenang", file: "music/tenang.wav", label: "Tenang (pad hangat)" },
-  { id: "cerah", file: "music/cerah.wav", label: "Cerah (pad mayor)" },
+  {
+    id: "tenang",
+    file: "music/tenang.wav",
+    label: "Tenang (pad hangat)",
+    lufs: -18.71,
+    channels: 1,
+  },
+  {
+    id: "cerah",
+    file: "music/cerah.wav",
+    label: "Cerah (pad mayor)",
+    lufs: -18.55,
+    channels: 1,
+  },
 ] as const;
 
 export const MUSIC_LIBRARY_PREFIX = "pustaka:";
@@ -38,6 +73,9 @@ export const MUSIC_LIBRARY_PREFIX = "pustaka:";
 export interface ResolvedMusic {
   file: string;
   bundled: boolean;
+  /** Hasil ukur kenyaringan bed pustaka; undefined untuk musik unggahan. */
+  lufs?: number;
+  channels?: number;
 }
 
 /**
@@ -49,60 +87,44 @@ export const resolveMusicFile = (assetId: string): ResolvedMusic | null => {
   if (assetId.startsWith(MUSIC_LIBRARY_PREFIX)) {
     const id = assetId.slice(MUSIC_LIBRARY_PREFIX.length);
     const found = BUNDLED_MUSIC.find((m) => m.id === id);
-    return found ? { file: found.file, bundled: true } : null;
+    return found
+      ? { file: found.file, bundled: true, lufs: found.lufs, channels: found.channels }
+      : null;
   }
   return { file: assetId, bundled: false };
 };
 
-const FADE_IN_FRAMES = 30;
-const FADE_OUT_FRAMES = 60;
-const DUCK_RAMP_FRAMES = 15;
-/** Faktor volume saat narasi berbicara. */
-const DUCK_FACTOR = 0.35;
-
-const cosRamp = (t: number): number => {
-  const clamped = Math.min(Math.max(t, 0), 1);
-  return 0.5 - 0.5 * Math.cos(clamped * Math.PI);
-};
-
 /**
- * Envelope volume musik per frame global.
- * Jendela duck = rentang scene yang PUNYA audio narasi di renderState dan
- * naskahnya tidak kosong; ramp turun/naik kosinus di tepinya.
+ * Envelope volume musik per frame GLOBAL (musik membentang seluruh video, jadi
+ * di sini frame lokal dan frame global memang sama).
+ *
+ * `lufs` adalah hasil ukur bed-nya: bed pustaka membawanya di
+ * `BUNDLED_MUSIC`, musik unggahan mendapatkannya dari tahap ukur. Tanpa hasil
+ * ukur, normalisasi dilewati — bukan ditebak.
  */
 export const buildMusicVolume = (
   plan: ScenePlan,
   layout: FrameLayout,
+  fps: number,
+  lufs?: number,
+  channels?: number,
 ): ((frame: number) => number) => {
   const music = plan.audio.music;
   if (!music) return () => 0;
-  const base = music.volume;
+  const base =
+    music.volume *
+    (music.normalize ? loudnessGain(lufs, plan.meta.loudnessTarget, channels) : 1);
+  if (base <= 0) return () => 0;
 
-  const duckWindows: Array<{ from: number; to: number }> = [];
-  if (music.ducking) {
-    plan.scenes.forEach((scene, index) => {
-      if (scene.narration.trim() === "") return;
-      if (!plan.renderState.narrationAudio[scene.id]) return;
-      const from = layout.sceneStarts[index] ?? 0;
-      duckWindows.push({ from, to: from + (layout.sceneFrames[index] ?? 0) });
-    });
-  }
+  const fadeInFrames = Math.round(music.fadeInSec * fps);
+  const fadeOutFrames = Math.round(music.fadeOutSec * fps);
+  const windows = music.ducking ? duckWindows(plan, layout) : [];
 
   return (frame: number): number => {
-    const fadeIn = cosRamp(frame / FADE_IN_FRAMES);
-    const fadeOut = cosRamp((layout.totalFrames - frame) / FADE_OUT_FRAMES);
-
-    let duck = 1;
-    for (const w of duckWindows) {
-      if (frame < w.from - DUCK_RAMP_FRAMES || frame > w.to + DUCK_RAMP_FRAMES) {
-        continue;
-      }
-      const enter = cosRamp((frame - (w.from - DUCK_RAMP_FRAMES)) / DUCK_RAMP_FRAMES);
-      const exit = cosRamp((w.to + DUCK_RAMP_FRAMES - frame) / DUCK_RAMP_FRAMES);
-      const depth = Math.min(enter, exit);
-      duck = Math.min(duck, 1 - depth * (1 - DUCK_FACTOR));
-    }
-
+    const fadeIn = fadeInFrames > 0 ? cosRamp(frame / fadeInFrames) : 1;
+    const fadeOut =
+      fadeOutFrames > 0 ? cosRamp((layout.totalFrames - frame) / fadeOutFrames) : 1;
+    const duck = windows.length > 0 ? duckAt(frame, windows) : 1;
     return Math.max(0, base * fadeIn * fadeOut * duck);
   };
 };

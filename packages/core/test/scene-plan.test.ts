@@ -23,6 +23,7 @@ describe("scene-plan schema v0", () => {
       narrationAudio: {},
       resolvedAssets: {},
       layerAssets: {},
+      trackAssets: {},
       graphicAssets: {},
       sfxAssets: {},
       transcripts: {},

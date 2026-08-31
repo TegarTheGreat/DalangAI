@@ -10,6 +10,7 @@ import {
 } from "remotion";
 import { easeDolly, kf } from "../../anim";
 import { useAssetSrc } from "../../asset-src";
+import { isSilent } from "../../audio-model";
 import { filterToCss } from "../../filters";
 import { motionTransform } from "../../motion-model";
 import type { DocTheme } from "./theme";
@@ -24,7 +25,9 @@ const AssetLayer: React.FC<{
   asset: ResolvedAsset;
   scene: Scene;
   durationInFrames: number;
-}> = ({ asset, scene, durationInFrames }) => {
+  /** Amplop volume suara aset (ADR-0026); tanpa ini asetnya bisu. */
+  volume?: ((frame: number) => number) | undefined;
+}> = ({ asset, scene, durationInFrames, volume }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const assetSrc = useAssetSrc();
@@ -48,11 +51,11 @@ const AssetLayer: React.FC<{
     return (
       <Video
         src={assetSrc(asset.file)}
-        // ADR-0025: bawaan `volume` 0 = bisu, persis perilaku sebelumnya.
-        // `muted` tetap dipasang saat 0 supaya Remotion tidak menyiapkan
-        // jalur audio untuk trek yang memang tidak berbunyi.
-        muted={scene.visual.volume <= 0}
-        volume={scene.visual.volume}
+        // ADR-0025/0026: bawaan bisu, persis perilaku sebelum keduanya.
+        // `muted` dipasang saat tidak berbunyi supaya Remotion tidak
+        // menyiapkan jalur audio untuk trek yang memang diam.
+        muted={isSilent(scene.visual.audio)}
+        {...(volume ? { volume } : {})}
         playbackRate={scene.visual.speed}
         // ADR-0017: titik masuk di rekaman sumber — satu video panjang bisa
         // dipakai berkali-kali dengan potongan berbeda per scene.
@@ -206,14 +209,21 @@ export const Backdrop: React.FC<{
   durationInFrames: number;
   /** Extra darkening for text-heavy scenes (title/outro). */
   dim?: number;
-}> = ({ scene, sceneIndex, asset, theme, durationInFrames, dim = 0 }) => {
+  /** Amplop volume suara aset (ADR-0026). */
+  volume?: ((frame: number) => number) | undefined;
+}> = ({ scene, sceneIndex, asset, theme, durationInFrames, dim = 0, volume }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: theme.bg }}>
       {asset ? (
         <AbsoluteFill
           style={{ filter: "saturate(1.04) contrast(1.05) brightness(0.96)" }}
         >
-          <AssetLayer asset={asset} scene={scene} durationInFrames={durationInFrames} />
+          <AssetLayer
+            asset={asset}
+            scene={scene}
+            durationInFrames={durationInFrames}
+            volume={volume}
+          />
         </AbsoluteFill>
       ) : (
         <ProceduralBackdrop
