@@ -212,6 +212,12 @@ apakah perubahannya membantu.
 
 ### Fase 8 — Keluar dan masuk
 
+**Sudah dikerjakan** (ADR-0023) — 8.1, 8.2, dan 8.4 penuh; 8.3 hanya arah OTIO,
+karena FCPXML punya lusinan bentuk sah yang sama dan membaca separuhnya lebih
+berbahaya daripada tidak membacanya. Batas yang tersisa ada di "Batas yang
+dinyatakan" ADR-0023: belum pernah dibuka di Resolve/Premiere/Final Cut yang
+sungguhan.
+
 > Membuka: Dalang jadi bagian alur kerja profesional, bukan pulau.
 
 | # | Item | Minta |

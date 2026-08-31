@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -353,7 +353,30 @@ Yang sudah berjalan:
     sungguhan (repo ini tanpa kunci API), dan skor eval mengukur KEPATUHAN
     serta KERAJINAN — bukan apakah naskahnya menarik. Plan membosankan yang
     rapi bisa mendapat 100.*
-- **Kualitas terjaga otomatis**: 677 unit test (kontrak lock/pin/undo, timing
+- **Keluar ke perkakas profesional, dan masuk dari perkakas lain (ADR-0023)** —
+  Dalang berhenti jadi pulau:
+  - `dalang export <proyek> --format otio|fcpxml` menulis garis waktunya untuk
+    difinishing di DaVinci Resolve, Premiere, atau Final Cut. Ada juga di dialog
+    Ekspor Studio, dan sebagai tool MCP.
+  - Setiap ekspor SELALU melaporkan **apa yang tidak ikut menyeberang** —
+    caption karaoke, teks bergaya, Ken Burns, filter, anotasi. Daftarnya ikut
+    masuk ke dalam berkasnya juga, karena berkas ekspor sering berpindah tangan
+    tanpa log yang menyertainya.
+  - `dalang import <berkas.otio>` menghasilkan KERANGKA scene-plan: urutan,
+    durasi, dan titik masuk yang benar, naskah kosong — dan catatannya bilang
+    begitu.
+  - Potongan diletakkan di TENGAH tumpang-tindih transisi, titik yang sama
+    dipakai Dalang untuk berpindah scene; memakai awalnya akan menggeser seluruh
+    ekspor setengah transisi terhadap videonya sendiri.
+- **Dalang sebagai kemampuan: server MCP (ADR-0023)** — `dalang mcp [akar]`
+  menyajikan garis waktu ke agent mana pun yang bicara MCP (Claude Code, dsb.):
+  - baca rencana, ubah lewat patch op tervalidasi, urungkan, kritik struktur,
+    ekspor. Scene terkunci ditolak persis seperti untuk agent Dalang sendiri.
+  - **Tidak ada tool yang memanggil model atau membelanjakan uang.** Kliennya
+    sudah agent; yang tidak dipunyainya adalah timeline. Render hanya kalau
+    dijalankan dengan `--izinkan-render`.
+  - Pagar ruang kerja: satu folder akar, semua path diperiksa (termasuk symlink).
+- **Kualitas terjaga otomatis**: 720 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -366,7 +389,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 677 unit test (8 paket) — tanpa browser & jaringan
+pnpm test                 # 720 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -377,6 +400,9 @@ pnpm dalang validate examples/borobudur-60s          # folder atau plan.json, sa
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
 pnpm dalang transcribe examples/podcast   # transkripsi rekaman -> renderState (ADR-0021)
 pnpm dalang review examples/borobudur-60s # render frame -> nilai dengan model vision (ADR-0022)
+pnpm dalang export examples/borobudur-60s --format otio     # garis waktu -> Resolve/Premiere/FCP
+pnpm dalang import rough.otio -o proyekku/                  # OTIO -> kerangka scene-plan
+pnpm dalang mcp ~/video                   # server MCP: timeline sebagai tool untuk agent lain
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
 pnpm dalang render   examples/borobudur-60s/plan.json --video-format webm --resolution 720 --quality terbaik
@@ -499,7 +525,15 @@ di `docs/decisions/`.
       `--self-check`-nya menjaga CI. *Catatan: jalur vision belum dijalankan
       terhadap model sungguhan — lihat "Batas yang dinyatakan" di ADR-0022.*
 
-Fase 8 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
+- [x] **Fase 8 — Keluar dan masuk** (ADR-0023): ekspor OpenTimelineIO dan
+      FCPXML dengan laporan "yang tidak ikut menyeberang", impor OTIO jadi
+      kerangka scene-plan, dan **server MCP** yang menyajikan garis waktu ke
+      agent lain tanpa memberinya akses ke uang penggunanya. Gerbang CI baru
+      memakai pustaka OpenTimelineIO resmi untuk membaca ulang keluaran kita.
+      *Catatan: belum pernah dibuka di Resolve/Premiere/Final Cut sungguhan, dan
+      impor FCPXML tidak dikerjakan — lihat "Batas yang dinyatakan" di ADR-0023.*
+
+Fase 9 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,
 format interchange, ASR), lengkap dengan celah beserta buktinya, risiko yang
 harus diputuskan, dan daftar yang sengaja TIDAK dikerjakan.

@@ -88,6 +88,18 @@ jobs:
       # ATAU dari URL (render cloud). Gerbang ini merender kedua jalur dan
       # menuntut hasilnya identik byte per byte. Satu pemanggil staticFile()
       # yang terlewat tidak menggagalkan unit test mana pun — hanya ini.
+      # ADR-0023: klaim "berkas ekspor kami benar-benar bisa dibuka perkakas
+      # lain" tidak bisa dibuktikan tes unit — pembaca kita sendiri hanya
+      # membuktikan dua berkas kita saling setuju. Gerbang ini memakai
+      # IMPLEMENTASI RUJUKAN: pustaka OpenTimelineIO resmi membaca .otio kita,
+      # adapter fcpx_xml resmi membaca .fcpxml kita, lalu posisi tiap klip
+      # dibandingkan dengan `activeSceneIndex` milik renderer.
+      - name: Interop gate (pembaca rujukan OTIO/FCPXML)
+        timeout-minutes: 5
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check opentimelineio otio-fcpx-xml-adapter
+          pnpm --filter @dalang/interop gate:interop
+
       - name: Asset URL parity gate
         timeout-minutes: 8
         run: |

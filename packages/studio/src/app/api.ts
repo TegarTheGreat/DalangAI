@@ -91,6 +91,18 @@ export type ReviewResult = {
   costUsd?: number;
 };
 
+/** Hasil ekspor garis waktu ke format interchange (ADR-0023). */
+export type TimelineExportResult = {
+  ok: true;
+  berkas: string;
+  nama: string;
+  trek: number;
+  klip: number;
+  detik: number;
+  /** Apa yang tidak punya padanan di format tujuan. Wajib ditampilkan. */
+  tidakIkut: string[];
+};
+
 export const api = {
   getProject: () => request<ProjectStatePayload>("/api/project"),
 
@@ -167,6 +179,12 @@ export const api = {
     request<ReviewResult>("/api/review", {
       method: "POST",
       body: JSON.stringify({ maxFrames, ...(perhatian ? { perhatian } : {}) }),
+    }),
+
+  exportTimeline: (format: "otio" | "fcpxml") =>
+    request<TimelineExportResult>("/api/timeline-export", {
+      method: "POST",
+      body: JSON.stringify({ format }),
     }),
 
   runTts: (sceneIds: string[] | undefined, confirm: boolean) =>

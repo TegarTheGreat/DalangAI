@@ -17,6 +17,7 @@
   "dependencies": {
     "@dalang/agent": "workspace:*",
     "@dalang/core": "workspace:*",
+    "@dalang/interop": "workspace:*",
     "@dalang/pipeline": "workspace:*",
     "@dalang/providers": "workspace:*",
     "@dalang/renderer": "workspace:*",

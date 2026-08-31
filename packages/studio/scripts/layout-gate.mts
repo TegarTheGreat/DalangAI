@@ -53,6 +53,42 @@ const WIDTHS = [
   600, 420, 380,
 ];
 
+/**
+ * Dialog yang dibuka dan diukur. Dipilih yang isinya PALING BANYAK: kalau yang
+ * terpanjang muat, yang lain juga.
+ */
+const DIALOGS = [
+  { tip: "Render video", name: "Ekspor" },
+  { tip: "Gaya proyek", name: "Gaya" },
+  { tip: "Catatan sutradara", name: "Catatan" },
+  { tip: "Tinjauan render", name: "Tinjau" },
+] as const;
+
+/**
+ * Membuka satu dialog, mengukur kotaknya terhadap viewport, lalu menutupnya.
+ * Mengembalikan kalimat masalah, atau null kalau muat.
+ *
+ * Ditulis sebagai string kode: sama seperti MEASURE, ia berjalan di dalam
+ * peramban dan tidak boleh mengandung sintaks TypeScript apa pun.
+ */
+const dialogProbe = (tip: string, name: string): string =>
+  `(() => {
+    const opener = document.querySelector('[data-tip^="${tip}"]');
+    if (!opener) return null;
+    opener.click();
+    const dialog = document.querySelector(".dialog-backdrop .dialog");
+    if (!dialog) return null;
+    const box = dialog.getBoundingClientRect();
+    const bocor = box.top < 0 || box.bottom > window.innerHeight + 1
+      || box.left < 0 || box.right > window.innerWidth + 1;
+    const tinggi = Math.round(box.height);
+    const layar = window.innerHeight;
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    return bocor
+      ? "dialog ${name} keluar layar: tinggi " + tinggi + "px pada layar " + layar + "px"
+      : null;
+  })()`;
+
 interface Report {
   overlaps: string[];
   clippedTools: string[];
@@ -138,6 +174,17 @@ const main = async (): Promise<void> => {
           ? [`halaman bisa digeser ke samping ${report.sideScroll}px`]
           : []),
       ];
+      // Dialog diperiksa TERSENDIRI: ia tidak ada di DOM sampai dibuka, jadi
+      // pengukuran di atas tidak pernah melihatnya. Kelas cacatnya nyata —
+      // dialog Ekspor tumbuh melewati kedua tepi layar begitu bagian interop
+      // masuk (ADR-0023), dan tombol "Mulai ekspor" jadi tak terjangkau.
+      for (const dialog of DIALOGS) {
+        const overflow = (await page.evaluate(dialogProbe(dialog.tip, dialog.name))) as
+          | string
+          | null;
+        if (overflow) problems.push(overflow);
+      }
+
       if (problems.length === 0) {
         console.log(`  ${String(width).padStart(4)}px  ok`);
       } else {

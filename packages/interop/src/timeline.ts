@@ -1,0 +1,435 @@
+import { dirname, isAbsolute, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import {
+  DIMENSIONS,
+  NARRATION_LEAD_IN_SEC,
+  type ResolvedAsset,
+  type ScenePlan,
+} from "@dalang/core";
+import { computeFrameLayout, FPS } from "@dalang/templates/layout";
+import { resolveMusicFile } from "@dalang/templates/music";
+import type { InteropNote } from "./report";
+
+/**
+ * Garis waktu perantara — SATU model, dua format.
+ *
+ * OTIO dan FCPXML sama-sama butuh jawaban atas pertanyaan yang sama: klip apa,
+ * di trek mana, mulai frame berapa, dari berkas mana, potongannya dari detik
+ * ke berapa. Menghitungnya dua kali berarti dua kesempatan untuk menyimpang —
+ * dan penyimpangan pada garis waktu adalah cacat yang baru ketahuan setelah
+ * seseorang membuka hasilnya di Resolve.
+ *
+ * Model ini juga tempat kejujurannya tinggal. Scene-plan Dalang menyimpan
+ * jauh lebih banyak daripada yang bisa diwakili format interchange mana pun:
+ * caption karaoke, teks bergaya, Ken Burns, filter, anotasi, ducking musik.
+ * Yang tidak bisa dibawa TIDAK dibuang diam-diam — ia dicatat sebagai
+ * `notes`, dan setiap permukaan (CLI, Studio) wajib menampilkannya.
+ */
+
+/** Satu klip di garis waktu, dalam domain FRAME komposisi. */
+export interface EditClip {
+  kind: "clip";
+  /** Scene asal; null untuk musik yang membentang seluruh video. */
+  sceneId: string | null;
+  name: string;
+  startFrame: number;
+  durationFrames: number;
+  /** URL berkas absolut (file://). */
+  url: string;
+  media: "image" | "video" | "audio";
+  /** Titik masuk di dalam berkas sumber, detik. */
+  sourceStartSec: number;
+  /** Panjang berkas sumber, detik; null = tidak diketahui (mis. gambar diam). */
+  sourceDurationSec: number | null;
+  /** Penanda yang dibawa ke format tujuan (naskah, id scene). */
+  markers: EditMarker[];
+}
+
+/** Lubang kosong di trek — dibutuhkan OTIO, dan FCPXML memakai `<gap>`. */
+export interface EditGap {
+  kind: "gap";
+  startFrame: number;
+  durationFrames: number;
+}
+
+/**
+ * Peralihan ANTAR dua klip bersebelahan di trek yang sama.
+ *
+ * Dimodelkan seperti OTIO memodelkannya: klipnya dipotong adu-tumpul di titik
+ * potong, lalu peralihannya menjulur `offsetFrames` ke kiri dan ke kanan dari
+ * titik itu. Inilah alasan klip video Dalang dipotong di TENGAH tumpang-tindih
+ * transisi, bukan di awalnya — titik itu yang dianggap "pindah scene" oleh
+ * `activeSceneIndex`, jadi itu pula yang dilihat penonton sebagai potongan.
+ */
+export interface EditTransition {
+  /** Indeks klip di trek yang mendahului peralihan ini. */
+  afterClipIndex: number;
+  /** Julur ke tiap arah dari titik potong, frame. */
+  offsetFrames: number;
+  /** Tipe Dalang apa adanya ("cross-fade", "slide-left", …). */
+  dalangType: string;
+  /** True kalau format tujuan punya padanan sungguhan (hanya dissolve). */
+  dissolve: boolean;
+}
+
+export interface EditTrack {
+  name: string;
+  kind: "video" | "audio";
+  items: (EditClip | EditGap)[];
+  transitions: EditTransition[];
+}
+
+export interface EditMarker {
+  startFrame: number;
+  durationFrames: number;
+  value: string;
+}
+
+export interface EditTimeline {
+  name: string;
+  fps: number;
+  width: number;
+  height: number;
+  totalFrames: number;
+  tracks: EditTrack[];
+  /** Apa yang TIDAK ikut menyeberang. Wajib ditampilkan pemanggilnya. */
+  notes: InteropNote[];
+}
+
+export interface BuildTimelineOptions {
+  /** Path plan.json — akar untuk semua path aset relatif. */
+  planPath: string;
+  /**
+   * Folder aset situs (public/ paket templates). Diperlukan hanya untuk musik
+   * ter-bundle; tanpa itu musiknya dilaporkan sebagai tidak ikut, bukan
+   * ditunjuk ke path yang tidak ada.
+   */
+  siteAssetDir?: string;
+}
+
+const secToFrames = (sec: number): number => Math.round(sec * FPS);
+
+/** file:// absolut dan ter-encode; path relatif dihitung dari folder plan. */
+const fileUrlFor = (planDir: string, file: string): string =>
+  pathToFileURL(isAbsolute(file) ? file : resolve(planDir, file)).href;
+
+/**
+ * Titik potong yang TERLIHAT antara scene i dan i+1, dalam frame.
+ *
+ * Sengaja tengah tumpang-tindih, bukan awalnya: itu ambang yang dipakai
+ * `activeSceneIndex`, jadi memakai yang lain akan menggeser seluruh garis
+ * waktu ekspor setengah transisi terhadap videonya sendiri.
+ */
+const cutPoints = (
+  sceneStarts: number[],
+  boundaryFrames: number[],
+  totalFrames: number,
+): number[] => {
+  const cuts: number[] = [];
+  for (let i = 0; i < sceneStarts.length - 1; i++) {
+    const nextStart = sceneStarts[i + 1] ?? 0;
+    const overlap = boundaryFrames[i] ?? 0;
+    cuts.push(Math.round(nextStart + overlap / 2));
+  }
+  cuts.push(totalFrames);
+  return cuts;
+};
+
+/**
+ * Menaruh klip ke trek pertama yang masih longgar.
+ *
+ * Narasi dan efek suara ditambatkan ke scene, dan scene BOLEH lebih pendek
+ * daripada audionya (durasi tetap yang dipasang tangan). Tanpa pengalokasi
+ * ini dua klip akan bertindihan di satu trek — sah di Dalang (keduanya memang
+ * berbunyi bersamaan), mustahil di trek NLE mana pun.
+ */
+const layOnLanes = (
+  clips: EditClip[],
+  baseName: string,
+  kind: "video" | "audio",
+): EditTrack[] => {
+  const lanes: EditClip[][] = [];
+  for (const clip of [...clips].sort((a, b) => a.startFrame - b.startFrame)) {
+    const lane = lanes.find((items) => {
+      const last = items[items.length - 1];
+      return !last || last.startFrame + last.durationFrames <= clip.startFrame;
+    });
+    if (lane) lane.push(clip);
+    else lanes.push([clip]);
+  }
+  return lanes.map((items, index) => ({
+    name: lanes.length > 1 ? `${baseName} ${index + 1}` : baseName,
+    kind,
+    items: withGaps(items),
+    transitions: [],
+  }));
+};
+
+/** Menyisipkan gap supaya trek jadi rangkaian penuh tanpa lubang implisit. */
+const withGaps = (clips: EditClip[]): (EditClip | EditGap)[] => {
+  const out: (EditClip | EditGap)[] = [];
+  let cursor = 0;
+  for (const clip of clips) {
+    if (clip.startFrame > cursor) {
+      out.push({
+        kind: "gap",
+        startFrame: cursor,
+        durationFrames: clip.startFrame - cursor,
+      });
+    }
+    out.push(clip);
+    cursor = clip.startFrame + clip.durationFrames;
+  }
+  return out;
+};
+
+/** Huruf pertama jadi kapital — catatan dirakit dari potongan, bukan ditulis utuh. */
+const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Ringkasan hitungan untuk catatan "ini tidak ikut". */
+const countScenes = (
+  plan: ScenePlan,
+  predicate: (scene: ScenePlan["scenes"][number]) => boolean,
+) => plan.scenes.filter(predicate).length;
+
+export const buildEditTimeline = (
+  plan: ScenePlan,
+  { planPath, siteAssetDir }: BuildTimelineOptions,
+): EditTimeline => {
+  const planDir = dirname(resolve(planPath));
+  const layout = computeFrameLayout(plan);
+  const { width, height } = DIMENSIONS[plan.meta.aspectRatio];
+  const notes: InteropNote[] = [];
+  const cuts = cutPoints(layout.sceneStarts, layout.boundaryFrames, layout.totalFrames);
+
+  // --- Trek video: satu klip per scene, adu-tumpul di titik potong ---------
+  const videoItems: (EditClip | EditGap)[] = [];
+  const transitions: EditTransition[] = [];
+  const unresolved: string[] = [];
+  let cursor = 0;
+
+  plan.scenes.forEach((scene, index) => {
+    const end = cuts[index] ?? layout.totalFrames;
+    const durationFrames = Math.max(1, end - cursor);
+    const asset: ResolvedAsset | undefined = plan.renderState.resolvedAssets[scene.id];
+
+    if (!asset) {
+      // Scene tanpa aset nyata (template-anim, atau belum diresolusi) tidak
+      // bisa jadi klip: tidak ada berkas untuk ditunjuk. Gap yang jujur.
+      unresolved.push(scene.id);
+      videoItems.push({ kind: "gap", startFrame: cursor, durationFrames });
+    } else {
+      const markers: EditMarker[] = [
+        { startFrame: 0, durationFrames: 1, value: `Dalang: ${scene.id}` },
+      ];
+      if (scene.narration.trim()) {
+        markers.push({ startFrame: 0, durationFrames: 1, value: scene.narration.trim() });
+      }
+      videoItems.push({
+        kind: "clip",
+        sceneId: scene.id,
+        name: scene.id,
+        startFrame: cursor,
+        durationFrames,
+        url: fileUrlFor(planDir, asset.file),
+        media: asset.kind,
+        // Gambar diam tidak punya titik masuk; hanya video yang dipotong.
+        sourceStartSec: asset.kind === "video" ? scene.visual.trimStartSec : 0,
+        sourceDurationSec: asset.durationSec ?? null,
+        markers,
+      });
+    }
+
+    const boundary = layout.boundaryFrames[index];
+    if (index < plan.scenes.length - 1 && boundary && scene.transition.type !== "none") {
+      transitions.push({
+        afterClipIndex: videoItems.length - 1,
+        offsetFrames: Math.round(boundary / 2),
+        dalangType: scene.transition.type,
+        dissolve: scene.transition.type === "cross-fade",
+      });
+    }
+    cursor = end;
+  });
+
+  const tracks: EditTrack[] = [
+    { name: "Video", kind: "video", items: videoItems, transitions },
+  ];
+
+  // --- Trek narasi --------------------------------------------------------
+  const narrationClips: EditClip[] = [];
+  plan.scenes.forEach((scene, index) => {
+    const audio = plan.renderState.narrationAudio[scene.id];
+    if (!audio) return;
+    narrationClips.push({
+      kind: "clip",
+      sceneId: scene.id,
+      name: `${scene.id} narasi`,
+      startFrame: (layout.sceneStarts[index] ?? 0) + secToFrames(NARRATION_LEAD_IN_SEC),
+      durationFrames: Math.max(1, secToFrames(audio.durationSec)),
+      url: fileUrlFor(planDir, audio.file),
+      media: "audio",
+      sourceStartSec: 0,
+      sourceDurationSec: audio.durationSec,
+      markers: [],
+    });
+  });
+  tracks.push(...layOnLanes(narrationClips, "Narasi", "audio"));
+
+  // --- Trek musik ---------------------------------------------------------
+  const music = plan.audio.music;
+  if (music) {
+    const resolved = resolveMusicFile(music.assetId);
+    if (!resolved) {
+      notes.push({
+        code: "musik-tidak-dikenal",
+        detail: `Musik "${music.assetId}" tidak ada di pustaka — tidak ikut diekspor.`,
+      });
+    } else if (resolved.bundled && !siteAssetDir) {
+      notes.push({
+        code: "musik-pustaka-tanpa-folder",
+        detail:
+          "Musik pustaka ter-bundle tidak ikut: folder aset situs tidak diberikan ke pengekspor.",
+      });
+    } else {
+      const base = resolved.bundled ? (siteAssetDir as string) : planDir;
+      tracks.push({
+        name: "Musik",
+        kind: "audio",
+        items: [
+          {
+            kind: "clip",
+            sceneId: null,
+            name: music.assetId,
+            startFrame: 0,
+            durationFrames: layout.totalFrames,
+            url: fileUrlFor(base, resolved.file),
+            media: "audio",
+            sourceStartSec: 0,
+            sourceDurationSec: null,
+            markers: [],
+          },
+        ],
+        transitions: [],
+      });
+      notes.push({
+        code: "musik-datar",
+        detail:
+          "Musik diekspor sebagai satu klip sepanjang video; loop, fade, dan ducking otomatis di bawah narasi TIDAK ikut.",
+      });
+    }
+  }
+
+  // --- Trek efek suara ----------------------------------------------------
+  const sfxClips: EditClip[] = [];
+  const sfxTanpaDurasi: string[] = [];
+  for (const cue of plan.audio.sfx) {
+    const asset = plan.renderState.sfxAssets[cue.id];
+    const sceneIndex = plan.scenes.findIndex((scene) => scene.id === cue.sceneId);
+    if (!asset || sceneIndex < 0) continue;
+    if (asset.durationSec === undefined) {
+      // Klip NLE WAJIB punya panjang. Mengarang panjangnya berarti menaruh
+      // kebohongan di garis waktu; melewatinya dan menyebut namanya tidak.
+      sfxTanpaDurasi.push(cue.id);
+      continue;
+    }
+    sfxClips.push({
+      kind: "clip",
+      sceneId: cue.sceneId,
+      name: cue.id,
+      startFrame: (layout.sceneStarts[sceneIndex] ?? 0) + secToFrames(cue.atSec),
+      durationFrames: Math.max(1, secToFrames(asset.durationSec)),
+      url: fileUrlFor(planDir, asset.file),
+      media: "audio",
+      sourceStartSec: 0,
+      sourceDurationSec: asset.durationSec,
+      markers: [],
+    });
+  }
+  tracks.push(...layOnLanes(sfxClips, "Efek", "audio"));
+  if (sfxTanpaDurasi.length > 0) {
+    notes.push({
+      code: "sfx-tanpa-durasi",
+      detail: `Efek suara tanpa panjang tercatat dilewati (${sfxTanpaDurasi.join(", ")}) — panjang karangan di garis waktu lebih menyesatkan daripada klip yang hilang.`,
+    });
+  }
+
+  // --- Catatan: yang tidak punya padanan di format mana pun ---------------
+  if (unresolved.length > 0) {
+    notes.push({
+      code: "scene-tanpa-aset",
+      detail: `Scene tanpa berkas aset jadi lubang kosong: ${unresolved.join(", ")}. Scene template-anim (judul/penutup) memang digambar Dalang sendiri, bukan dari berkas.`,
+    });
+  }
+  const captions = countScenes(
+    plan,
+    (scene) => scene.caption.enabled && !!scene.narration.trim(),
+  );
+  if (captions > 0) {
+    notes.push({
+      code: "caption",
+      detail: `Caption karaoke ${captions} scene tidak ikut — tidak ada padanannya di OTIO/FCPXML. Naskahnya dibawa sebagai penanda (marker) di tiap klip.`,
+    });
+  }
+  const texts = plan.scenes.reduce((sum, scene) => sum + scene.texts.length, 0);
+  const graphics = plan.scenes.reduce((sum, scene) => sum + scene.graphics.length, 0);
+  if (texts + graphics > 0) {
+    // Hanya yang ADA yang disebut: "0 grafis" di daftar kehilangan membuat
+    // pembacanya berhenti membaca daftarnya.
+    const bagian = [
+      texts > 0 ? `${texts} teks overlay` : null,
+      graphics > 0 ? `${graphics} grafis` : null,
+    ].filter((part) => part !== null);
+    notes.push({
+      code: "overlay",
+      detail: `${sentence(bagian.join(" dan "))} tidak ikut — digambar preset Dalang saat render, bukan disimpan sebagai berkas.`,
+    });
+  }
+  const motion = countScenes(plan, (scene) => scene.visual.motion !== "none");
+  const filtered = countScenes(
+    plan,
+    (scene) => !!scene.visual.filter && scene.visual.filter.preset !== "none",
+  );
+  if (motion + filtered > 0) {
+    const bagian = [
+      motion > 0 ? `gerak kamera (${motion} scene)` : null,
+      filtered > 0 ? `filter warna (${filtered} scene)` : null,
+    ].filter((part) => part !== null);
+    notes.push({
+      code: "gerak-filter",
+      detail: `${sentence(bagian.join(" dan "))} tidak ikut — efek render, bukan properti klip.`,
+    });
+  }
+  const annotations = plan.scenes.reduce(
+    (sum, scene) => sum + scene.annotations.length,
+    0,
+  );
+  if (annotations > 0) {
+    notes.push({
+      code: "anotasi",
+      detail: `${annotations} anotasi tutorial (zoom/sorot/panah/blur) tidak ikut.`,
+    });
+  }
+  const speedy = countScenes(plan, (scene) => scene.visual.speed !== 1);
+  const flipped = countScenes(plan, (scene) => scene.visual.flipH);
+  if (speedy + flipped > 0) {
+    const bagian = [
+      speedy > 0 ? `kecepatan putar (${speedy} scene)` : null,
+      flipped > 0 ? `cermin horizontal (${flipped} scene)` : null,
+    ].filter((part) => part !== null);
+    notes.push({
+      code: "speed-flip",
+      detail: `${sentence(bagian.join(" dan "))} tidak ikut.`,
+    });
+  }
+
+  return {
+    name: plan.meta.title,
+    fps: FPS,
+    width,
+    height,
+    totalFrames: layout.totalFrames,
+    tracks: tracks.filter((track) => track.items.length > 0),
+    notes,
+  };
+};

@@ -40,6 +40,8 @@ import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/la
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
 import { buildLambdaTarget, readCloudConfig, registerCloudCommands } from "./cloud";
+import { registerInteropCommands } from "./interop";
+import { registerMcpCommand } from "./mcp";
 import { planPathOf } from "./project-path";
 import { registerProvidersCheckCommand } from "./providers-check";
 import { registerReviewCommand } from "./review";
@@ -543,6 +545,8 @@ program
     },
   );
 
+registerInteropCommands(program);
+registerMcpCommand(program);
 registerReviewCommand(program);
 registerChatCommand(program);
 registerLogCommand(program);

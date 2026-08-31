@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   estimateLlmCostUsd,
   NO_VISION_MODEL,
@@ -13,7 +13,9 @@ import {
   setResolvedAsset,
   speechSpans,
 } from "@dalang/core";
+import { buildEditTimeline, otioToJson, toFcpxml } from "@dalang/interop";
 import {
+  atomicWriteFile,
   contentHash,
   imageDims,
   materializeCandidate,
@@ -28,6 +30,7 @@ import {
   resolveExportSettings,
   VIDEO_FORMATS,
 } from "@dalang/renderer";
+import { templatesPublicDir } from "@dalang/templates/paths";
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -50,6 +53,10 @@ const patchBody = z.object({ ops: z.array(patchOpSchema).min(1) });
 const reviewBody = z.object({
   maxFrames: z.number().int().min(1).max(8).optional(),
   perhatian: z.string().optional(),
+});
+
+const timelineExportBody = z.object({
+  format: z.enum(["otio", "fcpxml"]).default("otio"),
 });
 
 const transcribeBody = z.object({
@@ -370,6 +377,61 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
 
   // ADR-0022: tinjauan render dari UI, bukan hanya lewat chat agent. Memakai
   // fungsi bersama yang sama dengan tool agent dan perintah CLI.
+  /**
+   * Ekspor garis waktu ke OTIO/FCPXML (ADR-0023).
+   *
+   * Berkasnya ditulis di SAMPING plan.json, bukan diunduh lewat browser: aset
+   * dirujuk dengan path absolut, jadi berkasnya hanya berguna di mesin yang
+   * memuat proyeknya. Unduhan ke folder Downloads justru menghasilkan berkas
+   * yang tautannya putus semua.
+   */
+  app.post("/api/timeline-export", async (c) => {
+    const body = timelineExportBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+
+    try {
+      const startedAt = Date.now();
+      const timeline = buildEditTimeline(plan, {
+        planPath: session.paths.planPath,
+        siteAssetDir: templatesPublicDir,
+      });
+      const format = body.data.format;
+      const name = format === "otio" ? "timeline.otio" : "timeline.fcpxml";
+      const target = join(dirname(session.paths.planPath), name);
+      atomicWriteFile(
+        target,
+        format === "otio" ? otioToJson(timeline) : toFcpxml(timeline),
+      );
+
+      const clips = timeline.tracks.reduce(
+        (sum, track) => sum + track.items.filter((item) => item.kind === "clip").length,
+        0,
+      );
+      logUiEvent(
+        "timelineExport",
+        { format },
+        { berkas: name, klip: clips },
+        0,
+        Date.now() - startedAt,
+      );
+      return c.json({
+        ok: true,
+        berkas: target,
+        nama: name,
+        trek: timeline.tracks.length,
+        klip: clips,
+        detik: Number((timeline.totalFrames / timeline.fps).toFixed(1)),
+        // Wajib ikut ke UI: ekspor yang diam soal caption dan gerak membuat
+        // orang mengira Dalang yang rusak saat membuka hasilnya di Resolve.
+        tidakIkut: timeline.notes.map((note) => note.detail),
+      });
+    } catch (error) {
+      return c.json(errorPayload(error), 500);
+    }
+  });
+
   app.post("/api/review", async (c) => {
     const body = reviewBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);

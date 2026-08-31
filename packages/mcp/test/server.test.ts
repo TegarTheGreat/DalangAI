@@ -1,0 +1,274 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parseScenePlan, type ScenePlanInput } from "@dalang/core";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { describe, expect, it } from "vitest";
+import { createDalangMcpServer } from "../src/server";
+import type { ToolContext } from "../src/tools";
+
+/**
+ * Server MCP diuji lewat KLIEN MCP sungguhan di atas transport in-memory,
+ * bukan dengan memanggil fungsinya langsung.
+ *
+ * Alasannya: yang paling mudah salah di server MCP bukan logikanya melainkan
+ * kontraknya — skema input yang tidak bisa diserialkan ke JSON Schema, tool
+ * yang terdaftar padahal tidak seharusnya, galat yang dilempar alih-alih
+ * dikembalikan. Semua itu hanya kelihatan lewat protokolnya.
+ */
+
+const planInput = (): ScenePlanInput => ({
+  version: 1,
+  projectId: "uji-mcp",
+  meta: { title: "Proyek MCP", aspectRatio: "16:9", language: "id" },
+  audio: {},
+  scenes: [
+    { id: "sc-satu", narration: "Kalimat pertama.", visual: { type: "image" } },
+    {
+      id: "sc-dua",
+      narration: "Kalimat kedua.",
+      visual: { type: "image" },
+      locked: true,
+    },
+  ],
+  renderState: { narrationAudio: {}, resolvedAssets: {} },
+});
+
+const makeWorkspace = () => {
+  const root = mkdtempSync(join(tmpdir(), "dalang-mcp-"));
+  const dir = join(root, "proyekku");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "plan.json"),
+    `${JSON.stringify(parseScenePlan(planInput()), null, 2)}\n`,
+  );
+  return { root, dir, planPath: join(dir, "plan.json") };
+};
+
+const connect = async (context: ToolContext) => {
+  const server = createDalangMcpServer(context);
+  const client = new Client({ name: "uji", version: "0.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  return { client, close: async () => await client.close() };
+};
+
+interface ToolText {
+  content: Array<{ type: string; text?: string }>;
+  isError?: boolean;
+}
+
+const callJson = async (
+  client: Client,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<{ isError: boolean; text: string; value: unknown }> => {
+  const result = (await client.callTool({
+    name,
+    arguments: args,
+  })) as unknown as ToolText;
+  const text = result.content.map((part) => part.text ?? "").join("");
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    value = undefined;
+  }
+  return { isError: result.isError === true, text, value };
+};
+
+describe("server MCP Dalang", () => {
+  it("tidak mendaftarkan satu pun tool yang memanggil model atau membelanjakan uang", async () => {
+    // Kaidah inti ADR-0023: pemanggil server ini SUDAH agent. Memberinya otak
+    // kedua hanya menambah biaya dan satu tempat lagi yang bisa berhalusinasi.
+    const { root } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const { tools } = await client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(names).toContain("dalang_apply_patch");
+    expect(names).toContain("dalang_export_timeline");
+    for (const forbidden of ["tts", "voice", "suara", "stock", "aset", "chat", "model"]) {
+      expect(names.filter((name) => name.includes(forbidden))).toEqual([]);
+    }
+    await close();
+  });
+
+  it("tool render TIDAK didaftarkan tanpa port, bukan didaftarkan lalu menolak", async () => {
+    // Klien merencanakan langkahnya dari daftar tool; tool yang selalu menolak
+    // adalah rencana yang selalu gagal di tengah jalan.
+    const { root } = makeWorkspace();
+    const tanpa = await connect({ workspace: { root, readOnly: false } });
+    expect((await tanpa.client.listTools()).tools.map((t) => t.name)).not.toContain(
+      "dalang_render_still",
+    );
+    await tanpa.close();
+
+    const dengan = await connect({
+      workspace: { root, readOnly: false },
+      renderStill: async ({ frames, outDir }) =>
+        frames.map((f) => join(outDir, `${f}.png`)),
+    });
+    expect((await dengan.client.listTools()).tools.map((t) => t.name)).toContain(
+      "dalang_render_still",
+    );
+    await dengan.close();
+  });
+
+  it("membaca ringkasan garis waktu, bukan plan mentah, kecuali diminta", async () => {
+    const { root } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+
+    const ringkas = await callJson(client, "dalang_get_plan", { proyek: "proyekku" });
+    const summary = ringkas.value as {
+      scenes: Array<Record<string, unknown>>;
+      judul: string;
+    };
+    expect(summary.judul).toBe("Proyek MCP");
+    expect(summary.scenes[0]).toMatchObject({ id: "sc-satu", asetSiap: false });
+    expect(ringkas.text).not.toContain("renderState");
+
+    const mentah = await callJson(client, "dalang_get_plan", {
+      proyek: "proyekku",
+      mentah: true,
+    });
+    expect(mentah.text).toContain("renderState");
+    await close();
+  });
+
+  it("menolak path di luar akar dengan HASIL bertanda error, bukan koneksi putus", async () => {
+    const { root } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+
+    const keluar = await callJson(client, "dalang_get_plan", { proyek: "../../etc" });
+    expect(keluar.isError).toBe(true);
+    expect(keluar.text).toContain("pagar ruang kerja");
+
+    // Koneksinya harus tetap hidup: model perlu tahu kenapa panggilannya
+    // ditolak supaya bisa memperbaikinya.
+    const lanjut = await callJson(client, "dalang_list_projects", {});
+    expect(lanjut.isError).toBe(false);
+    await close();
+  });
+
+  it("menolak plan.json yang symlink ke luar akar", async () => {
+    // Path argumennya aman ("liar"), yang menunjuk keluar adalah berkasnya.
+    const { root } = makeWorkspace();
+    const luar = mkdtempSync(join(tmpdir(), "dalang-luar-"));
+    writeFileSync(join(luar, "rahasia.json"), "{}");
+    const liar = join(root, "liar");
+    mkdirSync(liar, { recursive: true });
+    symlinkSync(join(luar, "rahasia.json"), join(liar, "plan.json"));
+
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const hasil = await callJson(client, "dalang_get_plan", { proyek: "liar" });
+    expect(hasil.isError).toBe(true);
+    expect(hasil.text).toContain("luar ruang kerja");
+    await close();
+  });
+
+  it("apply_patch menulis plan.json, dan undo mengembalikannya", async () => {
+    const { root, planPath } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+
+    const patched = await callJson(client, "dalang_apply_patch", {
+      proyek: "proyekku",
+      ops: [{ op: "updateScene", id: "sc-satu", patch: { narration: "Kalimat baru." } }],
+    });
+    expect(patched.isError).toBe(false);
+    expect(readFileSync(planPath, "utf8")).toContain("Kalimat baru.");
+
+    const undone = await callJson(client, "dalang_undo", { proyek: "proyekku" });
+    expect(undone.isError).toBe(false);
+    expect(readFileSync(planPath, "utf8")).toContain("Kalimat pertama.");
+    await close();
+  });
+
+  it("scene terkunci ditolak — pagar yang sama seperti untuk agent Dalang sendiri", async () => {
+    const { root, planPath } = makeWorkspace();
+    const before = readFileSync(planPath, "utf8");
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+
+    const hasil = await callJson(client, "dalang_apply_patch", {
+      proyek: "proyekku",
+      ops: [{ op: "updateScene", id: "sc-dua", patch: { narration: "Dipaksa." } }],
+    });
+    expect(hasil.isError).toBe(true);
+    expect(readFileSync(planPath, "utf8")).toBe(before);
+    await close();
+  });
+
+  it("undo tanpa riwayat mengatakan sebabnya, bukan diam-diam sukses", async () => {
+    const { root } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const hasil = await callJson(client, "dalang_undo", { proyek: "proyekku" });
+    const value = hasil.value as { ok: boolean; pesan: string };
+    expect(value.ok).toBe(false);
+    expect(value.pesan).toContain("bukan yang dibuat Studio atau CLI");
+    await close();
+  });
+
+  it("mode hanya-baca menolak tulisan, dan tetap melayani bacaan", async () => {
+    const { root, planPath } = makeWorkspace();
+    const before = readFileSync(planPath, "utf8");
+    const { client, close } = await connect({ workspace: { root, readOnly: true } });
+
+    const tulis = await callJson(client, "dalang_apply_patch", {
+      proyek: "proyekku",
+      ops: [{ op: "updateScene", id: "sc-satu", patch: { narration: "x" } }],
+    });
+    expect(tulis.isError).toBe(true);
+    expect(readFileSync(planPath, "utf8")).toBe(before);
+
+    expect(
+      (await callJson(client, "dalang_critique", { proyek: "proyekku" })).isError,
+    ).toBe(false);
+    await close();
+  });
+
+  it("ekspor selalu membawa daftar yang TIDAK ikut menyeberang", async () => {
+    // Agent yang mengira ekspornya utuh akan meyakinkan penggunanya soal hal
+    // yang tidak benar.
+    const { root } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const hasil = await callJson(client, "dalang_export_timeline", {
+      proyek: "proyekku",
+    });
+    const value = hasil.value as { ok: boolean; berkas: string; tidakIkut: string[] };
+    expect(value.ok).toBe(true);
+    expect(value.berkas).toBe("proyekku/timeline.otio");
+    expect(value.tidakIkut.length).toBeGreaterThan(0);
+    await close();
+  });
+
+  it("op patch yang tidak valid ditolak skema, bukan diterima separuh", async () => {
+    const { root, planPath } = makeWorkspace();
+    const before = readFileSync(planPath, "utf8");
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const hasil = await callJson(client, "dalang_apply_patch", {
+      proyek: "proyekku",
+      ops: [{ op: "opYangTidakAda", id: "sc-satu" }],
+    });
+    expect(hasil.isError).toBe(true);
+    expect(readFileSync(planPath, "utf8")).toBe(before);
+    await close();
+  });
+
+  it("daftar proyek memakai path relatif akar, tidak membocorkan path absolut", async () => {
+    const { root } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const hasil = await callJson(client, "dalang_list_projects", {});
+    const value = hasil.value as { proyek: Array<{ path: string; title: string }> };
+    expect(value.proyek).toEqual([
+      expect.objectContaining({ path: "proyekku", title: "Proyek MCP" }),
+    ]);
+    await close();
+  });
+});

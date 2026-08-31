@@ -9,7 +9,7 @@ import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useState } from "react";
 import type { BusyKind, ExportSettingsLite } from "../shared/api-types";
-import { api, type ReviewResult } from "./api";
+import { api, type ReviewResult, type TimelineExportResult } from "./api";
 import {
   RadioCard,
   Segmented,
@@ -161,9 +161,34 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const [format, setFormat] = useState<ExportSettingsLite["format"]>("mp4");
   const [resolution, setResolution] = useState<ExportSettingsLite["resolution"]>(1080);
   const [quality, setQuality] = useState<ExportSettingsLite["quality"]>("seimbang");
+  // Ekspor garis waktu berdiri sendiri di dialog ini: bukan render, tidak
+  // memakai setelan di atasnya, dan hasilnya berkas teks — bukan video.
+  const [timeline, setTimeline] = useState<TimelineExportResult | null>(null);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [timelineBusy, setTimelineBusy] = useState<"otio" | "fcpxml" | null>(null);
   useEscape(open, onClose);
 
+  useEffect(() => {
+    if (!open) {
+      setTimeline(null);
+      setTimelineError(null);
+    }
+  }, [open]);
+
   if (!open) return null;
+
+  const exportTimeline = (format: "otio" | "fcpxml") => {
+    setTimelineBusy(format);
+    setTimelineError(null);
+    setTimeline(null);
+    api
+      .exportTimeline(format)
+      .then(setTimeline)
+      .catch((cause: unknown) => {
+        setTimelineError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => setTimelineBusy(null));
+  };
   const busy = project?.busy.render !== null;
   return (
     <div className="dialog-backdrop">
@@ -226,6 +251,56 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
           </div>
         </div>
         <p className="export-hint">{QUALITY_HINT[format][quality]}</p>
+
+        <div className="interop-block">
+          <span className="interop-label">Bawa ke editor lain</span>
+          <p className="interop-desc">
+            Garis waktunya saja — untuk difinishing di DaVinci Resolve, Premiere, atau
+            Final Cut. Berkasnya ditulis di samping plan.json karena asetnya dirujuk
+            dengan path mesin ini.
+          </p>
+          <div className="interop-actions">
+            <button
+              type="button"
+              disabled={timelineBusy !== null}
+              onClick={() => exportTimeline("otio")}
+            >
+              {timelineBusy === "otio" ? <IconSpinner /> : null}
+              OpenTimelineIO
+            </button>
+            <button
+              type="button"
+              disabled={timelineBusy !== null}
+              onClick={() => exportTimeline("fcpxml")}
+            >
+              {timelineBusy === "fcpxml" ? <IconSpinner /> : null}
+              FCPXML
+            </button>
+          </div>
+          {timelineError ? (
+            <div className="notice-warn interop-notice">
+              <strong>Ekspor gagal</strong>
+              <p>{timelineError}</p>
+            </div>
+          ) : null}
+          {timeline ? (
+            <div className="interop-result">
+              <p className="interop-file">
+                {timeline.nama} · {timeline.klip} klip · {timeline.trek} trek ·{" "}
+                {timeline.detik} detik
+              </p>
+              {/* Daftar ini bukan basa-basi: tanpa itu orang membuka hasilnya,
+                  melihat klip polos, lalu mengira Dalang yang rusak. */}
+              <span className="interop-label">Yang tidak ikut menyeberang</span>
+              <ul className="interop-notes">
+                {timeline.tidakIkut.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
         <div className="dialog-actions">
           <button type="button" className="ghost" onClick={onClose}>
             Batal
