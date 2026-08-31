@@ -8,7 +8,8 @@ import {
 import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useState } from "react";
-import type { ExportSettingsLite } from "../shared/api-types";
+import type { BusyKind, ExportSettingsLite } from "../shared/api-types";
+import { api, type ReviewResult } from "./api";
 import {
   RadioCard,
   Segmented,
@@ -21,6 +22,7 @@ import {
   IconCheck,
   IconClipboard,
   IconExport,
+  IconEye,
   IconFolder,
   IconImage,
   IconMic,
@@ -49,10 +51,16 @@ import { studioClient, useStudio } from "./use-studio";
 const formatUsd = (value: number): string =>
   value === 0 ? "$0.00" : `$${value.toFixed(value < 0.1 ? 4 : 2)}`;
 
-const BUSY_LABEL: Record<string, string> = {
+/* Diketik `Record<BusyKind, string>`, bukan `Record<string, string>`: dengan
+   yang kedua, BusyKind baru diam-diam jatuh ke "Memproses" — dan itu sudah
+   terjadi dua kali (transcribe, lalu review). Sekarang kompiler yang
+   mengingatkan. */
+const BUSY_LABEL: Record<BusyKind, string> = {
   chat: "Agent sedang bekerja",
   tts: "Membuat suara",
   assets: "Mengambil aset",
+  transcribe: "Mentranskrip rekaman",
+  review: "Meninjau render",
   pick: "Memasang aset",
 };
 
@@ -543,12 +551,194 @@ const CritiqueDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   );
 };
 
+/**
+ * Tinjauan render (ADR-0022) — agent MELIHAT hasil kerjanya, bukan cuma
+ * membaca plan. Bedanya dengan Catatan sutradara di atas tajam dan disengaja:
+ *
+ *  - Catatan dihitung di browser dari plan: gratis, seketika, dan hanya bisa
+ *    menemukan hal yang terbaca dari angka (narasi terlalu padat, scene
+ *    terlalu pendek).
+ *  - Tinjauan me-render frame sungguhan lalu mengirimkannya ke model vision:
+ *    berbiaya dan makan waktu, tapi menemukan hal yang cuma kelihatan (teks
+ *    tertutup, kontras jeblok, frame kosong).
+ *
+ * Permintaannya dipegang di sini, bukan di store: hasil tinjauan tidak
+ * mengubah plan sama sekali — menyiarkannya ke semua tab hanya menambah
+ * muatan tanpa ada yang memakainya.
+ */
+const FRAME_CHOICES = [2, 4, 6] as const;
+
+const ReviewDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
+  open,
+  onClose,
+}) => {
+  const { project } = useStudio();
+  const plan = project?.plan ?? null;
+  const [maxFrames, setMaxFrames] = useState<number>(4);
+  const [perhatian, setPerhatian] = useState("");
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ReviewResult | null>(null);
+  useEscape(open && !running, onClose);
+
+  // Dibuang saat dialog ditutup: hasil tinjauan menempel pada satu versi plan,
+  // dan menampilkannya lagi setelah beberapa editan hanya menyesatkan.
+  useEffect(() => {
+    if (!open) {
+      setResult(null);
+      setError(null);
+    }
+  }, [open]);
+
+  if (!open || !plan) return null;
+
+  const run = () => {
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    api
+      .runReview(maxFrames, perhatian.trim() || undefined)
+      .then(setResult)
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => setRunning(false));
+  };
+
+  const findings = result?.findings ?? [];
+  return (
+    <div className="dialog-backdrop">
+      <div className="dialog brief-dialog">
+        <h3>Tinjauan render</h3>
+        <p>
+          Beberapa frame dirender sungguhan lalu dibaca model vision — untuk menemukan
+          yang cuma kelihatan: teks tertutup, kontras jeblok, frame kosong. Berbiaya
+          (render + model) dan butuh waktu.
+        </p>
+        <div className="review-form">
+          <div className="field">
+            <span>Jumlah frame</span>
+            <Segmented
+              options={FRAME_CHOICES}
+              value={maxFrames}
+              label={(option) => `${option} frame`}
+              onChange={setMaxFrames}
+              disabled={running}
+              grow
+            />
+          </div>
+          <label className="field">
+            <span>Yang ingin diperiksa (opsional)</span>
+            <input
+              type="text"
+              value={perhatian}
+              disabled={running}
+              placeholder="mis. apakah judul terbaca di atas fotonya"
+              onChange={(event) => setPerhatian(event.target.value)}
+            />
+          </label>
+        </div>
+        {error ? (
+          <div className="notice-warn review-notice">
+            <strong>Tinjauan gagal</strong>
+            <p>{error}</p>
+          </div>
+        ) : null}
+        {result?.warning ? (
+          <div className="notice-warn review-notice">
+            <strong>Jawaban model tidak terbaca</strong>
+            <p>{result.warning}</p>
+          </div>
+        ) : null}
+        {result ? (
+          <>
+            <ul className="review-frames">
+              {result.frames.map((frame) => (
+                <li key={frame.frame}>
+                  <span className="review-frame-scene">Scene {frame.sceneNumber}</span>
+                  <span className="review-frame-reason">{frame.reason}</span>
+                </li>
+              ))}
+            </ul>
+            {result.dropped ? (
+              <p className="review-dropped">
+                {result.dropped} temuan dibuang karena menunjuk scene yang tidak ada.
+              </p>
+            ) : null}
+            <p className="review-cost">
+              {result.model}
+              {result.costUsd !== undefined
+                ? ` · biaya tercatat ${formatUsd(result.costUsd)}`
+                : " · harga model tidak diketahui, biaya tidak tercatat"}
+            </p>
+            {findings.length === 0 && !result.warning ? (
+              <p className="note-clean">
+                <IconCheck /> Model tidak menemukan masalah pada frame yang dilihat. Frame
+                lain belum tentu bersih.
+              </p>
+            ) : (
+              <ul className="note-list">
+                {findings.map((finding, index) => (
+                  // Model bisa mengembalikan dua temuan yang sama persis pada
+                  // scene yang sama, jadi isinya bukan kunci yang unik. Daftar
+                  // ini diganti utuh tiap tinjauan dan itemnya tidak menyimpan
+                  // state, jadi posisi memang identitasnya.
+                  // biome-ignore lint/suspicious/noArrayIndexKey: daftar diganti utuh, item tanpa state
+                  <li key={index} className={`note-item ${finding.level}`}>
+                    <span className="note-level">
+                      {finding.level === "perhatian" ? "Perhatian" : "Saran"}
+                    </span>
+                    <span className="note-body">
+                      {finding.masalah}
+                      <span className="review-saran">{finding.saran}</span>
+                      {finding.sceneId ? (
+                        <button
+                          type="button"
+                          className="note-jump"
+                          onClick={() => {
+                            onClose();
+                            studioClient.selectScene(finding.sceneId as string);
+                          }}
+                        >
+                          Buka {finding.sceneId}
+                        </button>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : null}
+        <div className="brief-actions">
+          <button type="button" className="primary" disabled={running} onClick={run}>
+            {running ? (
+              <>
+                <IconSpinner />
+                Merender & menilai…
+              </>
+            ) : result ? (
+              "Tinjau lagi"
+            ) : (
+              "Tinjau sekarang"
+            )}
+          </button>
+          <button type="button" disabled={running} onClick={onClose}>
+            Tutup
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Header: React.FC = () => {
   const { project, connected } = useStudio();
   const { chatOpen, inspectorOpen } = useUi();
   const [exportOpen, setExportOpen] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
   const [critiqueOpen, setCritiqueOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [actionsRef, actionsFade] = useScrollFade<HTMLDivElement>();
   const plan = project?.plan ?? null;
   const noteCount = plan ? critiquePlan(plan).length : 0;
@@ -651,6 +841,17 @@ const Header: React.FC = () => {
           <span>Catatan</span>
           {noteCount > 0 ? <span className="tool-badge">{noteCount}</span> : null}
         </button>
+        <button
+          type="button"
+          className="tool"
+          disabled={!plan || project?.busy.mutation !== null}
+          onClick={() => setReviewOpen(true)}
+          data-tip="Tinjauan render: agent melihat frame sungguhan (berbiaya)"
+          data-tip-bottom=""
+        >
+          <IconEye />
+          <span>Tinjau</span>
+        </button>
         <span className="divider" />
         <button
           type="button"
@@ -743,6 +944,7 @@ const Header: React.FC = () => {
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
       <StyleDialog open={styleOpen} onClose={() => setStyleOpen(false)} />
       <CritiqueDialog open={critiqueOpen} onClose={() => setCritiqueOpen(false)} />
+      <ReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} />
     </header>
   );
 };

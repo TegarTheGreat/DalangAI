@@ -44,9 +44,11 @@ export const buildUserMessage = (
   return {
     role: "user",
     content: [
+      // Bagian "file", bukan "image": bentuk "image" sudah usang di AI SDK v7
+      // dan memicu peringatan deprecation di setiap panggilan multimodal.
       ...images.map((image) => ({
-        type: "image" as const,
-        image: image.base64,
+        type: "file" as const,
+        data: image.base64,
         mediaType: image.mediaType,
       })),
       { type: "text" as const, text },

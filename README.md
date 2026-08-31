@@ -336,15 +336,24 @@ Yang sudah berjalan:
     mudah berputar tanpa ujung.
   - Jawaban model yang tidak bisa diurai ditandai peringatan, **tidak** pernah
     dilaporkan sebagai "bersih".
+  - Tiga permukaan di atas satu runner: tool agent, tombol **Tinjau** di
+    toolbar Studio, dan `dalang review <proyek>` — jadi tinjauan berguna juga
+    bagi orang yang mengedit sepenuhnya dengan tangan, tanpa membuka chat.
+    Tak satu pun mengubah plan: temuan model adalah saran.
+  - Biayanya jujur di ketiganya: agent lewat gerbang izin + anggaran proyek,
+    CLI mencetak perkiraan sebelum jalan dan biaya nyata sesudahnya, Studio
+    menampilkan biaya nyata dan mencatatnya ke buku besar proyek.
   - **Suite eval** (`pnpm --filter @dalang/agent eval`): lima brief bersumbu
     berbeda, skor 0-100 dari kepatuhan brief + kerajinan. Ini yang membuat
     perubahan prompt/model bisa dibandingkan dengan angka, bukan kesan.
-    `-- --self-check` menguji rangkanya tanpa model.
+    `-- --self-check` menguji rangkanya tanpa model — dan mode itu kini jadi
+    gerbang CI: penilai yang rusak atau plan contoh yang melanggar kaidahnya
+    sendiri membuat CI merah, tanpa kunci API dan tanpa biaya.
   - *Batas jujur: tinjauan vision belum pernah dijalankan terhadap model
     sungguhan (repo ini tanpa kunci API), dan skor eval mengukur KEPATUHAN
     serta KERAJINAN — bukan apakah naskahnya menarik. Plan membosankan yang
     rapi bisa mendapat 100.*
-- **Kualitas terjaga otomatis**: 665 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 677 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -357,7 +366,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 665 unit test (8 paket) — tanpa browser & jaringan
+pnpm test                 # 677 unit test (8 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -367,6 +376,7 @@ pnpm dalang chat proyekku/            # chat agent di terminal — Fase 2
 pnpm dalang validate examples/borobudur-60s          # folder atau plan.json, sama saja
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
 pnpm dalang transcribe examples/podcast   # transkripsi rekaman -> renderState (ADR-0021)
+pnpm dalang review examples/borobudur-60s # render frame -> nilai dengan model vision (ADR-0022)
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
 pnpm dalang render   examples/borobudur-60s/plan.json --video-format webm --resolution 720 --quality terbaik
@@ -483,10 +493,11 @@ di `docs/decisions/`.
 
 - [x] **Fase 7 — Agent melihat hasil kerjanya** (ADR-0022): tool
       `reviewRender` (render frame kunci -> vision -> temuan terstruktur),
-      pemilihan frame berbasis momen paling ramai, batas loop di kode, laporan
-      gabungan gambar + struktur, dan suite eval berskor. *Catatan: jalur
-      vision belum dijalankan terhadap model sungguhan — lihat "Batas yang
-      dinyatakan" di ADR-0022.*
+      pemilihan frame berbasis momen paling ramai, batas loop + gerbang biaya
+      di kode, laporan gabungan gambar + struktur, tiga permukaan (tool,
+      tombol Tinjau di Studio, `dalang review`), dan suite eval berskor yang
+      `--self-check`-nya menjaga CI. *Catatan: jalur vision belum dijalankan
+      terhadap model sungguhan — lihat "Batas yang dinyatakan" di ADR-0022.*
 
 Fase 8 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

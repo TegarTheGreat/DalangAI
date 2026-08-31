@@ -35,7 +35,6 @@ import {
 } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
 import type { RenderVideoResult } from "@dalang/renderer";
-import { pickReviewFrames } from "@dalang/templates/review-frames";
 import { generateText, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { ResolvedModel } from "./models/resolve";
@@ -48,7 +47,12 @@ import {
   parseVerification,
   verifyPrompt,
 } from "./vision/grounding";
-import { parseReviewFindings, reviewPrompt } from "./vision/review";
+import {
+  estimateReviewUsd,
+  NO_VISION_MODEL,
+  runRenderReview,
+  UNPARSED_WARNING,
+} from "./vision/review-run";
 
 /**
  * Tools §6.2 — jendela agent ke sistem. Setiap tool:
@@ -1290,8 +1294,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           if (!volume) {
             return {
               ok: false,
-              error:
-                "Model vision tidak tersedia — tinjauan render butuh model tier-volume yang menerima gambar. Sampaikan ini ke user; JANGAN mengarang penilaian atas frame yang tidak pernah kamu lihat.",
+              error: `${NO_VISION_MODEL} Sampaikan ini ke user; JANGAN mengarang penilaian atas frame yang tidak pernah kamu lihat.`,
             };
           }
           if (volume.info && !volume.info.imageInput) {
@@ -1309,72 +1312,72 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             };
           }
 
-          const frames = pickReviewFrames(plan, { max: input.maxFrame ?? 4 });
+          // Gerbang BIAYA (§6.3), bukan hanya gerbang iterasi. Tiap frame
+          // adalah gambar yang dikirim ke model berbayar, dan tiga tinjauan
+          // berturut-turut pada delapan frame bukan pengeluaran sepele.
+          const maxFrame = input.maxFrame ?? 4;
+          const estimatedUsd = estimateReviewUsd(volume, maxFrame);
+          if (estimatedUsd !== null && estimatedUsd > guards.config.approvalGateUsd) {
+            const approved = await guards.approve({
+              action: "tinjauan-render",
+              detail: `Tinjauan render ${maxFrame} frame lewat ${volume.key}`,
+              estimatedUsd,
+            });
+            if (!approved) {
+              throw new Error(
+                "User menolak tinjauan render — tawarkan meninjau lebih sedikit frame",
+              );
+            }
+          }
+          if (estimatedUsd !== null && estimatedUsd > 0) {
+            const withinBudget = await guards.ensureProjectBudget(
+              session.events.totalCostUsd(),
+              estimatedUsd,
+              "tinjauan render",
+            );
+            if (!withinBudget) {
+              throw new Error("Budget proyek terlampaui dan user tidak menyetujui");
+            }
+          }
+
           session.persist();
-          const outDir = join(session.paths.dalangDir, "review");
-          let files: string[];
+          let review: Awaited<ReturnType<typeof runRenderReview>>;
           try {
-            files = await deps.renderStills({
+            review = await runRenderReview({
+              plan,
               planPath: session.paths.planPath,
-              frames: frames.map((item) => item.frame),
-              outDir,
-              // Seperempat ukuran: cukup untuk menilai tata letak dan
-              // keterbacaan, dan jauh lebih murah dikirim ke model.
-              scale: 0.25,
+              outDir: join(session.paths.dalangDir, "review"),
+              model: volume,
+              renderStills: deps.renderStills,
+              maxFrames: maxFrame,
+              ...(input.perhatian ? { extra: input.perhatian } : {}),
             });
           } catch (error) {
             return {
               ok: false,
-              error: `Render frame tinjauan gagal: ${error instanceof Error ? error.message : String(error)}`,
+              error: `Tinjauan render gagal: ${error instanceof Error ? error.message : String(error)}`,
             };
           }
 
-          const images = files.map((file) => readFileSync(file));
-          const result = await generateText({
-            model: volume.model,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  ...images.map((bytes) => ({
-                    type: "image" as const,
-                    image: bytes,
-                    mediaType: "image/png",
-                  })),
-                  { type: "text" as const, text: reviewPrompt(frames, input.perhatian) },
-                ],
-              },
-            ],
-          });
-          guards.addLlmUsage(volume.info, result.totalUsage);
+          guards.addLlmUsage(volume.info, review.usage);
           session.events.record({
             turn: session.turn,
             kind: "llm",
             name: `review:${volume.key}`,
-            input: { frames: frames.length },
-            output: { chars: result.text.length },
+            input: { frames: review.frames.length },
+            output: { temuan: review.findings.length },
             costUsd: null,
           });
 
-          const parsed = parseReviewFindings(result.text);
-          // Nomor scene dari model dipetakan balik ke id — temuan tanpa id
-          // tidak bisa dipakai applyPatch, dan nomor bisa saja meleset.
-          const byNumber = new Map(
-            plan.scenes.map((scene, index) => [index + 1, scene.id]),
-          );
-          const temuanGambar = parsed.findings.map((finding) => ({
+          const temuanGambar = review.findings.map((finding) => ({
             level: finding.level,
             masalah: finding.masalah,
             ...(finding.saran !== "" ? { saran: finding.saran } : {}),
-            ...(finding.scene !== undefined && byNumber.has(finding.scene)
-              ? { sceneId: byNumber.get(finding.scene) as string, scene: finding.scene }
+            ...(finding.sceneId
+              ? { sceneId: finding.sceneId, scene: finding.scene }
               : {}),
           }));
-
-          // ADR-0022 §7.3: satu laporan, dua sudut. Kritik struktur melihat
-          // yang tidak terlihat di gambar (musik hilang, irama datar), gambar
-          // melihat yang tidak terbaca dari JSON.
-          const struktur = critiquePlan(plan).map((note) => ({
+          const struktur = review.structural.map((note) => ({
             kode: note.code,
             level: note.level,
             ...(note.sceneId ? { sceneId: note.sceneId } : {}),
@@ -1383,7 +1386,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
           return {
             ok: true,
-            frameDitinjau: frames.map((item) => ({
+            frameDitinjau: review.frames.map((item) => ({
               scene: item.sceneNumber,
               sceneId: item.sceneId,
               frame: item.frame,
@@ -1393,13 +1396,8 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             temuanStruktur: struktur,
             bersih: temuanGambar.length === 0 && struktur.length === 0,
             sisaJatahTinjauan: guards.reviewRendersLeft,
-            ...(parsed.unparsed
-              ? {
-                  peringatan:
-                    "Model vision tidak menjawab dalam bentuk yang bisa diurai — TIDAK ADA temuan gambar yang sah. Jangan menganggap ini berarti gambarnya bersih.",
-                }
-              : {}),
-            ...(parsed.dropped > 0 ? { temuanDibuang: parsed.dropped } : {}),
+            ...(review.unparsed ? { peringatan: UNPARSED_WARNING } : {}),
+            ...(review.dropped > 0 ? { temuanDibuang: review.dropped } : {}),
           };
         }),
     }),
@@ -1505,7 +1503,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
               {
                 role: "user",
                 content: [
-                  { type: "image", image: bytes, mediaType },
+                  { type: "file", data: bytes, mediaType },
                   { type: "text", text: input.question },
                 ],
               },
@@ -1561,7 +1559,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
               {
                 role: "user",
                 content: [
-                  { type: "image", image: bytes, mediaType: "image/png" },
+                  { type: "file", data: bytes, mediaType: "image/png" },
                   { type: "text", text: locatePrompt(input.description) },
                 ],
               },
@@ -1583,7 +1581,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
               {
                 role: "user",
                 content: [
-                  { type: "image", image: crop.png, mediaType: "image/png" },
+                  { type: "file", data: crop.png, mediaType: "image/png" },
                   { type: "text", text: verifyPrompt(input.description) },
                 ],
               },

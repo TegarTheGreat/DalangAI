@@ -146,6 +146,64 @@ describe("ADR-0022 · reviewRender", () => {
     expect(String(ketiga.error)).toMatch(/Terapkan dulu temuan sebelumnya/);
   });
 
+  it("GERBANG BIAYA meminta izin saat perkiraannya melewati ambang", async () => {
+    // Roadmap 7.2 menuntut batas iterasi DAN biaya. Batas iterasi saja tidak
+    // cukup: tiga tinjauan pada delapan frame tetap pengeluaran nyata.
+    const { session } = open(basicPlan());
+    const ditolak = new Guardrails({ approvalGateUsd: 0.001 }, async () => false);
+    const { deps } = makeDeps({ guards: ditolak, volumeModel: visionSaying(CLEAN) });
+    // Pembungkus tool mengubah lemparan jadi { ok: false, error } — itulah
+    // bentuk yang benar-benar dibaca agent.
+    const result = await exec(buildAgentTools(session, deps), "reviewRender", {
+      maxFrame: 8,
+    });
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/menolak tinjauan render/);
+  });
+
+  it("izin yang diberikan meneruskan tinjauan", async () => {
+    const { session } = open(basicPlan());
+    const diizinkan = new Guardrails({ approvalGateUsd: 0.001 }, async () => true);
+    const { deps } = makeDeps({ guards: diizinkan, volumeModel: visionSaying(CLEAN) });
+    expect(
+      (await exec(buildAgentTools(session, deps), "reviewRender", { maxFrame: 8 })).ok,
+    ).toBe(true);
+  });
+
+  it("tidak meminta izin untuk tinjauan kecil di bawah ambang", async () => {
+    const permintaan: unknown[] = [];
+    const { session } = open(basicPlan());
+    const guards = new Guardrails({ approvalGateUsd: 1 }, async (request) => {
+      permintaan.push(request);
+      return true;
+    });
+    const { deps } = makeDeps({ guards, volumeModel: visionSaying(CLEAN) });
+    await exec(buildAgentTools(session, deps), "reviewRender", { maxFrame: 2 });
+    expect(permintaan).toEqual([]);
+  });
+
+  it("model tanpa harga tidak diblokir gerbang biaya", async () => {
+    // Registry tidak selalu tahu harga tiap model. Menolak menjalankan hanya
+    // karena harganya tak diketahui akan mematikan fitur ini untuk model
+    // lokal dan model baru — padahal keduanya justru yang termurah.
+    const { session } = open(basicPlan());
+    const guards = new Guardrails({ approvalGateUsd: 0.000001 }, async () => false);
+    const { deps } = makeDeps({
+      guards,
+      // `undefined` sebagai argumen kedua memakai DEFAULT-nya (yang berharga),
+      // jadi harganya dikosongkan lewat field — persis kondisi yang membuat
+      // estimateLlmCostUsd mengembalikan null.
+      volumeModel: resolvedScripted(() => textStep(CLEAN), {
+        ...SCRIPTED_INFO,
+        costInputPerMTok: undefined,
+        costOutputPerMTok: undefined,
+      }),
+    });
+    expect(
+      (await exec(buildAgentTools(session, deps), "reviewRender", { maxFrame: 8 })).ok,
+    ).toBe(true);
+  });
+
   it("jatah pulih di giliran berikutnya", async () => {
     const { session } = open(basicPlan());
     const guards = new Guardrails({ reviewRenderCap: 1 }, async () => true);

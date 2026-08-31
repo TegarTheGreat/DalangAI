@@ -82,7 +82,12 @@ export interface StudioDeps {
 export interface ChatBridge {
   onActivity: (line: string) => void;
   onApproval: (request: {
-    action: "renderFinal" | "tts-massal" | "transkripsi" | "budget-proyek";
+    action:
+      | "renderFinal"
+      | "tts-massal"
+      | "transkripsi"
+      | "tinjauan-render"
+      | "budget-proyek";
     detail: string;
     estimatedUsd?: number;
   }) => Promise<boolean>;

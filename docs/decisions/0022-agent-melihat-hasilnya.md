@@ -105,6 +105,52 @@ brief satu kalimat tanpa arahan. Briefnya ditulis seperti orang menulis —
 kalimat pendek, tidak lengkap; eval yang briefnya rapi hanya mengukur
 kemampuan mengisi formulir.
 
+### 7. Satu runner, tiga permukaan — dan gerbang biaya di ketiganya
+
+`reviewRender` mulanya hanya tool agent. Itu tidak cukup: tinjauan paling
+berguna justru pada plan yang TIDAK sedang dikerjakan agent — setelah editan
+manual di Studio, atau sebagai pemeriksaan terakhir sebelum ekspor, dari
+terminal, tanpa membuka sesi chat. Fase 6 memberi transkrip tiga permukaan
+(tool, tab Studio, `dalang transcribe`); tinjauan mendapat tiga yang sama:
+
+- tool `reviewRender` untuk agent;
+- `POST /api/review` + tombol **Tinjau** di toolbar Studio;
+- `dalang review <proyek>`.
+
+Ketiganya memanggil **satu** fungsi `runRenderReview`. Diekstrak sebelum
+pemakai keduanya ada, bukan sesudah: jalur "pilih frame → render still → satu
+panggilan vision multi-gambar → urai temuan" punya beberapa detail yang mudah
+menyimpang kalau disalin (pemetaan nomor scene ke id, geseran waktu,
+perlakuan jawaban tak terurai).
+
+Yang TIDAK dibagi adalah gerbangnya, karena keadaannya memang berbeda:
+
+- **Tool agent** melewati `Guardrails` — jatah `reviewRenderCap`, izin
+  (`tinjauan-render`), dan anggaran proyek. Agent bisa memutuskan meninjau
+  berkali-kali tanpa ada yang menyadarinya; gerbang biaya inilah yang hilang
+  di versi pertama ADR ini dan ditambahkan setelah audit.
+- **Studio dan CLI** dijalankan MANUSIA yang menekan tombol atau mengetik
+  perintah. Perintah eksplisit adalah persetujuannya sendiri; yang wajib di
+  sana bukan gerbang melainkan **kejujuran angka** — CLI mencetak perkiraan
+  sebelum jalan dan biaya nyata sesudahnya, Studio menampilkan biaya nyata di
+  dialog dan mencatatnya ke buku besar proyek.
+
+Tidak satu pun dari ketiganya mengubah plan. Temuan model adalah pendapat, dan
+pendapat tidak menulis ke sumber kebenaran tanpa ada yang memutuskannya
+(PRD §5.1).
+
+### 8. Eval `--self-check` jadi gerbang CI
+
+Mode `--self-check` menilai plan contoh repo tanpa memanggil model sama
+sekali. Ia tidak mengukur mutu agent — mustahil tanpa model berbayar di CI —
+tapi ia menangkap dua kemunduran yang tidak ditangkap tes mana pun: **penilai
+yang rusak diam-diam**, dan **plan contoh repo yang diedit sampai melanggar
+kaidahnya sendiri**.
+
+Agar berguna sebagai gerbang, modenya harus bisa GAGAL: versi pertamanya
+mencetak "GAGAL" per pemeriksaan lalu tetap keluar dengan kode 0. Itu
+diperbaiki dan dibuktikan dua arah sebelum dipasang di CI.
+
 ## Bukti
 
 **Penilai eval menolak fixture "bagus" buatan sendiri, dan itu buktinya
@@ -133,6 +179,33 @@ dilacak balik.
 **Batas tinjauan dibuktikan dua arah:** panggilan ketiga dengan cap 2 ditolak
 dengan instruksi yang benar, dan jatahnya pulih setelah `beginTurn()`.
 
+**Gerbang CI dibuktikan menyala, bukan diasumsikan.** Satu scene penutup
+dibuang dari `examples/borobudur-60s`, `--self-check` melaporkan "GAGAL ada
+penutup" dan keluar dengan kode 1; plan dikembalikan, kode 0. Gerbang yang
+tidak pernah dilihat gagal adalah gerbang yang belum terbukti ada.
+
+**Rute Studio mencatat biaya NYATA, dan itu ditemukan karena diuji.** Versi
+pertama `POST /api/review` memanggil model berbayar lalu memanggil
+`logUiEvent(..., 0, ...)` — chip biaya di topbar dan anggaran proyek akan
+melaporkan tinjauan sebagai gratis. Sekarang biayanya dihitung dari `usage`
+yang dikembalikan model, dan dua tes menguncinya: satu memastikan angkanya
+masuk buku besar proyek, satu lagi memastikan model tanpa harga melaporkan
+biaya **tidak diketahui** — bukan nol.
+
+**Satu tombol menggeser seluruh tangga responsif.** Menambahkan "Tinjau" ke
+toolbar membuat gerbang tata letak gagal di 1536/1512px (sakelar rasio
+tergunting, lalu menindih tombol Chat) dan di 768px (tombol Proyek
+tergunting). Ambang label-jadi-ikon dinaikkan ke 1600px dan zona aksi mulai
+digulir pada 860px; gerbang lulus lagi di 18 lebar layar. Satu kontrol
+tambahan pada baris yang sudah padat bukan perubahan lokal — dan hanya
+gerbang yang MENGUKUR geometri yang bisa mengatakan itu.
+
+**Bagian gambar yang usang diganti di seluruh repo.** Menjalankan tes
+tinjauan memunculkan peringatan deprecation AI SDK v7: bentuk
+`{ type: "image", image }` sudah usang. Lima pemanggilan (tinjauan render,
+chat multimodal, `analyzeImage`, dan dua langkah grounding tutorial) diubah ke
+`{ type: "file", data, mediaType }`.
+
 ## Batas yang dinyatakan
 
 - **Belum pernah dijalankan terhadap model vision sungguhan.** Repo ini tidak
@@ -149,6 +222,10 @@ dengan instruksi yang benar, dan jatahnya pulih setelah `beginTurn()`.
   membuktikan rangkanya jalan, dan pesannya mengatakan itu.
 - Tinjauan memakai still, jadi ia buta terhadap gerak dan audio — persis yang
   dilarang keras dilaporkan di dalam promptnya.
+- Studio dan CLI **tidak** memakai `reviewRenderCap`: batas itu ada untuk
+  mengekang loop agent, dan manusia yang menekan tombol tidak sedang berputar
+  dalam loop. Konsekuensinya jujur: seseorang yang menekan "Tinjau sekarang"
+  sepuluh kali akan membayar sepuluh kali, dan angkanya terlihat setiap kali.
 
 ## Konsekuensi
 
@@ -158,6 +235,11 @@ dengan instruksi yang benar, dan jatahnya pulih setelah `beginTurn()`.
   bukan kesan. Itu prasyarat untuk semua penyetelan agent sesudah ini.
 - `scripts/` yang kini ditypecheck menutup satu kelas cacat untuk seluruh repo,
   bukan hanya untuk berkas yang memicunya.
+- Tinjauan bisa dijalankan tanpa agent sama sekali — dari toolbar Studio atau
+  dari terminal — jadi ia berguna juga bagi orang yang mengedit sepenuhnya
+  dengan tangan.
+- CI kini menjaga penilai eval dan plan contoh repo, tanpa kunci API dan tanpa
+  biaya.
 
 ## Alternatif yang ditolak
 

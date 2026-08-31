@@ -10,7 +10,7 @@ import type { PatchOpInput, ScenePlan } from "@dalang/core";
 // Snapshot proyek (GET /api/project)
 // ---------------------------------------------------------------------------
 
-export type BusyKind = "chat" | "tts" | "assets" | "transcribe" | "pick";
+export type BusyKind = "chat" | "tts" | "assets" | "transcribe" | "review" | "pick";
 
 export interface BusyState {
   /** Job yang sedang memutasi plan (satu-per-satu), atau null. */

@@ -70,6 +70,17 @@ if (selfCheck) {
       `      ${check.passed ? "ok   " : "GAGAL"} ${check.name} — ${check.detail}`,
     );
   }
+  // Keluar 1 kalau ada yang gagal — kalau tidak, mode ini tak berguna sebagai
+  // gerbang CI: ia akan mencetak "GAGAL" lalu tetap melaporkan sukses. Dua
+  // regresi yang ditangkapnya nyata: penilai yang rusak, dan plan contoh repo
+  // yang diedit sampai melanggar kaidahnya sendiri.
+  const failed = score.checks.filter((check) => !check.passed);
+  if (failed.length > 0) {
+    console.error(
+      `\nGAGAL: ${failed.length} pemeriksaan tidak lolos pada plan contoh repo.`,
+    );
+    process.exit(1);
+  }
   process.exit(0);
 }
 

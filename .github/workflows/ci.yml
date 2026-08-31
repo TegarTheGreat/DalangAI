@@ -44,6 +44,14 @@ jobs:
       - name: Unit tests (incl. JSON Schema up-to-date check)
         run: pnpm test
 
+      # ADR-0022: rangka eval (penilai + papan skor) dijalankan tanpa model
+      # sama sekali, atas plan contoh repo. Tidak mengukur mutu agent — mustahil
+      # tanpa memanggil model berbayar di CI — tapi menangkap dua regresi yang
+      # tidak ditangkap tes mana pun: penilai yang rusak diam-diam, dan plan
+      # contoh yang diedit sampai melanggar kaidahnya sendiri.
+      - name: Eval self-check (rangka penilai, tanpa model)
+        run: pnpm --filter @dalang/agent eval --self-check
+
       - name: Build app studio (Vite)
         run: pnpm --filter @dalang/studio build
 

@@ -1,6 +1,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  estimateLlmCostUsd,
+  NO_VISION_MODEL,
+  runRenderReview,
+  UNPARSED_WARNING,
+} from "@dalang/agent";
+import {
   PatchError,
   patchOpSchema,
   resolveSceneDurationSec,
@@ -41,6 +47,11 @@ import { StudioBusyError } from "./store";
  */
 
 const patchBody = z.object({ ops: z.array(patchOpSchema).min(1) });
+const reviewBody = z.object({
+  maxFrames: z.number().int().min(1).max(8).optional(),
+  perhatian: z.string().optional(),
+});
+
 const transcribeBody = z.object({
   sceneIds: z.array(z.string().min(1)).optional(),
   diarize: z.boolean().optional(),
@@ -351,6 +362,77 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         })),
       });
       return c.json({ ok: true, results: outcome.results });
+    } catch (error) {
+      if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
+      return c.json(errorPayload(error), 500);
+    }
+  });
+
+  // ADR-0022: tinjauan render dari UI, bukan hanya lewat chat agent. Memakai
+  // fungsi bersama yang sama dengan tool agent dan perintah CLI.
+  app.post("/api/review", async (c) => {
+    const body = reviewBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+
+    const volume = deps.volumeModel;
+    if (!volume || (volume.info && !volume.info.imageInput)) {
+      // 501, bukan 500: kemampuan yang belum dikonfigurasi, bukan kerusakan.
+      return c.json(
+        {
+          error: volume
+            ? `Model ${volume.key} tidak menerima input gambar — pilih model vision untuk tier volume.`
+            : `${NO_VISION_MODEL} Set model tier-volume yang menerima gambar.`,
+          code: "vision-unavailable",
+        },
+        501,
+      );
+    }
+
+    try {
+      const startedAt = Date.now();
+      const review = await store.runExclusive("review", () =>
+        runRenderReview({
+          plan,
+          planPath: session.paths.planPath,
+          outDir: join(session.paths.dalangDir, "review"),
+          model: volume,
+          renderStills: (stills) => deps.renderStills(stills),
+          ...(body.data.maxFrames !== undefined
+            ? { maxFrames: body.data.maxFrames }
+            : {}),
+          ...(body.data.perhatian ? { extra: body.data.perhatian } : {}),
+        }),
+      );
+      // Biaya NYATA dari usage yang dikembalikan model, bukan perkiraan pra-
+      // panggil: tinjauan lewat Studio memanggil model berbayar, dan mencatatnya
+      // 0 membuat chip biaya di topbar serta anggaran proyek berbohong.
+      const costUsd = estimateLlmCostUsd(volume.info, review.usage) ?? 0;
+      logUiEvent(
+        "reviewRender",
+        { frames: review.frames.length },
+        { temuan: review.findings.length },
+        costUsd,
+        Date.now() - startedAt,
+      );
+      return c.json({
+        ok: true,
+        frames: review.frames,
+        findings: review.findings,
+        structural: review.structural.map((note) => ({
+          code: note.code,
+          level: note.level,
+          ...(note.sceneId ? { sceneId: note.sceneId } : {}),
+          message: note.message,
+        })),
+        // Dibedakan dengan tegas dari "tidak ada temuan": UI menampilkannya
+        // sebagai peringatan, bukan sebagai kabar baik.
+        ...(review.unparsed ? { warning: UNPARSED_WARNING } : {}),
+        ...(review.dropped > 0 ? { dropped: review.dropped } : {}),
+        model: volume.key,
+        ...(costUsd > 0 ? { costUsd: Number(costUsd.toFixed(4)) } : {}),
+      });
     } catch (error) {
       if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
       return c.json(errorPayload(error), 500);

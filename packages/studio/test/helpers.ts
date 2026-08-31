@@ -153,6 +153,8 @@ export interface StudioOverrides {
   /** Rantai ASR (ADR-0021); bawaannya kosong = mesin tanpa jalur transkripsi. */
   asrChain?: StudioDeps["asrChain"];
   renderStills?: StudioDeps["renderStills"];
+  /** Model tier-volume (ADR-0022); bawaannya kosong = mesin tanpa model vision. */
+  volumeModel?: StudioDeps["volumeModel"];
 }
 
 export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
@@ -233,6 +235,9 @@ export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
   ...(overrides?.noOrchestrator
     ? { chatDisabledReason: "butuh API key (uji)" }
     : { orchestrator: resolveModel("mock/echo") }),
+  // Tanpa override = tidak ada model vision, keadaan mesin polos: rute
+  // /api/review harus menolak dengan 501, bukan pura-pura bisa.
+  ...(overrides?.volumeModel ? { volumeModel: overrides.volumeModel } : {}),
   registrySource: "uji",
 });
 

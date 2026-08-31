@@ -2387,6 +2387,68 @@ input[type="color"]::-webkit-color-swatch {
   font-size: 11px;
 }
 
+/* Tinjauan render (ADR-0022) — form kecil di atas, hasil di bawah. */
+.review-form {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: end;
+  margin: 12px 0;
+}
+.review-form .field > span {
+  white-space: nowrap;
+}
+.review-notice {
+  margin: 0 0 12px;
+}
+/* Frame mana yang dilihat dan kenapa — supaya "tidak ada temuan" bisa dinilai
+   pembacanya: bersih pada 2 frame bukan bersih pada seluruh video. */
+.review-frames {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg-deep);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.review-frames li {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.review-frame-scene {
+  flex-shrink: 0;
+  font-weight: 650;
+  color: var(--accent);
+}
+.review-frame-reason {
+  min-width: 0;
+}
+.review-dropped {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--warn);
+}
+/* Biaya nyata, bukan perkiraan: dicetak SETELAH panggilan, dari usage model.
+   Kalau harganya tidak diketahui, itu yang dikatakan — bukan "$0.00". */
+.review-cost {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.review-saran {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-dim);
+}
+
 /* ---------------------------------------------------------------------------
    Pustaka media (ADR-0018): ikon, stiker, efek suara
    --------------------------------------------------------------------------- */
@@ -3521,7 +3583,12 @@ button.ghost.danger.confirm {
   }
 }
 
-@media (max-width: 1440px) {
+/* Ambang ini dulunya 1440px, lalu tombol Tinjau (ADR-0022) menambah satu
+   perkakas berlabel di zona aksi dan gerbang tata letak langsung menyala di
+   1536/1512px: sakelar rasio tergunting, lalu menindih tombol Chat. Ambangnya
+   dinaikkan sampai berimpit dengan hilangnya judul — di bawah 1600px zona
+   kiri memang sudah tidak muat bersama perkakas BERLABEL. */
+@media (max-width: 1600px) {
   /* Label rasio jadi glyph saja — bentuknya sudah menjelaskan dirinya.
      Selektor disandarkan pada .topbar, bukan pada urutan berkas: aturan dasar
      .segmented ditulis SETELAH blok ini dan akan memenangkan `display` pada
@@ -3598,18 +3665,12 @@ button.ghost.danger.confirm {
   }
 }
 
-@media (max-width: 720px) {
-  .topbar .project-title,
-  .topbar .cost-chip,
-  .topbar .busy-chip,
-  .topbar .brand-sub,
-  .topbar-actions .divider {
-    display: none;
-  }
-  .topbar {
-    padding: 6px 10px;
-    gap: 8px;
-  }
+/* Zona aksi digulir sebelum ia sempat memeras zona kiri. Ambangnya 860px,
+   bukan 720px seperti sisa aturan layar kecil: dengan satu perkakas tambahan
+   (Tinjau) barisan ikon sudah meluap di 768px dan yang tergunting justru
+   tombol Proyek di kiri — kontrol, bukan keterangan. Menggulir kehilangan
+   lebih sedikit daripada menggunting. */
+@media (max-width: 860px) {
   .topbar-left {
     flex-shrink: 0;
   }
@@ -3628,6 +3689,20 @@ button.ghost.danger.confirm {
   }
   .topbar-actions::-webkit-scrollbar {
     display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar .project-title,
+  .topbar .cost-chip,
+  .topbar .busy-chip,
+  .topbar .brand-sub,
+  .topbar-actions .divider {
+    display: none;
+  }
+  .topbar {
+    padding: 6px 10px;
+    gap: 8px;
   }
   button {
     padding: 9px 12px;

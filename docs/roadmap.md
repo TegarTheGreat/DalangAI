@@ -164,6 +164,10 @@ Urutannya bukan selera: tiap fase membuka fase berikutnya.
 
 ### Fase 6 — Transkrip sebagai fondasi
 
+**Sudah dikerjakan** (ADR-0021) — 6.1 sampai 6.5. Batas yang tersisa ada di
+"Batas yang dinyatakan" ADR-0021: jalur API dan whisper.cpp belum pernah
+dijalankan terhadap layanan/binari sungguhan.
+
 > Membuka: memotong berdasarkan kata, buang jeda/filler, caption untuk
 > footage orang, agent yang memahami isi rekaman.
 
@@ -186,6 +190,12 @@ WER; ElevenLabs Scribe v2 Realtime untuk latensi rendah. Titik impas
 self-host vs API kira-kira 500 jam/bulan — relevan untuk keputusan default.
 
 ### Fase 7 — Agent yang melihat hasil kerjanya
+
+**Sudah dikerjakan** (ADR-0022) — 7.1 sampai 7.4, plus dua hal yang tidak ada
+di tabel ini tapi ternyata dibutuhkan: tinjauan mendapat permukaan Studio dan
+CLI (bukan hanya tool agent), dan `--self-check` eval dipasang sebagai gerbang
+CI. Batas yang tersisa ada di "Batas yang dinyatakan" ADR-0022: jalur vision
+belum pernah dijalankan terhadap model sungguhan.
 
 > Membuka: kritik yang berdasar pada gambar nyata, bukan pada struktur JSON.
 

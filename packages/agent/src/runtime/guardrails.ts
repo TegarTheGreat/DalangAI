@@ -48,7 +48,12 @@ export const DEFAULT_GUARDRAILS: GuardrailConfig = {
  * mode non-interaktif WAJIB mengembalikan false (deny-by-default).
  */
 export type ApprovalFn = (request: {
-  action: "renderFinal" | "tts-massal" | "transkripsi" | "budget-proyek";
+  action:
+    | "renderFinal"
+    | "tts-massal"
+    | "transkripsi"
+    | "tinjauan-render"
+    | "budget-proyek";
   detail: string;
   estimatedUsd?: number;
 }) => Promise<boolean>;

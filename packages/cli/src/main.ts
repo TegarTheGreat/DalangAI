@@ -42,6 +42,7 @@ import { registerChatCommand, registerLogCommand } from "./chat";
 import { buildLambdaTarget, readCloudConfig, registerCloudCommands } from "./cloud";
 import { planPathOf } from "./project-path";
 import { registerProvidersCheckCommand } from "./providers-check";
+import { registerReviewCommand } from "./review";
 import { registerStudioCommand } from "./studio";
 
 /**
@@ -542,6 +543,7 @@ program
     },
   );
 
+registerReviewCommand(program);
 registerChatCommand(program);
 registerLogCommand(program);
 registerStudioCommand(program);

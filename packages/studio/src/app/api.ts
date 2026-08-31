@@ -62,6 +62,35 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   return payload as T;
 };
 
+/**
+ * Hasil tinjauan render (ADR-0022). Dinamai supaya komponen bisa menyimpannya
+ * di state tanpa mengulang bentuknya: `masalah` dan `saran` dipisah karena
+ * keduanya ditampilkan berbeda — masalah tebal, saran sebagai tindak lanjut.
+ */
+export type ReviewResult = {
+  ok: true;
+  frames: Array<{ frame: number; sceneId: string; sceneNumber: number; reason: string }>;
+  findings: Array<{
+    level: "perhatian" | "saran";
+    masalah: string;
+    saran: string;
+    scene?: number;
+    sceneId?: string;
+  }>;
+  structural: Array<{
+    code: string;
+    level: "perhatian" | "saran";
+    sceneId?: string;
+    message: string;
+  }>;
+  warning?: string;
+  dropped?: number;
+  /** Model vision yang dipakai — supaya angka biaya di bawah punya konteks. */
+  model: string;
+  /** Biaya NYATA dari usage model; absen kalau harga modelnya tak diketahui. */
+  costUsd?: number;
+};
+
 export const api = {
   getProject: () => request<ProjectStatePayload>("/api/project"),
 
@@ -130,6 +159,14 @@ export const api = {
     }>("/api/pipeline/transcribe", {
       method: "POST",
       body: JSON.stringify({ ...(sceneIds ? { sceneIds } : {}), diarize }),
+    }),
+
+  // ADR-0022: tinjauan render dari UI. Isinya tidak disimpan di state — ia
+  // hasil satu permintaan, dan dialognya yang memegangnya.
+  runReview: (maxFrames: number, perhatian?: string) =>
+    request<ReviewResult>("/api/review", {
+      method: "POST",
+      body: JSON.stringify({ maxFrames, ...(perhatian ? { perhatian } : {}) }),
     }),
 
   runTts: (sceneIds: string[] | undefined, confirm: boolean) =>
