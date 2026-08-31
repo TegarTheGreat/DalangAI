@@ -16,6 +16,8 @@ export const stubDeps = (): StudioDeps => ({
   ttsChainFor: () => [],
   stockChain: () => [],
   stickerChain: () => [],
+  // Tanpa jalur ASR: itu keadaan mesin polos, dan cukup untuk gerbang tata letak.
+  asrChain: () => [],
   iconProvider: () => ({
     id: "stub",
     label: "stub",

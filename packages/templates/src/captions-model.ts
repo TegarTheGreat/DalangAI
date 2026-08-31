@@ -4,6 +4,8 @@ import {
   narrationWindowSec,
   type Scene,
   type ScenePlan,
+  transcriptForScene,
+  transcriptToWordTimestamps,
   type WordTimestamp,
 } from "@dalang/core";
 import {
@@ -53,6 +55,55 @@ const toRemotionCaptions = (
     confidence: null,
   }));
 
+/**
+ * Dari mana kata-kata caption datang, dan dengan geseran berapa (ADR-0021).
+ *
+ * Ada TIGA sumber, dan urutannya bukan selera:
+ *
+ *  1. word timestamp TTS — narasi yang Dalang buat sendiri, paling tepat;
+ *  2. estimasi deterministik dari teks narasi — dipakai sebelum TTS jalan;
+ *  3. TRANSKRIP rekaman — satu-satunya sumber untuk scene yang menampilkan
+ *     orang bicara tanpa narasi tulis. Inilah "caption untuk footage orang".
+ *
+ * Geserannya beda: narasi disisipkan setelah jeda pembuka (NARRATION_LEAD_IN),
+ * sedangkan rekaman sudah berbunyi sejak frame pertama scene — memberinya
+ * geseran yang sama akan membuat caption tertinggal sekian ratus milidetik dari
+ * bibir orangnya.
+ */
+const captionWords = (
+  scene: Scene,
+  plan: ScenePlan,
+  sceneDurationFrames: number,
+  fps: number,
+): { words: WordTimestamp[]; offsetMs: number } => {
+  if (scene.narration.trim() !== "") {
+    const real = plan.renderState.narrationAudio[scene.id]?.wordTimestamps;
+    return {
+      words:
+        real && real.length > 0
+          ? real
+          : estimateWordTimestamps(
+              scene.narration,
+              narrationWindowSec(sceneDurationFrames / fps),
+            ),
+      offsetMs: NARRATION_LEAD_IN_SEC * 1000,
+    };
+  }
+
+  const transcript = transcriptForScene(plan, scene.id);
+  if (!transcript) return { words: [], offsetMs: 0 };
+
+  const speed = scene.visual.speed;
+  const fromSec = scene.visual.trimStartSec;
+  // Rentang rekaman yang benar-benar terpakai: durasi scene DIKALI kecepatan,
+  // karena scene 5 detik pada 2x memakan 10 detik rekaman.
+  const toSec = fromSec + (sceneDurationFrames / fps) * (speed > 0 ? speed : 1);
+  return {
+    words: transcriptToWordTimestamps(transcript, fromSec, toSec, { speed }),
+    offsetMs: 0,
+  };
+};
+
 export const buildCaptionPages = ({
   scene,
   plan,
@@ -64,18 +115,11 @@ export const buildCaptionPages = ({
   sceneDurationFrames: number;
   fps: number;
 }): CaptionPageModel[] => {
-  if (!scene.caption.enabled || scene.narration.trim() === "") return [];
+  if (!scene.caption.enabled) return [];
 
-  const real = plan.renderState.narrationAudio[scene.id]?.wordTimestamps;
-  const words =
-    real && real.length > 0
-      ? real
-      : estimateWordTimestamps(
-          scene.narration,
-          narrationWindowSec(sceneDurationFrames / fps),
-        );
+  const { words, offsetMs } = captionWords(scene, plan, sceneDurationFrames, fps);
+  if (words.length === 0) return [];
 
-  const offsetMs = NARRATION_LEAD_IN_SEC * 1000;
   const { pages } = createTikTokStyleCaptions({
     captions: toRemotionCaptions(words, offsetMs),
     combineTokensWithinMilliseconds: PAGE_COMBINE_MS,

@@ -422,6 +422,54 @@ export const resolvedAssetSchema = z.strictObject({
 });
 export type ResolvedAsset = z.infer<typeof resolvedAssetSchema>;
 
+/**
+ * Satu kata dari hasil transkripsi (ADR-0021).
+ *
+ * Bentuknya SUPERSET dari `wordTimestampSchema`, bukan penggantinya: caption
+ * hanya butuh kata + waktu, sedangkan editing berbasis rekaman juga butuh tahu
+ * seberapa yakin mesinnya dan siapa yang bicara. Waktunya relatif terhadap awal
+ * BERKAS REKAMAN, persis seperti yang dikeluarkan ASR — bukan relatif terhadap
+ * scene, karena satu rekaman bisa dipakai banyak scene dengan titik masuk
+ * berbeda.
+ */
+export const transcriptWordSchema = z.strictObject({
+  word: z.string(),
+  startSec: z.number().min(0).finite(),
+  endSec: z.number().min(0).finite(),
+  /** 0-1 kalau providernya melaporkan; tidak semua melaporkan. */
+  confidence: z.number().min(0).max(1).optional(),
+  /** Label diarisasi, mis. "A"/"B" atau "speaker_0" — apa adanya dari provider. */
+  speaker: z.string().optional(),
+});
+export type TranscriptWord = z.infer<typeof transcriptWordSchema>;
+
+/** Satu giliran bicara: sudah berpunktuasi, untuk dibaca manusia dan agent. */
+export const transcriptSegmentSchema = z.strictObject({
+  startSec: z.number().min(0).finite(),
+  endSec: z.number().min(0).finite(),
+  text: z.string(),
+  speaker: z.string().optional(),
+});
+export type TranscriptSegment = z.infer<typeof transcriptSegmentSchema>;
+
+export const transcriptSchema = z.strictObject({
+  /** Id provider: "whisper-cpp" | "deepgram" | "elevenlabs-scribe" | "narration". */
+  source: z.string().min(1),
+  /** Bahasa yang TERDETEKSI (atau diminta), bukan bahasa proyek. */
+  language: z.string().min(1),
+  durationSec: finitePositive,
+  words: z.array(transcriptWordSchema),
+  segments: z.array(transcriptSegmentSchema).default([]),
+  /**
+   * True kalau transkrip ini diturunkan dari word timestamp TTS Dalang
+   * sendiri, bukan dari mendengarkan rekaman. Dibedakan karena akurasinya
+   * beda kelas — dan karena menyembunyikan bedanya berarti berbohong soal
+   * dari mana angkanya datang.
+   */
+  fromNarration: z.boolean().optional(),
+});
+export type Transcript = z.infer<typeof transcriptSchema>;
+
 export const renderStateSchema = z.strictObject({
   narrationAudio: z.record(z.string(), narrationAudioSchema).default({}),
   resolvedAssets: z.record(z.string(), resolvedAssetSchema).default({}),
@@ -429,6 +477,12 @@ export const renderStateSchema = z.strictObject({
   graphicAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /** Berkas nyata untuk cue efek suara, dikunci id cue (ADR-0018). */
   sfxAssets: z.record(z.string(), resolvedAssetSchema).default({}),
+  /**
+   * Transkrip, dikunci PATH BERKAS relatif-plan — bukan id scene (ADR-0021).
+   * Satu rekaman panjang yang dipakai lima scene ditranskrip sekali, dan
+   * transkripnya tidak basi saat scene berganti aset.
+   */
+  transcripts: z.record(z.string(), transcriptSchema).default({}),
 });
 export type RenderState = z.infer<typeof renderStateSchema>;
 
@@ -454,6 +508,7 @@ export const scenePlanSchema = z
       resolvedAssets: {},
       graphicAssets: {},
       sfxAssets: {},
+      transcripts: {},
     }),
   })
   .superRefine((plan, ctx) => {

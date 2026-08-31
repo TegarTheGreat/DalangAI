@@ -1,9 +1,13 @@
 import type {
+  AsrProvider,
   IconProvider,
   SfxProvider,
   StockProvider,
   TtsProvider,
 } from "@dalang/pipeline";
+import { createDeepgramAsr } from "./asr/deepgram";
+import { createElevenLabsScribeAsr } from "./asr/elevenlabs-scribe";
+import { createWhisperCppAsr, findWhisperCpp } from "./asr/whisper-cpp";
 import type { FetchImpl } from "./http";
 import { createIconifyIcons } from "./icons/iconify";
 import { createOpenverseSfx } from "./sfx/openverse";
@@ -35,6 +39,12 @@ export interface ProviderEnv {
   TENOR_API_KEY?: string;
   /** Openverse: token OPSIONAL, hanya menaikkan batas laju (ADR-0018). */
   OPENVERSE_TOKEN?: string;
+  /** ASR (ADR-0021). Keduanya opsional; tanpa keduanya jalur ASR = whisper.cpp. */
+  DEEPGRAM_API_KEY?: string;
+  DEEPGRAM_MODEL?: string;
+  /** Binari & model whisper.cpp kalau tidak di lokasi biasa. */
+  WHISPER_CPP_BIN?: string;
+  WHISPER_CPP_MODEL?: string;
 }
 
 export const KNOWN_TTS_PROVIDERS = ["elevenlabs", "edge", "silence"] as const;
@@ -169,3 +179,41 @@ export const buildSfxChain = ({
     fetchImpl,
   }),
 ];
+
+/**
+ * Rantai ASR (ADR-0021). Urutannya keputusan produk, bukan selera:
+ *
+ * whisper.cpp DULUAN kalau terpasang — bukan karena paling akurat, tapi karena
+ * rekaman mentah adalah materi yang paling pribadi yang dipegang Dalang, dan
+ * mengirimnya ke pihak ketiga harus jadi pilihan sadar pemiliknya, bukan
+ * bawaan diam-diam. Yang tidak memasang whisper.cpp otomatis memakai jalur API
+ * yang kuncinya memang sudah ia set sendiri.
+ *
+ * Rantai KOSONG adalah keadaan sah dan sering: mesin tanpa whisper.cpp dan
+ * tanpa kunci API. Pemanggilnya yang memutuskan bagaimana mengabarkannya —
+ * stage ASR melempar galat yang menyebut persis apa yang kurang.
+ */
+export const buildAsrChain = ({
+  env = process.env as ProviderEnv,
+  fetchImpl,
+}: {
+  env?: ProviderEnv;
+  fetchImpl?: FetchImpl;
+} = {}): AsrProvider[] => {
+  const chain: AsrProvider[] = [];
+  const whisper = findWhisperCpp(env);
+  if (whisper) chain.push(createWhisperCppAsr(whisper));
+  if (env.DEEPGRAM_API_KEY) {
+    chain.push(
+      createDeepgramAsr({
+        apiKey: env.DEEPGRAM_API_KEY,
+        ...(env.DEEPGRAM_MODEL ? { model: env.DEEPGRAM_MODEL } : {}),
+        fetchImpl,
+      }),
+    );
+  }
+  if (env.ELEVENLABS_API_KEY) {
+    chain.push(createElevenLabsScribeAsr({ apiKey: env.ELEVENLABS_API_KEY, fetchImpl }));
+  }
+  return chain;
+};

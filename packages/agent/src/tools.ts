@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   critiquePlan,
+  findFillerSpans,
+  findPhraseSpans,
   GRAPHIC_ANCHORS,
   GRAPHIC_ANIMS,
   idSlug,
@@ -12,12 +14,19 @@ import {
   setGraphicAsset,
   setResolvedAsset,
   setSfxAsset,
+  speechSpans,
+  type Transcript,
+  textInSpan,
+  transcriptForScene,
   uniqueGraphicId,
   uniqueSfxCueId,
 } from "@dalang/core";
 import type { IconProvider, SfxProvider } from "@dalang/pipeline";
 import {
+  type AsrProvider,
   materializeCandidate,
+  recordingsInPlan,
+  runAsrStage,
   runAssetStage,
   runTtsStage,
   type SceneStageResult,
@@ -101,6 +110,12 @@ export interface AgentDeps {
     silences: Array<{ startSec: number; endSec: number }>;
     audible: Array<{ startSec: number; endSec: number }>;
   } | null>;
+  /**
+   * Rantai ASR (ADR-0021). Rantai KOSONG adalah keadaan sah dan sering —
+   * mesin tanpa whisper.cpp dan tanpa kunci API — dan harus dikabarkan apa
+   * adanya, bukan disamarkan jadi "tidak ada rekaman".
+   */
+  asrChain: () => AsrProvider[];
   onToolActivity?: (line: string) => void;
 }
 
@@ -259,12 +274,306 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         }),
     }),
 
+    // ------------------------------------------------------------------
+    // ADR-0021: sampai fase ini agent BUTA terhadap isi rekaman — ia bisa
+    // tahu di mana orang berhenti bicara, tapi tidak tahu apa yang dikatakan.
+    // Empat tool berikut menutup celah itu. Semuanya bekerja di atas patch op
+    // yang SUDAH ADA (updateScene): tidak ada op baru, jadi undo/redo untuk
+    // potongan berbasis kata gratis sejak hari pertama.
+    // ------------------------------------------------------------------
+
+    transcribeVideo: tool({
+      description:
+        "Transkripsi rekaman (video/audio) milik scene menjadi teks berwaktu. Jalankan SEKALI per rekaman — hasilnya di-cache dan dipakai ulang oleh semua scene yang memakai berkas itu. Setelah ini, pakai getTranscript untuk membaca isinya dan cutByWords untuk memotong berdasarkan kata. Rekaman yang sama tidak akan ditranskrip dua kali.",
+      inputSchema: z.object({
+        sceneIds: z
+          .array(z.string().min(1))
+          .optional()
+          .describe("Kosongkan untuk menranskrip semua rekaman di plan."),
+        pisahkanPembicara: z
+          .boolean()
+          .optional()
+          .describe("Minta label pembicara (A/B) untuk wawancara atau podcast."),
+      }),
+      execute: (input) =>
+        run("transcribeVideo", input, async () => {
+          const plan = requirePlan();
+          const providers = deps.asrChain();
+          if (providers.length === 0) {
+            // Dikabarkan apa adanya: tidak ada jalur ASR sama sekali bukan
+            // hal yang boleh disamarkan jadi "tidak ada rekaman".
+            return {
+              ok: false,
+              error:
+                "Tidak ada jalur transkripsi di mesin ini. Pasang whisper.cpp untuk jalur offline, atau set DEEPGRAM_API_KEY / ELEVENLABS_API_KEY. Sampaikan ini ke user — jangan mengarang isi rekaman.",
+            };
+          }
+
+          const recordings = recordingsInPlan(plan, input.sceneIds);
+          if (recordings.size === 0) {
+            return {
+              ok: true,
+              hasil: [],
+              catatan:
+                "Tidak ada scene yang memakai rekaman video/audio — tidak ada yang perlu ditranskrip.",
+            };
+          }
+
+          // Gerbang biaya (§6.3). Menranskrip rekaman panjang di provider
+          // berbayar adalah pengeluaran nyata, dan panjangnya baru diketahui
+          // dari aset — bukan dari jumlah scene.
+          const totalSec = [...recordings.keys()].reduce((sum, file) => {
+            const owner = plan.scenes.find(
+              (scene) => plan.renderState.resolvedAssets[scene.id]?.file === file,
+            );
+            return (
+              sum +
+              (owner ? (plan.renderState.resolvedAssets[owner.id]?.durationSec ?? 0) : 0)
+            );
+          }, 0);
+          const berbayar = providers[0]?.offline !== true;
+          if (berbayar && totalSec > 0) {
+            const estimatedUsd = (totalSec / 60) * 0.006;
+            if (estimatedUsd > guards.config.approvalGateUsd) {
+              const approved = await guards.approve({
+                action: "transkripsi",
+                detail: `Transkripsi ${recordings.size} rekaman (${Math.round(totalSec / 60)} menit, ${providers[0]?.label})`,
+                estimatedUsd,
+              });
+              if (!approved) {
+                throw new Error(
+                  "User menolak transkripsi — tawarkan menranskrip sebagian rekaman saja",
+                );
+              }
+            }
+            const withinBudget = await guards.ensureProjectBudget(
+              session.events.totalCostUsd(),
+              estimatedUsd,
+              "transkripsi",
+            );
+            if (!withinBudget) {
+              throw new Error("Budget proyek terlampaui dan user tidak menyetujui");
+            }
+          }
+
+          const outcome = await runAsrStage({
+            paths: session.paths,
+            plan,
+            providers,
+            db: session.db,
+            ...(input.sceneIds ? { sceneIds: input.sceneIds } : {}),
+            ...(input.pisahkanPembicara !== undefined
+              ? { diarize: input.pisahkanPembicara }
+              : {}),
+            log: { info: activity, warn: activity },
+          });
+          session.plan = outcome.plan;
+          session.persist();
+          const costUsd = sumCost(outcome.results);
+          guards.addToolCost(costUsd);
+
+          return {
+            ok: true,
+            hasil: compactResults(outcome.results),
+            biayaUsd: Number(costUsd.toFixed(4)),
+            transkripTersedia: Object.entries(outcome.plan.renderState.transcripts).map(
+              ([file, transcript]) => ({
+                file,
+                kata: transcript.words.length,
+                durasiDetik: Number(transcript.durationSec.toFixed(1)),
+                bahasa: transcript.language,
+                dariNarasi: transcript.fromNarration === true,
+              }),
+            ),
+          };
+        }),
+    }),
+
+    getTranscript: tool({
+      description:
+        "Baca transkrip rekaman sebuah scene sebagai teks berwaktu. Pakai ini SEBELUM memutuskan potongan: kamu yang menilai bagian mana yang menarik, tool ini hanya menyediakan kata beserta detiknya. Rekaman panjang dibaca per jendela lewat dariDetik/sampaiDetik.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        dariDetik: z.number().min(0).optional(),
+        sampaiDetik: z.number().min(0).optional(),
+      }),
+      execute: (input) =>
+        run("getTranscript", input, async () => {
+          const plan = requirePlan();
+          const transcript = transcriptForScene(plan, input.sceneId);
+          if (!transcript) {
+            return {
+              ok: false,
+              error: `Scene ${input.sceneId} belum punya transkrip — jalankan transcribeVideo dulu (atau scene ini memang bukan rekaman).`,
+            };
+          }
+          const from = input.dariDetik ?? 0;
+          const to = input.sampaiDetik ?? transcript.durationSec;
+          const spans = speechSpans(transcript).filter(
+            (span) => span.endSec > from && span.startSec < to,
+          );
+          return {
+            ok: true,
+            file: plan.renderState.resolvedAssets[input.sceneId]?.file,
+            bahasa: transcript.language,
+            durasiDetik: Number(transcript.durationSec.toFixed(1)),
+            dariNarasi: transcript.fromNarration === true,
+            // Per giliran bicara, bukan per kata: ribuan kata akan menenggelamkan
+            // konteks, sedangkan kalimat berwaktu sudah cukup untuk memilih.
+            kalimat: spans.slice(0, 120).map((span) => ({
+              mulai: Number(span.startSec.toFixed(2)),
+              selesai: Number(span.endSec.toFixed(2)),
+              teks: span.text,
+            })),
+            adaLanjutan: spans.length > 120,
+            teksRingkas: textInSpan(transcript, from, to).slice(0, 4000),
+          };
+        }),
+    }),
+
+    findMoments: tool({
+      description:
+        "Cari FRASA di dalam transkrip rekaman dan dapatkan detik kemunculannya. Untuk menemukan potongan tertentu yang sudah kamu tahu kata-katanya (mis. 'harga emas'). Untuk menemukan kata pengisi dan pengulangan yang perlu dibuang, isi jenis='pengisi'.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        frasa: z
+          .string()
+          .optional()
+          .describe("Frasa yang dicari; wajib kecuali jenis='pengisi'."),
+        jenis: z.enum(["frasa", "pengisi"]).optional(),
+        bantalanDetik: z
+          .number()
+          .min(0)
+          .max(10)
+          .optional()
+          .describe("Lebarkan tiap rentang sekian detik supaya potongan tidak mepet."),
+      }),
+      execute: (input) =>
+        run("findMoments", input, async () => {
+          const plan = requirePlan();
+          const transcript = transcriptForScene(plan, input.sceneId);
+          if (!transcript) {
+            return {
+              ok: false,
+              error: `Scene ${input.sceneId} belum punya transkrip — jalankan transcribeVideo dulu.`,
+            };
+          }
+          if ((input.jenis ?? "frasa") === "pengisi") {
+            const spans = findFillerSpans(transcript);
+            return {
+              ok: true,
+              jenis: "pengisi",
+              jumlah: spans.length,
+              rentang: spans.slice(0, 80).map((span) => ({
+                mulai: Number(span.startSec.toFixed(2)),
+                selesai: Number(span.endSec.toFixed(2)),
+                teks: span.text,
+              })),
+              catatan:
+                "Daftar ini sengaja konservatif: hanya bunyi ragu dan kata yang langsung terulang. Kata seperti 'kayak', 'terus', 'jadi' TIDAK ikut karena sering membawa arti.",
+            };
+          }
+          if (!input.frasa || input.frasa.trim() === "") {
+            return { ok: false, error: "Isi 'frasa' untuk jenis pencarian frasa." };
+          }
+          const spans = findPhraseSpans(transcript, input.frasa, {
+            ...(input.bantalanDetik !== undefined ? { padSec: input.bantalanDetik } : {}),
+          });
+          return {
+            ok: true,
+            jenis: "frasa",
+            frasa: input.frasa,
+            jumlah: spans.length,
+            rentang: spans.map((span) => ({
+              mulai: Number(span.startSec.toFixed(2)),
+              selesai: Number(span.endSec.toFixed(2)),
+              teks: span.text,
+            })),
+            ...(spans.length === 0
+              ? {
+                  catatan:
+                    "Tidak ketemu. Pencocokannya beruntun dan harfiah — coba frasa yang lebih pendek, atau baca getTranscript dulu untuk melihat kata yang benar-benar terucap.",
+                }
+              : {}),
+          };
+        }),
+    }),
+
+    cutByWords: tool({
+      description:
+        "Potong scene supaya menampilkan PERSIS rentang rekaman yang kamu pilih (dari transkrip). Menyetel visual.trimStartSec dan durasi scene sekaligus. Dapatkan detiknya dari getTranscript atau findMoments lebih dulu — jangan menebak.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        dariDetik: z.number().min(0),
+        sampaiDetik: z.number().min(0),
+      }),
+      execute: (input) =>
+        run("cutByWords", input, async () => {
+          const plan = requirePlan();
+          const scene = plan.scenes.find((item) => item.id === input.sceneId);
+          if (!scene) return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          if (input.sampaiDetik <= input.dariDetik) {
+            return {
+              ok: false,
+              error: `Rentang tidak sah: sampaiDetik (${input.sampaiDetik}) harus lebih besar dari dariDetik (${input.dariDetik}).`,
+            };
+          }
+
+          const asset = plan.renderState.resolvedAssets[input.sceneId];
+          const sourceDuration = asset?.durationSec;
+          if (sourceDuration !== undefined && input.dariDetik >= sourceDuration) {
+            return {
+              ok: false,
+              error: `dariDetik (${input.dariDetik}) melewati akhir rekaman (${sourceDuration.toFixed(1)} detik).`,
+            };
+          }
+          // Dijepit ke panjang rekaman, bukan ditolak: minta 3 detik terakhir
+          // dari rekaman yang tersisa 2,4 detik adalah maksud yang jelas.
+          const end =
+            sourceDuration === undefined
+              ? input.sampaiDetik
+              : Math.min(input.sampaiDetik, sourceDuration);
+          const speed = scene.visual.speed > 0 ? scene.visual.speed : 1;
+          const durationSec = Number(((end - input.dariDetik) / speed).toFixed(3));
+
+          const transcript = transcriptForScene(plan, input.sceneId) as
+            | Transcript
+            | undefined;
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "updateScene",
+              id: input.sceneId,
+              patch: {
+                visual: { trimStartSec: input.dariDetik },
+                duration: durationSec,
+              },
+            },
+          ]);
+          return {
+            ok: true,
+            sceneId: input.sceneId,
+            mulaiDiRekamanDetik: input.dariDetik,
+            durasiSceneDetik: durationSec,
+            ...(end !== input.sampaiDetik ? { dijepitKeAkhirRekaman: end } : {}),
+            ...(transcript
+              ? {
+                  teksTerpakai: textInSpan(transcript, input.dariDetik, end).slice(
+                    0,
+                    600,
+                  ),
+                }
+              : {}),
+            ringkasanPerubahan: summary,
+          };
+        }),
+    }),
+
     // ADR-0017: agent tidak bisa MENDENGAR isi rekaman, tapi bisa tahu di mana
     // orang berhenti bicara. Itu cukup untuk menempatkan batas potong pada
     // jeda alami alih-alih di tengah napas.
     findCutPoints: tool({
       description:
-        "Cari jeda hening di rekaman lokal untuk dipakai sebagai titik potong ALAMI (batas kalimat penutur). Kembalikan daftar jeda + rentang bersuara. PENTING: ini mengukur suara/hening, BUKAN isi — ia tidak tahu apa yang dibicarakan, jadi jangan memakainya untuk menebak momen menarik. Untuk memilih momen, minta transkrip atau penanda waktu ke user.",
+        "Cari jeda hening di rekaman lokal untuk dipakai sebagai titik potong ALAMI (batas kalimat penutur). Kembalikan daftar jeda + rentang bersuara. PENTING: ini mengukur suara/hening, BUKAN isi — ia tidak tahu apa yang dibicarakan. Untuk memilih momen BERDASARKAN ISI, pakai transcribeVideo lalu getTranscript/findMoments.",
       inputSchema: z.object({
         file: z
           .string()

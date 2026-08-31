@@ -23,6 +23,7 @@ describe("scene-plan schema v0", () => {
       resolvedAssets: {},
       graphicAssets: {},
       sfxAssets: {},
+      transcripts: {},
     });
     expect(plan.scenes[0]?.graphics).toEqual([]);
     expect(plan.audio.sfx).toEqual([]);

@@ -158,6 +158,9 @@ export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
   ],
   stockChain: () => [fakeStock()],
   stickerChain: () => [fakeSticker()],
+  // Rantai ASR kosong = keadaan mesin polos; tes yang butuh transkripsi
+  // menyuntikkan rantainya sendiri lewat override.
+  asrChain: () => [],
   probeVideo: async (_planPath, file) =>
     file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null,
   iconProvider: () => ({

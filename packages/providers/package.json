@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@dalang/core": "workspace:*",
-    "@dalang/pipeline": "workspace:*"
+    "@dalang/pipeline": "workspace:*",
+    "zod": "4.5.2"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

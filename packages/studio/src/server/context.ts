@@ -1,5 +1,6 @@
 import type { AgentDeps, Guardrails, ResolvedModel } from "@dalang/agent";
 import type {
+  AsrProvider,
   IconProvider,
   SfxProvider,
   StockProvider,
@@ -43,6 +44,8 @@ export interface StudioDeps {
     planPath: string,
     media: { url: string; folder: string; name: string; fileExt: string },
   ) => Promise<string>;
+  /** Rantai ASR (ADR-0021); boleh kosong = tidak ada jalur transkripsi. */
+  asrChain: () => AsrProvider[];
   /** Cari jeda hening di rekaman (ADR-0017): (planPath, path relatif) -> jeda. */
   detectSilence: (
     planPath: string,
@@ -72,7 +75,7 @@ export interface StudioDeps {
 export interface ChatBridge {
   onActivity: (line: string) => void;
   onApproval: (request: {
-    action: "renderFinal" | "tts-massal" | "budget-proyek";
+    action: "renderFinal" | "tts-massal" | "transkripsi" | "budget-proyek";
     detail: string;
     estimatedUsd?: number;
   }) => Promise<boolean>;

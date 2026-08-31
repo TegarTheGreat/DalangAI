@@ -50,7 +50,12 @@ export const openSqlite = (path: string): SqliteDatabase => {
   return db;
 };
 
-export type StageName = "tts" | "assets";
+/**
+ * Satuan kerja per baris ledger. "tts"/"assets" dikunci per SCENE; "asr"
+ * dikunci per BERKAS REKAMAN (kolom scene_id memuat path relatif-plan-nya),
+ * karena satu rekaman yang dipakai lima scene ditranskrip sekali (ADR-0021).
+ */
+export type StageName = "tts" | "assets" | "asr";
 export type RunStatus = "running" | "done" | "error";
 
 export interface StageRun {

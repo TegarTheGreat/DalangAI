@@ -4,6 +4,8 @@ import {
   type ResolvedAsset,
   resolvedAssetSchema,
   type ScenePlan,
+  type Transcript,
+  transcriptSchema,
 } from "./scene-plan";
 
 /**
@@ -57,6 +59,24 @@ export const setSfxAsset = (
 ): ScenePlan => {
   const next = structuredClone(plan);
   next.renderState.sfxAssets[cueId] = resolvedAssetSchema.parse(asset);
+  return next;
+};
+
+/**
+ * Transkrip satu berkas rekaman (ADR-0021), dikunci PATH BERKAS relatif-plan.
+ *
+ * Bukan per scene: satu rekaman satu jam yang dipakai lima scene ditranskrip
+ * sekali, dan transkripnya tetap sah saat scene-nya dipotong ulang atau
+ * dihapus. Sama seperti entri renderState lain, ini data turunan — di luar
+ * patch op, jadi undo pada potongan tidak pernah menghapus hasil transkripsi.
+ */
+export const setTranscript = (
+  plan: ScenePlan,
+  file: string,
+  transcript: Transcript,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  next.renderState.transcripts[file] = transcriptSchema.parse(transcript);
   return next;
 };
 

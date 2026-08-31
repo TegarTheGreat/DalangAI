@@ -1,4 +1,11 @@
-import { NARRATION_LEAD_IN_SEC, parseScenePlan, type ScenePlan } from "@dalang/core";
+import {
+  NARRATION_LEAD_IN_SEC,
+  parseScenePlan,
+  type Scene,
+  type ScenePlan,
+  setResolvedAsset,
+  setTranscript,
+} from "@dalang/core";
 import { describe, expect, it } from "vitest";
 import { buildCaptionPages } from "../src/captions-model";
 import { FPS } from "../src/layout";
@@ -99,5 +106,117 @@ describe("buildCaptionPages", () => {
       .flatMap((page) => page.tokens.map((token) => token.text.trim()))
       .filter(Boolean);
     expect(words).toEqual(narration.split(/\s+/));
+  });
+});
+
+describe("caption dari transkrip rekaman (ADR-0021)", () => {
+  const withRecording = (
+    overrides: {
+      trimStartSec?: number;
+      speed?: number;
+      narration?: string;
+      captionEnabled?: boolean;
+    } = {},
+  ): ScenePlan => {
+    let plan = parseScenePlan({
+      version: 1,
+      projectId: "p",
+      meta: { title: "T" },
+      scenes: [
+        {
+          id: "sc-1",
+          narration: overrides.narration ?? "",
+          caption: {
+            enabled: overrides.captionEnabled ?? true,
+            style: "klasik",
+            size: "m",
+            position: "bottom",
+          },
+          visual: {
+            type: "stock",
+            trimStartSec: overrides.trimStartSec ?? 0,
+            speed: overrides.speed ?? 1,
+          },
+        },
+      ],
+    });
+    plan = setResolvedAsset(plan, "sc-1", {
+      file: "media/talk.mp4",
+      kind: "video",
+      source: "local",
+    });
+    plan = setTranscript(plan, "media/talk.mp4", {
+      source: "uji",
+      language: "id",
+      durationSec: 30,
+      words: [
+        { word: "Halo", startSec: 10, endSec: 10.4 },
+        { word: "semua", startSec: 10.5, endSec: 11 },
+        { word: "apa", startSec: 11.1, endSec: 11.4 },
+        { word: "kabar", startSec: 11.5, endSec: 12 },
+      ],
+      segments: [],
+    });
+    return plan;
+  };
+
+  const words = (plan: ScenePlan, frames = 90) =>
+    buildCaptionPages({
+      scene: plan.scenes[0] as Scene,
+      plan,
+      sceneDurationFrames: frames,
+      fps: 30,
+    }).flatMap((page) => page.tokens.map((token) => token.text.trim()));
+
+  it("scene tanpa narasi tapi punya rekaman TETAP dapat caption", () => {
+    // Sebelum ADR-0021 ini mengembalikan nol halaman: caption hanya lahir dari
+    // teks narasi, jadi footage orang bicara selalu tanpa teks.
+    const plan = withRecording({ trimStartSec: 10 });
+    expect(words(plan)).toEqual(["Halo", "semua", "apa", "kabar"]);
+  });
+
+  it("mengambil hanya kata di dalam potongan scene", () => {
+    // Scene 1 detik dari detik 10: hanya dua kata pertama yang terdengar.
+    const plan = withRecording({ trimStartSec: 10 });
+    expect(words(plan, 30)).toEqual(["Halo", "semua"]);
+  });
+
+  it("caption rekaman TIDAK digeser jeda pembuka narasi", () => {
+    // Rekaman sudah berbunyi sejak frame pertama; memberinya geseran narasi
+    // membuat teks tertinggal dari bibir orangnya.
+    const plan = withRecording({ trimStartSec: 10 });
+    const pages = buildCaptionPages({
+      scene: plan.scenes[0] as Scene,
+      plan,
+      sceneDurationFrames: 90,
+      fps: 30,
+    });
+    expect(pages[0]?.startMs).toBe(0);
+  });
+
+  it("narasi tulis tetap menang atas transkrip", () => {
+    const plan = withRecording({ narration: "Teks narasi menang", trimStartSec: 10 });
+    expect(words(plan).join(" ")).toContain("narasi");
+  });
+
+  it("caption dimatikan tetap dihormati", () => {
+    expect(words(withRecording({ captionEnabled: false }))).toEqual([]);
+  });
+
+  it("scene tanpa narasi DAN tanpa transkrip menghasilkan nol halaman", () => {
+    const plan = parseScenePlan({
+      version: 1,
+      projectId: "p",
+      meta: { title: "T" },
+      scenes: [{ id: "sc-1", narration: "", visual: { type: "solid" } }],
+    });
+    expect(
+      buildCaptionPages({
+        scene: plan.scenes[0] as Scene,
+        plan,
+        sceneDurationFrames: 90,
+        fps: 30,
+      }),
+    ).toEqual([]);
   });
 });

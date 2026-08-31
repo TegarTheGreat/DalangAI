@@ -45,7 +45,7 @@ export interface PatchLogEntryLite {
 
 export interface StageRunLite {
   sceneId: string;
-  stage: "tts" | "assets";
+  stage: "tts" | "assets" | "asr";
   status: "running" | "done" | "error";
   provider: string | null;
   fallback: boolean;
@@ -295,7 +295,7 @@ export type StudioEvent =
   | { type: "busy"; busy: BusyState }
   | {
       type: "stage-results";
-      stage: "tts" | "assets";
+      stage: "tts" | "assets" | "asr";
       results: { sceneId: string; status: string; detail: string }[];
     }
   | {

@@ -66,6 +66,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
     // dengan planPath sesi ini — paket studio tidak mengimpor renderer.
     videoMetadata: (file) => options.deps.probeVideo(session.paths.planPath, file),
     detectSilence: (file) => options.deps.detectSilence(session.paths.planPath, file),
+    asrChain: () => options.deps.asrChain(),
     stickerChain: options.deps.stickerChain,
     iconProvider: options.deps.iconProvider,
     sfxChain: options.deps.sfxChain,

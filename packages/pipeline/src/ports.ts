@@ -1,4 +1,4 @@
-import type { WordTimestamp } from "@dalang/core";
+import type { TranscriptSegment, TranscriptWord, WordTimestamp } from "@dalang/core";
 
 /**
  * Provider ports (hexagonal boundary, ADR-0001): the pipeline declares what it
@@ -42,6 +42,46 @@ export interface TtsProvider {
    */
   placeholderQuality: boolean;
   synthesize(request: TtsRequest): Promise<TtsResult>;
+}
+
+// ---------------------------------------------------------------------------
+// ASR — transkripsi rekaman (ADR-0021)
+// ---------------------------------------------------------------------------
+
+export interface AsrRequest {
+  /** Path ABSOLUT ke berkas media; provider lokal membacanya langsung. */
+  file: string;
+  /** Petunjuk bahasa BCP-47-ish, mis. "id". String kosong = deteksi otomatis. */
+  language: string;
+  /** Minta label pembicara kalau providernya mampu; yang tidak mampu abaikan. */
+  diarize: boolean;
+}
+
+export interface AsrResult {
+  words: TranscriptWord[];
+  /** Giliran bicara berpunktuasi; boleh kosong kalau provider tidak memberi. */
+  segments: TranscriptSegment[];
+  /** Bahasa yang TERDETEKSI provider — belum tentu sama dengan yang diminta. */
+  language: string;
+  durationSec: number;
+  /** Perkiraan kasar untuk ledger biaya; 0 untuk provider lokal. */
+  costUsd: number;
+}
+
+/**
+ * Port ASR. Bentuknya sengaja sesempit port TTS: satu kata kerja, satu hasil.
+ *
+ * Tidak ada `available()` di sini — ketersediaan diputuskan saat RANTAI
+ * dibangun (binari ada? kunci API ada?), bukan saat transkripsi berjalan,
+ * supaya pemakainya tahu ada-tidaknya jalur ASR sebelum pekerjaan panjang
+ * dimulai, bukan sesudahnya.
+ */
+export interface AsrProvider {
+  id: string;
+  label: string;
+  /** True untuk provider yang berjalan di mesin sendiri, tanpa jaringan. */
+  offline: boolean;
+  transcribe(request: AsrRequest): Promise<AsrResult>;
 }
 
 // ---------------------------------------------------------------------------

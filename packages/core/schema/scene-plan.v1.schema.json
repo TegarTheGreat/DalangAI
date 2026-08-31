@@ -704,7 +704,8 @@
         "narrationAudio": {},
         "resolvedAssets": {},
         "graphicAssets": {},
-        "sfxAssets": {}
+        "sfxAssets": {},
+        "transcripts": {}
       },
       "type": "object",
       "properties": {
@@ -922,6 +923,102 @@
               "file",
               "kind",
               "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "transcripts": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "language": {
+                "type": "string",
+                "minLength": 1
+              },
+              "durationSec": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "words": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "word": {
+                      "type": "string"
+                    },
+                    "startSec": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "endSec": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "speaker": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "word",
+                    "startSec",
+                    "endSec"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "segments": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "startSec": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "endSec": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "speaker": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "startSec",
+                    "endSec",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "fromNarration": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "source",
+              "language",
+              "durationSec",
+              "words"
             ],
             "additionalProperties": false
           }

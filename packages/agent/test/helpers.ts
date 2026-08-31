@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ScenePlanInput } from "@dalang/core";
-import type { StockCandidate, StockProvider, TtsProvider } from "@dalang/pipeline";
+import type {
+  AsrProvider,
+  StockCandidate,
+  StockProvider,
+  TtsProvider,
+} from "@dalang/pipeline";
 import type { RenderVideoResult } from "@dalang/renderer";
 import { MockLanguageModelV3 } from "ai/test";
 import type { ModelInfo } from "../src/models/registry";
@@ -124,6 +129,33 @@ export const resolvedScripted = (
 // Dependensi fake
 // ---------------------------------------------------------------------------
 
+/** Provider ASR palsu — offline supaya gerbang biaya tidak ikut terpicu. */
+export const fakeAsr = (
+  id = "asr-palsu",
+  options: { offline?: boolean } = {},
+): AsrProvider & { calls: string[] } => {
+  const provider: AsrProvider & { calls: string[] } = {
+    id,
+    label: `ASR palsu ${id}`,
+    offline: options.offline ?? true,
+    calls: [],
+    transcribe: async (request) => {
+      provider.calls.push(request.file);
+      return {
+        words: [
+          { word: "halo", startSec: 0, endSec: 0.5 },
+          { word: "dunia", startSec: 0.6, endSec: 1.2 },
+        ],
+        segments: [{ startSec: 0, endSec: 1.2, text: "halo dunia" }],
+        language: "id",
+        durationSec: 1.2,
+        costUsd: 0.02,
+      };
+    },
+  };
+  return provider;
+};
+
 export const fakeTts = (id = "tts-palsu"): TtsProvider & { calls: string[] } => {
   const provider = {
     id,
@@ -234,6 +266,9 @@ export const makeDeps = (
       overrides.videoMetadata ??
       (async (file) =>
         file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null),
+    // Rantai ASR bawaan KOSONG: itu keadaan mesin polos, dan yang paling
+    // sering. Tes yang membutuhkan transkripsi menyuntikkan rantainya sendiri.
+    asrChain: overrides.asrChain ?? (() => []),
     detectSilence:
       overrides.detectSilence ??
       (async (file) =>

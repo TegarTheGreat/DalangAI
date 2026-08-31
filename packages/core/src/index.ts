@@ -9,3 +9,4 @@ export * from "./prose";
 export * from "./render-state";
 export * from "./scene-plan";
 export * from "./syllables";
+export * from "./transcript";
