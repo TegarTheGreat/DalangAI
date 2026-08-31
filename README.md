@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -304,7 +304,28 @@ Yang sudah berjalan:
     menemukan dua API deprecated dan satu kunci S3 tebakan yang salah untuk
     WebM/MOV). `dalang cloud:check` dibuat supaya pemilik repo bisa memverifikasi
     sisanya sendiri.*
-- **Kualitas terjaga otomatis**: 529 unit test (kontrak lock/pin/undo, timing
+- **Transkrip rekaman (ADR-0021)** — Dalang bisa MENDENGAR, bukan cuma
+  menyusun materi buatannya sendiri:
+  - port `AsrProvider` + rantai **whisper.cpp (offline) -> Deepgram ->
+    ElevenLabs Scribe**. Offline di depan karena PRIVASI, bukan akurasi:
+    rekaman mentah adalah materi paling pribadi yang dipegang Dalang, dan
+    mengirimnya ke pihak ketiga harus jadi pilihan sadar pemiliknya.
+  - `dalang transcribe <proyek>` + tab **Transkrip** di Properti: klik kalimat
+    untuk melompat di preview, satu tombol untuk memotong scene ke kalimat itu
+    (lewat patch op biasa — bisa diurungkan seperti editan lain).
+  - **caption untuk footage orang**: scene tanpa narasi tulis mendapat caption
+    dari transkrip rekamannya, dengan `visual.speed` ikut dihitung.
+  - tool agent `transcribeVideo`, `getTranscript`, `findMoments` (frasa dan
+    kata pengisi), `cutByWords`.
+  - cache dikunci ISI BERKAS: salinan identik tidak ditranskrip dua kali,
+    berkas berbeda bernama sama tidak memakai cache yang salah.
+  - *Batas jujur: jalur API-nya belum pernah dijalankan terhadap layanan
+    sungguhan — repo ini tidak punya kuncinya dan proxy kerjanya memblokir
+    kedua domain. Bentuk responsnya divalidasi Zod, jadi kontrak yang meleset
+    GAGAL DENGAN PESAN, bukan menghasilkan transkrip kosong diam-diam. Jalur
+    offline-nya juga belum dijalankan di sini karena binari whisper.cpp tidak
+    terpasang di container ini.*
+- **Kualitas terjaga otomatis**: 616 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -317,7 +338,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 529 unit test (8 paket) — tanpa browser & jaringan
+pnpm test                 # 616 unit test (8 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -326,6 +347,7 @@ pnpm dalang studio proyekku/          # langsung buka satu proyek (lobinya folde
 pnpm dalang chat proyekku/            # chat agent di terminal — Fase 2
 pnpm dalang validate examples/borobudur-60s          # folder atau plan.json, sama saja
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
+pnpm dalang transcribe examples/podcast   # transkripsi rekaman -> renderState (ADR-0021)
 pnpm dalang generate examples/borobudur-60s/plan.json --render draft
 pnpm dalang render   examples/borobudur-60s/plan.json --profile draft
 pnpm dalang render   examples/borobudur-60s/plan.json --video-format webm --resolution 720 --quality terbaik
@@ -433,7 +455,14 @@ Tugas riset R-2…R-6 & R-8…R-11 (PRD §14) belum diputuskan — masing-masing
 menghasilkan ADR sebelum implementasinya, mengikuti pola R-1/R-7 yang sudah ada
 di `docs/decisions/`.
 
-Fase 6 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
+- [x] **Fase 6 — Transkrip sebagai fondasi** (ADR-0021): port `AsrProvider`,
+      rantai whisper.cpp/Deepgram/ElevenLabs Scribe, stage ber-cache per
+      BERKAS, caption dari rekaman, tool agent transkrip, `dalang transcribe`,
+      tab Transkrip di Studio. *Catatan: jalur API dan whisper.cpp belum
+      dijalankan terhadap layanan/binari sungguhan — lihat "Batas yang
+      dinyatakan" di ADR-0021.*
+
+Fase 7 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,
 format interchange, ASR), lengkap dengan celah beserta buktinya, risiko yang
 harus diputuskan, dan daftar yang sengaja TIDAK dikerjakan.

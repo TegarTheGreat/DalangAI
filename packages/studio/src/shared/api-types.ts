@@ -10,7 +10,7 @@ import type { PatchOpInput, ScenePlan } from "@dalang/core";
 // Snapshot proyek (GET /api/project)
 // ---------------------------------------------------------------------------
 
-export type BusyKind = "chat" | "tts" | "assets" | "pick";
+export type BusyKind = "chat" | "tts" | "assets" | "transcribe" | "pick";
 
 export interface BusyState {
   /** Job yang sedang memutasi plan (satu-per-satu), atau null. */
@@ -43,6 +43,23 @@ export interface PatchLogEntryLite {
   opsCount: number;
 }
 
+/**
+ * Ringkasan transkrip yang ikut di muatan state (ADR-0021) — TANPA isinya.
+ * Cukup untuk menyalakan panel dan menampilkan berapa kata/siapa saja yang
+ * bicara; teks lengkapnya diambil terpisah lewat /api/transcript.
+ */
+export interface TranscriptSummary {
+  /** Path berkas relatif-plan; ini kuncinya di renderState.transcripts. */
+  file: string;
+  words: number;
+  durationSec: number;
+  language: string;
+  source: string;
+  /** True = diturunkan dari word timestamp TTS Dalang, bukan dari mendengarkan. */
+  fromNarration: boolean;
+  speakers: string[];
+}
+
 export interface StageRunLite {
   sceneId: string;
   stage: "tts" | "assets" | "asr";
@@ -73,6 +90,8 @@ export interface ProjectStatePayload {
     recent: PatchLogEntryLite[];
   };
   stageRuns: StageRunLite[];
+  /** Ringkasan transkrip; isinya diambil lewat /api/transcript (ADR-0021). */
+  transcripts: TranscriptSummary[];
   /** Total biaya tercatat proyek (ledger agent_events), USD. */
   totalCostUsd: number;
   models: {

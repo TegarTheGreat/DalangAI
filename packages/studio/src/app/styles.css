@@ -3384,6 +3384,132 @@ button.ghost.danger.confirm {
 /* Tangga penyusutan header, diukur (bukan ditebak) dengan gerbang tata letak
    `pnpm --filter @dalang/studio gate:layout`: tiap ambang adalah lebar tempat
    susunan sebelumnya mulai tidak muat. */
+/* --- Tab transkrip (ADR-0021) ------------------------------------------- */
+
+.transcript-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.transcript-file {
+  margin: 4px 0 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+
+.transcript-badge {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  background: var(--hover);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.transcript-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+}
+
+.transcript-empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.transcript-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transcript-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: start;
+  border-radius: 8px;
+}
+
+.transcript-line.in-window {
+  background: rgba(232, 163, 61, 0.1);
+}
+
+.transcript-seek {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.transcript-seek:hover {
+  background: var(--hover);
+}
+
+.transcript-time {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.transcript-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Kalimat di LUAR potongan yang sedang dipakai scene diredupkan, bukan
+   disembunyikan: konteks sebelum dan sesudah potongan justru yang dibutuhkan
+   orang saat memutuskan mau memindahkan batasnya ke mana. */
+.transcript-line:not(.in-window) .transcript-text {
+  color: var(--text-faint);
+}
+
+.transcript-cut {
+  align-self: center;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+/* Tombol potong muncul saat barisnya disentuh ATAU saat fokus keyboard ada di
+   dalamnya — kalau hanya :hover, tombolnya tidak akan pernah bisa dicapai
+   tanpa tetikus. */
+.transcript-line:hover .transcript-cut,
+.transcript-line:focus-within .transcript-cut {
+  opacity: 1;
+}
+
+.panel-empty.compact {
+  padding: 20px 12px;
+  gap: 10px;
+}
+
 /* Judul pergi lebih dulu daripada kontrol. Di 1450-1600px zona kiri terlalu
    sempit untuk merek + Proyek + judul + sakelar rasio berlabel, dan karena
    judul menolak menyusut di bawah 11ch, yang TERGUNTING justru segmen "1:1" —

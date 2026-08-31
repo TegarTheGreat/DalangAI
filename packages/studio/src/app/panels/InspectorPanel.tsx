@@ -29,6 +29,7 @@ import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "..
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
 import { GrafisTab, SfxSection } from "./MediaLibrary";
+import { TranscriptTab } from "./TranscriptTab";
 
 /**
  * Panel properti bertab (pola editor: CapCut/Premiere) untuk scene terpilih:
@@ -39,7 +40,7 @@ import { GrafisTab, SfxSection } from "./MediaLibrary";
  * Semua perubahan = patch user (tercatat, bisa di-undo, terlihat agent).
  */
 
-type Tab = "scene" | "visual" | "teks" | "grafis" | "transisi" | "anotasi";
+type Tab = "scene" | "visual" | "teks" | "transkrip" | "grafis" | "transisi" | "anotasi";
 
 const ANNOTATION_TYPES = ["zoom", "highlight", "arrow", "blur"] as const;
 const ANNOTATION_LABEL: Record<(typeof ANNOTATION_TYPES)[number], string> = {
@@ -1315,6 +1316,7 @@ export const InspectorPanel: React.FC = () => {
                 ["scene", "Scene"],
                 ["visual", "Visual"],
                 ["teks", "Teks"],
+                ["transkrip", "Transkrip"],
                 ["grafis", "Grafis"],
                 ["transisi", "Transisi"],
                 ["anotasi", "Anotasi"],
@@ -1345,6 +1347,7 @@ export const InspectorPanel: React.FC = () => {
             ) : null}
             {tab === "visual" ? <VisualTab scene={scene} /> : null}
             {tab === "teks" ? <TeksTab scene={scene} /> : null}
+            {tab === "transkrip" ? <TranscriptTab plan={plan} scene={scene} /> : null}
             {tab === "grafis" ? <GrafisTab plan={plan} scene={scene} /> : null}
             {tab === "transisi" ? (
               <TransisiTab scene={scene} isLast={index === plan.scenes.length - 1} />

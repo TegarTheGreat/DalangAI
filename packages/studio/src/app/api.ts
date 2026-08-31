@@ -1,4 +1,4 @@
-import type { PatchOpInput } from "@dalang/core";
+import type { PatchOpInput, Transcript, TranscriptSpan } from "@dalang/core";
 import type {
   AddGraphicResponse,
   AddSfxResponse,
@@ -115,6 +115,22 @@ export const api = {
     request<{ ok: true; summary: string | null }>("/api/undo", { method: "POST" }),
   redo: () =>
     request<{ ok: true; summary: string | null }>("/api/redo", { method: "POST" }),
+
+  // ADR-0021: isi transkrip TIDAK ikut muatan state (besarnya), jadi panel
+  // mengambilnya sendiri saat dibuka.
+  getTranscript: (file: string) =>
+    request<{ file: string; transcript: Transcript; spans: TranscriptSpan[] }>(
+      `/api/transcript?file=${encodeURIComponent(file)}`,
+    ),
+
+  runTranscribe: (sceneIds: string[] | undefined, diarize: boolean) =>
+    request<{
+      ok: true;
+      results: Array<{ sceneId: string; status: string; detail?: string }>;
+    }>("/api/pipeline/transcribe", {
+      method: "POST",
+      body: JSON.stringify({ ...(sceneIds ? { sceneIds } : {}), diarize }),
+    }),
 
   runTts: (sceneIds: string[] | undefined, confirm: boolean) =>
     request<{ ok: true }>("/api/pipeline/tts", {

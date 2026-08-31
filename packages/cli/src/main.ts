@@ -8,8 +8,17 @@ import {
   resolveSceneDurationSec,
   type ScenePlan,
 } from "@dalang/core";
-import { generatePlan, readPlanFile, type SceneStageResult } from "@dalang/pipeline";
-import { buildStockChain, buildTtsChain } from "@dalang/providers";
+import {
+  atomicWriteFile,
+  generatePlan,
+  PipelineDb,
+  projectPaths,
+  readPlanFile,
+  recordingsInPlan,
+  runAsrStage,
+  type SceneStageResult,
+} from "@dalang/pipeline";
+import { buildAsrChain, buildStockChain, buildTtsChain } from "@dalang/providers";
 import {
   ENCODE_QUALITIES,
   type EncodeQuality,
@@ -422,6 +431,113 @@ program
             `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
             `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec((Date.now() - startedAt) / 1000)}`,
         );
+      }
+    },
+  );
+
+program
+  .command("transcribe")
+  .argument("<proyek>", "folder proyek atau path plan.json")
+  .option("--scene <id...>", "batasi ke scene tertentu")
+  .option("--pembicara", "minta label pembicara (A/B) untuk wawancara/podcast")
+  .option("--force", "abaikan cache — transkripsi ulang")
+  .description(
+    "Transkripsi rekaman video/audio di plan jadi teks berwaktu (ADR-0021), lalu tulis ke renderState",
+  )
+  .action(
+    async (
+      planPath: string,
+      options: { scene?: string[]; pembicara?: boolean; force?: boolean },
+    ) => {
+      const absPlan = planPathOf(planPath);
+      const paths = projectPaths(absPlan);
+      const plan = readPlanFile(absPlan);
+
+      const recordings = recordingsInPlan(plan, options.scene);
+      if (recordings.size === 0) {
+        console.log(
+          "Tidak ada scene yang memakai rekaman video/audio — tidak ada yang perlu ditranskrip.",
+        );
+        console.log(
+          "  Daftarkan rekaman lebih dulu (mis. lewat `dalang chat` dan tool ingestVideo).",
+        );
+        return;
+      }
+
+      const providers = buildAsrChain();
+      if (providers.length === 0) {
+        // Disebutkan persis apa yang kurang, bukan "gagal": mesin tanpa jalur
+        // ASR adalah keadaan sah yang cuma butuh satu langkah pemasangan.
+        process.exitCode = 1;
+        console.error("Tidak ada jalur transkripsi di mesin ini. Pilih salah satu:");
+        console.error(
+          "  offline  pasang whisper.cpp + satu model GGML, atau set WHISPER_CPP_BIN & WHISPER_CPP_MODEL",
+        );
+        console.error("  API      set DEEPGRAM_API_KEY, atau ELEVENLABS_API_KEY");
+        return;
+      }
+
+      console.log(
+        `Transkripsi ${recordings.size} rekaman lewat ${providers.map((provider) => provider.label).join(" -> ")}`,
+      );
+      if (!providers[0]?.offline) {
+        console.log(
+          "  Catatan: provider pertama bukan jalur offline — rekaman dikirim ke layanan pihak ketiga.",
+        );
+      }
+
+      const db = new PipelineDb(paths.dbPath);
+      const outcome = await runAsrStage({
+        paths,
+        plan,
+        providers,
+        db,
+        ...(options.scene ? { sceneIds: options.scene } : {}),
+        ...(options.pembicara !== undefined ? { diarize: options.pembicara } : {}),
+        ...(options.force !== undefined ? { force: options.force } : {}),
+        log: {
+          info: (message) => console.log(message),
+          warn: (message) => console.warn(message),
+        },
+      });
+
+      console.log("");
+      printStageResults("Transkrip", outcome.results);
+
+      const errors = outcome.results.filter((result) => result.status === "error").length;
+      // Dibandingkan ISINYA, bukan identitas objeknya: cache hit tetap
+      // menghasilkan objek baru (setTranscript menyalin), jadi `!==` akan
+      // menulis ulang plan.json pada setiap jalan dan mengotori mtime-nya
+      // tanpa satu pun perubahan nyata.
+      const next = `${JSON.stringify(outcome.plan, null, 2)}\n`;
+      if (next !== `${JSON.stringify(plan, null, 2)}\n`) {
+        atomicWriteFile(absPlan, next);
+        console.log(`\n  transkrip ditulis ke ${absPlan}`);
+      } else {
+        console.log("\n  tidak ada perubahan pada plan (semua dari cache)");
+      }
+      const cost = outcome.results.reduce(
+        (sum, result) => sum + (result.costUsd ?? 0),
+        0,
+      );
+      if (cost > 0) console.log(`  perkiraan biaya ~$${cost.toFixed(4)}`);
+
+      for (const [file, transcript] of Object.entries(
+        outcome.plan.renderState.transcripts,
+      )) {
+        const speakers = new Set(
+          transcript.words.map((word) => word.speaker).filter((s) => s !== undefined),
+        );
+        console.log(
+          `  ${file} — ${transcript.words.length} kata · ${transcript.language} · ` +
+            `${transcript.durationSec.toFixed(1)} dtk` +
+            (speakers.size > 1 ? ` · ${speakers.size} pembicara` : ""),
+        );
+      }
+
+      if (errors > 0) {
+        process.exitCode = 1;
+        console.error(`\nGAGAL: ${errors} rekaman bermasalah — lihat detail di atas`);
       }
     },
   );

@@ -150,6 +150,8 @@ export interface StudioOverrides {
   renderDelayMs?: number;
   renderFail?: boolean;
   noOrchestrator?: boolean;
+  /** Rantai ASR (ADR-0021); bawaannya kosong = mesin tanpa jalur transkripsi. */
+  asrChain?: StudioDeps["asrChain"];
 }
 
 export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
@@ -160,7 +162,7 @@ export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
   stickerChain: () => [fakeSticker()],
   // Rantai ASR kosong = keadaan mesin polos; tes yang butuh transkripsi
   // menyuntikkan rantainya sendiri lewat override.
-  asrChain: () => [],
+  asrChain: overrides?.asrChain ?? (() => []),
   probeVideo: async (_planPath, file) =>
     file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null,
   iconProvider: () => ({

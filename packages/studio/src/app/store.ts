@@ -525,6 +525,21 @@ export class StudioClient {
     });
   }
 
+  /**
+   * Transkripsi (ADR-0021). Galatnya SENGAJA dilempar ulang, tidak ditelan
+   * jadi toast: pesan "tidak ada jalur ASR" menyebut persis apa yang harus
+   * dipasang, dan panelnya menampilkannya utuh di tempat orang membacanya.
+   */
+  async transcribe(sceneIds: string[] | undefined, diarize: boolean): Promise<void> {
+    const results = await api.runTranscribe(sceneIds, diarize);
+    const gagal = results.results.filter((item) => item.status === "error").length;
+    this.toast(
+      gagal > 0
+        ? `Transkripsi selesai dengan ${gagal} rekaman bermasalah`
+        : "Transkripsi selesai",
+    );
+  }
+
   runAssets(sceneIds?: string[]): Promise<void> {
     return this.withConfirm(async (confirm) => {
       await api.runAssets(sceneIds, confirm);

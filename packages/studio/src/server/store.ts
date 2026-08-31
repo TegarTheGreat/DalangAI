@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync, watch } from "node:fs";
 import { basename, join } from "node:path";
 import type { ProjectSession } from "@dalang/agent";
-import type { PatchOpInput } from "@dalang/core";
+import type { PatchOpInput, ScenePlan } from "@dalang/core";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
 import type {
   BusyKind,
@@ -11,6 +11,7 @@ import type {
   ProjectStatePayload,
   RenderOutput,
   StageRunLite,
+  TranscriptSummary,
 } from "../shared/api-types";
 import type { EventBus } from "./bus";
 
@@ -120,7 +121,32 @@ export class StudioStore {
 
   snapshot(models: ProjectStatePayload["models"]): ProjectStatePayload {
     const { session } = this;
-    const plan = session.plan;
+    // Transkrip DIBUANG dari muatan state (ADR-0021). Rekaman satu jam
+    // menambah ratusan kilobyte, dan state ini disiarkan ulang pada SETIAP
+    // perubahan — memuatnya di sini berarti mengirimi setiap penonton seluruh
+    // transkrip tiap kali satu judul discene diketik. UI mengambilnya lewat
+    // /api/transcript saat panelnya dibuka; ringkasannya tetap di sini supaya
+    // UI tahu apa yang ada tanpa mengunduh isinya.
+    const plan = session.plan ? stripTranscripts(session.plan) : null;
+    const transcripts: TranscriptSummary[] = session.plan
+      ? Object.entries(session.plan.renderState.transcripts).map(
+          ([file, transcript]) => ({
+            file,
+            words: transcript.words.length,
+            durationSec: Number(transcript.durationSec.toFixed(2)),
+            language: transcript.language,
+            source: transcript.source,
+            fromNarration: transcript.fromNarration === true,
+            speakers: [
+              ...new Set(
+                transcript.words
+                  .map((word) => word.speaker)
+                  .filter((speaker): speaker is string => speaker !== undefined),
+              ),
+            ].sort(),
+          }),
+        )
+      : [];
 
     const stageRuns: StageRunLite[] = plan
       ? session.db.listRuns(plan.projectId).map((run) => ({
@@ -145,6 +171,7 @@ export class StudioStore {
         recent: this.patchLogLite(),
       },
       stageRuns,
+      transcripts,
       totalCostUsd: Number(session.events.totalCostUsd().toFixed(4)),
       models,
       ttsEstimate: this.ttsEstimate(),
@@ -211,3 +238,15 @@ export class StudioStore {
     this.session.close();
   }
 }
+
+/**
+ * Salinan plan tanpa isi transkrip (ADR-0021).
+ *
+ * Kuncinya DIPERTAHANKAN sebagai entri kosong, bukan dihapus: UI perlu tahu
+ * berkas mana yang punya transkrip untuk menyalakan panelnya, dan menghapus
+ * seluruh kuncinya akan membuat panel itu tampak tidak ada padahal ada.
+ */
+export const stripTranscripts = (plan: ScenePlan): ScenePlan => ({
+  ...plan,
+  renderState: { ...plan.renderState, transcripts: {} },
+});

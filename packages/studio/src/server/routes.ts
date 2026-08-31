@@ -5,11 +5,13 @@ import {
   patchOpSchema,
   resolveSceneDurationSec,
   setResolvedAsset,
+  speechSpans,
 } from "@dalang/core";
 import {
   contentHash,
   imageDims,
   materializeCandidate,
+  runAsrStage,
   runAssetStage,
   runTtsStage,
 } from "@dalang/pipeline";
@@ -39,6 +41,11 @@ import { StudioBusyError } from "./store";
  */
 
 const patchBody = z.object({ ops: z.array(patchOpSchema).min(1) });
+const transcribeBody = z.object({
+  sceneIds: z.array(z.string().min(1)).optional(),
+  diarize: z.boolean().optional(),
+});
+
 const pipelineBody = z.object({
   sceneIds: z.array(z.string()).optional(),
   confirm: z.boolean().optional(),
@@ -255,6 +262,88 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
       store.bus.emit({
         type: "stage-results",
         stage: "assets",
+        results: outcome.results.map((r) => ({
+          sceneId: r.sceneId,
+          status: r.status,
+          detail: r.detail,
+        })),
+      });
+      return c.json({ ok: true, results: outcome.results });
+    } catch (error) {
+      if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
+      return c.json(errorPayload(error), 500);
+    }
+  });
+
+  // ADR-0021: transkrip DIBUANG dari muatan state karena besarnya; ini
+  // pintu tunggal untuk mengambil isinya, dan hanya saat panelnya dibuka.
+  app.get("/api/transcript", (c) => {
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const file = c.req.query("file");
+    if (!file) return c.json({ error: "Parameter ?file= wajib diisi" }, 400);
+
+    const transcript = plan.renderState.transcripts[file];
+    if (!transcript) {
+      return c.json({ error: `Belum ada transkrip untuk ${file}` }, 404);
+    }
+    return c.json({
+      file,
+      transcript,
+      // Kalimat siap pakai untuk panel: memecahnya di server berarti UI tidak
+      // perlu mengulang aturan celah antar kata yang sudah teruji di core.
+      spans: speechSpans(transcript),
+    });
+  });
+
+  app.post("/api/pipeline/transcribe", async (c) => {
+    const body = transcribeBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+
+    const providers = deps.asrChain();
+    if (providers.length === 0) {
+      // 501, bukan 500: bukan kerusakan, melainkan kemampuan yang memang belum
+      // dipasang — dan pesannya menyebut persis apa yang kurang, supaya UI
+      // bisa menampilkannya apa adanya tanpa menebak (PRD §10).
+      return c.json(
+        {
+          error:
+            "Tidak ada jalur transkripsi di mesin ini. Pasang whisper.cpp untuk jalur offline, atau set DEEPGRAM_API_KEY / ELEVENLABS_API_KEY.",
+          code: "asr-unavailable",
+        },
+        501,
+      );
+    }
+
+    try {
+      const startedAt = Date.now();
+      const outcome = await store.runExclusive("transcribe", () =>
+        runAsrStage({
+          paths: session.paths,
+          plan,
+          providers,
+          db: session.db,
+          ...(body.data.sceneIds ? { sceneIds: body.data.sceneIds } : {}),
+          ...(body.data.diarize !== undefined ? { diarize: body.data.diarize } : {}),
+          log: { info: () => {}, warn: () => {} },
+        }),
+      );
+      session.plan = outcome.plan;
+      session.persist();
+      const costUsd = outcome.results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
+      logUiEvent(
+        "transcribeVideo",
+        { sceneIds: body.data.sceneIds ?? null },
+        { rekaman: outcome.results.length },
+        costUsd,
+        Date.now() - startedAt,
+      );
+      store.notifyPlan("pipeline");
+      store.bus.emit({
+        type: "stage-results",
+        stage: "asr",
         results: outcome.results.map((r) => ({
           sceneId: r.sceneId,
           status: r.status,
