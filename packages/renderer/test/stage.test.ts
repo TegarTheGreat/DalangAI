@@ -173,3 +173,68 @@ describe("copyPlanAssets: grafis & efek suara (ADR-0018)", () => {
     expect(existsSync(join(publicDir, "assets/icons/yatim.svg"))).toBe(false);
   });
 });
+
+/**
+ * ADR-0025: lapisan video punya lumbung berkas sendiri (`layerAssets`).
+ *
+ * Ini persis jenis kelalaian yang dulu terjadi pada `graphicAssets`: berkasnya
+ * tidak ikut dipentaskan, dan render gagal memuatnya — cacat yang TIDAK
+ * terlihat oleh test mana pun, hanya oleh render sungguhan.
+ */
+describe("copyPlanAssets: lapisan video (ADR-0025)", () => {
+  const planWithLayers = (): ScenePlan =>
+    parseScenePlan({
+      version: 1,
+      projectId: "p",
+      meta: { title: "T" },
+      scenes: [
+        {
+          id: "sc-001",
+          visual: { type: "solid" },
+          layers: [{ id: "lap-hidup", visual: { type: "stock", query: "x" } }],
+        },
+      ],
+      renderState: {
+        layerAssets: {
+          "lap-hidup": {
+            file: "assets/media/hidup.mp4",
+            kind: "video",
+            source: "pexels",
+          },
+          "lap-yatim": {
+            file: "assets/media/yatim.mp4",
+            kind: "video",
+            source: "pexels",
+          },
+        },
+      },
+    });
+
+  const stageLayers = (writeOrphan: boolean) => {
+    const planDir = join(workDir, "proyek-lapisan");
+    mkdirSync(join(planDir, "assets", "media"), { recursive: true });
+    writeFileSync(join(planDir, "assets", "media", "hidup.mp4"), "video");
+    if (writeOrphan) {
+      writeFileSync(join(planDir, "assets", "media", "yatim.mp4"), "video");
+    }
+    const publicDir = join(workDir, "public-lapisan");
+    const copied = copyPlanAssets(
+      join(planDir, "plan.json"),
+      planWithLayers(),
+      publicDir,
+    );
+    return { copied, publicDir };
+  };
+
+  it("berkas lapisan yang dipakai ikut dipentaskan", () => {
+    const { copied, publicDir } = stageLayers(true);
+    expect(copied).toContain("assets/media/hidup.mp4");
+    expect(existsSync(join(publicDir, "assets/media/hidup.mp4"))).toBe(true);
+  });
+
+  it("entri lapisan yatim dilewati, dan hilangnya berkas tidak menggagalkan render", () => {
+    const { copied, publicDir } = stageLayers(false);
+    expect(copied).not.toContain("assets/media/yatim.mp4");
+    expect(existsSync(join(publicDir, "assets/media/yatim.mp4"))).toBe(false);
+  });
+});

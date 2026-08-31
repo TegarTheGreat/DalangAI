@@ -51,6 +51,55 @@ export const setGraphicAsset = (
   return next;
 };
 
+/**
+ * Berkas nyata untuk satu lapisan video (ADR-0025), dikunci per ID LAPISAN.
+ *
+ * Alasannya sama dengan grafis: satu scene boleh punya beberapa lapisan, jadi
+ * mengunci per scene membuat lapisan kedua menimpa berkas lapisan pertama.
+ */
+export const setLayerAsset = (
+  plan: ScenePlan,
+  layerId: string,
+  asset: ResolvedAsset,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  next.renderState.layerAssets[layerId] = resolvedAssetSchema.parse(asset);
+  return next;
+};
+
+/**
+ * Jalur tulis auto-resolve untuk lapisan: mencatat berkas DAN mengisi
+ * `layer.visual.assetId` tanpa mem-pin — cermin `assignResolvedAsset`.
+ * Menolak lapisan ter-pin: pilihan eksplisit tidak pernah ditimpa otomatis.
+ */
+export const assignLayerAsset = (
+  plan: ScenePlan,
+  sceneId: string,
+  layerId: string,
+  assetId: string,
+  asset: ResolvedAsset,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  const scene = next.scenes.find((candidate) => candidate.id === sceneId);
+  if (!scene) {
+    throw new Error(`assignLayerAsset: scene "${sceneId}" tidak ditemukan`);
+  }
+  const layer = scene.layers.find((candidate) => candidate.id === layerId);
+  if (!layer) {
+    throw new Error(
+      `assignLayerAsset: lapisan "${layerId}" tidak ada di scene "${sceneId}"`,
+    );
+  }
+  if (layer.visual.pinned) {
+    throw new Error(
+      `assignLayerAsset: aset lapisan "${layerId}" ter-pin — auto-resolve tidak boleh menimpanya`,
+    );
+  }
+  layer.visual.assetId = assetId;
+  next.renderState.layerAssets[layerId] = resolvedAssetSchema.parse(asset);
+  return next;
+};
+
 /** Berkas nyata untuk satu cue efek suara (ADR-0018), dikunci per ID CUE. */
 export const setSfxAsset = (
   plan: ScenePlan,
@@ -92,13 +141,15 @@ export const setTranscript = (
  */
 export const orphanMediaAssetIds = (
   plan: ScenePlan,
-): { graphics: string[]; sfx: string[] } => {
+): { graphics: string[]; layers: string[]; sfx: string[] } => {
   const graphicIds = new Set(plan.scenes.flatMap((s) => s.graphics.map((g) => g.id)));
+  const layerIds = new Set(plan.scenes.flatMap((s) => s.layers.map((l) => l.id)));
   const cueIds = new Set(plan.audio.sfx.map((cue) => cue.id));
   return {
     graphics: Object.keys(plan.renderState.graphicAssets).filter(
       (id) => !graphicIds.has(id),
     ),
+    layers: Object.keys(plan.renderState.layerAssets).filter((id) => !layerIds.has(id)),
     sfx: Object.keys(plan.renderState.sfxAssets).filter((id) => !cueIds.has(id)),
   };
 };

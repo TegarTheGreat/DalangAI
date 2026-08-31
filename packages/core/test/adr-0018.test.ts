@@ -298,6 +298,7 @@ describe("aset media yatim", () => {
   it("hanya entri yang tidak dirujuk lagi yang dilaporkan", () => {
     expect(orphanMediaAssetIds(populated())).toEqual({
       graphics: ["yatim"],
+      layers: [],
       sfx: ["cue-yatim"],
     });
   });

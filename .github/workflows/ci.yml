@@ -80,8 +80,12 @@ jobs:
           test -s /tmp/smoke/borobudur-60s-f240.png
           test -s /tmp/smoke/borobudur-60s-f870.png
           # Fase 4: preset tutorial-01 (screenshot + anotasi zoom/highlight/arrow)
-          pnpm dalang still examples/tutorial-studio/plan.json -t 8 21.5 -s 0.25 -o /tmp/smoke
+          # Detik 18 sengaja ikut: di situ LAPISAN video (ADR-0025) sedang
+          # tampil, jadi jalur render sisipan benar-benar dijalankan — bukan
+          # hanya diuji sebagai angka.
+          pnpm dalang still examples/tutorial-studio/plan.json -t 8 18 21.5 -s 0.25 -o /tmp/smoke
           test -s /tmp/smoke/tutorial-studio-f240.png
+          test -s /tmp/smoke/tutorial-studio-f540.png
           test -s /tmp/smoke/tutorial-studio-f645.png
 
       # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)

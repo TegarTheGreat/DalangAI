@@ -1,6 +1,6 @@
 import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ScenePlanInput } from "@dalang/core";
+import { MAX_LAYERS, type ScenePlanInput } from "@dalang/core";
 import type { InteropNote } from "./report";
 
 /**
@@ -24,6 +24,12 @@ export interface ImportedClip {
   url?: string;
   /** Panjang berkas sumber kalau dilaporkan berkasnya. */
   sourceDurationSec?: number;
+  /**
+   * Letak klip di garis waktu SUMBER, detik. Wajib untuk sisipan (lihat
+   * `ClipsToPlanOptions.overlays`); untuk klip jalur utama boleh kosong dan
+   * urutannya yang menentukan.
+   */
+  timelineStartSec?: number;
 }
 
 export interface ImportResult {
@@ -39,6 +45,13 @@ export interface ClipsToPlanOptions {
   notes: InteropNote[];
   /** Nama format asal, untuk field `source` di renderState. */
   source: string;
+  /**
+   * Klip di trek/lane VIDEO tambahan — connected clip FCPXML, trek video kedua
+   * OTIO. Masing-masing jadi LAPISAN (ADR-0025) pada scene yang paling banyak
+   * bertindih dengannya di garis waktu sumber, jadi tiap sisipan WAJIB punya
+   * `timelineStartSec`.
+   */
+  overlays?: ImportedClip[];
 }
 
 const MEDIA_EXT: Record<string, "image" | "video" | "audio"> = {
@@ -76,7 +89,7 @@ export const slugId = (text: string, index: number): string => {
 
 export const clipsToPlan = (
   clips: ImportedClip[],
-  { projectDir, title, notes, source }: ClipsToPlanOptions,
+  { projectDir, title, notes, source, overlays = [] }: ClipsToPlanOptions,
 ): ImportResult => {
   if (clips.length === 0) {
     throw new Error("Tidak ada satu klip pun yang bisa dipakai di berkas ini.");
@@ -139,7 +152,123 @@ export const clipsToPlan = (
     }
   });
 
+  // --- Sisipan (lane / trek video kedua) jadi LAPISAN (ADR-0025) ----------
+  //
+  // Scene dipasangkan lewat rentang waktu SUMBER, bukan lewat urutan hasil:
+  // gap di spine tidak jadi scene, jadi garis waktu hasil impor lebih pendek
+  // daripada aslinya, dan mencocokkan pakai indeks akan menaruh sisipan di
+  // scene yang salah begitu ada satu lubang saja.
+  const sceneSpans = clips.map((clip, index) => {
+    const start =
+      clip.timelineStartSec ??
+      clips.slice(0, index).reduce((sum, earlier) => sum + earlier.durationSec, 0);
+    return { start, end: start + clip.durationSec, index };
+  });
+  const layerAssets: Record<string, unknown> = {};
+  let tanpaScene = 0;
+  let kelebihan = 0;
+  for (const overlay of overlays) {
+    const start = overlay.timelineStartSec ?? 0;
+    const end = start + overlay.durationSec;
+    let best: { index: number; overlap: number } | null = null;
+    for (const span of sceneSpans) {
+      const overlap = Math.min(end, span.end) - Math.max(start, span.start);
+      if (overlap > 0 && (!best || overlap > best.overlap)) {
+        best = { index: span.index, overlap };
+      }
+    }
+    if (!best) {
+      tanpaScene++;
+      continue;
+    }
+    const scene = scenes[best.index];
+    const span = sceneSpans[best.index];
+    if (!scene || !span) {
+      tanpaScene++;
+      continue;
+    }
+    if (scene.layers && scene.layers.length >= MAX_LAYERS) {
+      kelebihan++;
+      continue;
+    }
+
+    let file: string | undefined;
+    if (overlay.url?.startsWith("file://")) {
+      const absolute = fileURLToPath(overlay.url);
+      const rel = relative(root, absolute);
+      if (rel && !rel.startsWith("..")) file = rel;
+      else luarProyek.push(absolute);
+    }
+
+    let layerId = slugId(overlay.name, dipakai.size).replace(/^sc-/, "lap-");
+    if (dipakai.has(layerId)) {
+      let n = 2;
+      while (dipakai.has(`${layerId}-${n}`)) n++;
+      layerId = `${layerId}-${n}`;
+    }
+    dipakai.add(layerId);
+
+    const kind = file ? mediaKindOf(file) : "image";
+    const sceneLength = Math.max(0.001, span.end - span.start);
+    const clampFrac = (value: number) => Math.min(1, Math.max(0, value));
+    // Jendela tampil harus punya panjang, dan tetap di dalam [0,1] — skema
+    // menolak keduanya kalau dilanggar. Sisipan yang mulai persis di detik
+    // terakhir scene (setelah pembulatan empat angka) akan menghasilkan
+    // startFrac 1 dan endFrac 1,01: sah secara aritmetika, ditolak skema, dan
+    // impor gagal seluruhnya hanya karena satu klip di ujung.
+    const startFrac = Math.min(0.99, clampFrac((start - span.start) / sceneLength));
+    const endFrac = Math.min(
+      1,
+      Math.max(startFrac + 0.01, clampFrac((end - span.start) / sceneLength)),
+    );
+    const trimStartSec = Math.max(0, overlay.sourceStartSec);
+
+    scene.layers = [
+      ...(scene.layers ?? []),
+      {
+        id: layerId,
+        visual: {
+          type: kind === "video" ? "stock" : "image",
+          ...(file ? { assetId: layerId, pinned: true } : {}),
+          ...(kind === "video" && trimStartSec > 0
+            ? { trimStartSec: Number(trimStartSec.toFixed(3)) }
+            : {}),
+        },
+        startFrac: Number(startFrac.toFixed(4)),
+        endFrac: Number(endFrac.toFixed(4)),
+      },
+    ];
+    if (file) {
+      layerAssets[layerId] = {
+        file,
+        kind,
+        source,
+        ...(overlay.sourceDurationSec !== undefined && overlay.sourceDurationSec > 0
+          ? { durationSec: Number(overlay.sourceDurationSec.toFixed(3)) }
+          : {}),
+      };
+    }
+  }
+
   const allNotes = [...notes];
+  if (overlays.length > 0) {
+    allNotes.push({
+      code: "impor-lapisan",
+      detail: `${overlays.length - tanpaScene - kelebihan} klip lane/trek video kedua dipulihkan sebagai lapisan video. Letak, ukuran, dan bentuknya TIDAK ada di berkas interchange — semuanya memakai kotak bawaan dan perlu ditata ulang.`,
+    });
+  }
+  if (tanpaScene > 0) {
+    allNotes.push({
+      code: "impor-lapisan-tanpa-scene",
+      detail: `${tanpaScene} klip lane tidak bertindih dengan scene mana pun (menempel di gap) dan dilewati.`,
+    });
+  }
+  if (kelebihan > 0) {
+    allNotes.push({
+      code: "impor-lapisan-kelebihan",
+      detail: `${kelebihan} klip lane dilewati: satu scene menampung paling banyak ${MAX_LAYERS} lapisan.`,
+    });
+  }
   if (luarProyek.length > 0) {
     allNotes.push({
       code: "impor-aset-luar",
@@ -167,6 +296,7 @@ export const clipsToPlan = (
       renderState: {
         narrationAudio: {},
         resolvedAssets: resolvedAssets as never,
+        layerAssets: layerAssets as never,
       },
     },
     notes: allNotes,

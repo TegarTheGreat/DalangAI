@@ -169,3 +169,80 @@ describe("garis waktu interop", () => {
     expect(clip?.url).toContain("/media/candi.mp4");
   });
 });
+
+/**
+ * ADR-0025: lapisan video jadi trek video TAMBAHAN (lane FCPXML).
+ *
+ * Waktunya diukur dari AWAL SCENE, bukan dari titik potong yang dipakai trek
+ * utama: di render, lapisan hidup di dalam Sequence scene-nya. Memakai titik
+ * potong akan menggeser tiap sisipan setengah transisi dari tempat aslinya —
+ * dan itu justru cacat yang tidak terlihat sampai berkasnya dibuka orang lain.
+ */
+describe("lapisan video di garis waktu", () => {
+  const withLayer = () =>
+    makePlan((input) => {
+      const scene = input.scenes[1] as Record<string, unknown>;
+      scene.layers = [
+        {
+          id: "lap-broll",
+          visual: { type: "stock", query: "rain", trimStartSec: 2 },
+          startFrac: 0.25,
+          endFrac: 0.75,
+        },
+      ];
+      const state = input.renderState as Record<string, unknown>;
+      state.layerAssets = {
+        "lap-broll": {
+          file: "media/rain.mp4",
+          kind: "video",
+          source: "pexels",
+          durationSec: 12,
+        },
+      };
+    });
+
+  it("lapisan jadi trek video kedua, di posisi relatif AWAL SCENE-nya", () => {
+    const plan = withLayer();
+    const project = tempProject(plan);
+    const layout = computeFrameLayout(plan);
+    const timeline = buildEditTimeline(plan, { planPath: project.planPath });
+
+    const videoTracks = timeline.tracks.filter((track) => track.kind === "video");
+    expect(videoTracks).toHaveLength(2);
+    const layerClip = clipsOf(videoTracks[1]?.items ?? [])[0];
+    const sceneStart = layout.sceneStarts[1] ?? 0;
+    const sceneFrames = layout.sceneFrames[1] ?? 0;
+    expect(layerClip?.startFrame).toBe(sceneStart + Math.round(0.25 * sceneFrames));
+    expect(layerClip?.durationFrames).toBe(
+      Math.round(0.75 * sceneFrames) - Math.round(0.25 * sceneFrames),
+    );
+    // Titik masuk di rekaman sumber ikut menyeberang.
+    expect(layerClip?.sourceStartSec).toBe(2);
+    expect(layerClip?.url).toMatch(/rain\.mp4$/);
+  });
+
+  /**
+   * Laporan "tidak ikut" ADALAH fiturnya: ekspor yang diam-diam meratakan
+   * sisipan jadi klip layar penuh membuat orang mengira Dalang rusak.
+   */
+  it("bentuk & letak lapisan dilaporkan TIDAK ikut menyeberang", () => {
+    const plan = withLayer();
+    const project = tempProject(plan);
+    const timeline = buildEditTimeline(plan, { planPath: project.planPath });
+    const note = timeline.notes.find((entry) => entry.code === "lapisan-bentuk");
+    expect(note?.detail).toContain("layar penuh");
+  });
+
+  it("lapisan tanpa berkas tidak jadi klip hantu; namanya disebut di laporan", () => {
+    const plan = makePlan((input) => {
+      const scene = input.scenes[1] as Record<string, unknown>;
+      scene.layers = [{ id: "lap-hilang", visual: { type: "stock", query: "x" } }];
+    });
+    const project = tempProject(plan);
+    const timeline = buildEditTimeline(plan, { planPath: project.planPath });
+    expect(timeline.tracks.filter((track) => track.kind === "video")).toHaveLength(1);
+    expect(
+      timeline.notes.find((entry) => entry.code === "lapisan-tanpa-aset")?.detail,
+    ).toContain("lap-hilang");
+  });
+});

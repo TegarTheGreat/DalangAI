@@ -217,6 +217,16 @@ export const visualSchema = z.strictObject({
   /** Titik fokus crop `cover` (ADR-0015), fraksi 0-1; 0.5/0.5 = tengah. */
   focusX: normalized01.default(0.5),
   focusY: normalized01.default(0.5),
+  /**
+   * Gain audio aset VIDEO (ADR-0025); 0 (bawaan) = bisu, seperti seluruh
+   * perilaku sebelum ADR ini. Diabaikan untuk gambar.
+   *
+   * Ada di `visual` — bukan hanya di lapisan — supaya B-roll bersuara alami
+   * memakai field yang sama entah ia jadi visual dasar atau lapisan di
+   * atasnya. Amplop fade dan normalisasi kenyaringan adalah §9.4, bukan ini:
+   * yang di sini hanya satu angka gain.
+   */
+  volume: normalized01.default(0),
 });
 export type Visual = z.infer<typeof visualSchema>;
 
@@ -287,6 +297,74 @@ export const graphicSchema = z.strictObject({
 });
 export type Graphic = z.infer<typeof graphicSchema>;
 
+/**
+ * Lapisan video di atas visual dasar (ADR-0025, roadmap §9.2): B-roll,
+ * picture-in-picture, sisipan bukti.
+ *
+ * KENAPA PER SCENE, BUKAN TRACK GLOBAL. Garis waktu Dalang adalah barisan
+ * scene, dan scene itulah satuan yang dipahami agent: ia menulis naskah per
+ * scene, memilih aset per scene, mengkritik per scene. Track global dengan
+ * waktu mutlak akan memutus ikatan itu — memindahkan satu scene tidak lagi
+ * memindahkan sisipannya, dan agent kehilangan cara menyebut "yang muncul saat
+ * kalimat ini dibacakan". Jendela tampil karenanya FRAKSI durasi scene, sama
+ * seperti grafis tempelan (ADR-0018): scene yang dipanjangkan membawa serta
+ * sisipannya.
+ *
+ * Medianya memakai bentuk `visual` yang SAMA dengan visual dasar. Dengan itu
+ * gerak Ken Burns, filter, kecepatan, trim, cermin, dan titik fokus berlaku di
+ * lapisan tanpa satu baris rumus pun ditulis dua kali — dan lapisan tidak akan
+ * pernah tertinggal saat kemampuan visual bertambah.
+ */
+export const LAYER_SHAPES = ["persegi", "bulat"] as const;
+export const layerShapeSchema = z.enum(LAYER_SHAPES);
+export type LayerShape = (typeof LAYER_SHAPES)[number];
+
+export const LAYER_ENTRANCES = ["fade", "geser", "pop", "diam"] as const;
+export const layerEntranceSchema = z.enum(LAYER_ENTRANCES);
+export type LayerEntrance = (typeof LAYER_ENTRANCES)[number];
+
+/**
+ * `variant` dibuang dan `type` dipersempit: lapisan tidak bisa berupa scene
+ * judul animasi maupun bidang warna. Keduanya adalah LATAR — menaruhnya
+ * sebagai sisipan hanya menghasilkan kotak yang menutupi videonya sendiri.
+ */
+export const layerVisualSchema = visualSchema.omit({ variant: true }).extend({
+  type: z.enum(["stock", "image", "generated", "screenshot"]),
+});
+export type LayerVisual = z.infer<typeof layerVisualSchema>;
+
+/** Batas jumlah lapisan per scene. */
+export const MAX_LAYERS = 2;
+
+export const videoLayerSchema = z.strictObject({
+  id: z.string().min(1),
+  visual: layerVisualSchema,
+  /** Penempatan: jangkar + geseran fraksional, sama dengan grafis (ADR-0018). */
+  anchor: graphicAnchorSchema.default("kanan-bawah"),
+  /** Lebar kotak sebagai fraksi LEBAR frame. */
+  width: z.number().min(0.08).max(1).default(0.34),
+  /** Tinggi kotak sebagai fraksi TINGGI frame. */
+  height: z.number().min(0.08).max(1).default(0.34),
+  offsetX: z.number().min(-0.5).max(0.5).default(0),
+  offsetY: z.number().min(-0.5).max(0.5).default(0),
+  shape: layerShapeSchema.default("persegi"),
+  /** Sudut membulat, fraksi sisi TERPENDEK kotak; diabaikan bila bulat. */
+  radius: z.number().min(0).max(0.5).default(0.05),
+  /** Tebal bingkai, fraksi tinggi frame; 0 = tanpa bingkai. */
+  border: z.number().min(0).max(0.02).default(0),
+  /** Warna bingkai; null = warna aksen preset. */
+  borderColor: hexColorSchema.nullable().default(null),
+  opacity: normalized01.default(1),
+  /** Isi kotak: `cover` memotong, `contain` memuat seluruh bingkai. */
+  fit: z.enum(["cover", "contain"]).default("cover"),
+  entrance: layerEntranceSchema.default("fade"),
+  /** Jendela tampil, fraksi 0-1 dari durasi scene. */
+  startFrac: normalized01.default(0),
+  endFrac: normalized01.default(1),
+});
+export type VideoLayer = z.infer<typeof videoLayerSchema>;
+export type VideoLayerInput = z.input<typeof videoLayerSchema>;
+
 export const sceneSchema = z.strictObject({
   id: z.string().min(1),
   /** Hard contract: agents are rejected at the code level when touching a locked scene. */
@@ -310,6 +388,8 @@ export const sceneSchema = z.strictObject({
   annotations: z.array(annotationSchema).default([]),
   /** Ikon/stiker tempelan (maks 4) di atas visual (ADR-0018). */
   graphics: z.array(graphicSchema).max(4).default([]),
+  /** Lapisan video di atas visual dasar (maks 2) — ADR-0025. */
+  layers: z.array(videoLayerSchema).max(MAX_LAYERS).default([]),
 });
 export type Scene = z.infer<typeof sceneSchema>;
 export type SceneInput = z.input<typeof sceneSchema>;
@@ -486,6 +566,12 @@ export const renderStateSchema = z.strictObject({
   resolvedAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /** Berkas nyata untuk grafis tempelan, dikunci id grafis (ADR-0018). */
   graphicAssets: z.record(z.string(), resolvedAssetSchema).default({}),
+  /**
+   * Berkas nyata untuk lapisan video, dikunci ID LAPISAN (ADR-0025) — bukan
+   * id scene, karena satu scene boleh punya beberapa lapisan dan lapisan
+   * kedua akan menimpa berkas lapisan pertama kalau kuncinya scene.
+   */
+  layerAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /** Berkas nyata untuk cue efek suara, dikunci id cue (ADR-0018). */
   sfxAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /**
@@ -518,6 +604,7 @@ export const scenePlanSchema = z
       narrationAudio: {},
       resolvedAssets: {},
       graphicAssets: {},
+      layerAssets: {},
       sfxAssets: {},
       transcripts: {},
     }),
@@ -533,6 +620,25 @@ export const scenePlanSchema = z
         });
       }
       seen.add(scene.id);
+    });
+
+    // Id lapisan harus unik SE-PLAN, bukan se-scene (ADR-0025): berkasnya
+    // dikunci per id di `renderState.layerAssets`, jadi dua lapisan bernama
+    // sama di scene berbeda akan berbagi satu berkas — dan menghapus salah
+    // satunya mencabut berkas milik yang lain. Persis pelajaran yang sama
+    // dengan id grafis/cue di ADR-0018.
+    const layerIds = new Set<string>();
+    plan.scenes.forEach((scene, sceneIndex) => {
+      scene.layers.forEach((layer, layerIndex) => {
+        if (layerIds.has(layer.id)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["scenes", sceneIndex, "layers", layerIndex, "id"],
+            message: `Id lapisan "${layer.id}" dipakai lebih dari sekali — id lapisan harus unik di seluruh plan`,
+          });
+        }
+        layerIds.add(layer.id);
+      });
     });
   });
 

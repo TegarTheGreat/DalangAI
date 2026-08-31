@@ -1166,6 +1166,51 @@ input[type="color"]::-webkit-color-swatch {
   margin-bottom: 2px;
 }
 /*
+ * Track lapisan video (ADR-0025): sisipan di ATAS klip utama, jadi barisnya
+ * juga duduk tepat di bawah track video — urutan baris di timeline harus
+ * membaca sama dengan urutan lapisan di gambar, kalau tidak ia mengajarkan
+ * susunan yang salah.
+ */
+.tl-track.layers {
+  height: 20px;
+  margin-bottom: 3px;
+}
+.layer-bar {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-height: 0;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid rgba(232, 163, 61, 0.4);
+  background: rgba(232, 163, 61, 0.14);
+}
+.layer-bar:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(232, 163, 61, 0.22);
+}
+/* Lapisan tanpa berkas TIDAK digambar di video. Barisnya karenanya juga tidak
+   boleh terlihat padat — garis putus-putus mengatakan "direncanakan, belum
+   ada" tanpa perlu tooltip. */
+.layer-bar.kosong {
+  border-style: dashed;
+  background: transparent;
+}
+.layer-bar-label {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
  * Track campuran: musik latar sepanjang video + pin cue efek suara.
  * Sengaja track TERPISAH dari narasi — keduanya lapisan yang berbeda, dan
  * menumpuknya di satu baris membuat cue tak bisa dibedakan dari narasinya.
@@ -2435,6 +2480,18 @@ input[type="color"]::-webkit-color-swatch {
   border-color: var(--accent);
   background: rgba(232, 163, 61, 0.06);
 }
+/* Lapisan video (ADR-0025): kotaknya utuh, bukan putus-putus. Sisipan PUNYA
+   tepi yang terlihat di video, jadi pegangannya menegaskan tepi itu alih-alih
+   menyarankan area seperti pada teks yang tepinya tak terlihat. */
+.canvas-box.layer {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+}
+.canvas-box.layer:hover,
+.canvas-box.layer.active {
+  border-color: var(--accent);
+}
 .canvas-tag {
   position: absolute;
   left: 0;
@@ -2926,6 +2983,17 @@ input[type="color"]::-webkit-color-swatch {
   gap: 6px;
   min-width: 0;
   flex: 1;
+}
+/* Kartu lapisan punya jauh lebih banyak kendali daripada kartu grafis (aset,
+   kotak, bentuk, jendela tampil, suara), jadi badannya satu kolom penuh:
+   pad jangkar ikut turun ke dalam kolom itu, bukan berdiri sendiri di kiri
+   dan menyisakan lajur kanan yang sempit. */
+.graphic-card-body.layer {
+  flex-direction: column;
+  gap: 8px;
+}
+.graphic-card-body.layer .anchor-pad {
+  align-self: flex-start;
 }
 
 /* Cue efek suara terpasang */

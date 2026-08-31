@@ -10,6 +10,8 @@ import type { InteropNote } from "./report";
  * tidak tahu naskah, gaya, format konten, atau maksud — semua yang membuat
  * scene-plan berguna bagi agent. Hasil impor adalah KERANGKA, dan catatannya
  * mengatakan itu.
+ *
+ * Trek video pertama jadi scene; trek video berikutnya jadi LAPISAN (ADR-0025).
  */
 
 interface OtioTime {
@@ -52,9 +54,10 @@ export const fromOtio = (
   const stack = isRecord(doc.tracks) ? doc.tracks : {};
   const trackList = Array.isArray(stack.children) ? stack.children : [];
 
-  const videoTrack = trackList.find(
+  const videoTracks = trackList.filter(
     (track) => isRecord(track) && track.kind === "Video" && Array.isArray(track.children),
   );
+  const videoTrack = videoTracks[0];
   if (!videoTrack || !isRecord(videoTrack)) {
     throw new Error(
       "Berkas OTIO ini tidak punya trek video — tidak ada yang bisa jadi scene.",
@@ -72,40 +75,63 @@ export const fromOtio = (
     });
   }
 
-  const clips: ImportedClip[] = [];
   let dilewati = 0;
 
-  for (const child of videoTrack.children as unknown[]) {
-    const schema = schemaOf(child);
-    if (schema.startsWith("Transition")) continue;
-    if (!isRecord(child) || !schema.startsWith("Clip")) {
-      // Gap dan bentuk tak dikenal bukan scene: tidak ada yang bisa ditampilkan.
-      dilewati++;
-      continue;
-    }
-    const sourceRange = isRecord(child.source_range) ? child.source_range : {};
-    const durationSec = seconds(sourceRange.duration);
-    if (durationSec <= 0) {
-      dilewati++;
-      continue;
-    }
-    const reference = isRecord(child.media_reference) ? child.media_reference : {};
-    const available = isRecord(reference.available_range)
-      ? reference.available_range
-      : null;
-    const sourceDurationSec = available ? seconds(available.duration) : 0;
+  /**
+   * Baca satu trek jadi daftar klip berwaktu MUTLAK.
+   *
+   * Kursor ikut maju melewati gap: tanpa itu klip sesudah sebuah lubang akan
+   * dilaporkan lebih awal daripada tempatnya, dan sisipan di trek kedua akan
+   * dipasangkan ke scene yang salah.
+   */
+  const readTrack = (track: Record<string, unknown>): ImportedClip[] => {
+    const out: ImportedClip[] = [];
+    let cursorSec = 0;
+    for (const child of (track.children as unknown[]) ?? []) {
+      const schema = schemaOf(child);
+      if (schema.startsWith("Transition")) continue;
+      const sourceRange =
+        isRecord(child) && isRecord(child.source_range) ? child.source_range : {};
+      const durationSec = seconds(sourceRange.duration);
+      if (!isRecord(child) || !schema.startsWith("Clip") || durationSec <= 0) {
+        // Gap dan bentuk tak dikenal bukan scene: tidak ada yang bisa
+        // ditampilkan. Panjangnya tetap dihitung supaya letak klip sesudahnya
+        // tidak melenceng.
+        dilewati++;
+        cursorSec += Math.max(0, durationSec);
+        continue;
+      }
+      const reference = isRecord(child.media_reference) ? child.media_reference : {};
+      const available = isRecord(reference.available_range)
+        ? reference.available_range
+        : null;
+      const sourceDurationSec = available ? seconds(available.duration) : 0;
 
-    clips.push({
-      name:
-        typeof child.name === "string" && child.name
-          ? child.name
-          : `clip-${clips.length + 1}`,
-      durationSec,
-      sourceStartSec: Math.max(0, seconds(sourceRange.start_time)),
-      ...(typeof reference.target_url === "string" ? { url: reference.target_url } : {}),
-      ...(sourceDurationSec > 0 ? { sourceDurationSec } : {}),
-    });
-  }
+      out.push({
+        name:
+          typeof child.name === "string" && child.name
+            ? child.name
+            : `clip-${out.length + 1}`,
+        durationSec,
+        sourceStartSec: Math.max(0, seconds(sourceRange.start_time)),
+        timelineStartSec: cursorSec,
+        ...(typeof reference.target_url === "string"
+          ? { url: reference.target_url }
+          : {}),
+        ...(sourceDurationSec > 0 ? { sourceDurationSec } : {}),
+      });
+      cursorSec += durationSec;
+    }
+    return out;
+  };
+
+  const clips = readTrack(videoTrack);
+  // Trek video KEDUA dan seterusnya jadi lapisan (ADR-0025) — inilah bentuk
+  // OTIO untuk B-roll dan PiP, dan sampai fase kesembilan Dalang tidak punya
+  // tempat untuk menaruhnya.
+  const overlays = videoTracks
+    .slice(1)
+    .flatMap((track) => (isRecord(track) ? readTrack(track) : []));
 
   if (dilewati > 0) {
     notes.push({
@@ -119,5 +145,6 @@ export const fromOtio = (
     title: title ?? (typeof doc.name === "string" && doc.name ? doc.name : "Impor OTIO"),
     notes,
     source: "otio",
+    overlays,
   });
 };

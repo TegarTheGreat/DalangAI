@@ -57,6 +57,8 @@ export const planAssetFiles = (plan: ScenePlan): string[] => {
     // Melupakan keduanya di sini berarti render gagal memuat berkasnya — dan
     // itu TIDAK terlihat oleh test mana pun, hanya oleh render sungguhan.
     ...live(plan.renderState.graphicAssets, orphans.graphics),
+    // ADR-0025: lapisan video juga punya lumbung berkasnya sendiri.
+    ...live(plan.renderState.layerAssets, orphans.layers),
     ...live(plan.renderState.sfxAssets, orphans.sfx),
   ];
   // Musik proyek (ADR-0014): file milik plan ikut di-stage; id "pustaka:*"

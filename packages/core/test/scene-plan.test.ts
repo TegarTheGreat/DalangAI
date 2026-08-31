@@ -17,10 +17,12 @@ describe("scene-plan schema v0", () => {
     });
     expect(plan.scenes[0]?.visual.assetId).toBeNull();
     expect(plan.scenes[0]?.visual.pinned).toBe(false);
-    // ADR-0018: grafis & efek suara punya lumbung berkasnya sendiri.
+    // ADR-0018/0025: grafis, lapisan, dan efek suara punya lumbung berkasnya
+    // sendiri-sendiri.
     expect(plan.renderState).toEqual({
       narrationAudio: {},
       resolvedAssets: {},
+      layerAssets: {},
       graphicAssets: {},
       sfxAssets: {},
       transcripts: {},

@@ -2,6 +2,7 @@ import {
   activeSnapLines,
   type FramePoint,
   placeGraphic,
+  placeLayer,
   placeText,
   type SafeInsets,
   type Scene,
@@ -27,7 +28,7 @@ import { studioClient } from "../use-studio";
  * tidak ada editor video yang menyuruh orang mengetik koordinat.
  *
  * Kotak pegangan dibaca dari DOM yang SUDAH ter-render (`data-dalang-text`,
- * `data-dalang-graphic`), bukan dihitung ulang dari model. Itu keputusan
+ * `data-dalang-graphic`, `data-dalang-layer`), bukan dihitung ulang dari model. Itu keputusan
  * penting: preset menata teks dengan flex, margin aman, dan pengelompokan per
  * posisi, dan menirukan semua itu di sisi Studio berarti dua rumus tata letak
  * yang harus tetap sama selamanya. Membaca kotaknya membuat pegangan selalu
@@ -41,7 +42,7 @@ import { studioClient } from "../use-studio";
 const SNAP = 0.012;
 
 interface Handle {
-  kind: "text" | "graphic";
+  kind: "text" | "graphic" | "layer";
   id: string;
   /** Kotak dalam koordinat kotak pemutar (piksel CSS). */
   rect: { x: number; y: number; w: number; h: number };
@@ -132,6 +133,8 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       for (const [attribute, kind] of [
         ["data-dalang-text", "text"],
         ["data-dalang-graphic", "graphic"],
+        // ADR-0025: lapisan video ikut bisa diseret & diubah ukurannya.
+        ["data-dalang-layer", "layer"],
       ] as const) {
         for (const element of box.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
           const id = element.getAttribute(attribute);
@@ -229,14 +232,20 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     const item =
       handle.kind === "graphic"
         ? scene.graphics.find((graphic) => graphic.id === handle.id)
-        : undefined;
+        : handle.kind === "layer"
+          ? scene.layers.find((layer) => layer.id === handle.id)
+          : undefined;
+    // Grafis punya satu `size`; lapisan punya `height` (lebarnya ikut skala
+    // yang sama saat diseret, lihat buildOps).
+    const startSize =
+      item && "size" in item ? item.size : item && "height" in item ? item.height : null;
     setSelected(handle.id);
     setDrag({
       handle,
       mode,
       origin: centerOf(handle.rect, box),
       pointer: { x: event.clientX, y: event.clientY },
-      startSizeFrac: item?.size ?? handle.rect.h / box.height,
+      startSizeFrac: startSize ?? handle.rect.h / box.height,
     });
   };
 
@@ -287,7 +296,7 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
           onPointerDown={(event) => start(handle, "move", event)}
         >
           <span className="canvas-tag">{handle.id}</span>
-          {handle.kind === "graphic" ? (
+          {handle.kind === "graphic" || handle.kind === "layer" ? (
             <button
               type="button"
               className="canvas-grip"
@@ -315,6 +324,76 @@ const buildOps = (
   safe: SafeInsets,
 ): { ops: Parameters<typeof studioClient.applyPatch>[0]; label: string } | null => {
   if (!scene || scene.locked) return null;
+
+  if (drag.handle.kind === "layer") {
+    const layer = scene.layers.find((item) => item.id === drag.handle.id);
+    if (!layer) return null;
+    if (drag.mode === "resize") {
+      // Ukuran lapisan berubah SERAGAM: tinggi dan lebar diskalakan dengan
+      // faktor yang sama. Sudut yang memetakan dx ke lebar dan dy ke tinggi
+      // memang lebih bebas, tapi hampir selalu memenceng-mencengkan sisipan
+      // 16:9 tanpa disadari — dan rasio bebas tetap tersedia di panel Properti.
+      const height = Math.min(
+        1,
+        Math.max(0.08, drag.startSizeFrac + (target.y - drag.origin.y) * 2),
+      );
+      const factor = drag.startSizeFrac > 0 ? height / drag.startSizeFrac : 1;
+      const width = Math.min(1, Math.max(0.08, layer.width * factor));
+      if (Math.abs(height - layer.height) < 0.001) return null;
+      return {
+        ops: [
+          {
+            op: "updateScene",
+            id: scene.id,
+            patch: {
+              layers: scene.layers.map((item) =>
+                item.id === layer.id
+                  ? {
+                      ...item,
+                      width: Number(width.toFixed(4)),
+                      height: Number(height.toFixed(4)),
+                    }
+                  : item,
+              ),
+            },
+          },
+        ],
+        label: `Ukuran lapisan ${layer.id}`,
+      };
+    }
+    // Titik jatuh adalah PUSAT kotak; `placeLayer` bekerja pada kotaknya,
+    // karena jangkar kiri menempelkan TEPI kiri ke margin aman, bukan pusatnya.
+    const placement = placeLayer(
+      {
+        x: target.x - layer.width / 2,
+        y: target.y - layer.height / 2,
+        width: layer.width,
+        height: layer.height,
+      },
+      safe,
+    );
+    if (
+      placement.anchor === layer.anchor &&
+      Math.abs(placement.offsetX - layer.offsetX) < 0.001 &&
+      Math.abs(placement.offsetY - layer.offsetY) < 0.001
+    ) {
+      return null;
+    }
+    return {
+      ops: [
+        {
+          op: "updateScene",
+          id: scene.id,
+          patch: {
+            layers: scene.layers.map((item) =>
+              item.id === layer.id ? { ...item, ...placement } : item,
+            ),
+          },
+        },
+      ],
+      label: `Geser lapisan ${layer.id}`,
+    };
+  }
 
   if (drag.handle.kind === "graphic") {
     const graphic = scene.graphics.find((item) => item.id === drag.handle.id);

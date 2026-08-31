@@ -28,6 +28,7 @@ import { Segmented, Switch, useScrollFade } from "../components/controls";
 import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
+import { LapisanTab } from "./LayersTab";
 import { GrafisTab, SfxSection } from "./MediaLibrary";
 import { TranscriptTab } from "./TranscriptTab";
 
@@ -40,7 +41,15 @@ import { TranscriptTab } from "./TranscriptTab";
  * Semua perubahan = patch user (tercatat, bisa di-undo, terlihat agent).
  */
 
-type Tab = "scene" | "visual" | "teks" | "transkrip" | "grafis" | "transisi" | "anotasi";
+type Tab =
+  | "scene"
+  | "visual"
+  | "teks"
+  | "transkrip"
+  | "grafis"
+  | "lapisan"
+  | "transisi"
+  | "anotasi";
 
 const ANNOTATION_TYPES = ["zoom", "highlight", "arrow", "blur"] as const;
 const ANNOTATION_LABEL: Record<(typeof ANNOTATION_TYPES)[number], string> = {
@@ -1320,6 +1329,7 @@ export const InspectorPanel: React.FC = () => {
                 ["teks", "Teks"],
                 ["transkrip", "Transkrip"],
                 ["grafis", "Grafis"],
+                ["lapisan", "Lapisan"],
                 ["transisi", "Transisi"],
                 ["anotasi", "Anotasi"],
               ] as const
@@ -1337,6 +1347,9 @@ export const InspectorPanel: React.FC = () => {
                 {key === "grafis" && scene.graphics.length > 0 ? (
                   <span className="tab-count">{scene.graphics.length}</span>
                 ) : null}
+                {key === "lapisan" && scene.layers.length > 0 ? (
+                  <span className="tab-count">{scene.layers.length}</span>
+                ) : null}
                 {key === "anotasi" && scene.annotations.length > 0 ? (
                   <span className="tab-count">{scene.annotations.length}</span>
                 ) : null}
@@ -1351,6 +1364,7 @@ export const InspectorPanel: React.FC = () => {
             {tab === "teks" ? <TeksTab scene={scene} /> : null}
             {tab === "transkrip" ? <TranscriptTab plan={plan} scene={scene} /> : null}
             {tab === "grafis" ? <GrafisTab plan={plan} scene={scene} /> : null}
+            {tab === "lapisan" ? <LapisanTab plan={plan} scene={scene} /> : null}
             {tab === "transisi" ? (
               <TransisiTab scene={scene} isLast={index === plan.scenes.length - 1} />
             ) : null}

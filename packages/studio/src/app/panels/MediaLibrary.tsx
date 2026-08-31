@@ -30,7 +30,7 @@ import { SliderRow } from "./InspectorPanel";
  * bisa di-undo, dan terlihat agent di giliran berikutnya (PRD §5.2 dua arah).
  */
 
-const ANCHOR_LABEL: Record<GraphicAnchor, string> = {
+export const ANCHOR_LABEL: Record<GraphicAnchor, string> = {
   "kiri-atas": "Kiri atas",
   "tengah-atas": "Tengah atas",
   "kanan-atas": "Kanan atas",
@@ -138,7 +138,7 @@ const SearchBox: React.FC<{
 };
 
 /** Jangkar 3x3 — peta posisi yang sebenarnya, bukan daftar nama. */
-const AnchorPad: React.FC<{
+export const AnchorPad: React.FC<{
   value: GraphicAnchor;
   onChange: (anchor: GraphicAnchor) => void;
 }> = ({ value, onChange }) => (

@@ -10,8 +10,8 @@ import {
 } from "remotion";
 import { easeDolly, kf } from "../../anim";
 import { useAssetSrc } from "../../asset-src";
+import { filterToCss } from "../../filters";
 import { motionTransform } from "../../motion-model";
-import { filterToCss } from "./filters";
 import type { DocTheme } from "./theme";
 
 /**
@@ -48,7 +48,11 @@ const AssetLayer: React.FC<{
     return (
       <Video
         src={assetSrc(asset.file)}
-        muted
+        // ADR-0025: bawaan `volume` 0 = bisu, persis perilaku sebelumnya.
+        // `muted` tetap dipasang saat 0 supaya Remotion tidak menyiapkan
+        // jalur audio untuk trek yang memang tidak berbunyi.
+        muted={scene.visual.volume <= 0}
+        volume={scene.visual.volume}
         playbackRate={scene.visual.speed}
         // ADR-0017: titik masuk di rekaman sumber — satu video panjang bisa
         // dipakai berkali-kali dengan potongan berbeda per scene.

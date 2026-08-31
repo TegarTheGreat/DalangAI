@@ -95,6 +95,19 @@ export const summarizePlan = (workspace: Workspace, planPath: string): PlanSumma
       visual: scene.visual.query ?? scene.visual.variant ?? scene.visual.type,
       asetSiap: plan.renderState.resolvedAssets[scene.id] !== undefined,
       suaraSiap: plan.renderState.narrationAudio[scene.id] !== undefined,
+      // Lapisan (ADR-0025) ikut ke ringkasan: agent pemanggil yang tidak
+      // melihatnya akan mengira scene ini punya satu gambar, lalu menyarankan
+      // menambah sisipan yang sudah ada di sana.
+      ...(scene.layers.length > 0
+        ? {
+            lapisan: scene.layers.map((layer) => ({
+              id: layer.id,
+              tampilDari: layer.startFrac,
+              tampilSampai: layer.endFrac,
+              asetSiap: plan.renderState.layerAssets[layer.id] !== undefined,
+            })),
+          }
+        : {}),
     })),
   };
 };

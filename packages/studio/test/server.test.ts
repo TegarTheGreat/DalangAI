@@ -327,6 +327,54 @@ describe("stock search & pick (grid aset §8.2)", () => {
     expect(scene?.visual.assetId).toBe("fake:image:2");
   });
 
+  /**
+   * ADR-0025: memilih aset untuk sebuah LAPISAN memakai op yang sama, dan
+   * TIDAK boleh menyentuh visual dasar scene-nya.
+   */
+  it("pick dengan layerId memasang aset ke lapisan, bukan ke visual dasar", async () => {
+    const { studio } = boot();
+    const added = await callJson<{ ok: boolean }>(studio, "/api/patch", {
+      method: "POST",
+      body: JSON.stringify({
+        ops: [
+          {
+            op: "updateScene",
+            id: "sc-batu",
+            patch: {
+              layers: [{ id: "lap-1", visual: { type: "stock", query: "rain" } }],
+            },
+          },
+        ],
+        label: "tambah lapisan",
+      }),
+    });
+    expect(added.status).toBe(200);
+
+    await call(studio, "/api/stock/search?query=temple&kind=image");
+    const picked = await callJson<{ ok: boolean; file: string }>(
+      studio,
+      "/api/stock/pick",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          sceneId: "sc-batu",
+          query: "temple",
+          index: 0,
+          layerId: "lap-1",
+        }),
+      },
+    );
+    expect(picked.status).toBe(200);
+
+    const project = await getProject(studio);
+    const scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
+    expect(scene?.layers[0]?.visual.assetId).toBe("fake:image:0");
+    expect(scene?.layers[0]?.visual.pinned).toBe(true);
+    expect(project.plan?.renderState.layerAssets["lap-1"]?.license).toBe("Uji License");
+    // Visual dasar tidak ikut berubah — pagar yang paling mudah jebol.
+    expect(scene?.visual.assetId).not.toBe("fake:image:0");
+  });
+
   it("auto-resolve stage tetap melewati scene ter-pin", async () => {
     const { studio } = boot();
     await call(studio, "/api/stock/pick", {

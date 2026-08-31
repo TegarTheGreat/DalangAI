@@ -554,6 +554,40 @@ export const TimelineStrip: React.FC = () => {
               </button>
             </div>
 
+            {/*
+              Track lapisan (ADR-0025) hanya muncul kalau ada lapisannya.
+              Baris kosong permanen di timeline mengajarkan mata untuk
+              melewatinya, dan baris yang dilewati sama saja dengan tidak ada.
+            */}
+            {plan.scenes.some((scene) => scene.layers.length > 0) ? (
+              <div className="tl-track layers">
+                {plan.scenes.flatMap((scene, index) => {
+                  const box = boxes[index] as ClipBox;
+                  return scene.layers.map((layer) => {
+                    const asset = plan.renderState.layerAssets[layer.id];
+                    const x = box.x + layer.startFrac * box.w;
+                    const w = Math.max(6, (layer.endFrac - layer.startFrac) * box.w);
+                    return (
+                      <button
+                        key={layer.id}
+                        type="button"
+                        className={asset ? "layer-bar" : "layer-bar kosong"}
+                        style={{ left: x, width: w }}
+                        onClick={() => studioClient.selectScene(scene.id)}
+                        title={`Lapisan ${layer.id} di ${scene.id} · ${Math.round(
+                          layer.startFrac * 100,
+                        )}%–${Math.round(layer.endFrac * 100)}% durasi scene${
+                          asset ? "" : " · berkas belum ada, tidak akan muncul"
+                        }`}
+                      >
+                        <span className="layer-bar-label">{layer.id}</span>
+                      </button>
+                    );
+                  });
+                })}
+              </div>
+            ) : null}
+
             <div className="tl-track audio">
               {plan.scenes.map((scene, index) => {
                 const audio = plan.renderState.narrationAudio[scene.id];

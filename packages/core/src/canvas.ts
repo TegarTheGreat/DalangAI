@@ -1,4 +1,4 @@
-import type { GraphicAnchor, TextPosition } from "./scene-plan";
+import type { GraphicAnchor, TextPosition, VideoLayer } from "./scene-plan";
 import { GRAPHIC_ANCHORS } from "./scene-plan";
 
 /**
@@ -162,3 +162,66 @@ export const activeSnapLines = (
   x: lines.x.filter((line) => Math.abs(point.x - line) < threshold),
   y: lines.y.filter((line) => Math.abs(point.y - line) < threshold),
 });
+
+/**
+ * Kotak satu LAPISAN video (ADR-0025) sebagai fraksi bingkai: kiri-atas,
+ * lebar, tinggi.
+ *
+ * Ada di sini, bukan di preset, karena lapisan manipulasi langsung butuh tahu
+ * di mana kotaknya SEBELUM ada yang menggambarnya — saat lapisan baru dibuat
+ * dan asetnya belum ter-resolve, tidak ada elemen DOM untuk diukur. Rumusnya
+ * mengikuti jangkar yang sama dengan `layerBoxStyle` di paket templates.
+ */
+export const layerRect = (
+  layer: Pick<VideoLayer, "anchor" | "width" | "height" | "offsetX" | "offsetY">,
+  safe: SafeInsets,
+): { x: number; y: number; width: number; height: number } => {
+  const index = GRAPHIC_ANCHORS.indexOf(layer.anchor);
+  const column = index % 3;
+  const row = Math.floor(index / 3);
+  const left =
+    column === 0
+      ? safe.x
+      : column === 2
+        ? 1 - safe.x - layer.width
+        : 0.5 - layer.width / 2;
+  const top =
+    row === 0 ? safe.y : row === 2 ? 1 - safe.y - layer.height : 0.5 - layer.height / 2;
+  return {
+    x: fmt(left + layer.offsetX),
+    y: fmt(top + layer.offsetY),
+    width: layer.width,
+    height: layer.height,
+  };
+};
+
+/**
+ * Kebalikan `layerRect`: kotak (kiri-atas + ukuran) -> jangkar + geseran.
+ *
+ * Dipakai saat sebuah lapisan diseret atau diubah ukurannya di kanvas. Sama
+ * seperti teks dan grafis, jangkarnya DIPILIH ULANG dari titik pusat kotak —
+ * bukan dipertahankan — supaya menyeret dari satu sudut ke sudut seberangnya
+ * tidak menabrak batas geseran ±0,5.
+ */
+export const placeLayer = (
+  rect: { x: number; y: number; width: number; height: number },
+  safe: SafeInsets,
+): { anchor: GraphicAnchor; offsetX: number; offsetY: number } => {
+  const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  const horizontal = nearestOnAxis(clamp(center.x, 0, 1), safe.x);
+  const vertical = nearestOnAxis(clamp(center.y, 0, 1), safe.y);
+  const anchor = GRAPHIC_ANCHORS[vertical.index * 3 + horizontal.index] as GraphicAnchor;
+  // Geserannya diukur dari POSISI KOTAK yang dituntut jangkar itu, bukan dari
+  // pusatnya: `layerRect` menempatkan tepi kiri di margin aman untuk jangkar
+  // kiri, jadi memakai selisih pusat akan menggeser kotak sebesar setengah
+  // lebarnya pada setiap penempatan.
+  const base = layerRect(
+    { anchor, width: rect.width, height: rect.height, offsetX: 0, offsetY: 0 },
+    safe,
+  );
+  return {
+    anchor,
+    offsetX: fmt(clamp(rect.x - base.x, -0.5, 0.5)),
+    offsetY: fmt(clamp(rect.y - base.y, -0.5, 0.5)),
+  };
+};

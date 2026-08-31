@@ -49,6 +49,8 @@ export interface PendingConfirm {
 
 export interface AssetSearchState {
   sceneId: string;
+  /** Lapisan tujuan (ADR-0025); null = visual dasar scene. */
+  layerId: string | null;
   query: string;
   kind: "video" | "image";
   loading: boolean;
@@ -588,10 +590,16 @@ export class StudioClient {
 
   // -- grid aset (search → pick = patch user ter-pin) ------------------------
 
-  async searchAssets(sceneId: string, query: string, kind: "video" | "image") {
+  async searchAssets(
+    sceneId: string,
+    query: string,
+    kind: "video" | "image",
+    layerId: string | null = null,
+  ) {
     this.set({
       assetSearch: {
         sceneId,
+        layerId,
         query,
         kind,
         loading: true,
@@ -605,6 +613,7 @@ export class StudioClient {
       this.set({
         assetSearch: {
           sceneId,
+          layerId,
           query: result.query,
           kind,
           loading: false,
@@ -617,6 +626,7 @@ export class StudioClient {
       this.set({
         assetSearch: {
           sceneId,
+          layerId,
           query,
           kind,
           loading: false,
@@ -636,8 +646,17 @@ export class StudioClient {
     const search = this.state.assetSearch;
     if (!search) return;
     try {
-      const result = await api.stockPick(search.sceneId, search.query, index);
-      this.toast(`Aset terpasang dan ter-pin: ${result.file}`);
+      const result = await api.stockPick(
+        search.sceneId,
+        search.query,
+        index,
+        search.layerId ?? undefined,
+      );
+      this.toast(
+        search.layerId
+          ? `Aset lapisan ${search.layerId} terpasang: ${result.file}`
+          : `Aset terpasang dan ter-pin: ${result.file}`,
+      );
       this.set({ assetSearch: null });
       await this.refresh();
     } catch (error) {

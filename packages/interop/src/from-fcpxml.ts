@@ -18,9 +18,11 @@ import type { InteropNote } from "./report";
  * itu pula alasan versi pertama fase ini sengaja tidak membaca FCPXML sama
  * sekali (lihat "Alternatif yang ditolak" di ADR-0023, yang kini dicabut).
  *
- * Yang dibaca: spine UTAMA sebuah sequence. Klip di lane (connected clip)
- * dilewati dengan hitungannya, karena garis waktu Dalang hanya punya satu
- * jalur video — lihat §9.2 di roadmap.
+ * Yang dibaca: spine UTAMA sebuah sequence, plus connected clip di lane
+ * POSITIF — sejak ADR-0025 garis waktu Dalang punya lapisan video, jadi
+ * sisipan yang dulu hanya dihitung kini benar-benar dipulihkan. Lane negatif
+ * (audio tempelan) tetap dilewati dengan hitungannya: narasi Dalang dibuat
+ * dari naskah lewat TTS, bukan dari berkas audio yang sudah jadi.
  */
 
 const parser = new XMLParser({
@@ -164,11 +166,76 @@ export const fromFcpxml = (
   if (!spine) {
     throw new Error("Sequence di berkas ini tidak punya <spine>.");
   }
+  // Basis waktu sequence; hampir selalu "0s", tapi tidak wajib.
+  const sequenceStartSec = parseFcpTime(attr(found.sequence, "tcStart")) ?? 0;
 
   const clips: ImportedClip[] = [];
-  let lanes = 0;
+  const overlays: ImportedClip[] = [];
+  let laneAudio = 0;
   let takDikenal = 0;
   let gaps = 0;
+
+  /** Satu node klip -> ImportedClip; null kalau waktunya tidak sah. */
+  const readClip = (node: Node, tag: string, index: number): ImportedClip | null => {
+    const offsetSec = parseFcpTime(attr(node, "offset"));
+    const durationSec = parseFcpTime(attr(node, "duration"));
+    if (offsetSec === null || durationSec === null || durationSec <= 0) return null;
+    const ref =
+      attr(node, "ref") ??
+      attr(childrenOf(node, "video")[0], "ref") ??
+      attr(childrenOf(node, "asset-clip")[0], "ref");
+    const asset = ref ? assets.get(ref) : undefined;
+    return {
+      name: attr(node, "name") ?? `${tag}-${index + 1}`,
+      durationSec,
+      sourceStartSec: parseFcpTime(attr(node, "start")) ?? 0,
+      timelineStartSec: offsetSec,
+      ...(asset?.url ? { url: asset.url } : {}),
+      ...(asset?.durationSec !== undefined
+        ? { sourceDurationSec: asset.durationSec }
+        : {}),
+    };
+  };
+
+  /**
+   * Connected clip: lane POSITIF jadi lapisan video, lane negatif dilewati.
+   *
+   * WAKTUNYA TIDAK MUTLAK. `offset` sebuah klip bersarang diukur di basis
+   * waktu INDUKNYA, dan induk itu punya titik masuknya sendiri (`start`).
+   * Letak sebenarnya di garis waktu karenanya:
+   *
+   *     mutlak = induk.offset + (anak.offset - induk.start)
+   *
+   * Menjumlahkan begitu saja (`induk.offset + anak.offset`) terlihat benar
+   * pada berkas buatan sendiri, karena di sana `start` kebetulan nol — tapi
+   * Final Cut menulis `start="3600s"` untuk gap, dan sisipannya akan mendarat
+   * satu jam dari tempatnya.
+   */
+  const takeLane = (
+    node: Node,
+    tag: string,
+    parentOffsetSec: number,
+    parentStartSec: number,
+  ): void => {
+    const lane = Number(attr(node, "lane"));
+    if (!Number.isFinite(lane) || lane < 0) {
+      laneAudio++;
+      return;
+    }
+    const clip = readClip(node, tag, overlays.length);
+    if (!clip) {
+      takDikenal++;
+      return;
+    }
+    const absolute = parentOffsetSec + ((clip.timelineStartSec ?? 0) - parentStartSec);
+    if (absolute < 0) {
+      // Waktu negatif berarti asumsi basis waktunya meleset. Menaruhnya di
+      // detik nol akan menyembunyikan kesalahan itu di dalam plan.
+      takDikenal++;
+      return;
+    }
+    overlays.push({ ...clip, timelineStartSec: absolute });
+  };
 
   // Anak spine dibaca APA ADANYA per tag; urutan antar-tag di objek hasil
   // parse tidak berarti apa-apa, jadi urutan garis waktu dipulihkan dengan
@@ -178,47 +245,43 @@ export const fromFcpxml = (
   for (const tag of CLIP_TAGS) {
     for (const node of childrenOf(spine, tag)) {
       if (attr(node, "lane") !== undefined) {
-        // Connected clip: menempel di lane lain, bukan di jalur utama. Garis
-        // waktu Dalang hanya punya satu jalur video (roadmap §9.2).
-        lanes++;
+        takeLane(node, tag, 0, sequenceStartSec);
         continue;
       }
-      const offsetSec = parseFcpTime(attr(node, "offset"));
-      const durationSec = parseFcpTime(attr(node, "duration"));
-      if (offsetSec === null || durationSec === null || durationSec <= 0) {
+      const clip = readClip(node, tag, entries.length);
+      if (!clip) {
         takDikenal++;
         continue;
       }
-      // `<clip>` membungkus `<video ref>`; `<asset-clip ref>` menunjuk langsung.
-      const ref =
-        attr(node, "ref") ??
-        attr(childrenOf(node, "video")[0], "ref") ??
-        attr(childrenOf(node, "asset-clip")[0], "ref");
-      const asset = ref ? assets.get(ref) : undefined;
-      if (tag === "ref-clip" || (ref && !asset)) {
-        // Klip majemuk menunjuk `<media>`, bukan berkas. Menebak isinya berarti
-        // mengarang; namanya tetap jadi scene, asetnya kosong.
-        takDikenal += tag === "ref-clip" ? 0 : 1;
+      // Klip majemuk menunjuk `<media>`, bukan berkas. Menebak isinya berarti
+      // mengarang; namanya tetap jadi scene, asetnya kosong.
+      const ref = attr(node, "ref");
+      if (tag !== "ref-clip" && ref && !assets.get(ref)) takDikenal++;
+      entries.push({ offsetSec: clip.timelineStartSec ?? 0, clip });
+      // Connected clip bisa bersarang DI DALAM klip spine; offsetnya relatif
+      // terhadap klip induk itu.
+      const parentStart = parseFcpTime(attr(node, "start")) ?? 0;
+      for (const inner of CLIP_TAGS) {
+        for (const child of childrenOf(node, inner)) {
+          if (attr(child, "lane") !== undefined) {
+            takeLane(child, inner, clip.timelineStartSec ?? 0, parentStart);
+          }
+        }
       }
-      entries.push({
-        offsetSec,
-        clip: {
-          name: attr(node, "name") ?? `${tag}-${entries.length + 1}`,
-          durationSec,
-          sourceStartSec: parseFcpTime(attr(node, "start")) ?? 0,
-          ...(asset?.url ? { url: asset.url } : {}),
-          ...(asset?.durationSec !== undefined
-            ? { sourceDurationSec: asset.durationSec }
-            : {}),
-        },
-      });
     }
   }
 
   for (const node of childrenOf(spine, "gap")) {
     if (attr(node, "lane") === undefined) gaps++;
-    // Klip yang bersarang DI DALAM gap tetap connected clip di lane lain.
-    for (const tag of CLIP_TAGS) lanes += childrenOf(node, tag).length;
+    // Klip yang bersarang DI DALAM gap tetap connected clip di lane lain —
+    // pola yang dipakai Final Cut untuk sisipan tanpa klip utama di bawahnya.
+    const parentOffset = parseFcpTime(attr(node, "offset")) ?? 0;
+    const parentStart = parseFcpTime(attr(node, "start")) ?? 0;
+    for (const tag of CLIP_TAGS) {
+      for (const child of childrenOf(node, tag)) {
+        takeLane(child, tag, parentOffset, parentStart);
+      }
+    }
   }
 
   entries.sort((a, b) => a.offsetSec - b.offsetSec);
@@ -230,10 +293,10 @@ export const fromFcpxml = (
       detail: `Berkas ini FCPXML ${version}; pembaca Dalang diuji terhadap 1.8 dan bentuk <media-rep> versi 1.9+. Periksa hasilnya kalau ada klip yang hilang.`,
     });
   }
-  if (lanes > 0) {
+  if (laneAudio > 0) {
     notes.push({
-      code: "impor-lane-dilewati",
-      detail: `${lanes} klip di lane (connected clip: overlay, PiP, audio tempelan) dilewati — garis waktu Dalang baru punya satu jalur video.`,
+      code: "impor-lane-audio-dilewati",
+      detail: `${laneAudio} klip di lane negatif (audio tempelan) dilewati: narasi Dalang dibuat dari naskah lewat TTS, bukan dari berkas audio yang sudah jadi.`,
     });
   }
   if (gaps > 0) {
@@ -254,5 +317,6 @@ export const fromFcpxml = (
     title: title ?? found.title,
     notes,
     source: "fcpxml",
+    overlays,
   });
 };

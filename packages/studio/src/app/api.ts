@@ -227,10 +227,11 @@ export const api = {
       `/api/stock/search?query=${encodeURIComponent(query)}&kind=${kind}`,
     ),
 
-  stockPick: (sceneId: string, query: string, index: number) =>
+  /** `layerId` memasang aset ke satu lapisan video, bukan ke visual dasar (ADR-0025). */
+  stockPick: (sceneId: string, query: string, index: number, layerId?: string) =>
     request<{ ok: true; file: string; summary: string }>("/api/stock/pick", {
       method: "POST",
-      body: JSON.stringify({ sceneId, query, index }),
+      body: JSON.stringify({ sceneId, query, index, ...(layerId ? { layerId } : {}) }),
     }),
 
   // --- Pustaka media (ADR-0018) -------------------------------------------

@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import {
+  assignLayerAsset,
   assignResolvedAsset,
   getScene,
   type ResolvedAsset,
   type ScenePlan,
+  setLayerAsset,
   setResolvedAsset,
 } from "@dalang/core";
 import type { PipelineDb } from "./db";
@@ -29,6 +31,7 @@ export const materializeCandidate = async ({
   plan,
   db,
   sceneId,
+  layerId,
   provider,
   candidate,
   allowPinned = false,
@@ -37,6 +40,8 @@ export const materializeCandidate = async ({
   plan: ScenePlan;
   db: PipelineDb;
   sceneId: string;
+  /** Menyasar satu lapisan video di dalam scene (ADR-0025); kosong = visual dasar. */
+  layerId?: string;
   provider: StockProvider;
   candidate: StockCandidate;
   allowPinned?: boolean;
@@ -46,12 +51,18 @@ export const materializeCandidate = async ({
   if (scene.locked) {
     throw new Error(`Scene "${sceneId}" terkunci — aset tidak boleh diubah`);
   }
+  if (layerId !== undefined && !scene.layers.some((layer) => layer.id === layerId)) {
+    throw new Error(`Lapisan "${layerId}" tidak ada di scene "${sceneId}"`);
+  }
 
   const inputHash = contentHash({
     kind: "stock-pick",
     assetId: candidate.assetId,
   });
-  db.startRun(plan.projectId, sceneId, "assets", inputHash);
+  // Kunci run ikut menyebut lapisannya, sama seperti di auto-resolve: tanpa
+  // itu memilih aset lapisan menimpa riwayat pilihan visual dasarnya.
+  const runKey = layerId === undefined ? sceneId : `${sceneId}#${layerId}`;
+  db.startRun(plan.projectId, runKey, "assets", inputHash);
   const startedAt = Date.now();
 
   try {
@@ -69,11 +80,16 @@ export const materializeCandidate = async ({
       width: candidate.width,
       height: candidate.height,
     };
-    const next = allowPinned
-      ? setResolvedAsset(plan, sceneId, asset)
-      : assignResolvedAsset(plan, sceneId, candidate.assetId, asset);
+    const next =
+      layerId === undefined
+        ? allowPinned
+          ? setResolvedAsset(plan, sceneId, asset)
+          : assignResolvedAsset(plan, sceneId, candidate.assetId, asset)
+        : allowPinned
+          ? setLayerAsset(plan, layerId, asset)
+          : assignLayerAsset(plan, sceneId, layerId, candidate.assetId, asset);
 
-    db.finishRun(plan.projectId, sceneId, "assets", {
+    db.finishRun(plan.projectId, runKey, "assets", {
       provider: candidate.providerId,
       fallback: false,
       outputJson: JSON.stringify({ assetId: candidate.assetId, asset }),
@@ -83,7 +99,7 @@ export const materializeCandidate = async ({
     return { plan: next, asset };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    db.failRun(plan.projectId, sceneId, "assets", message, Date.now() - startedAt);
+    db.failRun(plan.projectId, runKey, "assets", message, Date.now() - startedAt);
     throw error;
   }
 };

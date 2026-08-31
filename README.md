@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -403,7 +403,24 @@ Yang sudah berjalan:
     menyeret "ke pinggir" mendarat di kolom aman yang sama dengan teks lain;
   - keluarannya patch op biasa: tercatat, bisa Ctrl+Z, terlihat agent;
   - menyeret TIDAK mengubah perataan teks — itu keputusan tipografi, bukan letak.
-- **Kualitas terjaga otomatis**: 744 unit test (kontrak lock/pin/undo, timing
+- **Lapisan video (ADR-0025)** — satu scene bisa punya dua sisipan video di atas
+  visual dasarnya: B-roll yang menunjukkan apa yang sedang dikatakan,
+  picture-in-picture, atau bukti visual:
+  - medianya memakai bentuk `visual` yang SAMA, jadi Ken Burns, filter,
+    kecepatan, trim, cermin, dan titik fokus berlaku tanpa rumus kedua — dan
+    lapisan ikut bertambah pintar setiap kali `visual` bertambah;
+  - kotaknya jangkar + geseran fraksional (tetap benar di 16:9, 9:16, 1:1),
+    dengan lebar dan tinggi terpisah karena sisipan video punya rasio sendiri;
+  - jendela tampilnya fraksi durasi scene, jadi scene yang dipanjangkan membawa
+    serta sisipannya;
+  - bisa diseret & diubah ukurannya langsung di kanvas, punya kartu sendiri di
+    panel Properti, dan bar sendiri di timeline;
+  - `visual.volume` (bawaan 0 = bisu) memberi B-roll suara alaminya; amplop
+    fade, ducking, dan normalisasi kenyaringan adalah §9.4 dan **belum ada**;
+  - diekspor sebagai trek video tambahan (OTIO) / connected clip lane (FCPXML),
+    dan lane dari berkas orang lain kini **dipulihkan** jadi lapisan — batas
+    ADR-0023 soal connected clip dicabut.
+- **Kualitas terjaga otomatis**: 797 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -416,7 +433,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 744 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 797 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -561,10 +578,10 @@ di `docs/decisions/`.
       lihat "Batas yang dinyatakan" di ADR-0023.*
 
 - [~] **Fase 9 — Editor yang terasa seperti editor**: §9.1 (manipulasi langsung
-      di kanvas) selesai lewat ADR-0024. §9.2 (multi-track video), §9.3
-      (keyframe sembarang), §9.4 (audio per klip), dan §9.5 (proxy) BELUM
-      dikerjakan — §9.2 dan §9.3 masing-masing menuntut perubahan skema besar
-      dan ADR tersendiri.
+      di kanvas) selesai lewat ADR-0024, §9.2 (multi-track video) lewat
+      ADR-0025. §9.3 (keyframe sembarang), §9.4 (audio per klip: fade, ducking,
+      normalisasi EBU R128), dan §9.5 (proxy) BELUM dikerjakan — §9.3 menuntut
+      model animasi baru dan ADR tersendiri.
 
 Sisa Fase 9 dan Fase 10 ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

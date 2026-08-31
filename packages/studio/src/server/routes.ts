@@ -79,6 +79,8 @@ const pickBody = z.object({
   sceneId: z.string(),
   query: z.string(),
   index: z.number().int().min(0),
+  /** Menyasar satu lapisan video di dalam scene (ADR-0025); kosong = visual dasar. */
+  layerId: z.string().nullish(),
 });
 
 const errorPayload = (error: unknown) => ({
@@ -824,6 +826,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           plan,
           db: session.db,
           sceneId: body.data.sceneId,
+          ...(body.data.layerId ? { layerId: body.data.layerId } : {}),
           provider,
           candidate,
           allowPinned: true,
@@ -834,6 +837,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           {
             op: "replaceAsset",
             sceneId: body.data.sceneId,
+            ...(body.data.layerId ? { layerId: body.data.layerId } : {}),
             assetId: candidate.assetId,
             pinned: true,
           },

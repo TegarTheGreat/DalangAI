@@ -56,13 +56,25 @@ const PLAN = process.argv[2]
  * benar-benar punya aset ter-resolve. Nomor frame tetap akan lulus paritas pada
  * kartu judul yang tidak memuat aset apa pun — yaitu lulus tanpa menguji apa
  * pun. Maksimal tiga supaya gerbangnya tetap cepat.
+ *
+ * Scene yang punya LAPISAN ber-aset (ADR-0025) didahulukan: lapisan memakai
+ * `useAssetSrc()` yang sama, jadi ia punya bahaya yang sama — satu pemanggil
+ * `staticFile()` yang terlewat di sana membuat render cloud kehilangan
+ * sisipannya, dan tidak ada unit test yang bisa melihat itu. Kalau scene
+ * berlapisan tidak ikut terpilih, jalur itu tidak pernah diuji.
  */
 const framesWithAssets = (planPath: string): number[] => {
   const plan = parseScenePlan(JSON.parse(readFileSync(planPath, "utf8")));
   const layout = computeFrameLayout(plan);
+  const punyaLapisan = (scene: (typeof plan.scenes)[number]): boolean =>
+    scene.layers.some((layer) => plan.renderState.layerAssets[layer.id] !== undefined);
   return plan.scenes
     .map((scene, index) => ({ scene, index }))
-    .filter(({ scene }) => plan.renderState.resolvedAssets[scene.id] !== undefined)
+    .filter(
+      ({ scene }) =>
+        plan.renderState.resolvedAssets[scene.id] !== undefined || punyaLapisan(scene),
+    )
+    .sort((a, b) => Number(punyaLapisan(b.scene)) - Number(punyaLapisan(a.scene)))
     .slice(0, 3)
     .map(({ index }) =>
       Math.round((layout.sceneStarts[index] ?? 0) + (layout.sceneFrames[index] ?? 2) / 2),

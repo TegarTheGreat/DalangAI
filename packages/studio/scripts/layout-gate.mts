@@ -89,6 +89,90 @@ const dialogProbe = (tip: string, name: string): string =>
       : null;
   })()`;
 
+/**
+ * Tab panel Properti yang dibuka dan diukur satu per satu.
+ *
+ * Versi pertama gerbang ini hanya mengukur tab BAWAAN ("Scene"), jadi seluruh
+ * isi tab lain tidak pernah dilihat siapa pun sampai seseorang membukanya
+ * sendiri di layar sempit. Tab "Lapisan" (ADR-0025) adalah yang paling padat
+ * kendalinya — kalau ia muat, yang lain hampir pasti muat, tapi murah untuk
+ * memeriksa semuanya sekalian.
+ */
+const TABS = [
+  "Scene",
+  "Visual",
+  "Teks",
+  "Transkrip",
+  "Grafis",
+  "Lapisan",
+  "Transisi",
+  "Anotasi",
+] as const;
+
+/** Membuka satu tab Properti; false kalau tabnya tidak ada di DOM. */
+const tabProbe = (label: string): string =>
+  `(() => {
+    const tabs = Array.from(document.querySelectorAll(".tab-bar .tab"));
+    const target = tabs.find((tab) => (tab.textContent || "").trim().startsWith("${label}"));
+    if (!target) return false;
+    target.click();
+    return true;
+  })()`;
+
+/**
+ * Memastikan tab Lapisan punya SATU kartu terbuka untuk diukur.
+ *
+ * Tanpa ini gerbang hanya melihat keadaan kosong ("belum ada lapisan"), yaitu
+ * satu paragraf dan satu tombol — dan keadaan kosong tidak pernah meluber.
+ * Yang padat kendalinya justru kartu yang terbuka, dan itulah yang harus
+ * dibuktikan muat di 380px.
+ */
+const ENSURE_LAYER = `(() => {
+  if (document.querySelector(".inspector-scroll .graphic-card")) return "ada";
+  const buttons = Array.from(document.querySelectorAll(".inspector-scroll button"));
+  const add = buttons.find((b) => (b.textContent || "").includes("Tambah lapisan"));
+  if (!add || add.disabled) return "tidak-bisa";
+  add.click();
+  return "ditambah";
+})()`;
+
+/**
+ * Kendali di panel Properti yang keluar dari kolomnya.
+ *
+ * Diukur per ELEMEN terhadap kotak panel, bukan lewat `scrollWidth` panelnya.
+ * Alasannya ketahuan saat mengujinya: kartu tempelan/lapisan memakai
+ * `overflow: hidden`, jadi isi yang terlalu lebar TERGUNTING di dalam kartu
+ * dan tidak pernah menambah `scrollWidth` panel sama sekali. Pemeriksaan
+ * lewat scrollWidth akan hijau persis pada kasus yang paling perlu ditangkap:
+ * kendali yang ada tapi tidak bisa dijangkau.
+ */
+const INSPECTOR_CLIPPED = `(() => {
+  const panel = document.querySelector(".inspector-scroll");
+  if (!panel) return [];
+  const box = panel.getBoundingClientRect();
+  const out = [];
+  // Panelnya sendiri boleh MELEBAR kalau kolomnya masih punya kelonggaran,
+  // dan pada layar lebar itu menyembunyikan isi yang kelewat lebar: yang
+  // meluber justru panelnya, bukan kendalinya. Diperiksa lebih dulu.
+  if (box.right > window.innerWidth + 1 || box.left < -1) {
+    out.push("panel Properti keluar layar (+" +
+      Math.round(Math.max(box.right - window.innerWidth, -box.left)) + "px)");
+  }
+  const nodes = panel.querySelectorAll(
+    ".slider-row, .field, .anchor-pad, .lib-search, .segmented, button"
+  );
+  for (const node of nodes) {
+    const r = node.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    const lebih = Math.round(Math.max(r.right - box.right, box.left - r.left));
+    if (lebih > 1) {
+      const nama = (node.className || "").toString().split(" ")[0] || node.tagName;
+      out.push(nama + " (+" + lebih + "px)");
+    }
+  }
+  return out.slice(0, 3);
+})()`;
+
 interface Report {
   overlaps: string[];
   clippedTools: string[];
@@ -184,6 +268,31 @@ const main = async (): Promise<void> => {
           | null;
         if (overflow) problems.push(overflow);
       }
+
+      // Tiap tab Properti dibuka dan diukur sendiri: isinya baru ada di DOM
+      // setelah tabnya aktif, jadi pengukuran di atas tidak pernah melihatnya.
+      for (const label of TABS) {
+        const opened = (await page.evaluate(tabProbe(label))) as boolean;
+        if (!opened) continue;
+        await sleep(90);
+        if (label === "Lapisan") {
+          const state = (await page.evaluate(ENSURE_LAYER)) as string;
+          // Penambahan lapisan lewat patch: server, lalu SSE, lalu render ulang.
+          if (state === "ditambah") await sleep(700);
+        }
+        const tabReport = (await page.evaluate(MEASURE)) as Report;
+        for (const overlap of tabReport.overlaps) {
+          problems.push(`tab ${label}: ${overlap}`);
+        }
+        if (tabReport.sideScroll > 0) {
+          problems.push(`tab ${label}: halaman bisa digeser ke samping`);
+        }
+        const clipped = (await page.evaluate(INSPECTOR_CLIPPED)) as string[];
+        for (const item of clipped) {
+          problems.push(`tab ${label}: kendali keluar kolom — ${item}`);
+        }
+      }
+      await page.evaluate(tabProbe("Scene"));
 
       if (problems.length === 0) {
         console.log(`  ${String(width).padStart(4)}px  ok`);

@@ -216,7 +216,8 @@ apakah perubahannya membantu.
 FCPXML (spine utama), lewat CLI maupun lobi Studio. Batas yang tersisa ada di
 "Batas yang dinyatakan" ADR-0023: belum pernah dibuka di Resolve/Premiere/Final
 Cut yang sungguhan, dan connected clip di lane tidak dipulihkan karena garis
-waktu Dalang baru punya satu jalur video (§9.2).
+waktu Dalang baru punya satu jalur video — batas terakhir ini DICABUT oleh
+ADR-0025 (§9.2): lane positif kini dipulihkan jadi lapisan video.
 
 > Membuka: Dalang jadi bagian alur kerja profesional, bukan pulau.
 
@@ -235,8 +236,18 @@ bisa dipakai agent mana pun.
 
 **§9.1 sudah dikerjakan** (ADR-0024): teks dan grafis bisa diseret dan diubah
 ukurannya langsung di atas preview, keluarannya patch op biasa. Skema teks
-bertambah `offsetX`/`offsetY`. Sisanya (§9.2–§9.5) belum; §9.2 dan §9.3
-masing-masing menuntut perubahan skema besar dan ADR tersendiri.
+bertambah `offsetX`/`offsetY`.
+
+**§9.2 sudah dikerjakan** (ADR-0025): satu scene bisa punya dua lapisan video di
+atas visual dasarnya — B-roll, picture-in-picture, sisipan bukti. Lapisan
+ter-render di kedua preset, bisa diseret & diubah ukurannya di kanvas, punya
+kartu sendiri di panel Properti dan bar sendiri di timeline, di-resolve pipeline
+seperti aset lain, dan diekspor sebagai lane OTIO/FCPXML. Impor lane pun ikut
+terbuka — batas ADR-0023 soal connected clip dicabut. Batas yang tersisa ada di
+"Batas yang dinyatakan" ADR-0025 (maks 2 lapisan, sisipan lintas scene ditulis
+dua kali, suara cuma satu angka gain).
+
+Sisanya (§9.3–§9.5) belum; §9.3 menuntut model animasi baru dan ADR tersendiri.
 
 > Membuka: pekerjaan yang hari ini harus dilakukan lewat form.
 
@@ -248,8 +259,9 @@ masing-masing menuntut perubahan skema besar dan ADR tersendiri.
 | 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | — |
 | 9.5 | Proxy + penanganan rekaman panjang | Terkait 6.x |
 
-**Catatan urutan:** 9.1 memberi rasa paling besar per biaya. 9.2 paling
-mahal karena menyentuh skema dan seluruh preset.
+**Catatan urutan:** 9.1 memberi rasa paling besar per biaya. 9.2 memang yang
+paling mahal — ia menyentuh skema, kedua preset, pipeline, Studio, dan kedua
+arah interop sekaligus.
 
 ### Fase 10 — Skala dan kolaborasi
 

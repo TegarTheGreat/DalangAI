@@ -6,6 +6,7 @@ import {
   designTokensSchema,
   getSceneIndex,
   graphicSchema,
+  MAX_LAYERS,
   type Meta,
   metaSchema,
   motionSchema,
@@ -18,6 +19,7 @@ import {
   textOverlaySchema,
   textSizeSchema,
   transitionSchema,
+  videoLayerSchema,
   visualFilterSchema,
   visualTypeSchema,
   voiceSchema,
@@ -68,6 +70,8 @@ export const sceneUpdateSchema = z.strictObject({
       flipH: z.boolean().optional(),
       focusX: z.number().min(0).max(1).optional(),
       focusY: z.number().min(0).max(1).optional(),
+      /** ADR-0025: gain audio aset video; 0 = bisu. */
+      volume: z.number().min(0).max(1).optional(),
     })
     .optional(),
   caption: z
@@ -87,6 +91,18 @@ export const sceneUpdateSchema = z.strictObject({
   annotations: z.array(annotationSchema).optional(),
   /** Menggantikan seluruh larik grafis tempelan (ADR-0018). */
   graphics: z.array(graphicSchema).max(4).optional(),
+  /**
+   * Menggantikan seluruh larik lapisan video (ADR-0025).
+   *
+   * `visual.assetId`/`visual.pinned` di dalam lapisan MEMANG ikut terganti di
+   * sini — berbeda dari visual dasar, yang asetnya hanya boleh lewat
+   * `replaceAsset`. Alasannya bukan kelonggaran: menambah dan membuang lapisan
+   * adalah operasi larik, dan lapisan yang baru dibuat belum punya aset sama
+   * sekali, jadi memaksa dua op untuk satu tindakan hanya membuat undo
+   * setengah jalan. Untuk MENGGANTI aset lapisan yang sudah ada, `replaceAsset`
+   * dengan `layerId` tetap jalur yang benar.
+   */
+  layers: z.array(videoLayerSchema).max(MAX_LAYERS).optional(),
 });
 export type SceneUpdate = z.infer<typeof sceneUpdateSchema>;
 
@@ -142,6 +158,11 @@ export const patchOpSchema = z.discriminatedUnion("op", [
   z.strictObject({
     op: z.literal("replaceAsset"),
     sceneId: z.string(),
+    /**
+     * Menyasar satu LAPISAN di dalam scene, bukan visual dasarnya (ADR-0025).
+     * Kosong/null = visual dasar, persis perilaku sebelum lapisan ada.
+     */
+    layerId: z.string().nullable().optional(),
     /** `null` clears the asset (back to unresolved). */
     assetId: z.string().nullable(),
     /** Defaults to true when setting an asset, false when clearing. */
@@ -159,6 +180,7 @@ export type PatchErrorCode =
   | "LOCK_FORBIDDEN"
   | "LAST_SCENE"
   | "BAD_REORDER"
+  | "LAYER_NOT_FOUND"
   | "PLAN_INVALID";
 
 export class PatchError extends Error {
@@ -403,13 +425,29 @@ const applyOne = (
     case "replaceAsset": {
       const { scene } = requireScene(plan, op.sceneId, opIndex);
       assertNotLockedForAgent(scene, origin, enforce, opIndex);
-      const priorAssetId = scene.visual.assetId;
-      const priorPinned = scene.visual.pinned;
-      scene.visual.assetId = op.assetId;
-      scene.visual.pinned = op.pinned ?? op.assetId !== null;
+      // Lapisan dan visual dasar memakai op yang SAMA (ADR-0025): keduanya
+      // menjawab pertanyaan identik ("aset mana yang dipakai di sini"), dan
+      // op kedua yang isinya sama persis hanya menggandakan aturan pin/lock
+      // di dua tempat yang harus tetap seragam selamanya.
+      const target =
+        op.layerId == null
+          ? scene.visual
+          : scene.layers.find((layer) => layer.id === op.layerId)?.visual;
+      if (!target) {
+        throw new PatchError(
+          "LAYER_NOT_FOUND",
+          `Lapisan "${op.layerId}" tidak ada di scene "${op.sceneId}"`,
+          opIndex,
+        );
+      }
+      const priorAssetId = target.assetId;
+      const priorPinned = target.pinned;
+      target.assetId = op.assetId;
+      target.pinned = op.pinned ?? op.assetId !== null;
       return {
         op: "replaceAsset",
         sceneId: op.sceneId,
+        ...(op.layerId == null ? {} : { layerId: op.layerId }),
         assetId: priorAssetId,
         pinned: priorPinned,
       };
@@ -511,10 +549,15 @@ const describeOp = (op: PatchOp): string => {
     }
     case "lockScene":
       return op.locked ? `mengunci scene ${op.id}` : `membuka kunci scene ${op.id}`;
-    case "replaceAsset":
+    case "replaceAsset": {
+      const where =
+        op.layerId == null
+          ? `scene ${op.sceneId}`
+          : `lapisan ${op.layerId} (scene ${op.sceneId})`;
       return op.assetId === null
-        ? `melepas aset scene ${op.sceneId}`
-        : `mengganti aset scene ${op.sceneId} → ${op.assetId}`;
+        ? `melepas aset ${where}`
+        : `mengganti aset ${where} → ${op.assetId}`;
+    }
   }
 };
 

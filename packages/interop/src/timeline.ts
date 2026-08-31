@@ -256,6 +256,60 @@ export const buildEditTimeline = (
     { name: "Video", kind: "video", items: videoItems, transitions },
   ];
 
+  // --- Trek lapisan video (ADR-0025) --------------------------------------
+  //
+  // Waktunya diukur dari AWAL SCENE (`sceneStarts`), bukan dari titik potong
+  // yang dipakai trek utama: di render, lapisan hidup di dalam Sequence
+  // scene-nya, jadi `startFrac` memang fraksi dari jendela itu. Memakai titik
+  // potong akan menggeser tiap sisipan setengah transisi dari tempat
+  // sebenarnya.
+  const layerClips: EditClip[] = [];
+  const lapisanTanpaAset: string[] = [];
+  plan.scenes.forEach((scene, index) => {
+    const sceneStart = layout.sceneStarts[index] ?? 0;
+    const sceneFrames = layout.sceneFrames[index] ?? 0;
+    for (const layer of scene.layers) {
+      const asset = plan.renderState.layerAssets[layer.id];
+      if (!asset) {
+        lapisanTanpaAset.push(layer.id);
+        continue;
+      }
+      const from = Math.round(layer.startFrac * sceneFrames);
+      const to = Math.round(layer.endFrac * sceneFrames);
+      layerClips.push({
+        kind: "clip",
+        sceneId: scene.id,
+        name: layer.id,
+        startFrame: sceneStart + from,
+        durationFrames: Math.max(1, to - from),
+        url: fileUrlFor(planDir, asset.file),
+        media: asset.kind,
+        sourceStartSec: asset.kind === "video" ? layer.visual.trimStartSec : 0,
+        sourceDurationSec: asset.durationSec ?? null,
+        markers: [
+          {
+            startFrame: 0,
+            durationFrames: 1,
+            value: `Dalang lapisan: ${layer.id} (scene ${scene.id})`,
+          },
+        ],
+      });
+    }
+  });
+  tracks.push(...layOnLanes(layerClips, "Lapisan", "video"));
+  if (lapisanTanpaAset.length > 0) {
+    notes.push({
+      code: "lapisan-tanpa-aset",
+      detail: `Lapisan tanpa berkas aset tidak ikut (${lapisanTanpaAset.join(", ")}) — belum di-resolve.`,
+    });
+  }
+  if (layerClips.length > 0) {
+    notes.push({
+      code: "lapisan-bentuk",
+      detail: `${layerClips.length} lapisan video diekspor sebagai klip di trek terpisah (lane), tapi letak, ukuran, bentuk bulat, bingkai, dan animasi masuknya TIDAK ikut — itu transform milik render, bukan properti klip. Klipnya akan tampil layar penuh sampai ditata ulang di editor tujuan.`,
+    });
+  }
+
   // --- Trek narasi --------------------------------------------------------
   const narrationClips: EditClip[] = [];
   plan.scenes.forEach((scene, index) => {

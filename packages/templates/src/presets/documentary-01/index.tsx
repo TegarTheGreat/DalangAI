@@ -11,6 +11,7 @@ import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
 import { useAssetSrc } from "../../asset-src";
 import { ensureFontsLoaded } from "../../fonts";
 import { GraphicsOverlay } from "../../GraphicsOverlay";
+import { LayersOverlay } from "../../LayersOverlay";
 import {
   type AspectMetrics,
   aspectMetrics,
@@ -61,6 +62,16 @@ const SceneRouter: React.FC<{
   return (
     <AbsoluteFill>
       {content}
+      {/* Lapisan video (ADR-0025) duduk DI ATAS visual dasar tapi DI BAWAH
+          teks, caption, dan tempelan: sisipan adalah gambar, dan gambar tidak
+          pernah boleh menutupi kalimat yang sedang dibacakan. */}
+      <LayersOverlay
+        scene={scene}
+        plan={plan}
+        metrics={props.metrics}
+        accent={props.theme.accent}
+        durationInFrames={props.durationInFrames}
+      />
       <TextsOverlay
         scene={scene}
         metrics={props.metrics}

@@ -309,6 +309,12 @@
                 "type": "number",
                 "minimum": 0,
                 "maximum": 1
+              },
+              "volume": {
+                "default": 0,
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
             "required": [
@@ -702,6 +708,259 @@
               ],
               "additionalProperties": false
             }
+          },
+          "layers": {
+            "default": [],
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "visual": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "stock",
+                        "image",
+                        "generated",
+                        "screenshot"
+                      ]
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "assetId": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "motion": {
+                      "default": "none",
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "kenburns-in",
+                        "kenburns-out",
+                        "pan-left",
+                        "pan-right",
+                        "pan-up",
+                        "pan-down",
+                        "drift"
+                      ]
+                    },
+                    "pinned": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "filter": {
+                      "type": "object",
+                      "properties": {
+                        "preset": {
+                          "default": "none",
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "warm",
+                            "cool",
+                            "mono",
+                            "vivid",
+                            "film"
+                          ]
+                        },
+                        "brightness": {
+                          "default": 1,
+                          "type": "number",
+                          "minimum": 0.25,
+                          "maximum": 2
+                        },
+                        "contrast": {
+                          "default": 1,
+                          "type": "number",
+                          "minimum": 0.25,
+                          "maximum": 2
+                        },
+                        "saturation": {
+                          "default": 1,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 2
+                        },
+                        "opacity": {
+                          "default": 1,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "blur": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 20
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "speed": {
+                      "default": 1,
+                      "type": "number",
+                      "minimum": 0.25,
+                      "maximum": 4
+                    },
+                    "trimStartSec": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "flipH": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "focusX": {
+                      "default": 0.5,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "focusY": {
+                      "default": 0.5,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "volume": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                "anchor": {
+                  "default": "kanan-bawah",
+                  "type": "string",
+                  "enum": [
+                    "kiri-atas",
+                    "tengah-atas",
+                    "kanan-atas",
+                    "kiri-tengah",
+                    "tengah",
+                    "kanan-tengah",
+                    "kiri-bawah",
+                    "tengah-bawah",
+                    "kanan-bawah"
+                  ]
+                },
+                "width": {
+                  "default": 0.34,
+                  "type": "number",
+                  "minimum": 0.08,
+                  "maximum": 1
+                },
+                "height": {
+                  "default": 0.34,
+                  "type": "number",
+                  "minimum": 0.08,
+                  "maximum": 1
+                },
+                "offsetX": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": -0.5,
+                  "maximum": 0.5
+                },
+                "offsetY": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": -0.5,
+                  "maximum": 0.5
+                },
+                "shape": {
+                  "default": "persegi",
+                  "type": "string",
+                  "enum": [
+                    "persegi",
+                    "bulat"
+                  ]
+                },
+                "radius": {
+                  "default": 0.05,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.5
+                },
+                "border": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.02
+                },
+                "borderColor": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{3,8}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "opacity": {
+                  "default": 1,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "fit": {
+                  "default": "cover",
+                  "type": "string",
+                  "enum": [
+                    "cover",
+                    "contain"
+                  ]
+                },
+                "entrance": {
+                  "default": "fade",
+                  "type": "string",
+                  "enum": [
+                    "fade",
+                    "geser",
+                    "pop",
+                    "diam"
+                  ]
+                },
+                "startFrac": {
+                  "default": 0,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "endFrac": {
+                  "default": 1,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "id",
+                "visual"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -716,6 +975,7 @@
         "narrationAudio": {},
         "resolvedAssets": {},
         "graphicAssets": {},
+        "layerAssets": {},
         "sfxAssets": {},
         "transcripts": {}
       },
@@ -830,6 +1090,61 @@
           }
         },
         "graphicAssets": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "image",
+                  "video",
+                  "audio"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceUrl": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "license": {
+                "type": "string"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "durationSec": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "file",
+              "kind",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "layerAssets": {
           "default": {},
           "type": "object",
           "propertyNames": {

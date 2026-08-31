@@ -164,8 +164,49 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   // 10. Aset yang hak pakainya belum jelas (ADR-0018).
   notes.push(...critiqueAssetRights(plan));
 
+  // 11. Lapisan video (ADR-0025).
+  notes.push(...critiqueLayers(plan));
+
   notes.push(...critiqueFormat(plan, recipe));
   notes.push(...critiqueProse(plan, recipe));
+  return notes;
+};
+
+/**
+ * Lapisan video (ADR-0025): dua cacat yang tidak terlihat dari JSON-nya.
+ *
+ * PERTAMA, lapisan yang berkasnya belum ada tidak akan digambar sama sekali —
+ * dan tidak ada apa pun di video yang memberi tahu kenapa. Ini `perhatian`,
+ * bukan saran: sisipan yang direncanakan lalu hilang diam-diam adalah selisih
+ * antara maksud dan hasil.
+ *
+ * KEDUA, sisipan yang menyala sepanjang scene berhenti jadi sisipan. Kekuatan
+ * B-roll ada pada MASUK dan KELUARNYA — ia menunjuk satu kalimat. Yang menetap
+ * dari frame pertama sampai terakhir cuma jadi kotak kedua yang menutupi
+ * sebagian gambar.
+ */
+const critiqueLayers = (plan: ScenePlan): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
+  for (const scene of plan.scenes) {
+    for (const layer of scene.layers) {
+      if (!plan.renderState.layerAssets[layer.id]) {
+        notes.push({
+          code: "lapisan-tanpa-aset",
+          level: "perhatian",
+          sceneId: scene.id,
+          message: `Lapisan "${layer.id}" belum punya berkas aset — ia TIDAK akan muncul di video. Isi visual.query lalu jalankan resolve aset, atau hapus lapisannya.`,
+        });
+      }
+      if (layer.startFrac <= 0 && layer.endFrac >= 1) {
+        notes.push({
+          code: "lapisan-sepanjang-scene",
+          level: "saran",
+          sceneId: scene.id,
+          message: `Lapisan "${layer.id}" menyala sepanjang scene. Sisipan bekerja karena masuk dan keluarnya menunjuk satu kalimat; persempit startFrac/endFrac ke bagian yang memang dibicarakan.`,
+        });
+      }
+    }
+  }
   return notes;
 };
 

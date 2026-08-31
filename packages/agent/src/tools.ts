@@ -7,6 +7,9 @@ import {
   GRAPHIC_ANCHORS,
   GRAPHIC_ANIMS,
   idSlug,
+  LAYER_ENTRANCES,
+  LAYER_SHAPES,
+  MAX_LAYERS,
   patchOpSchema,
   recipeFor,
   type ScenePlanInput,
@@ -19,6 +22,7 @@ import {
   textInSpan,
   transcriptForScene,
   uniqueGraphicId,
+  uniqueLayerId,
   uniqueSfxCueId,
 } from "@dalang/core";
 import type { IconProvider, SfxProvider } from "@dalang/pipeline";
@@ -1152,6 +1156,130 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         }),
     }),
 
+    /**
+     * Lapisan video (ADR-0025). Sengaja TIDAK ikut mencari asetnya sendiri:
+     * lapisan yang dibuat lalu di-resolve lewat `resolveAssets` (kalau
+     * `query`-nya diisi) atau `pickAsset` dengan `layerId` (kalau agent mau
+     * memilih kandidat) memakai jalur pemilihan aset yang SAMA dengan visual
+     * dasar — dan jalur kedua yang khusus lapisan pasti menyimpang dari yang
+     * pertama cepat atau lambat.
+     */
+    addLayer: tool({
+      description:
+        "Tambah satu lapisan video (B-roll/PiP/sisipan) di atas visual scene. Maks 2 per scene. Isi `query` (bahasa Inggris, konkret) supaya resolveAssets bisa mencarikan asetnya; atau kosongkan lalu pasang aset lewat pickAsset dengan layerId. Letaknya jangkar + geseran fraksional, jendela tampilnya fraksi durasi scene.",
+      inputSchema: z.object({
+        sceneId: z.string().min(1),
+        query: z
+          .string()
+          .nullable()
+          .default(null)
+          .describe(
+            "Kueri stock untuk lapisan. WAJIB diisi kalau mau di-resolve otomatis — kueri lapisan tidak diturunkan dari narasi, karena itu akan memberi gambar yang sama dengan latarnya.",
+          ),
+        anchor: z.enum(GRAPHIC_ANCHORS).default("kanan-bawah"),
+        width: z.number().min(0.08).max(1).default(0.34),
+        height: z.number().min(0.08).max(1).default(0.34),
+        shape: z.enum(LAYER_SHAPES).default("persegi"),
+        entrance: z.enum(LAYER_ENTRANCES).default("fade"),
+        volume: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0)
+          .describe(
+            "Gain audio lapisan; 0 = bisu. Naikkan hanya untuk suara alami B-roll.",
+          ),
+        startFrac: z.number().min(0).max(1).default(0),
+        endFrac: z.number().min(0).max(1).default(1),
+      }),
+      execute: (input) =>
+        run("addLayer", input, async () => {
+          const plan = requirePlan();
+          const scene = plan.scenes.find((s) => s.id === input.sceneId);
+          if (!scene) return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          if (scene.layers.length >= MAX_LAYERS) {
+            return {
+              ok: false,
+              error: `Scene ${input.sceneId} sudah punya ${MAX_LAYERS} lapisan (batas maksimum)`,
+            };
+          }
+          if (input.endFrac <= input.startFrac) {
+            return {
+              ok: false,
+              error: "endFrac harus lebih besar dari startFrac — jendela tampil kosong",
+            };
+          }
+          const layerId = uniqueLayerId(
+            plan,
+            `lap-${input.query ? idSlug(input.query) : input.sceneId}`,
+          );
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "updateScene",
+              id: input.sceneId,
+              patch: {
+                layers: [
+                  ...scene.layers,
+                  {
+                    id: layerId,
+                    visual: {
+                      type: "stock",
+                      ...(input.query ? { query: input.query } : {}),
+                      volume: input.volume,
+                    },
+                    anchor: input.anchor,
+                    width: input.width,
+                    height: input.height,
+                    shape: input.shape,
+                    entrance: input.entrance,
+                    startFrac: input.startFrac,
+                    endFrac: input.endFrac,
+                  },
+                ],
+              },
+            },
+          ]);
+          return {
+            ok: true,
+            layerId,
+            langkahBerikutnya: input.query
+              ? "panggil resolveAssets supaya berkasnya diunduh"
+              : "panggil searchAssets lalu pickAsset dengan layerId ini",
+            ringkasanPerubahan: summary,
+          };
+        }),
+    }),
+
+    removeLayer: tool({
+      description: "Hapus satu lapisan video dari sebuah scene.",
+      inputSchema: z.object({ sceneId: z.string().min(1), layerId: z.string().min(1) }),
+      execute: (input) =>
+        run("removeLayer", input, async () => {
+          const plan = requirePlan();
+          const scene = plan.scenes.find((s) => s.id === input.sceneId);
+          if (!scene) return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          if (!scene.layers.some((layer) => layer.id === input.layerId)) {
+            return {
+              ok: false,
+              error: `Lapisan ${input.layerId} tidak ada di scene ${input.sceneId}`,
+            };
+          }
+          const { summary } = session.applyAgentPatch([
+            {
+              op: "updateScene",
+              id: input.sceneId,
+              patch: {
+                layers: scene.layers.filter((layer) => layer.id !== input.layerId),
+              },
+            },
+          ]);
+          // Entri berkasnya SENGAJA ditinggal di renderState: undo yang
+          // mengembalikan lapisan ini harus mengembalikannya utuh, dan
+          // `orphanMediaAssetIds` sudah menjaganya tidak ikut dipentaskan.
+          return { ok: true, ringkasanPerubahan: summary };
+        }),
+    }),
+
     searchAssets: tool({
       description:
         "Cari kandidat stock footage/gambar (tanpa mengunduh). Hasil disimpan per query; pilih dengan pickAsset. Query bahasa Inggris, konkret dan visual.",
@@ -1202,11 +1330,16 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     pickAsset: tool({
       description:
-        "Unduh & pasang kandidat hasil searchAssets ke sebuah scene (berdasarkan query + index kandidat). Scene terkunci/pinned ditolak.",
+        "Unduh & pasang kandidat hasil searchAssets ke sebuah scene (berdasarkan query + index kandidat). Isi layerId untuk memasangnya ke lapisan video, bukan ke visual dasar. Scene terkunci/pinned ditolak.",
       inputSchema: z.object({
         sceneId: z.string(),
         query: z.string(),
         index: z.number().int().min(0),
+        layerId: z
+          .string()
+          .nullable()
+          .default(null)
+          .describe("Id lapisan dari addLayer; null = visual dasar scene."),
       }),
       execute: (input) =>
         run("pickAsset", input, async () => {
@@ -1234,6 +1367,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             plan,
             db: session.db,
             sceneId: input.sceneId,
+            ...(input.layerId ? { layerId: input.layerId } : {}),
             provider,
             candidate,
           });

@@ -46,3 +46,13 @@ export const uniqueSfxCueId = (plan: ScenePlan, base: string): string =>
     ]),
     idSlug(base),
   );
+
+/** Id lapisan video yang belum dipakai plan MAUPUN renderState (ADR-0025). */
+export const uniqueLayerId = (plan: ScenePlan, base: string): string =>
+  unique(
+    new Set([
+      ...plan.scenes.flatMap((scene) => scene.layers.map((layer) => layer.id)),
+      ...Object.keys(plan.renderState.layerAssets),
+    ]),
+    idSlug(base),
+  );

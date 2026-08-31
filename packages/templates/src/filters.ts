@@ -3,6 +3,10 @@ import type { VisualFilter } from "@dalang/core";
 /**
  * ADR-0011: filter visual scene → CSS. Murni & diuji unit; dipakai Backdrop
  * di Player DAN renderer (satu sumber kebenaran tampilan).
+ *
+ * Hidup di akar paket, bukan di dalam satu preset: filter adalah kontrak data
+ * §5.1 yang berlaku untuk semua gaya, dan sejak ADR-0025 lapisan video juga
+ * memakainya — lapisan berlaku di KEDUA preset.
  */
 
 const PRESET_CSS: Record<string, string[]> = {

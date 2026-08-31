@@ -110,19 +110,71 @@ describe("impor FCPXML", () => {
     ]);
   });
 
-  it("connected clip di lane DILEWATI dan dihitung, bukan diam-diam jadi scene", () => {
+  /**
+   * Sampai ADR-0025 connected clip hanya DIHITUNG, karena garis waktu Dalang
+   * belum punya tempat untuk menaruhnya. Sekarang lane positif jadi lapisan.
+   */
+  it("connected clip di lane positif jadi LAPISAN pada scene yang ditindihnya", () => {
     const xml = doc(
       '<asset id="r2" name="D" src="file:///proyek/d.mp4" start="0s" duration="20s" hasVideo="1" format="r1"/>',
       [
-        '<asset-clip name="utama" ref="r2" offset="0s" duration="5s"/>',
-        '<asset-clip name="overlay" ref="r2" offset="1s" duration="2s" lane="1"/>',
-        '<gap name="Gap" offset="5s" duration="5s" start="3600s"><asset-clip name="pip" ref="r2" offset="5s" duration="2s" lane="2"/></gap>',
+        '<asset-clip name="utama" ref="r2" offset="0s" duration="10s"/>',
+        '<asset-clip name="overlay" ref="r2" offset="2s" duration="4s" lane="1"/>',
       ].join("\n"),
     );
     const { plan, notes } = fromFcpxml(xml, { projectDir: "/proyek" });
     expect(plan.scenes.map((scene) => scene.id)).toEqual(["sc-utama"]);
-    const lane = notes.find((note) => note.code === "impor-lane-dilewati");
-    expect(lane?.detail).toContain("2 klip di lane");
+    const layers = plan.scenes[0]?.layers ?? [];
+    expect(layers).toHaveLength(1);
+    expect(layers[0]?.id).toBe("lap-overlay");
+    // 2s..6s di dalam scene 0..10s.
+    expect(layers[0]?.startFrac).toBeCloseTo(0.2, 4);
+    expect(layers[0]?.endFrac).toBeCloseTo(0.6, 4);
+    expect(plan.renderState?.layerAssets?.["lap-overlay"]).toMatchObject({
+      file: "d.mp4",
+      kind: "video",
+    });
+    expect(notes.find((note) => note.code === "impor-lapisan")?.detail).toContain(
+      "1 klip lane",
+    );
+  });
+
+  /**
+   * Waktu klip bersarang diukur di basis waktu INDUKNYA. Final Cut menulis
+   * `start="3600s"` untuk gap; menjumlahkan offset begitu saja akan menaruh
+   * sisipannya satu jam dari tempatnya — dan karena tidak ada scene di sana,
+   * sisipannya hilang tanpa jejak.
+   */
+  it("klip di dalam gap memakai basis waktu gap-nya (offset - start)", () => {
+    const xml = doc(
+      '<asset id="r2" name="D" src="file:///proyek/d.mp4" start="0s" duration="20s" hasVideo="1" format="r1"/>',
+      [
+        '<asset-clip name="utama" ref="r2" offset="0s" duration="4s"/>',
+        '<asset-clip name="kedua" ref="r2" offset="4s" duration="6s"/>',
+        '<gap name="Gap" offset="4s" duration="6s" start="3600s"><asset-clip name="pip" ref="r2" offset="3601s" duration="2s" lane="2"/></gap>',
+      ].join("\n"),
+    );
+    const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
+    // 4 + (3601 - 3600) = 5s -> di dalam scene kedua (4s..10s).
+    expect(plan.scenes[0]?.layers ?? []).toHaveLength(0);
+    const layers = plan.scenes[1]?.layers ?? [];
+    expect(layers).toHaveLength(1);
+    expect(layers[0]?.startFrac).toBeCloseTo((5 - 4) / 6, 3);
+  });
+
+  it("lane negatif (audio tempelan) tetap dilewati dan dihitung", () => {
+    const xml = doc(
+      '<asset id="r2" name="D" src="file:///proyek/d.mp4" start="0s" duration="20s" hasVideo="1" format="r1"/>',
+      [
+        '<asset-clip name="utama" ref="r2" offset="0s" duration="10s"/>',
+        '<asset-clip name="musik" ref="r2" offset="0s" duration="10s" lane="-1"/>',
+      ].join("\n"),
+    );
+    const { plan, notes } = fromFcpxml(xml, { projectDir: "/proyek" });
+    expect(plan.scenes[0]?.layers ?? []).toHaveLength(0);
+    expect(
+      notes.find((note) => note.code === "impor-lane-audio-dilewati")?.detail,
+    ).toContain("1 klip");
   });
 
   it("id scene dibuat unik walau namanya sama", () => {
@@ -155,5 +207,29 @@ describe("impor FCPXML", () => {
     // ikut sebagai klip audio di lane, jadi harus terlewat.
     expect(back.plan.scenes).toHaveLength(2);
     expect(back.plan.scenes[0]?.visual?.trimStartSec).toBe(4);
+  });
+});
+
+/**
+ * Sisipan yang menempel persis di ujung scene: aritmetikanya sah, tapi
+ * `startFrac` bisa membulat ke 1 dan `endFrac` jadi 1,01 — ditolak skema, dan
+ * seluruh impor gagal hanya karena satu klip di ujung.
+ */
+describe("lapisan di ujung scene", () => {
+  it("jendela tampilnya tetap di dalam [0,1] dan tetap punya panjang", () => {
+    const xml = doc(
+      '<asset id="r2" name="D" src="file:///proyek/d.mp4" start="0s" duration="20s" hasVideo="1" format="r1"/>',
+      [
+        '<asset-clip name="utama" ref="r2" offset="0s" duration="10s"/>',
+        // Mulai 1 milidetik sebelum scene berakhir.
+        '<asset-clip name="ujung" ref="r2" offset="9999/1000s" duration="3s" lane="1"/>',
+      ].join("\n"),
+    );
+    const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
+    const layer = (plan.scenes[0]?.layers ?? [])[0];
+    expect(layer).toBeDefined();
+    expect(layer?.startFrac).toBeLessThanOrEqual(0.99);
+    expect(layer?.endFrac).toBeLessThanOrEqual(1);
+    expect(layer?.endFrac ?? 0).toBeGreaterThan(layer?.startFrac ?? 0);
   });
 });

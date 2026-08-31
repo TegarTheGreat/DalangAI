@@ -12,6 +12,7 @@ import {
 import { useAssetSrc } from "../../asset-src";
 import { ensureFontsLoaded } from "../../fonts";
 import { GraphicsOverlay } from "../../GraphicsOverlay";
+import { LayersOverlay } from "../../LayersOverlay";
 import {
   type AspectMetrics,
   activeSceneIndex,
@@ -120,6 +121,15 @@ const SceneRouter: React.FC<{
   return (
     <AbsoluteFill>
       {content}
+      {/* Lapisan video juga berlaku untuk KEDUA preset (ADR-0025) — sisipan
+          bukti di samping screenshot adalah kegunaan aslinya. */}
+      <LayersOverlay
+        scene={scene}
+        plan={plan}
+        metrics={metrics}
+        accent={theme.accent}
+        durationInFrames={durationInFrames}
+      />
       {/* Tempelan berlaku untuk KEDUA preset (ADR-0018): grafis yang tersimpan
           di plan harus muncul apa pun gaya yang dipakai, kalau tidak proyek
           tutorial menyimpan sesuatu yang tak pernah terlihat di videonya. */}

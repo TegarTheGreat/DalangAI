@@ -1,6 +1,6 @@
 import { visualFilterSchema } from "@dalang/core";
 import { describe, expect, it } from "vitest";
-import { filterToCss } from "../src/presets/documentary-01/filters";
+import { filterToCss } from "../src/filters";
 
 describe("filterToCss (ADR-0011)", () => {
   it("tanpa filter atau serba-netral = tanpa CSS", () => {

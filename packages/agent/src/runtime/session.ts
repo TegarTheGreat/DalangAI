@@ -267,6 +267,16 @@ export class ProjectSession {
           : scene.visual.type === "stock"
             ? "aset:belum"
             : null,
+        // Lapisan (ADR-0025) ikut ke konteks: kalau tidak, agent tidak pernah
+        // tahu sisipan yang sudah ada dan akan menumpuknya sampai batas.
+        scene.layers.length > 0
+          ? `lapisan:${scene.layers
+              .map(
+                (layer) =>
+                  `${layer.id}${plan.renderState.layerAssets[layer.id] ? "" : "(aset:belum)"}`,
+              )
+              .join("+")}`
+          : null,
       ]
         .filter(Boolean)
         .join(", ");
