@@ -702,6 +702,9 @@ input[type="color"]::-webkit-color-swatch {
   background: radial-gradient(120% 90% at 50% 32%, #131519 0%, var(--bg-deep) 70%);
 }
 .player-box {
+  /* Jangkar untuk lapisan kanvas (ADR-0024): pegangan diposisikan absolut
+     terhadap kotak ini, jadi ia wajib jadi containing block. */
+  position: relative;
   border-radius: var(--r-lg);
   overflow: hidden;
   box-shadow:
@@ -2393,6 +2396,109 @@ input[type="color"]::-webkit-color-swatch {
   padding: 1px 8px;
   border-radius: 99px;
   font-size: 11px;
+}
+
+/* ---------------------------------------------------------------------------
+   Manipulasi langsung di kanvas (ADR-0024)
+   --------------------------------------------------------------------------- */
+
+/* Lapisan ini duduk DI ATAS pemutar tapi tidak boleh menelan klik yang bukan
+   miliknya: kontrol transport Remotion ada di bawahnya, dan preview yang tidak
+   bisa di-play adalah harga yang terlalu mahal untuk pegangan seret. */
+.canvas-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.canvas-box {
+  position: absolute;
+  pointer-events: auto;
+  cursor: grab;
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 3px;
+  /* Kotak seret harus PUNYA isian, walau bening: elemen tanpa latar hanya
+     bisa ditangkap di garis tepinya, dan menyeret teks jadi mustahil. */
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 120ms ease;
+}
+.canvas-box:hover {
+  border-color: var(--accent);
+}
+.canvas-box.active {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.canvas-box.dragging {
+  cursor: grabbing;
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(232, 163, 61, 0.06);
+}
+.canvas-tag {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 3px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.canvas-box:hover .canvas-tag,
+.canvas-box.active .canvas-tag,
+.canvas-box.dragging .canvas-tag {
+  opacity: 1;
+}
+.canvas-grip {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border-radius: 3px;
+  border: 1px solid var(--accent-ink);
+  background: var(--accent);
+  cursor: nwse-resize;
+}
+/* Garis bantu hanya muncul saat menempel — panduan yang selalu ada berhenti
+   jadi panduan dan mulai jadi latar. */
+.canvas-guide {
+  position: absolute;
+  background: var(--accent);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.canvas-guide.v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.canvas-guide.h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.canvas-locked {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  translate: -50% 0;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: rgba(7, 9, 15, 0.82);
+  border: 1px solid var(--line-strong);
+  font-size: 11px;
+  color: var(--text-dim);
+  pointer-events: none;
 }
 
 /* Dua aksi utama lobi berdampingan; Impor sekunder, Proyek baru primer. */

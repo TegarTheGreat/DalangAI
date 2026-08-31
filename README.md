@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -395,7 +395,15 @@ Yang sudah berjalan:
   Tambahkan `"--hanya-baca"` ke `args` kalau agent lain cukup boleh membaca,
   atau `"--izinkan-render"` kalau ia juga boleh merender frame (lambat).
   Transportnya stdio, jadi klien MCP mana pun bisa memakainya.
-- **Kualitas terjaga otomatis**: 733 unit test (kontrak lock/pin/undo, timing
+- **Manipulasi langsung di kanvas (ADR-0024)** — teks dan grafis diseret dan
+  diubah ukurannya langsung di atas preview, bukan lewat form angka:
+  - kotak pegangan dibaca dari DOM yang SUDAH ter-render, jadi selalu pas di
+    preset mana pun — termasuk preset yang belum ditulis;
+  - jangkar dipilih ulang saat dilepas dan tepinya memakai margin aman, jadi
+    menyeret "ke pinggir" mendarat di kolom aman yang sama dengan teks lain;
+  - keluarannya patch op biasa: tercatat, bisa Ctrl+Z, terlihat agent;
+  - menyeret TIDAK mengubah perataan teks — itu keputusan tipografi, bukan letak.
+- **Kualitas terjaga otomatis**: 744 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -408,7 +416,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 733 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 744 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -552,7 +560,13 @@ di `docs/decisions/`.
       *Catatan: belum pernah dibuka di Resolve/Premiere/Final Cut sungguhan —
       lihat "Batas yang dinyatakan" di ADR-0023.*
 
-Fase 9 ke atas ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
+- [~] **Fase 9 — Editor yang terasa seperti editor**: §9.1 (manipulasi langsung
+      di kanvas) selesai lewat ADR-0024. §9.2 (multi-track video), §9.3
+      (keyframe sembarang), §9.4 (audio per klip), dan §9.5 (proxy) BELUM
+      dikerjakan — §9.2 dan §9.3 masing-masing menuntut perubahan skema besar
+      dan ADR tersendiri.
+
+Sisa Fase 9 dan Fase 10 ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,
 format interchange, ASR), lengkap dengan celah beserta buktinya, risiko yang
 harus diputuskan, dan daftar yang sengaja TIDAK dikerjakan.

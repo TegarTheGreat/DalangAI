@@ -978,6 +978,8 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                     stroke: 0,
                     uppercase: false,
                     tracking: 0,
+                    offsetX: 0,
+                    offsetY: 0,
                     startFrac: 0,
                     endFrac: 1,
                   },

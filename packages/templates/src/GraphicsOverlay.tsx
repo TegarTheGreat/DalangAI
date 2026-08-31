@@ -90,6 +90,8 @@ const GraphicItem: React.FC<{
     const source = `url(${assetSrc(asset.file)})`;
     return (
       <div
+        // Penanda untuk lapisan manipulasi langsung Studio (ADR-0024).
+        data-dalang-graphic={graphic.id}
         style={{
           ...style,
           backgroundColor: graphic.color ?? accent,
@@ -107,7 +109,7 @@ const GraphicItem: React.FC<{
   }
 
   return (
-    <div style={style}>
+    <div data-dalang-graphic={graphic.id} style={style}>
       <Img
         src={assetSrc(asset.file)}
         style={{

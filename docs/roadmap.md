@@ -233,6 +233,11 @@ bisa dipakai agent mana pun.
 
 ### Fase 9 — Editor yang terasa seperti editor
 
+**§9.1 sudah dikerjakan** (ADR-0024): teks dan grafis bisa diseret dan diubah
+ukurannya langsung di atas preview, keluarannya patch op biasa. Skema teks
+bertambah `offsetX`/`offsetY`. Sisanya (§9.2–§9.5) belum; §9.2 dan §9.3
+masing-masing menuntut perubahan skema besar dan ADR tersendiri.
+
 > Membuka: pekerjaan yang hari ini harus dilakukan lewat form.
 
 | # | Item | Minta |

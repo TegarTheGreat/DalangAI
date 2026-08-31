@@ -1,3 +1,4 @@
+export * from "./canvas";
 export * from "./critique";
 export * from "./durations";
 export * from "./format-recipe";

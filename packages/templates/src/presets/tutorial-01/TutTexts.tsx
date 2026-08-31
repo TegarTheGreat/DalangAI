@@ -139,6 +139,13 @@ export const TutTexts: React.FC<{
               return (
                 <p
                   key={text.id}
+                  // Penanda untuk lapisan manipulasi langsung Studio
+                  // (ADR-0024). Kotak pegangan dibaca dari DOM yang SUDAH
+                  // ter-render, bukan dihitung ulang — menghitung ulang tata
+                  // letak preset di sisi Studio berarti dua rumus yang harus
+                  // tetap sama selamanya. Di video hasil render atribut ini
+                  // tidak berpengaruh apa-apa.
+                  data-dalang-text={text.id}
                   style={{
                     ...roleStyle(text.role, theme, metrics, TEXT_SIZE_FACTOR[text.size]),
                     ...align.self,
@@ -154,7 +161,12 @@ export const TutTexts: React.FC<{
                     ),
                     ...textLookStyle(text, { strokeColor: "rgba(255,255,255,0.92)" }),
                     opacity,
-                    translate: `0px ${blockRise.toFixed(2)}px`,
+                    // Geseran pengguna (ADR-0024) digabung dengan angkat masuk
+                    // dalam SATU translate: dua properti translate saling
+                    // menimpa, dan yang menang bergantung urutan objek gaya.
+                    translate: `${(text.offsetX * metrics.width).toFixed(2)}px ${(
+                      blockRise + text.offsetY * metrics.height
+                    ).toFixed(2)}px`,
                   }}
                 >
                   {text.anim === "fade"

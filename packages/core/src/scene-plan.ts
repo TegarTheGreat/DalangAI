@@ -124,6 +124,7 @@ export const TEXT_ROLES = ["headline", "subline", "kicker", "quote"] as const;
 export const textRoleSchema = z.enum(TEXT_ROLES);
 export const TEXT_POSITIONS = ["top", "center", "bottom"] as const;
 export const textPositionSchema = z.enum(TEXT_POSITIONS);
+export type TextPosition = z.infer<typeof textPositionSchema>;
 // ADR-0013: pengayaan gaya teks — semua default mempertahankan render lama.
 export const TEXT_ALIGNS = ["left", "center", "right"] as const;
 export const textAlignSchema = z.enum(TEXT_ALIGNS);
@@ -163,6 +164,16 @@ export const textOverlaySchema = z.strictObject({
   uppercase: z.boolean().default(false),
   /** Kerapatan huruf tambahan dalam em (relatif terhadap gaya peran). */
   tracking: z.number().min(-0.05).max(0.5).default(0),
+  /**
+   * Geseran dari jangkar `position`, fraksi lebar/tinggi bingkai (ADR-0024).
+   *
+   * Bentuknya sengaja SAMA dengan grafis: jangkar + geseran, bukan koordinat
+   * mutlak. Dengan begitu satu nilai tetap benar di 16:9, 9:16, dan 1:1 —
+   * dan nol berarti "di tempat yang dipilih preset", jadi semua plan lama
+   * tetap ter-render persis seperti sebelumnya.
+   */
+  offsetX: z.number().min(-0.5).max(0.5).default(0),
+  offsetY: z.number().min(-0.5).max(0.5).default(0),
   /** Jendela tampil, fraksi 0–1 dari durasi scene. */
   startFrac: normalized01.default(0),
   endFrac: normalized01.default(1),

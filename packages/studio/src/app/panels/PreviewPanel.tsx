@@ -7,6 +7,7 @@ import { planMeta } from "../model/plan-meta";
 import { playback } from "../playback";
 import { uiStore } from "../ui-state";
 import { useStudio } from "../use-studio";
+import { CanvasEditor } from "./CanvasEditor";
 
 /**
  * Panggung tengah: preview instan via @remotion/player — komponen video yang
@@ -105,6 +106,9 @@ export const PreviewPanel: React.FC = () => {
             acknowledgeRemotionLicense
             style={{ width: "100%", height: "100%" }}
           />
+          {/* Lapisan manipulasi langsung (ADR-0024) duduk DI ATAS pemutar dan
+              membaca kotak elemen yang sudah ter-render di dalamnya. */}
+          <CanvasEditor plan={plan} />
         </div>
       </div>
       {renderProgress?.status === "started" ||
