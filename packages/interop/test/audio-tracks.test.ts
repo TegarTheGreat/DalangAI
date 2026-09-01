@@ -135,6 +135,40 @@ describe("ekspor trek audio", () => {
     }
   });
 
+  /**
+   * ADR-0027: keyframe juga tidak ikut, dan laporannya HARUS mengatakannya.
+   * OTIO tidak punya kurva properti dan FCPXML hanya punya milik Final Cut;
+   * diam soal itu berarti orang membuka hasil ekspor, melihat elemennya diam,
+   * dan mengira ekspornya rusak.
+   */
+  it("laporan mengaku keyframe tidak ikut", () => {
+    const plan = makePlan((input) => {
+      const scene = input.scenes.find((item) => item.id === "sc-batu");
+      if (scene) {
+        scene.graphics = [
+          {
+            id: "g-kf",
+            ref: "iconify:mdi:home",
+            tracks: [
+              {
+                property: "offsetX",
+                points: [
+                  { at: 0, value: -0.2 },
+                  { at: 1, value: 0.2 },
+                ],
+              },
+            ],
+          },
+        ];
+      }
+    });
+    const project = tempProject(plan);
+    const timeline = buildEditTimeline(plan, { planPath: project.planPath });
+    const note = timeline.notes.find((item) => item.code === "keyframe");
+    expect(note).toBeDefined();
+    expect(note?.detail).toContain("TIDAK ikut");
+  });
+
   it("klip bersuara juga diakui kehilangan amplopnya", () => {
     const plan = makePlan((input) => {
       const scene = input.scenes.find((item) => item.id === "sc-batu");

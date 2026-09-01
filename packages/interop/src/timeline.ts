@@ -508,6 +508,24 @@ export const buildEditTimeline = (
       detail: `${annotations} anotasi tutorial (zoom/sorot/panah/blur) tidak ikut.`,
     });
   }
+  // ADR-0027: keyframe adalah otomatisasi milik render Dalang. OTIO tidak
+  // punya kurva properti sama sekali, dan FCPXML hanya punya milik Final Cut
+  // sendiri — memetakan ke sana berarti menebak, dan tebakan yang salah lebih
+  // buruk daripada mengaku tidak ikut.
+  const berkeyframe = plan.scenes.reduce(
+    (sum, scene) =>
+      sum +
+      scene.graphics.filter((item) => item.tracks.length > 0).length +
+      scene.texts.filter((item) => item.tracks.length > 0).length +
+      scene.layers.filter((item) => item.tracks.length > 0).length,
+    0,
+  );
+  if (berkeyframe > 0) {
+    notes.push({
+      code: "keyframe",
+      detail: `${berkeyframe} elemen punya keyframe (ADR-0027); kurvanya TIDAK ikut — elemennya diekspor pada nilai tetapnya. Animasinya perlu dibuat ulang di editor tujuan.`,
+    });
+  }
   const bersuara =
     countScenes(plan, (scene) => scene.visual.audio.volume > 0) +
     plan.scenes.reduce(

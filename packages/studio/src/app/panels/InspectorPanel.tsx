@@ -991,6 +991,9 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                     tracking: 0,
                     offsetX: 0,
                     offsetY: 0,
+                    // ADR-0027: elemen baru lahir TANPA keyframe — geraknya
+                    // datang dari preset `anim` sampai seseorang memutuskan lain.
+                    tracks: [],
                     startFrac: 0,
                     endFrac: 1,
                   },

@@ -1,6 +1,7 @@
 import type { Graphic, GraphicAnchor } from "@dalang/core";
 import type { CSSProperties } from "react";
 import { easeSettle, kf } from "./anim";
+import { evaluateTracks, trackProgress } from "./keyframe-model";
 
 /**
  * Model penempatan & gerak grafis tempelan (ADR-0018).
@@ -55,6 +56,18 @@ export interface GraphicMotion {
   /** Geseran vertikal tambahan dalam fraksi tinggi grafis. */
   liftFrac: number;
   opacity: number;
+  /**
+   * Nilai TERPAKAI untuk properti yang boleh dianimasikan (ADR-0027).
+   *
+   * Ada di sini, bukan dibaca ulang dari `graphic` oleh `graphicStyle`, supaya
+   * hanya ADA SATU tempat yang memutuskan nilai sebuah properti pada satu
+   * frame. Kalau `graphicStyle` tetap membaca `graphic.size` sementara track
+   * menganimasikannya, ukurannya akan diam sementara sisanya bergerak — cacat
+   * yang cuma kelihatan saat videonya diputar.
+   */
+  size: number;
+  offsetX: number;
+  offsetY: number;
 }
 
 /**
@@ -69,6 +82,15 @@ export const graphicMotion = (
   frame: number,
   windowFrames: number,
 ): GraphicMotion => {
+  // ADR-0027: track menang PENUH atas preset dan atas nilai statis untuk
+  // properti yang dianimasikannya. Bukan dikalikan: "geser ke 0,2" harus
+  // berarti 0,2, bukan 0,2 dikali apa pun yang kebetulan dilakukan preset.
+  const animated = evaluateTracks(graphic.tracks, trackProgress(frame, windowFrames));
+  const resolved = {
+    size: animated.size ?? graphic.size,
+    offsetX: animated.offsetX ?? graphic.offsetX,
+    offsetY: animated.offsetY ?? graphic.offsetY,
+  };
   const enterFrames = Math.min(14, Math.max(6, Math.round(windowFrames * 0.18)));
   const enter = kf(
     frame,
@@ -83,38 +105,47 @@ export const graphicMotion = (
   // lanjutannya, supaya satu scene dengan beberapa tempelan tetap terasa satu
   // bahasa gerak.
   const base: GraphicMotion = {
+    ...resolved,
     scale: 1,
-    rotate: graphic.rotate,
+    rotate: animated.rotate ?? graphic.rotate,
     liftFrac: 0,
-    opacity: fmt(enter * graphic.opacity),
+    opacity: fmt(animated.opacity ?? enter * graphic.opacity),
   };
+
+  // Properti yang di-track tidak boleh disentuh preset lagi. Yang lain tetap
+  // hidup, jadi satu track `offsetX` tidak mematikan seluruh animasi `pop`.
+  const kunci = (motion: GraphicMotion): GraphicMotion => ({
+    ...motion,
+    rotate: animated.rotate ?? motion.rotate,
+    opacity: animated.opacity ?? motion.opacity,
+  });
 
   switch (graphic.anim) {
     case "diam":
-      return { ...base, opacity: fmt(graphic.opacity) };
+      return kunci({ ...base, opacity: fmt(graphic.opacity) });
     case "pop":
       // Sedikit melewati 1 lalu kembali — terasa "mendarat", bukan muncul.
-      return {
+      return kunci({
         ...base,
         scale: fmt(0.72 + enter * 0.28 + Math.sin(enter * Math.PI) * 0.06),
-      };
+      });
     case "apung":
-      return {
+      return kunci({
         ...base,
         scale: fmt(0.9 + enter * 0.1),
         liftFrac: fmt(Math.sin(frame * 0.05) * 0.05),
-      };
+      });
     case "putar":
-      return {
+      return kunci({
         ...base,
         scale: fmt(0.9 + enter * 0.1),
         rotate: fmt(graphic.rotate + frame * 0.6),
-      };
+      });
     case "denyut":
-      return {
+      return kunci({
         ...base,
         scale: fmt((0.9 + enter * 0.1) * (1 + Math.sin(frame * 0.12) * 0.045)),
-      };
+      });
     default:
       return base;
   }
@@ -143,9 +174,9 @@ export const graphicStyle = (
   frame: GraphicFrame,
 ): CSSProperties => {
   const spec = anchorSpec(graphic.anchor);
-  const sizePx = fmt(graphic.size * frame.height);
-  const dx = fmt(graphic.offsetX * frame.width);
-  const dy = fmt((graphic.offsetY + motion.liftFrac * graphic.size) * frame.height);
+  const sizePx = fmt(motion.size * frame.height);
+  const dx = fmt(motion.offsetX * frame.width);
+  const dy = fmt((motion.offsetY + motion.liftFrac * motion.size) * frame.height);
 
   // Sumbu horizontal: kiri/kanan memakai margin aman; tengah memakai 50% dan
   // menggeser dirinya sendiri setengah lebar.

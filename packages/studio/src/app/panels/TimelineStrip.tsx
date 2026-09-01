@@ -581,6 +581,20 @@ export const TimelineStrip: React.FC = () => {
                         }`}
                       >
                         <span className="layer-bar-label">{layer.id}</span>
+                        {/* Berlian keyframe (ADR-0027): waktu adalah tempat
+                            keyframe hidup, jadi ia harus terlihat di garis
+                            waktu — bukan hanya sebagai daftar di panel.
+                            Menyeretnya belum ada; lihat "Batas" ADR-0027. */}
+                        {layer.tracks.flatMap((track) =>
+                          track.points.map((point) => (
+                            <span
+                              key={`${track.property}-${point.at}`}
+                              className="kf-diamond"
+                              style={{ left: `${point.at * 100}%` }}
+                              title={`${track.property} @ ${Math.round(point.at * 100)}%`}
+                            />
+                          )),
+                        )}
                       </button>
                     );
                   });

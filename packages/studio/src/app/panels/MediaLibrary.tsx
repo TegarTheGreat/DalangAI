@@ -6,7 +6,7 @@ import type {
   ScenePlan,
 } from "@dalang/core";
 import { GRAPHIC_ANIMS } from "@dalang/core";
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import type {
   IconCandidateLite,
   SfxCandidateLite,
@@ -15,8 +15,11 @@ import type {
 import { api } from "../api";
 import { Segmented } from "../components/controls";
 import { IconSearch, IconSpinner, IconSticker, IconTrash, IconWave } from "../icons";
+import { windowProgress } from "../model/keyframe-window";
+import { playback } from "../playback";
 import { studioClient } from "../use-studio";
 import { SliderRow } from "./InspectorPanel";
+import { KeyframeControls } from "./KeyframeControls";
 
 /**
  * Panel pustaka media (ADR-0018): ikon, stiker, dan efek suara di panel MANUAL.
@@ -201,6 +204,10 @@ const GraphicCard: React.FC<{
   open: boolean;
   onToggle: () => void;
 }> = ({ plan, scene, graphic, open, onToggle }) => {
+  // Playhead dibaca dari bus terpisah (bukan store) supaya kartu ini ikut
+  // menyegar saat playhead bergerak tanpa me-render ulang seluruh app.
+  const frame = useSyncExternalStore(playback.subscribe, playback.getFrame);
+  const progress = windowProgress(plan, scene.id, graphic, frame);
   const asset = plan.renderState.graphicAssets[graphic.id];
   const icon = isIconRef(graphic.ref);
   const preview = icon
@@ -305,6 +312,19 @@ const GraphicCard: React.FC<{
               value={graphic.anim}
               label={(anim) => ANIM_LABEL[anim]}
               onChange={(anim) => commit({ anim }, `Gerak grafis: ${ANIM_LABEL[anim]}`)}
+            />
+            <KeyframeControls
+              tracks={graphic.tracks}
+              allowed={["offsetX", "offsetY", "size", "rotate", "opacity"]}
+              values={{
+                offsetX: graphic.offsetX,
+                offsetY: graphic.offsetY,
+                size: graphic.size,
+                rotate: graphic.rotate,
+                opacity: graphic.opacity,
+              }}
+              progress={progress}
+              onChange={(tracks, label) => commit({ tracks }, label)}
             />
             {icon ? (
               <Swatches

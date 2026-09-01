@@ -143,6 +143,145 @@ export const textAnimSchema = z.enum(TEXT_ANIMS);
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{3,8}$/);
 
 /** Teks overlay di atas visual (di bawah caption); gaya dari theme preset. */
+/**
+ * Keyframe sembarang untuk properti (ADR-0027, roadmap §9.3).
+ *
+ * Sampai sini seluruh gerak di Dalang adalah PRESET: `anim: "pop"`,
+ * `motion: "kenburns-in"`, `entrance: "fade"`. Preset bagus untuk memulai —
+ * dan tetap jadi jalan bawaan — tapi ia tidak bisa menjawab "geser kartu ini
+ * dari kanan ke tengah tepat saat narasi menyebutnya". Itu butuh nilai yang
+ * berubah pada waktu yang DIPILIH, bukan dipilih dari daftar.
+ *
+ * Empat keputusan yang membentuk skema ini:
+ *
+ * 1. PROPERTINYA TERTUTUP, bukan jalur string bebas. `property: "offsetX"`
+ *    bisa divalidasi; `path: "style.transform.x"` tidak bisa — dan yang tidak
+ *    bisa divalidasi akan salah ditulis agent, lalu gagal saat render.
+ * 2. NILAINYA DIJEPIT RENTANG YANG SAMA dengan properti statisnya. Tanpa itu
+ *    sebuah keyframe bisa membawa `size` ke 5,0 — nilai yang ditolak skema
+ *    kalau ditulis statis. Satu bentuk data tidak boleh punya dua batas.
+ * 3. WAKTUNYA FRAKSI JENDELA ELEMEN, bukan detik. Elemen yang jendelanya
+ *    digeser atau scene yang dipanjangkan membawa serta animasinya, persis
+ *    seperti `startFrac`/`endFrac` sejak ADR-0018.
+ * 4. EASING-nya BERNAMA, bukan empat angka bezier. Nama menjaga bahasa gerak
+ *    yang sama dengan `anim.ts` (ADR-0015) dan membuat plan bisa dibaca.
+ */
+export const ANIMATABLE_PROPERTIES = [
+  "offsetX",
+  "offsetY",
+  "size",
+  "width",
+  "height",
+  "rotate",
+  "opacity",
+] as const;
+export type AnimatableProperty = (typeof ANIMATABLE_PROPERTIES)[number];
+
+/**
+ * Rentang sah tiap properti — SATU sumber, dipakai keyframe maupun nilai
+ * statisnya. Dituliskan sekali di sini supaya keduanya tidak bisa berbeda.
+ */
+export const ANIMATABLE_RANGE: Record<AnimatableProperty, readonly [number, number]> = {
+  offsetX: [-0.5, 0.5],
+  offsetY: [-0.5, 0.5],
+  size: [0.02, 0.6],
+  width: [0.08, 1],
+  height: [0.08, 1],
+  rotate: [-180, 180],
+  opacity: [0, 1],
+};
+
+export const KEYFRAME_EASINGS = ["settle", "glide", "dolly", "linear"] as const;
+export const keyframeEasingSchema = z.enum(KEYFRAME_EASINGS);
+export type KeyframeEasing = (typeof KEYFRAME_EASINGS)[number];
+
+/** Batas jumlah, supaya plan tetap terbaca dan biaya render tetap terduga. */
+export const MAX_TRACKS_PER_ELEMENT = 4;
+export const MAX_KEYFRAMES_PER_TRACK = 8;
+
+export const keyframeSchema = z.strictObject({
+  /** Waktu sebagai fraksi jendela tampil elemen: 0 = muncul, 1 = hilang. */
+  at: normalized01,
+  value: z.number().finite(),
+  /**
+   * Easing dari titik INI menuju titik berikutnya.
+   *
+   * Satu easing per SEGMEN, bukan dua per titik (masuk & keluar seperti
+   * After Effects). Segmen adalah hal yang benar-benar dianimasikan, dan dua
+   * easing per titik membuat dua titik bertetangga bisa saling bertentangan
+   * tentang bentuk satu segmen yang sama.
+   */
+  easing: keyframeEasingSchema.default("settle"),
+});
+export type Keyframe = z.infer<typeof keyframeSchema>;
+export type KeyframeInput = z.input<typeof keyframeSchema>;
+
+export const keyframeTrackSchema = z.strictObject({
+  property: z.enum(ANIMATABLE_PROPERTIES),
+  points: z.array(keyframeSchema).min(2).max(MAX_KEYFRAMES_PER_TRACK),
+});
+export type KeyframeTrack = z.infer<typeof keyframeTrackSchema>;
+
+/**
+ * Aturan yang berlaku untuk SETIAP kumpulan track, di elemen mana pun.
+ *
+ * Dipakai lewat `.superRefine(refineTracks(...))` pada tiap elemen, bukan
+ * disalin tiga kali: aturan yang disalin adalah aturan yang akan menyimpang.
+ */
+export const refineTracks =
+  (allowed: readonly AnimatableProperty[]) =>
+  (tracks: KeyframeTrack[], ctx: z.RefinementCtx): void => {
+    const seen = new Set<string>();
+    tracks.forEach((track, index) => {
+      if (!allowed.includes(track.property)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "property"],
+          message: `Properti "${track.property}" tidak bisa dianimasikan pada elemen ini — yang bisa: ${allowed.join(", ")}`,
+        });
+      }
+      // Satu properti satu track: dua track untuk properti yang sama berarti
+      // dua jawaban untuk satu pertanyaan, dan yang menang cuma soal urutan.
+      if (seen.has(track.property)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "property"],
+          message: `Properti "${track.property}" punya lebih dari satu track`,
+        });
+      }
+      seen.add(track.property);
+
+      const range = ANIMATABLE_RANGE[track.property];
+      track.points.forEach((point, pointIndex) => {
+        if (range && (point.value < range[0] || point.value > range[1])) {
+          ctx.addIssue({
+            code: "custom",
+            path: [index, "points", pointIndex, "value"],
+            message: `Nilai ${point.value} di luar rentang ${track.property} (${range[0]}..${range[1]})`,
+          });
+        }
+        // Waktu harus MENAIK. Titik yang tidak urut membuat interpolasinya
+        // bergantung pada urutan tulis, bukan pada waktunya.
+        const previous = track.points[pointIndex - 1];
+        if (previous && point.at <= previous.at) {
+          ctx.addIssue({
+            code: "custom",
+            path: [index, "points", pointIndex, "at"],
+            message: `Waktu keyframe harus menaik (${previous.at} lalu ${point.at})`,
+          });
+        }
+      });
+    });
+  };
+
+/** Larik track untuk satu elemen, dengan daftar properti yang boleh. */
+export const tracksSchema = (allowed: readonly AnimatableProperty[]) =>
+  z
+    .array(keyframeTrackSchema)
+    .max(MAX_TRACKS_PER_ELEMENT)
+    .default([])
+    .superRefine(refineTracks(allowed));
+
 export const textOverlaySchema = z.strictObject({
   id: z.string().min(1),
   content: z.string().min(1),
@@ -174,6 +313,8 @@ export const textOverlaySchema = z.strictObject({
    */
   offsetX: z.number().min(-0.5).max(0.5).default(0),
   offsetY: z.number().min(-0.5).max(0.5).default(0),
+  /** Track keyframe (ADR-0027) — lihat catatan di `graphicSchema.tracks`. */
+  tracks: tracksSchema(["offsetX", "offsetY", "opacity"]),
   /** Jendela tampil, fraksi 0–1 dari durasi scene. */
   startFrac: normalized01.default(0),
   endFrac: normalized01.default(1),
@@ -334,6 +475,13 @@ export const graphicSchema = z.strictObject({
   /** Warna ikon; null = warna aksen preset. Diabaikan untuk stiker gambar. */
   color: hexColorSchema.nullable().default(null),
   anim: graphicAnimSchema.default("pop"),
+  /**
+   * Track keyframe (ADR-0027). Properti yang punya track ditentukan PENUH
+   * olehnya — nilai statis dan preset `anim` tidak lagi ikut menghitung
+   * properti itu. Mengalikan keduanya akan membuat "pindahkan ke 0,2" berarti
+   * sesuatu yang berbeda tergantung preset yang kebetulan terpasang.
+   */
+  tracks: tracksSchema(["offsetX", "offsetY", "size", "rotate", "opacity"]),
   /** Jendela tampil, fraksi 0-1 dari durasi scene. */
   startFrac: normalized01.default(0),
   endFrac: normalized01.default(1),
@@ -401,6 +549,8 @@ export const videoLayerSchema = z.strictObject({
   /** Isi kotak: `cover` memotong, `contain` memuat seluruh bingkai. */
   fit: z.enum(["cover", "contain"]).default("cover"),
   entrance: layerEntranceSchema.default("fade"),
+  /** Track keyframe (ADR-0027) — lihat catatan di `graphicSchema.tracks`. */
+  tracks: tracksSchema(["offsetX", "offsetY", "width", "height", "opacity"]),
   /** Jendela tampil, fraksi 0-1 dari durasi scene. */
   startFrac: normalized01.default(0),
   endFrac: normalized01.default(1),

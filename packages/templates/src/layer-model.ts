@@ -2,6 +2,7 @@ import type { VideoLayer } from "@dalang/core";
 import type { CSSProperties } from "react";
 import { easeSettle, kf } from "./anim";
 import { anchorSpec, type GraphicFrame } from "./graphic-model";
+import { evaluateTracks, trackProgress } from "./keyframe-model";
 
 /**
  * Model penempatan & gerak LAPISAN VIDEO (ADR-0025, roadmap §9.2).
@@ -28,6 +29,15 @@ export interface LayerMotion {
   /** Geseran masuk, dalam FRAKSI ukuran kotak (bukan piksel). */
   slideX: number;
   slideY: number;
+  /**
+   * Nilai TERPAKAI properti yang boleh dianimasikan (ADR-0027) — alasannya
+   * sama dengan `GraphicMotion`: satu tempat saja yang memutuskan nilai
+   * sebuah properti pada satu frame.
+   */
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
 }
 
 /**
@@ -58,6 +68,14 @@ export const layerMotion = (
   frame: number,
   windowFrames: number,
 ): LayerMotion => {
+  // ADR-0027: track menang PENUH atas preset `entrance` dan nilai statis.
+  const animated = evaluateTracks(layer.tracks, trackProgress(frame, windowFrames));
+  const resolved = {
+    width: animated.width ?? layer.width,
+    height: animated.height ?? layer.height,
+    offsetX: animated.offsetX ?? layer.offsetX,
+    offsetY: animated.offsetY ?? layer.offsetY,
+  };
   const enterFrames = Math.min(16, Math.max(6, Math.round(windowFrames * 0.16)));
   const enter = kf(
     frame,
@@ -68,29 +86,36 @@ export const layerMotion = (
     easeSettle,
   );
   const base: LayerMotion = {
-    opacity: fmt(enter * layer.opacity),
+    ...resolved,
+    opacity: fmt(animated.opacity ?? enter * layer.opacity),
     scale: 1,
     slideX: 0,
     slideY: 0,
   };
 
+  /** Properti yang di-track tidak boleh disentuh preset lagi. */
+  const kunci = (motion: LayerMotion): LayerMotion => ({
+    ...motion,
+    opacity: animated.opacity ?? motion.opacity,
+  });
+
   switch (layer.entrance) {
     case "diam":
-      return { ...base, opacity: fmt(layer.opacity) };
+      return kunci({ ...base, opacity: fmt(layer.opacity) });
     case "fade":
       return base;
     case "pop":
-      return { ...base, scale: fmt(0.86 + enter * 0.14) };
+      return kunci({ ...base, scale: fmt(0.86 + enter * 0.14) });
     case "geser": {
       const from = slideFrom(layer);
-      return {
+      return kunci({
         ...base,
         // Opasitas penuh sejak awal: sisipan yang menggeser masuk SAMBIL
         // memudar terbaca sebagai dua animasi yang bertengkar.
         opacity: fmt(layer.opacity),
         slideX: fmt(from.x * (1 - enter)),
         slideY: fmt(from.y * (1 - enter)),
-      };
+      });
     }
     default:
       return base;
@@ -108,12 +133,21 @@ export const layerWindow = (
 };
 
 /** Ukuran kotak lapisan dalam piksel bingkai. */
+/**
+ * Ukuran kotak lapisan dalam piksel bingkai.
+ *
+ * Menerima apa saja yang punya `width`/`height` sebagai FRAKSI — baik lapisan
+ * itu sendiri maupun `LayerMotion` yang sudah menyelesaikan track-nya
+ * (ADR-0027). Dengan begitu jalur animasi dan jalur statis memakai rumus yang
+ * sama persis; menyalinnya jadi dua akan membuat sisipan yang di-track
+ * berukuran benar tapi sudut membulatnya dihitung dari ukuran yang lain.
+ */
 export const layerSize = (
-  layer: VideoLayer,
+  box: { width: number; height: number },
   frame: GraphicFrame,
 ): { width: number; height: number } => ({
-  width: fmt(layer.width * frame.width),
-  height: fmt(layer.height * frame.height),
+  width: fmt(box.width * frame.width),
+  height: fmt(box.height * frame.height),
 });
 
 /**
@@ -123,9 +157,13 @@ export const layerSize = (
  * lebar, fraksi-lebar 0,5 akan menghasilkan sudut lebih besar dari tingginya
  * sendiri dan CSS akan memotongnya diam-diam ke bentuk yang tidak diminta.
  */
-export const layerRadius = (layer: VideoLayer, frame: GraphicFrame): string => {
+export const layerRadius = (
+  layer: VideoLayer,
+  frame: GraphicFrame,
+  box: { width: number; height: number } = layer,
+): string => {
   if (layer.shape === "bulat") return "50%";
-  const { width, height } = layerSize(layer, frame);
+  const { width, height } = layerSize(box, frame);
   return `${fmt(layer.radius * Math.min(width, height))}px`;
 };
 
@@ -144,9 +182,10 @@ export const layerBoxStyle = (
   accent: string,
 ): CSSProperties => {
   const spec = anchorSpec(layer.anchor);
-  const { width, height } = layerSize(layer, frame);
-  const dx = fmt(layer.offsetX * frame.width + motion.slideX * width);
-  const dy = fmt(layer.offsetY * frame.height + motion.slideY * height);
+  // Ukuran dan geseran diambil dari MOTION: di situlah track sudah menang.
+  const { width, height } = layerSize(motion, frame);
+  const dx = fmt(motion.offsetX * frame.width + motion.slideX * width);
+  const dy = fmt(motion.offsetY * frame.height + motion.slideY * height);
   const borderPx = fmt(layer.border * frame.height);
 
   const horizontal =
@@ -170,7 +209,7 @@ export const layerBoxStyle = (
     height,
     opacity: motion.opacity,
     overflow: "hidden",
-    borderRadius: layerRadius(layer, frame),
+    borderRadius: layerRadius(layer, frame, motion),
     ...(borderPx > 0
       ? { border: `${borderPx}px solid ${layer.borderColor ?? accent}` }
       : {}),

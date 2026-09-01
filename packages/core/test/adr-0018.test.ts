@@ -62,6 +62,9 @@ describe("grafis tempelan", () => {
       opacity: 1,
       color: null,
       anim: "pop",
+      // ADR-0027: grafis baru lahir TANPA keyframe — geraknya sepenuhnya dari
+      // preset `anim` sampai seseorang memutuskan lain.
+      tracks: [],
       startFrac: 0,
       endFrac: 1,
     });

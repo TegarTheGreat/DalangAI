@@ -2,6 +2,7 @@ import type { Scene, TextOverlay } from "@dalang/core";
 import { Fragment } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { enterExit } from "../../anim";
+import { evaluateTracks, trackProgress } from "../../keyframe-model";
 import type { AspectMetrics } from "../../layout";
 import {
   alignStyles,
@@ -133,9 +134,22 @@ export const TutTexts: React.FC<{
                 EXIT_FRAMES,
               );
               const align = alignStyles(text.align);
+              // ADR-0027: track keyframe menang PENUH — aturan yang SAMA di
+              // kedua preset. Kalau hanya satu preset menghormatinya, plan yang
+              // sama akan bergerak di satu gaya dan diam di gaya lain.
+              const animated = evaluateTracks(
+                text.tracks,
+                trackProgress(frame - start, end - start + 1),
+              );
+              const offsetX = animated.offsetX ?? text.offsetX;
+              const offsetY = animated.offsetY ?? text.offsetY;
+              const alpha = animated.opacity ?? opacity;
               // ADR-0016: animasi masuk per kata/karakter (lihat type-style).
               const pieces = splitForAnim(text.content, text.anim);
-              const blockRise = text.anim === "fade" ? (1 - progress) * 22 : 0;
+              const blockRise =
+                text.anim === "fade" && animated.offsetY === undefined
+                  ? (1 - progress) * 22
+                  : 0;
               return (
                 <p
                   key={text.id}
@@ -160,12 +174,12 @@ export const TutTexts: React.FC<{
                       progress,
                     ),
                     ...textLookStyle(text, { strokeColor: "rgba(255,255,255,0.92)" }),
-                    opacity,
+                    opacity: alpha,
                     // Geseran pengguna (ADR-0024) digabung dengan angkat masuk
                     // dalam SATU translate: dua properti translate saling
                     // menimpa, dan yang menang bergantung urutan objek gaya.
-                    translate: `${(text.offsetX * metrics.width).toFixed(2)}px ${(
-                      blockRise + text.offsetY * metrics.height
+                    translate: `${(offsetX * metrics.width).toFixed(2)}px ${(
+                      blockRise + offsetY * metrics.height
                     ).toFixed(2)}px`,
                   }}
                 >

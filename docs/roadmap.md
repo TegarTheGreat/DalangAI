@@ -258,8 +258,19 @@ sama-sama mendarat di -16,00 LUFS. Batasnya ada di "Batas" ADR-0026 — yang
 terbesar: AAC/MP4 tidak terukur pada Chromium tanpa kodek proprietary, dan
 klip seperti itu dilewati dengan alasan yang disebutkan, bukan ditebak.
 
-Sisanya (§9.3 dan §9.5) belum; §9.3 menuntut model animasi baru dan ADR
-tersendiri.
+**§9.3 sudah dikerjakan** (ADR-0027): keyframe kini DATA PLAN, bukan lagi kode
+preset. `tracks` pada grafis, teks, dan lapisan menganimasikan properti yang
+daftarnya tertutup dan rentang nilainya sama persis dengan properti statisnya;
+waktunya fraksi jendela elemen (scene yang dipanjangkan membawa animasinya),
+easing-nya bernama, dan properti yang punya track ditentukan PENUH olehnya —
+tanpa mematikan preset untuk properti lain. Dipasang di posisi playhead lewat
+Studio, terlihat sebagai berlian di timeline, dan diverifikasi dari PIKSEL
+render: teks ber-track mendarat di 0,2888 / 0,4295 / 0,5688 lebar bingkai
+(ramalan 0,290 / 0,430 / 0,570), sementara plan yang sama tanpa track diam di
+0,4988. Batas terbesarnya: berlian belum bisa diseret, dan visual dasar scene
+belum bisa di-keyframe — selengkapnya di "Batas" ADR-0027.
+
+Sisanya (§9.5) belum.
 
 > Membuka: pekerjaan yang hari ini harus dilakukan lewat form.
 
@@ -267,7 +278,7 @@ tersendiri.
 | --- | --- | --- |
 | 9.1 | Manipulasi langsung di kanvas: seret/ubah ukuran teks & grafis di preview | Lapisan interaksi di atas Player; koordinat → patch op |
 | 9.2 | Multi-track video: overlay/PiP/B-roll sebagai lapisan | Perubahan skema besar → ADR |
-| 9.3 | Keyframe sembarang untuk properti | Model animasi baru |
+| 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027) |
 | 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | Selesai (ADR-0026) |
 | 9.5 | Proxy + penanganan rekaman panjang | Terkait 6.x |
 

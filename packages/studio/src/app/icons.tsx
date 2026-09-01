@@ -279,3 +279,13 @@ export const IconEye: React.FC = () => (
     <circle cx="12" cy="12" r="3" />
   </Icon>
 );
+
+/**
+ * Berlian keyframe (ADR-0027) — bentuk yang sama dipakai semua editor video
+ * untuk menandai titik animasi, jadi ia langsung terbaca tanpa dijelaskan.
+ */
+export const IconKeyframe: React.FC = () => (
+  <Icon>
+    <path d="M12 4.5 19.5 12 12 19.5 4.5 12Z" />
+  </Icon>
+);

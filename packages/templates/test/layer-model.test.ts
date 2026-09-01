@@ -120,12 +120,16 @@ describe("kotak", () => {
   });
 
   it("geseran pengguna dihitung dalam piksel bingkai", () => {
-    const style = layerBoxStyle(
-      layer({ anchor: "kiri-atas", offsetX: 0.1, offsetY: -0.05 }),
-      layerMotion(layer({ entrance: "diam" }), 0, 90),
-      frame,
-      "#fff",
-    );
+    // SATU lapisan untuk motion dan style: sejak ADR-0027 nilai terpakai tiap
+    // properti diputuskan di `layerMotion`, jadi memberi keduanya lapisan
+    // berbeda tidak berarti apa-apa — dan komponennya tidak pernah begitu.
+    const item = layer({
+      anchor: "kiri-atas",
+      offsetX: 0.1,
+      offsetY: -0.05,
+      entrance: "diam",
+    });
+    const style = layerBoxStyle(item, layerMotion(item, 0, 90), frame, "#fff");
     // 0,1 x 1920 = 192px ; -0,05 x 1080 = -54px
     expect(String(style.translate)).toContain("192px");
     expect(String(style.translate)).toContain("-54px");

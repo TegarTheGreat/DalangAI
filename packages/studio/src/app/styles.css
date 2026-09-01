@@ -4219,3 +4219,65 @@ button.ghost.danger.confirm {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --- Keyframe (ADR-0027, §9.3) ------------------------------------------ */
+
+.keyframe-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.keyframe-prop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.keyframe-prop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Tombol properti memuai; tombol hapus tetap sekecil isinya. */
+.keyframe-prop-head .mini.with-icon {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.keyframe-prop-head .mini.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Titik menjorok masuk supaya jelas ia milik properti di atasnya. */
+.keyframe-point {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1px solid var(--hairline);
+}
+
+/*
+ * Berlian di bar timeline. `pointer-events: none` supaya klik tetap jatuh ke
+ * bar-nya: berlian ini penanda, belum pegangan — menyeretnya bagian dari
+ * batas yang dinyatakan ADR-0027.
+ */
+.kf-diamond {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  translate: 0 -50%;
+  rotate: 45deg;
+  background: var(--accent);
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}

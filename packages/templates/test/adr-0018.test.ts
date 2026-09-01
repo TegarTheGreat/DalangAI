@@ -28,6 +28,9 @@ const graphic = (over: Record<string, unknown> = {}) => ({
   opacity: 1,
   color: null,
   anim: "pop" as const,
+  // ADR-0027: tanpa track, jadi seluruh gerak di berkas ini tetap datang dari
+  // preset `anim` — persis keadaan yang diuji ADR-0018.
+  tracks: [],
   startFrac: 0,
   endFrac: 1,
   ...over,
@@ -124,12 +127,13 @@ describe("ukuran grafis mengikuti tinggi frame, bukan piksel tetap", () => {
   });
 
   it("geseran memakai lebar untuk X dan tinggi untuk Y", () => {
-    const motion = graphicMotion(graphic({ anim: "diam" }), 0, 60);
-    const style = graphicStyle(
-      graphic({ offsetX: 0.1, offsetY: -0.05 }),
-      motion,
-      LANDSCAPE,
-    );
+    // SATU grafis untuk motion dan style: sejak ADR-0027 nilai terpakai tiap
+    // properti diputuskan di `graphicMotion` (supaya track punya satu tempat
+    // untuk menang), jadi memberi keduanya grafis berbeda memang tidak berarti
+    // apa-apa — dan komponen sungguhan tidak pernah melakukannya.
+    const item = graphic({ anim: "diam", offsetX: 0.1, offsetY: -0.05 });
+    const motion = graphicMotion(item, 0, 60);
+    const style = graphicStyle(item, motion, LANDSCAPE);
     expect(String(style.translate)).toContain("192px");
     expect(String(style.translate)).toContain("-54px");
   });

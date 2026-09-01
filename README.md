@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -439,7 +439,22 @@ Yang sudah berjalan:
   - `audio.tracks` (maks 8) untuk ambience, wawancara, atau lagu berlisensi;
   - diverifikasi lewat render sungguhan: sumber mono dan stereo sama-sama
     mendarat di -16,00 LUFS.
-- **Kualitas terjaga otomatis**: 874 unit test (kontrak lock/pin/undo, timing
+- **Keyframe properti (ADR-0027)** — gerak tidak lagi harus dipilih dari daftar:
+  - `tracks` pada grafis, teks, dan lapisan menganimasikan properti pada waktu
+    yang DIPILIH, bukan yang tersedia — "geser kartu ini ke tengah tepat saat
+    narasi menyebutnya";
+  - daftar propertinya TERTUTUP dan rentang nilainya sama persis dengan
+    properti statisnya, jadi keyframe tidak bisa membawa sesuatu ke nilai yang
+    ditolak skema kalau ditulis biasa;
+  - waktunya fraksi jendela tampil elemen, jadi scene yang dipanjangkan
+    membawa serta animasinya tanpa satu angka pun dihitung ulang;
+  - easing bernama (mendarat/meluncur/dolly/rata), satu per segmen;
+  - properti yang punya track ditentukan PENUH olehnya — preset tidak lagi
+    ikut menghitung properti itu, tapi tetap hidup untuk properti lain;
+  - dipasang di posisi playhead dari Studio dan terlihat sebagai berlian di
+    timeline; menyeret berlian itu BELUM ada (lihat "Batas" ADR-0027);
+  - diverifikasi dari piksel render sungguhan, bukan hanya unit test.
+- **Kualitas terjaga otomatis**: 906 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -452,7 +467,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 874 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 906 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -598,11 +613,12 @@ di `docs/decisions/`.
 
 - [~] **Fase 9 — Editor yang terasa seperti editor**: §9.1 (manipulasi langsung
       di kanvas) selesai lewat ADR-0024, §9.2 (multi-track video) lewat
-      ADR-0025, §9.4 (audio per klip) lewat ADR-0026. §9.3 (keyframe sembarang)
-      dan §9.5 (proxy) BELUM dikerjakan — §9.3 menuntut model animasi baru dan
-      ADR tersendiri.
+      ADR-0025, §9.3 (keyframe properti) lewat ADR-0027, §9.4 (audio per klip)
+      lewat ADR-0026. Hanya §9.5 (proxy + rekaman panjang) yang BELUM.
       *Batas §9.4: AAC/MP4 tidak terukur pada Chromium tanpa kodek proprietary;
-      campuran akhirnya tidak diukur — selengkapnya di "Batas" ADR-0026.*
+      campuran akhirnya tidak diukur. Batas §9.3: berlian keyframe belum bisa
+      diseret, dan visual dasar scene belum bisa di-keyframe — selengkapnya di
+      "Batas" ADR-0026 dan ADR-0027.*
 
 Sisa Fase 9 dan Fase 10 ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

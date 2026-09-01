@@ -14,12 +14,15 @@ import {
   uniqueLayerId,
   type VideoLayer,
 } from "@dalang/core";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Segmented } from "../components/controls";
 import { IconFilm, IconTrash } from "../icons";
+import { windowProgress } from "../model/keyframe-window";
+import { playback } from "../playback";
 import { studioClient, useStudio } from "../use-studio";
 import { ClipAudioControls } from "./ClipAudioControls";
 import { SliderRow } from "./InspectorPanel";
+import { KeyframeControls } from "./KeyframeControls";
 import { ANCHOR_LABEL, AnchorPad } from "./MediaLibrary";
 
 /**
@@ -105,6 +108,8 @@ export const LapisanTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
           opacity: 1,
           fit: "cover",
           entrance: "fade",
+          // ADR-0027: lapisan baru lahir tanpa keyframe.
+          tracks: [],
           // Bukan 0–1: sisipan yang menyala sepanjang scene berhenti jadi
           // sisipan (lihat kritik "lapisan-sepanjang-scene").
           startFrac: 0.15,
@@ -165,6 +170,8 @@ const LayerCard: React.FC<{
   const [query, setQuery] = useState(layer.visual.query ?? "");
   const asset = plan.renderState.layerAssets[layer.id];
   const searching = assetSearch?.layerId === layer.id;
+  const frame = useSyncExternalStore(playback.subscribe, playback.getFrame);
+  const progress = windowProgress(plan, scene.id, layer, frame);
 
   const update = (patch: Partial<VideoLayer>, label: string) => {
     void studioClient.applyPatch(
@@ -419,6 +426,19 @@ const LayerCard: React.FC<{
                   `Selesai lapisan ${layer.id}`,
                 )
               }
+            />
+            <KeyframeControls
+              tracks={layer.tracks}
+              allowed={["offsetX", "offsetY", "width", "height", "opacity"]}
+              values={{
+                offsetX: layer.offsetX,
+                offsetY: layer.offsetY,
+                width: layer.width,
+                height: layer.height,
+                opacity: layer.opacity,
+              }}
+              progress={progress}
+              onChange={(tracks, label) => update({ tracks }, label)}
             />
             <ClipAudioControls
               audio={layer.visual.audio}

@@ -653,6 +653,66 @@
                   "minimum": -0.5,
                   "maximum": 0.5
                 },
+                "tracks": {
+                  "default": [],
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "property": {
+                        "type": "string",
+                        "enum": [
+                          "offsetX",
+                          "offsetY",
+                          "size",
+                          "width",
+                          "height",
+                          "rotate",
+                          "opacity"
+                        ]
+                      },
+                      "points": {
+                        "minItems": 2,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            "value": {
+                              "type": "number"
+                            },
+                            "easing": {
+                              "default": "settle",
+                              "type": "string",
+                              "enum": [
+                                "settle",
+                                "glide",
+                                "dolly",
+                                "linear"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "property",
+                      "points"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
                 "startFrac": {
                   "default": 0,
                   "type": "number",
@@ -828,6 +888,66 @@
                     "putar",
                     "denyut"
                   ]
+                },
+                "tracks": {
+                  "default": [],
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "property": {
+                        "type": "string",
+                        "enum": [
+                          "offsetX",
+                          "offsetY",
+                          "size",
+                          "width",
+                          "height",
+                          "rotate",
+                          "opacity"
+                        ]
+                      },
+                      "points": {
+                        "minItems": 2,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            "value": {
+                              "type": "number"
+                            },
+                            "easing": {
+                              "default": "settle",
+                              "type": "string",
+                              "enum": [
+                                "settle",
+                                "glide",
+                                "dolly",
+                                "linear"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "property",
+                      "points"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "startFrac": {
                   "default": 0,
@@ -1114,6 +1234,66 @@
                     "pop",
                     "diam"
                   ]
+                },
+                "tracks": {
+                  "default": [],
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "property": {
+                        "type": "string",
+                        "enum": [
+                          "offsetX",
+                          "offsetY",
+                          "size",
+                          "width",
+                          "height",
+                          "rotate",
+                          "opacity"
+                        ]
+                      },
+                      "points": {
+                        "minItems": 2,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            "value": {
+                              "type": "number"
+                            },
+                            "easing": {
+                              "default": "settle",
+                              "type": "string",
+                              "enum": [
+                                "settle",
+                                "glide",
+                                "dolly",
+                                "linear"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "property",
+                      "points"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "startFrac": {
                   "default": 0,
