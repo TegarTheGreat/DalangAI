@@ -157,6 +157,8 @@ export interface StudioOverrides {
   volumeModel?: StudioDeps["volumeModel"];
   /** Transkoder (ADR-0028); bawaannya kosong = mesin tanpa ffmpeg. */
   transcoder?: StudioDeps["transcoder"];
+  /** Tujuan publikasi (ADR-0030); bawaannya kosong = mesin tanpa token. */
+  publishTargets?: StudioDeps["publishTargets"];
 }
 
 export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
@@ -241,6 +243,7 @@ export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
   // /api/review harus menolak dengan 501, bukan pura-pura bisa.
   ...(overrides?.volumeModel ? { volumeModel: overrides.volumeModel } : {}),
   ...(overrides?.transcoder ? { transcoder: overrides.transcoder } : {}),
+  ...(overrides?.publishTargets ? { publishTargets: overrides.publishTargets } : {}),
   registrySource: "uji",
 });
 

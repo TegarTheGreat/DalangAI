@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) + Fase 10.1: memori preferensi lintas proyek (ADR-0029) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) + Fase 10.1: memori preferensi lintas proyek (ADR-0029) + Fase 10.3: publikasi langsung ke YouTube (ADR-0030) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -517,7 +517,17 @@ Yang sudah berjalan:
   - MILIK ORANGNYA: satu berkas `~/.dalang/memori.json` (atau `$DALANG_HOME`),
     bukan di dalam plan dan bukan per folder; disuntikkan tiap giliran sebagai
     blok `[PREFERENSI USER LINTAS PROYEK]`, dan instruksi proyek selalu menang.
-- **Kualitas terjaga otomatis**: 1027 unit test (kontrak lock/pin/undo, timing
+- **Publikasi langsung ke YouTube (ADR-0030)** — dari riwayat render di Studio
+  (tombol Unggah), `dalang publish`, atau tool agent `publishVideo`: unggahan
+  resumable per potongan 8 MiB lewat YouTube Data API v3, dengan tiga pengaman
+  karena unggahan tidak bisa diurungkan: SELALU lewat konfirmasi (dialog
+  judul/deskripsi/privasi di Studio, pertanyaan di CLI, gerbang persetujuan
+  agent), bawaan PRIVAT, dan ledger yang menolak mengunggah berkas yang sama
+  dua kali tanpa `--force`. Butuh `YOUTUBE_ACCESS_TOKEN` milikmu sendiri
+  (Dalang tidak menjalankan alur OAuth); tanpa token, ketiga permukaan
+  berkata apa adanya. Jalurnya diuji terhadap HTTP palsu yang mengikuti
+  dokumentasi Google, belum terhadap YouTube sungguhan.
+- **Kualitas terjaga otomatis**: 1042 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -533,7 +543,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1027 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1042 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -544,6 +554,7 @@ pnpm dalang validate examples/borobudur-60s          # folder atau plan.json, sa
 pnpm dalang generate examples/borobudur-60s/plan.json            # pipeline: TTS + aset
 pnpm dalang transcribe examples/podcast   # transkripsi rekaman -> renderState (ADR-0021)
 pnpm dalang review examples/borobudur-60s # render frame -> nilai dengan model vision (ADR-0022)
+pnpm dalang publish proyekku/ --privasi unlisted   # unggah render terbaru ke YouTube (ADR-0030)
 pnpm dalang export examples/borobudur-60s --format otio     # garis waktu -> Resolve/Premiere/FCP
 pnpm dalang import rough.otio -o proyekku/                  # OTIO/FCPXML -> kerangka scene-plan
 pnpm dalang mcp ~/video                   # server MCP: timeline sebagai tool untuk agent lain

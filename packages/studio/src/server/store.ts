@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync, watch } from "node:fs";
 import { basename, join } from "node:path";
 import type { ProjectSession } from "@dalang/agent";
 import { type PatchOpInput, rebaseRenderState, type ScenePlan } from "@dalang/core";
+import { publishedRecordFor } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
 import type {
   BusyKind,
@@ -10,6 +11,8 @@ import type {
   PlanUpdateReason,
   ProjectStatePayload,
   ProxyJobLite,
+  PublishJobLite,
+  PublishStateLite,
   RenderOutput,
   StageRunLite,
   TranscriptSummary,
@@ -40,6 +43,8 @@ export class StudioStore {
   private render: string | null = null;
   /** Pekerjaan proxy di latar (ADR-0028 §10); ditulis oleh ProxyJobRunner. */
   proxyJob: ProxyJobLite | null = null;
+  /** Unggahan yang sedang berjalan (ADR-0030); ditulis oleh rute publish. */
+  publishJob: PublishJobLite | null = null;
   private stopWatch: (() => void) | null = null;
 
   constructor(session: ProjectSession, bus: EventBus) {
@@ -151,7 +156,10 @@ export class StudioStore {
     }));
   }
 
-  snapshot(models: ProjectStatePayload["models"]): ProjectStatePayload {
+  snapshot(
+    models: ProjectStatePayload["models"],
+    publish: Omit<PublishStateLite, "job">,
+  ): ProjectStatePayload {
     const { session } = this;
     // Transkrip DIBUANG dari muatan state (ADR-0021). Rekaman satu jam
     // menambah ratusan kilobyte, dan state ini disiarkan ulang pada SETIAP
@@ -209,6 +217,7 @@ export class StudioStore {
       models,
       ttsEstimate: this.ttsEstimate(),
       renders: this.listRenders(),
+      publish: { ...publish, job: this.publishJob },
     };
   }
 
@@ -226,17 +235,37 @@ export class StudioStore {
   }
 
   listRenders(): RenderOutput[] {
-    const dir = join(this.session.paths.dalangDir, "renders");
+    const { session } = this;
+    const dir = join(session.paths.dalangDir, "renders");
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
       .filter((name) => /\.(mp4|webm|mov)$/.test(name))
       .map((name) => {
-        const stats = statSync(join(dir, name));
+        const file = join(dir, name);
+        const stats = statSync(file);
+        // ADR-0030: catatan publikasi dari ledger, supaya UI menunjukkan
+        // tautan yang sudah ada alih-alih menawarkan unggahan kedua.
+        const published = publishedRecordFor(
+          session.db,
+          session.projectId,
+          session.paths,
+          file,
+        );
         return {
           label: name.replace(/\.(mp4|webm|mov)$/, ""),
           url: `/.dalang/renders/${name}`,
           sizeBytes: stats.size,
           finishedAt: stats.mtime.toISOString(),
+          ...(published
+            ? {
+                published: {
+                  targetId: published.targetId,
+                  url: published.url,
+                  privacy: published.privacy,
+                  at: published.at,
+                },
+              }
+            : {}),
         };
       })
       .sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));

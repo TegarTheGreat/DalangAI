@@ -357,6 +357,8 @@ export const makeDeps = (
       (async ({ folder, name, fileExt }) => `assets/${folder}/${name}.${fileExt}`),
     volumeModel: overrides.volumeModel,
     ...(overrides.transcoder ? { transcoder: overrides.transcoder } : {}),
+    // ADR-0030: tujuan publikasi hanya bila tes menyuntikkannya.
+    ...(overrides.publishTargets ? { publishTargets: overrides.publishTargets } : {}),
     onToolActivity: () => {},
   };
   return { deps, approvals, render };

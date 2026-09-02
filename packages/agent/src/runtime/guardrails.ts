@@ -53,7 +53,8 @@ export type ApprovalFn = (request: {
     | "tts-massal"
     | "transkripsi"
     | "tinjauan-render"
-    | "budget-proyek";
+    | "budget-proyek"
+    | "publishVideo";
   detail: string;
   estimatedUsd?: number;
 }) => Promise<boolean>;

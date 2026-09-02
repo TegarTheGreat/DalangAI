@@ -20,6 +20,7 @@ import {
   buildAsrChain,
   buildGifChain,
   buildIconProvider,
+  buildPublishTargets,
   buildSfxChain,
   buildStockChain,
   buildTtsChain,
@@ -180,6 +181,8 @@ export const registerChatCommand = (program: Command): void => {
           volumeModel,
           // ADR-0029: memori preferensi milik orangnya — satu berkas di rumah Dalang.
           memory: fileMemoryStore(defaultMemoryPath()),
+          // ADR-0030: tujuan publikasi — kosong tanpa token, dan tool-nya berkata begitu.
+          publishTargets: () => buildPublishTargets(),
           onToolActivity: (line) => console.log(line),
         };
 

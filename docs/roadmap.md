@@ -321,11 +321,19 @@ terlihat serta bisa dihapus di lobi Studio dan `dalang memori`. Batasnya di
 "Batas" ADR-0029: tidak belajar diam-diam, satu memori per rumah Dalang, tanpa
 sinkronisasi antar mesin.
 
+**§10.3 sudah dikerjakan untuk YouTube** (ADR-0030): port `PublishTarget`,
+unggahan resumable lewat YouTube Data API v3 dengan token milik user, tahap
+`publish` di ledger supaya berkas yang sama tidak naik dua kali, dan tiga
+permukaan — tombol Unggah di riwayat render Studio, `dalang publish`, tool
+agent `publishVideo` — yang semuanya lewat konfirmasi dan bawaannya privat.
+Batasnya di "Batas" ADR-0030: belum pernah dijalankan terhadap YouTube
+sungguhan, token akses tanpa refresh, TikTok/Instagram belum.
+
 | # | Item |
 | --- | --- |
 | 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
 | 10.2 | Marketplace preset/template |
-| 10.3 | Publikasi langsung (YouTube/TikTok/IG) |
+| 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030); TikTok/Instagram belum |
 | 10.4 | Multi-user pada satu proyek |
 
 ---

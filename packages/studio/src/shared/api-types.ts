@@ -1,4 +1,4 @@
-import type { PatchOpInput, ScenePlan } from "@dalang/core";
+import type { PatchOpInput, PublishPrivacy, ScenePlan } from "@dalang/core";
 
 /**
  * Kontrak API studio — dipakai server (node) dan app (browser). Hanya tipe
@@ -90,7 +90,7 @@ export interface TranscriptSummary {
 
 export interface StageRunLite {
   sceneId: string;
-  stage: "tts" | "assets" | "asr" | "loudness" | "proxy";
+  stage: "tts" | "assets" | "asr" | "loudness" | "proxy" | "publish";
   status: "running" | "done" | "error";
   provider: string | null;
   fallback: boolean;
@@ -105,6 +105,48 @@ export interface RenderOutput {
   url: string;
   sizeBytes: number;
   finishedAt: string;
+  /** Catatan publikasi terakhir berkas ini (ADR-0030), bila pernah diunggah. */
+  published?: PublishedLite;
+}
+
+/** Tujuan publikasi yang tersedia (ADR-0030). */
+export interface PublishTargetLite {
+  id: string;
+  label: string;
+}
+
+/** Unggahan yang sedang berjalan (ADR-0030); satu pada satu waktu. */
+export interface PublishJobLite {
+  file: string;
+  target: string;
+  fraction: number;
+}
+
+export interface PublishedLite {
+  targetId: string;
+  url: string;
+  privacy: PublishPrivacy;
+  at: string;
+}
+
+export interface PublishStateLite {
+  targets: PublishTargetLite[];
+  /** Petunjuk jujur bila tidak ada tujuan (token belum dipasang), atau null. */
+  hint: string | null;
+  job: PublishJobLite | null;
+}
+
+export interface PublishRequest {
+  /** Nama berkas di riwayat render, atau URL web-nya (/.dalang/renders/...). */
+  file: string;
+  targetId?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  privacy?: PublishPrivacy;
+  /** Unggah lagi walau berkas yang sama sudah pernah terunggah. */
+  force?: boolean;
+  confirm?: boolean;
 }
 
 export interface ProjectStatePayload {
@@ -140,6 +182,8 @@ export interface ProjectStatePayload {
   /** Estimasi TTS seluruh scene bernarasi (null = provider tanpa biaya diketahui). */
   ttsEstimate: { scenes: number; chars: number; usd: number | null } | null;
   renders: RenderOutput[];
+  /** Publikasi langsung (ADR-0030): tujuan, petunjuk, unggahan berjalan. */
+  publish: PublishStateLite;
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +449,18 @@ export type StudioEvent =
   | { type: "busy"; busy: BusyState }
   /** Kemajuan proxy di latar; `running: false` = selesai/dibatalkan. */
   | { type: "proxy-progress"; job: ProxyJobLite }
+  /** Unggahan ke tujuan publikasi (ADR-0030); satu berkas pada satu waktu. */
+  | {
+      type: "publish";
+      status: "started" | "progress" | "done" | "error";
+      file: string;
+      target: string;
+      fraction?: number;
+      url?: string;
+      /** true = tautan lama dari ledger; berkas yang sama tidak diunggah lagi. */
+      cached?: boolean;
+      error?: string;
+    }
   | {
       type: "stage-results";
       stage: "tts" | "assets" | "asr" | "loudness" | "proxy";

@@ -11,6 +11,7 @@ import {
   buildAsrChain,
   buildGifChain,
   buildIconProvider,
+  buildPublishTargets,
   buildSfxChain,
   buildStockChain,
   buildTtsChain,
@@ -117,6 +118,8 @@ export const registerStudioCommand = (program: Command): void => {
             audioProbe: remotionAudioProbe,
             // ADR-0028: proxy pratinjau, bingkai rekaman, bentuk gelombang.
             transcoder: remotionTranscoder,
+            // ADR-0030: tujuan publikasi; kosong tanpa token.
+            publishTargets: () => buildPublishTargets(),
             detectSilence,
             iconProvider: () => buildIconProvider(),
             sfxChain: () => buildSfxChain(),

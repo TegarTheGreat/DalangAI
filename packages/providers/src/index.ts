@@ -3,6 +3,7 @@ export * from "./asr/elevenlabs-scribe";
 export * from "./asr/whisper-cpp";
 export * from "./http";
 export * from "./icons/iconify";
+export * from "./publish/youtube";
 export * from "./registry";
 export * from "./sfx/openverse";
 export * from "./stock/giphy";

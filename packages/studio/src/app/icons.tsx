@@ -86,6 +86,14 @@ export const IconDownload: React.FC = () => (
   </Icon>
 );
 
+export const IconUpload: React.FC = () => (
+  <Icon>
+    <path d="M12 15V4" />
+    <path d="m6.5 9.5 5.5-5.5 5.5 5.5" />
+    <path d="M4 17v1a2.5 2.5 0 0 0 2.5 2.5h11A2.5 2.5 0 0 0 20 18v-1" />
+  </Icon>
+);
+
 export const IconLock: React.FC = () => (
   <Icon>
     <rect x="4.5" y="10.5" width="15" height="10.5" rx="2" />

@@ -13,5 +13,6 @@ export * from "./peaks";
 export * from "./ports";
 export * from "./project-paths";
 export * from "./proxy-stage";
+export * from "./publish-stage";
 export * from "./stage-types";
 export * from "./tts-stage";

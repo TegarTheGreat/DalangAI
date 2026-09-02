@@ -1,6 +1,7 @@
 import type {
   AsrProvider,
   IconProvider,
+  PublishTarget,
   SfxProvider,
   StockProvider,
   TtsProvider,
@@ -10,6 +11,7 @@ import { createElevenLabsScribeAsr } from "./asr/elevenlabs-scribe";
 import { createWhisperCppAsr, findWhisperCpp } from "./asr/whisper-cpp";
 import type { FetchImpl } from "./http";
 import { createIconifyIcons } from "./icons/iconify";
+import { createYoutubePublisher } from "./publish/youtube";
 import { createOpenverseSfx } from "./sfx/openverse";
 import { createGiphyStock } from "./stock/giphy";
 import { createPexelsStock } from "./stock/pexels";
@@ -45,6 +47,8 @@ export interface ProviderEnv {
   /** Binari & model whisper.cpp kalau tidak di lokasi biasa. */
   WHISPER_CPP_BIN?: string;
   WHISPER_CPP_MODEL?: string;
+  /** Publikasi langsung (ADR-0030): token akses OAuth cakupan youtube.upload. */
+  YOUTUBE_ACCESS_TOKEN?: string;
 }
 
 export const KNOWN_TTS_PROVIDERS = ["elevenlabs", "edge", "silence"] as const;
@@ -216,4 +220,31 @@ export const buildAsrChain = ({
     chain.push(createElevenLabsScribeAsr({ apiKey: env.ELEVENLABS_API_KEY, fetchImpl }));
   }
   return chain;
+};
+
+/** Petunjuk saat tidak ada tujuan publikasi — dipakai CLI, Studio, dan agent. */
+export const PUBLISH_SETUP_HINT =
+  "Belum ada tujuan publikasi. Pasang YOUTUBE_ACCESS_TOKEN di .env (token OAuth 2.0 dengan cakupan youtube.upload, mis. dari OAuth Playground), lalu jalankan ulang.";
+
+/**
+ * Tujuan publikasi (ADR-0030): kosong bila tidak ada token — dan itu keadaan
+ * yang harus dikabarkan apa adanya, bukan disamarkan.
+ */
+export const buildPublishTargets = ({
+  env = process.env as ProviderEnv,
+  fetchImpl,
+}: {
+  env?: ProviderEnv;
+  fetchImpl?: FetchImpl;
+} = {}): PublishTarget[] => {
+  const targets: PublishTarget[] = [];
+  if (env.YOUTUBE_ACCESS_TOKEN) {
+    targets.push(
+      createYoutubePublisher({
+        accessToken: env.YOUTUBE_ACCESS_TOKEN,
+        ...(fetchImpl ? { fetchImpl } : {}),
+      }),
+    );
+  }
+  return targets;
 };

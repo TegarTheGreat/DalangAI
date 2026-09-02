@@ -4707,3 +4707,76 @@ button.ghost.danger.confirm {
     grid-template-columns: 1fr;
   }
 }
+
+/* Publikasi langsung (ADR-0030): tombol unggah di riwayat render + dialognya */
+.render-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.render-publish {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+}
+.render-publish svg {
+  width: 13px;
+  height: 13px;
+}
+.render-published {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+}
+.render-published:hover {
+  background: var(--hover);
+  border-color: var(--line);
+}
+.render-note .mini {
+  margin-left: 8px;
+  animation: none;
+}
+.publish-dialog {
+  width: min(520px, 92vw);
+}
+.publish-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.publish-fields .field > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.field-count {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.check-row input {
+  margin-top: 3px;
+  flex: none;
+}

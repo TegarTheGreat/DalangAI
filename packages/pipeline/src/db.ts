@@ -55,7 +55,7 @@ export const openSqlite = (path: string): SqliteDatabase => {
  * dikunci per BERKAS REKAMAN (kolom scene_id memuat path relatif-plan-nya),
  * karena satu rekaman yang dipakai lima scene ditranskrip sekali (ADR-0021).
  */
-export type StageName = "tts" | "assets" | "asr" | "loudness" | "proxy";
+export type StageName = "tts" | "assets" | "asr" | "loudness" | "proxy" | "publish";
 export type RunStatus = "running" | "done" | "error";
 
 export interface StageRun {

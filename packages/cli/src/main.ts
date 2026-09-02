@@ -1,15 +1,19 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { defaultMemoryPath, fileMemoryStore } from "@dalang/agent";
 import {
   addMemoryEntry,
   computeTimeline,
   countWords,
   critiquePlan,
+  defaultPublishMetadata,
   formatDirectorNotes,
   MEMORY_KIND_LABEL,
   MEMORY_KINDS,
   memoryContextLines,
+  PUBLISH_PRIVACIES,
+  PUBLISH_PRIVACY_LABEL,
   removeMemoryEntry,
   resolveSceneDurationSec,
   type ScenePlan,
@@ -17,15 +21,24 @@ import {
 import {
   atomicWriteFile,
   generatePlan,
+  latestRenderFile,
   PipelineDb,
   projectPaths,
+  publishedRecordFor,
+  publishRender,
   readPlanFile,
   recordingsInPlan,
   runAsrStage,
   runProxyStage,
   type SceneStageResult,
 } from "@dalang/pipeline";
-import { buildAsrChain, buildStockChain, buildTtsChain } from "@dalang/providers";
+import {
+  buildAsrChain,
+  buildPublishTargets,
+  buildStockChain,
+  buildTtsChain,
+  PUBLISH_SETUP_HINT,
+} from "@dalang/providers";
 import {
   ENCODE_QUALITIES,
   type EncodeQuality,
@@ -174,6 +187,18 @@ const proxyProgressPrinter = () => {
     if (event.fraction >= 1) {
       process.stdout.write("\n");
       last = "";
+    }
+  };
+};
+
+/** Kemajuan unggahan (ADR-0030): satu baris, diperbarui di tempat. */
+const publishProgressPrinter = () => {
+  let last = "";
+  return (fraction: number) => {
+    const line = `  unggah ${(fraction * 100).toFixed(0)}%`;
+    if (line !== last) {
+      process.stdout.write(`\r${line.padEnd(30)}`);
+      last = line;
     }
   };
 };
@@ -555,6 +580,124 @@ program
       db.close();
     }
   });
+
+program
+  .command("publish")
+  .argument("<proyek>", "folder proyek atau path plan.json")
+  .option("--file <nama>", "berkas di .dalang/renders (bawaan: render terbaru)")
+  .option("--judul <judul>", "judul video (bawaan: judul proyek)")
+  .option("--deskripsi <teks>", "deskripsi (bawaan: narasi yang dibacakan)")
+  .option("--tag <tag...>", "tag video (bawaan: format proyek + dalang)")
+  .addOption(
+    new Option("--privasi <privasi>", "private (bawaan) | unlisted | public")
+      .choices(PUBLISH_PRIVACIES)
+      .default("private"),
+  )
+  .option("--force", "unggah lagi walau berkas yang sama sudah pernah terunggah")
+  .option("--yes", "tanpa pertanyaan konfirmasi")
+  .description(
+    "Unggah berkas render ke YouTube (ADR-0030) — butuh YOUTUBE_ACCESS_TOKEN; bawaan privat, dan berkas yang sama tidak diunggah dua kali tanpa --force",
+  )
+  .action(
+    async (
+      planPath: string,
+      options: {
+        file?: string;
+        judul?: string;
+        deskripsi?: string;
+        tag?: string[];
+        privasi: (typeof PUBLISH_PRIVACIES)[number];
+        force?: boolean;
+        yes?: boolean;
+      },
+    ) => {
+      const absPlan = planPathOf(planPath);
+      const paths = projectPaths(absPlan);
+      const plan = readPlanFile(absPlan);
+      const [target] = buildPublishTargets();
+      if (!target) throw new Error(PUBLISH_SETUP_HINT);
+
+      const rendersDir = join(paths.dalangDir, "renders");
+      const name = options.file ? basename(options.file) : latestRenderFile(rendersDir);
+      if (!name) {
+        throw new Error(
+          `Belum ada berkas render di ${rendersDir} — jalankan dalang render lebih dulu`,
+        );
+      }
+      const filePath = join(rendersDir, name);
+      if (!existsSync(filePath))
+        throw new Error(`Berkas render tidak ditemukan: ${filePath}`);
+
+      const metadata = {
+        ...defaultPublishMetadata(plan),
+        ...(options.judul ? { title: options.judul } : {}),
+        ...(options.deskripsi !== undefined ? { description: options.deskripsi } : {}),
+        ...(options.tag ? { tags: options.tag } : {}),
+        privacy: options.privasi,
+      };
+      const sizeMb = (statSync(filePath).size / 1024 / 1024).toFixed(1);
+      const firstLine = metadata.description.split("\n")[0] ?? "";
+      console.log(
+        `  berkas   : ${name} (${sizeMb} MB)\n` +
+          `  tujuan   : ${target.label}\n` +
+          `  judul    : ${metadata.title}\n` +
+          `  privasi  : ${PUBLISH_PRIVACY_LABEL[metadata.privacy]}\n` +
+          `  tag      : ${metadata.tags.join(", ") || "-"}\n` +
+          `  deskripsi: ${firstLine.length > 90 ? `${firstLine.slice(0, 89)}…` : firstLine}`,
+      );
+
+      const db = new PipelineDb(paths.dbPath);
+      try {
+        const existing = publishedRecordFor(db, plan.projectId, paths, filePath);
+        if (existing && !options.force) {
+          console.log(
+            `\n  Berkas ini sudah terunggah ${existing.at} → ${existing.url}\n` +
+              "  Pakai --force untuk mengunggahnya lagi sebagai video baru.",
+          );
+          return;
+        }
+        if (!options.yes) {
+          if (!process.stdin.isTTY) {
+            throw new Error(
+              "Unggahan butuh konfirmasi: jalankan di terminal interaktif atau tambahkan --yes",
+            );
+          }
+          const rl = createInterface({ input: process.stdin, output: process.stdout });
+          const answer = await rl.question(
+            `\n  Unggah sekarang sebagai ${PUBLISH_PRIVACY_LABEL[metadata.privacy]}? Tidak bisa diurungkan dari sini. (y/T) `,
+          );
+          rl.close();
+          if (!answer.trim().toLowerCase().startsWith("y")) {
+            console.log("  Dibatalkan.");
+            return;
+          }
+        }
+        const outcome = await publishRender({
+          paths,
+          db,
+          projectId: plan.projectId,
+          target,
+          filePath,
+          metadata,
+          force: options.force ?? false,
+          onProgress: publishProgressPrinter(),
+        });
+        process.stdout.write("\n");
+        if (outcome.status === "error") {
+          process.exitCode = 1;
+          console.error(`GAGAL: ${outcome.reason}`);
+          return;
+        }
+        console.log(
+          outcome.status === "cached"
+            ? `  sudah terunggah sebelumnya: ${outcome.record.url}`
+            : `  terunggah: ${outcome.record.url} (${PUBLISH_PRIVACY_LABEL[outcome.record.privacy]})`,
+        );
+      } finally {
+        db.close();
+      }
+    },
+  );
 
 program
   .command("memori")

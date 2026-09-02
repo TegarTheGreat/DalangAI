@@ -1,9 +1,10 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   addMemoryEntry,
   critiquePlan,
+  defaultPublishMetadata,
   findFillerSpans,
   findPhraseSpans,
   GRAPHIC_ANCHORS,
@@ -15,6 +16,11 @@ import {
   MAX_MEMORY_TEXT,
   MEMORY_KINDS,
   type ProxyMedia,
+  PUBLISH_DESCRIPTION_MAX,
+  PUBLISH_PRIVACIES,
+  PUBLISH_PRIVACY_LABEL,
+  PUBLISH_TITLE_MAX,
+  type PublishMetadata,
   patchOpSchema,
   recipeFor,
   removeMemoryEntry,
@@ -32,10 +38,17 @@ import {
   uniqueSfxCueId,
   uniqueTrackId,
 } from "@dalang/core";
-import type { IconProvider, MediaTranscoder, SfxProvider } from "@dalang/pipeline";
+import type {
+  IconProvider,
+  MediaTranscoder,
+  PublishTarget,
+  SfxProvider,
+} from "@dalang/pipeline";
 import {
   type AsrProvider,
+  latestRenderFile,
   materializeCandidate,
+  publishRender,
   recordingsInPlan,
   runAsrStage,
   runAssetStage,
@@ -45,7 +58,7 @@ import {
   type StockProvider,
   type TtsProvider,
 } from "@dalang/pipeline";
-import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
+import { ELEVENLABS_ESTIMATED_USD_PER_CHAR, PUBLISH_SETUP_HINT } from "@dalang/providers";
 import type { RenderVideoResult } from "@dalang/renderer";
 import { generateText, type ToolSet, tool } from "ai";
 import { z } from "zod";
@@ -160,6 +173,11 @@ export interface AgentDeps {
    * konteksnya tidak dicetak.
    */
   memory?: MemoryStore;
+  /**
+   * Tujuan publikasi (ADR-0030). Boleh kosong: publishVideo lalu mengatakan
+   * tidak tersedia beserta petunjuk tokennya — bukan pura-pura mengunggah.
+   */
+  publishTargets?: () => PublishTarget[];
   onToolActivity?: (line: string) => void;
 }
 
@@ -1802,6 +1820,85 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             file: result.outputLocation,
             durasiSec: result.durationSec,
             ukuranMB: Number((result.sizeBytes / 1024 / 1024).toFixed(1)),
+          };
+        }),
+    }),
+
+    // ADR-0030: unggah berkas render ke tujuan publikasi. TIDAK BISA
+    // DIURUNGKAN, jadi selalu lewat gerbang persetujuan, dan bawaannya privat.
+    publishVideo: tool({
+      description:
+        "Unggah berkas render ke tujuan publikasi (YouTube) — HANYA bila user memintanya secara eksplisit. SELALU meminta persetujuan user; bawaannya PRIVAT. Tanpa `file`, berkas render terbaru di .dalang/renders yang dipakai. Judul/deskripsi/tag bawaan diturunkan dari plan. Sebutkan tautannya ke user setelah selesai.",
+      inputSchema: z.object({
+        file: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "Nama berkas di .dalang/renders, mis. final.mp4; kosong = render terbaru",
+          ),
+        judul: z.string().min(1).max(PUBLISH_TITLE_MAX).optional(),
+        deskripsi: z.string().max(PUBLISH_DESCRIPTION_MAX).optional(),
+        tag: z.array(z.string().min(1)).max(30).optional(),
+        privasi: z
+          .enum(PUBLISH_PRIVACIES)
+          .default("private")
+          .describe(
+            "private (bawaan) | unlisted | public — publik hanya bila user memintanya",
+          ),
+        force: z
+          .boolean()
+          .optional()
+          .describe("Unggah lagi walau berkas yang sama sudah pernah terunggah"),
+      }),
+      execute: (input) =>
+        run("publishVideo", input, async () => {
+          const plan = requirePlan();
+          const [target] = deps.publishTargets?.() ?? [];
+          if (!target) return { ok: false, pesan: PUBLISH_SETUP_HINT };
+          const rendersDir = join(session.paths.dalangDir, "renders");
+          const name = input.file ? basename(input.file) : latestRenderFile(rendersDir);
+          if (!name) {
+            return {
+              ok: false,
+              pesan:
+                "Belum ada berkas render — jalankan renderFinal (atau renderPreview) lebih dulu",
+            };
+          }
+          const filePath = join(rendersDir, name);
+          if (!existsSync(filePath)) {
+            return { ok: false, pesan: `Berkas render tidak ditemukan: ${name}` };
+          }
+          const metadata: PublishMetadata = {
+            ...defaultPublishMetadata(plan),
+            ...(input.judul ? { title: input.judul } : {}),
+            ...(input.deskripsi !== undefined ? { description: input.deskripsi } : {}),
+            ...(input.tag ? { tags: input.tag } : {}),
+            privacy: input.privasi,
+          };
+          const approved = await guards.approve({
+            action: "publishVideo",
+            detail: `Unggah ${name} ke ${target.label} sebagai ${PUBLISH_PRIVACY_LABEL[metadata.privacy]}: "${metadata.title}"`,
+          });
+          if (!approved) throw new Error("User belum menyetujui unggahan");
+          const outcome = await publishRender({
+            paths: session.paths,
+            db: session.db,
+            projectId: session.projectId,
+            target,
+            filePath,
+            metadata,
+            force: input.force ?? false,
+          });
+          if (outcome.status === "error") return { ok: false, pesan: outcome.reason };
+          return {
+            ok: true,
+            berkas: name,
+            tujuan: target.label,
+            url: outcome.record.url,
+            videoId: outcome.record.videoId,
+            privasi: outcome.record.privacy,
+            dariCache: outcome.status === "cached",
           };
         }),
     }),

@@ -26,7 +26,14 @@
  * Jalankan: pnpm --filter @dalang/studio gate:interaksi [folder-tangkapan-layar]
  */
 
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -121,6 +128,12 @@ const main = async (): Promise<void> => {
     normalize: true,
   };
   writeFileSync(planPath, JSON.stringify(seed, null, 2));
+  // Satu berkas render palsu supaya riwayat render (dan tombol Unggah
+  // ADR-0030) ada di layar; server gerbang ini tidak punya token, jadi yang
+  // diuji adalah kejujurannya: tombol nonaktif yang menyebut apa yang kurang.
+  const rendersDir = join(root, "demo", ".dalang", "renders");
+  mkdirSync(rendersDir, { recursive: true });
+  writeFileSync(join(rendersDir, "preview.mp4"), "mp4-gerbang");
 
   const studio = await startStudioServer({
     workspaceRoot: root,
@@ -440,6 +453,32 @@ const main = async (): Promise<void> => {
       `fadeInSec → ${musicShifted?.fadeInSec}`,
     );
     await shot("gate-fade.png");
+
+    console.log("\nTombol unggah di riwayat render (ADR-0030, tanpa token)");
+    const publishButton = await rect(".render-publish");
+    check(
+      "tombol Unggah ada di samping berkas render",
+      publishButton !== null && publishButton.w > 0,
+      publishButton ? `lebar ${publishButton.w.toFixed(0)}px` : "tidak ada",
+    );
+    const publishDisabled = (await page.evaluate(
+      '(() => { const el = document.querySelector(".render-publish"); return el ? el.disabled : null; })()',
+    )) as boolean | null;
+    const publishTitle = await attr(".render-publish", 0, "title");
+    check(
+      "tanpa token tombolnya nonaktif dan judulnya menyebut token yang kurang",
+      publishDisabled === true && (publishTitle ?? "").includes("YOUTUBE_ACCESS_TOKEN"),
+      `disabled = ${publishDisabled}; title = ${publishTitle ?? "-"}`,
+    );
+    const publishText = (await page.evaluate(
+      '(() => { const el = document.querySelector(".render-publish"); return el ? el.textContent : null; })()',
+    )) as string | null;
+    check(
+      "labelnya mengatakan butuh token, bukan menjanjikan unggahan",
+      (publishText ?? "").includes("butuh token"),
+      `teks = ${publishText ?? "-"}`,
+    );
+    await shot("gate-publish.png");
   } finally {
     await page.close().catch(() => undefined);
     await browser.close({ silent: true }).catch(() => undefined);

@@ -307,3 +307,39 @@ export interface MediaTranscoder {
    */
   decodeMonoPcm(sourcePath: string, sampleRate: number): Promise<Int16Array | null>;
 }
+
+// ---------------------------------------------------------------------------
+// Publikasi langsung (ADR-0030)
+// ---------------------------------------------------------------------------
+
+export interface PublishRequest {
+  /** Path absolut berkas video hasil render. */
+  filePath: string;
+  title: string;
+  description: string;
+  tags: string[];
+  privacy: "private" | "unlisted" | "public";
+  language?: string;
+  onProgress?: (fraction: number) => void;
+  signal?: AbortSignal;
+}
+
+export interface PublishResult {
+  providerId: string;
+  /** Id video di platform tujuan. */
+  videoId: string;
+  /** Tautan yang bisa dibuka orang. */
+  url: string;
+}
+
+/**
+ * Port tujuan publikasi. PORT dengan alasan yang sama seperti provider lain:
+ * unggahan ke platform adalah efek eksternal yang tidak bisa diulang, jadi
+ * tes harus bisa memberi tujuan palsu, dan platform baru masuk lewat pintu
+ * yang sama tanpa menyentuh pipeline, CLI, atau Studio.
+ */
+export interface PublishTarget {
+  id: string;
+  label: string;
+  publish(request: PublishRequest): Promise<PublishResult>;
+}

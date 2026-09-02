@@ -11,6 +11,7 @@ export * from "./patch";
 export * from "./patch-log";
 export * from "./prose";
 export * from "./proxy";
+export * from "./publish";
 export * from "./render-state";
 export * from "./scene-plan";
 export * from "./syllables";

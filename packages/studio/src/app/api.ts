@@ -15,6 +15,8 @@ import type {
   PeaksResponse,
   ProjectStatePayload,
   ProxyJobLite,
+  PublishRequest,
+  PublishTargetLite,
   RegisterSourceRequest,
   RegisterSourceResponse,
   RenderRequest,
@@ -242,6 +244,20 @@ export const api = {
       body: JSON.stringify(req),
     }),
 
+  // --- Publikasi langsung (ADR-0030) ---------------------------------------
+  publishTargets: () =>
+    request<{ ok: true; targets: PublishTargetLite[]; hint: string | null }>(
+      "/api/publish/targets",
+    ),
+  /** 202 = unggahan berjalan di latar; kemajuan dan tautan lewat SSE `publish`. */
+  publish: (req: PublishRequest) =>
+    request<{ ok: true; started: true; file: string; target: string }>("/api/publish", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+  cancelPublish: () =>
+    request<{ ok: true; cancelled: boolean }>("/api/publish/cancel", { method: "POST" }),
+
   splitScene: (sceneId: string, atSec: number) =>
     request<{ ok: true; newId: string; summary: string }>("/api/scene/split", {
       method: "POST",
@@ -435,6 +451,10 @@ export const api = {
       "stage-results",
       "render",
       "project-closed",
+      // Tanpa dua ini, browser tidak pernah menerima kemajuan proxy (ADR-0028)
+      // maupun unggahan (ADR-0030): EventSource hanya mendengar nama yang didaftar.
+      "proxy-progress",
+      "publish",
     ];
     for (const name of names) {
       source.addEventListener(name, (message) => {

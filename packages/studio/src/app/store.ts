@@ -4,6 +4,7 @@ import type {
   ExportSettingsLite,
   NewProjectRequest,
   ProjectStatePayload,
+  PublishRequest,
   RegisterSourceRequest,
   SourceLite,
   StockCandidateLite,
@@ -85,6 +86,17 @@ export interface RenderProgress {
   mixNote?: string;
 }
 
+/** Unggahan yang berjalan/terakhir (ADR-0030); satu pada satu waktu. */
+export interface PublishProgress {
+  file: string;
+  target: string;
+  status: "started" | "progress" | "done" | "error";
+  fraction: number;
+  url?: string;
+  cached?: boolean;
+  error?: string;
+}
+
 export interface StudioState {
   loading: boolean;
   fatal: string | null;
@@ -108,6 +120,8 @@ export interface StudioState {
   pendingImages: string[];
   assetSearch: AssetSearchState | null;
   renderProgress: RenderProgress | null;
+  /** Unggahan ke tujuan publikasi (ADR-0030); null = belum ada. */
+  publishProgress: PublishProgress | null;
   /** Daftar rekaman proyek (ADR-0028); null = belum pernah dibuka. */
   sources: SourcesState | null;
   /** Unggahan rekaman yang sedang berjalan (ADR-0028). */
@@ -135,6 +149,7 @@ const emptyState: StudioState = {
   pendingImages: [],
   assetSearch: null,
   renderProgress: null,
+  publishProgress: null,
   sources: null,
   sourceUpload: null,
   toast: null,
@@ -231,6 +246,7 @@ export class StudioClient {
       confirm: null,
       assetSearch: null,
       renderProgress: null,
+      publishProgress: null,
       sources: null,
       sourceUpload: null,
       connected: true,
@@ -621,6 +637,36 @@ export class StudioClient {
         this.leaveEditor(null);
         void this.refreshWorkspace();
         break;
+      case "publish": {
+        this.set({
+          publishProgress: {
+            file: event.file,
+            target: event.target,
+            status: event.status,
+            fraction: event.fraction ?? (event.status === "done" ? 1 : 0),
+            ...(event.url ? { url: event.url } : {}),
+            ...(event.cached ? { cached: true } : {}),
+            ...(event.error ? { error: event.error } : {}),
+          },
+        });
+        if (event.status === "done") {
+          this.toast(
+            event.cached
+              ? `Sudah terunggah sebelumnya: ${event.url}`
+              : `Terunggah: ${event.url}`,
+          );
+          this.scheduleRefresh();
+        }
+        if (event.status === "error") {
+          this.toast(
+            event.error === "dibatalkan"
+              ? "Unggahan dibatalkan"
+              : `Unggah gagal: ${event.error}`,
+          );
+          this.scheduleRefresh();
+        }
+        break;
+      }
       case "render":
         this.set({
           renderProgress: {
@@ -786,6 +832,26 @@ export class StudioClient {
   async startExportConfirmed(settings: ExportSettingsLite): Promise<void> {
     try {
       await api.render({ ...settings, confirm: true });
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  // -- publikasi langsung (ADR-0030) ------------------------------------------
+
+  /** Dialog unggah adalah konfirmasinya: kirim dengan confirm: true. */
+  async startPublish(req: PublishRequest): Promise<void> {
+    try {
+      await api.publish({ ...req, confirm: true });
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  async cancelPublish(): Promise<void> {
+    try {
+      const { cancelled } = await api.cancelPublish();
+      if (!cancelled) this.toast("Tidak ada unggahan yang berjalan");
     } catch (error) {
       this.failure(error);
     }

@@ -41,6 +41,7 @@ import type {
   StudioEvent,
 } from "../shared/api-types";
 import type { StudioContext } from "./context";
+import { publishTargetsOf } from "./publish";
 import { StudioBusyError } from "./store";
 
 /**
@@ -94,15 +95,18 @@ export const registerProjectRoutes = (app: Hono, ctx: StudioContext): void => {
 
   app.get("/api/project", (c) =>
     c.json(
-      store.snapshot({
-        orchestrator: deps.orchestrator?.key ?? null,
-        volume: deps.volumeModel?.key ?? null,
-        registrySource: deps.registrySource,
-        chatDisabled: deps.orchestrator
-          ? null
-          : (deps.chatDisabledReason ?? "model orkestrator tidak tersedia"),
-        vision: deps.orchestrator?.info ? deps.orchestrator.info.imageInput : null,
-      }),
+      store.snapshot(
+        {
+          orchestrator: deps.orchestrator?.key ?? null,
+          volume: deps.volumeModel?.key ?? null,
+          registrySource: deps.registrySource,
+          chatDisabled: deps.orchestrator
+            ? null
+            : (deps.chatDisabledReason ?? "model orkestrator tidak tersedia"),
+          vision: deps.orchestrator?.info ? deps.orchestrator.info.imageInput : null,
+        },
+        publishTargetsOf(deps),
+      ),
     ),
   );
 

@@ -1,13 +1,20 @@
-import { parseScenePlan, proxiedFiles, substituteProxies } from "@dalang/core";
+import {
+  PUBLISH_PRIVACY_LABEL,
+  parseScenePlan,
+  proxiedFiles,
+  substituteProxies,
+} from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { type CallbackListener, Player, type PlayerRef } from "@remotion/player";
 import { useEffect, useMemo, useState } from "react";
-import { IconDownload } from "../icons";
+import type { RenderOutput } from "../../shared/api-types";
+import { IconDownload, IconUpload } from "../icons";
 import { planMeta } from "../model/plan-meta";
 import { playback } from "../playback";
 import { uiStore } from "../ui-state";
-import { useStudio } from "../use-studio";
+import { studioClient, useStudio } from "../use-studio";
 import { CanvasEditor } from "./CanvasEditor";
+import { PublishDialog } from "./PublishDialog";
 
 /**
  * Panggung tengah: preview instan via @remotion/player — komponen video yang
@@ -16,9 +23,24 @@ import { CanvasEditor } from "./CanvasEditor";
  */
 
 export const PreviewPanel: React.FC = () => {
-  const { project, renderProgress } = useStudio();
+  const { project, renderProgress, publishProgress } = useStudio();
   const rawPlan = project?.plan ?? null;
   const [player, setPlayer] = useState<PlayerRef | null>(null);
+  const [publishFor, setPublishFor] = useState<RenderOutput | null>(null);
+  const targets = project?.publish.targets ?? [];
+  const targetLabel = (id: string) =>
+    targets.find((candidate) => candidate.id === id)?.label ?? id;
+  // Unggahan yang berjalan (ADR-0030): dari event bila ada, atau dari
+  // snapshot server bila tab disegarkan di tengah unggahan.
+  const uploading =
+    publishProgress &&
+    (publishProgress.status === "started" || publishProgress.status === "progress")
+      ? {
+          file: publishProgress.file,
+          target: publishProgress.target,
+          fraction: publishProgress.fraction,
+        }
+      : (project?.publish.job ?? null);
 
   const parsed = useMemo(() => {
     if (!rawPlan) return null;
@@ -138,6 +160,26 @@ export const PreviewPanel: React.FC = () => {
               Render gagal: {renderProgress.error}
             </span>
           ) : null}
+          {uploading ? (
+            <span className="render-note">
+              Mengunggah {uploading.file} ke {targetLabel(uploading.target)}{" "}
+              {Math.round(uploading.fraction * 100)}%
+              <button
+                type="button"
+                className="mini"
+                onClick={() => void studioClient.cancelPublish()}
+              >
+                Batal
+              </button>
+            </span>
+          ) : null}
+          {!uploading && publishProgress?.status === "error" ? (
+            <span className="render-note error">
+              {publishProgress.error === "dibatalkan"
+                ? `Unggahan ${publishProgress.file} dibatalkan`
+                : `Unggah ${publishProgress.file} gagal: ${publishProgress.error}`}
+            </span>
+          ) : null}
           {renderProgress?.status === "done" &&
           typeof renderProgress.mixLufs === "number" ? (
             <span
@@ -156,21 +198,54 @@ export const PreviewPanel: React.FC = () => {
               {renderProgress.proxied ? ` · ${renderProgress.proxied} dari proxy` : ""}
             </span>
           ) : null}
-          {(project?.renders ?? []).map((render) => (
-            <a
-              key={render.url}
-              className="render-link"
-              href={render.url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <IconDownload />
-              {render.url.split("/").pop()} ({(render.sizeBytes / 1024 / 1024).toFixed(1)}{" "}
-              MB)
-            </a>
-          ))}
+          {(project?.renders ?? []).map((render) => {
+            const name = render.url.split("/").pop() ?? render.url;
+            return (
+              <span key={render.url} className="render-item">
+                <a
+                  className="render-link"
+                  href={render.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <IconDownload />
+                  {name} ({(render.sizeBytes / 1024 / 1024).toFixed(1)} MB)
+                </a>
+                {render.published ? (
+                  <a
+                    className="render-published"
+                    href={render.published.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={`Terunggah ${new Date(render.published.at).toLocaleString("id-ID")} · ${PUBLISH_PRIVACY_LABEL[render.published.privacy]}`}
+                  >
+                    {render.published.url.replace(/^https?:\/\//, "")}
+                  </a>
+                ) : null}
+                <button
+                  type="button"
+                  className="render-publish"
+                  disabled={targets.length === 0 || uploading !== null}
+                  title={
+                    targets.length === 0
+                      ? (project?.publish.hint ?? "Tidak ada tujuan publikasi")
+                      : `Unggah ${name} ke ${targets[0]?.label}`
+                  }
+                  onClick={() => setPublishFor(render)}
+                >
+                  <IconUpload />
+                  {targets.length === 0
+                    ? "Unggah (butuh token)"
+                    : render.published
+                      ? "Unggah lagi"
+                      : `Unggah ke ${targets[0]?.label}`}
+                </button>
+              </span>
+            );
+          })}
         </div>
       ) : null}
+      <PublishDialog render={publishFor} onClose={() => setPublishFor(null)} />
     </section>
   );
 };

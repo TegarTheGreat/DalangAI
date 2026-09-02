@@ -1,9 +1,10 @@
-import type { AgentDeps, Guardrails, ResolvedModel } from "@dalang/agent";
+import type { AgentDeps, ApprovalFn, Guardrails, ResolvedModel } from "@dalang/agent";
 import type {
   AsrProvider,
   AudioProbe,
   IconProvider,
   MediaTranscoder,
+  PublishTarget,
   SfxProvider,
   StockProvider,
   TtsProvider,
@@ -80,6 +81,11 @@ export interface StudioDeps {
     audible: Array<{ startSec: number; endSec: number }>;
   } | null>;
   /**
+   * Tujuan publikasi (ADR-0030); kosong = tidak ada token. Studio tidak
+   * menyamarkan keadaan ini: tombol unggahnya mengatakan apa yang kurang.
+   */
+  publishTargets?: () => PublishTarget[];
+  /**
    * Model orkestrator chat. Boleh kosong (mis. API key belum diset): panel
    * manual tetap berfungsi penuh; endpoint chat menjawab 503 dengan
    * `chatDisabledReason` dan UI menampilkannya apa adanya.
@@ -98,16 +104,8 @@ export interface StudioDeps {
  */
 export interface ChatBridge {
   onActivity: (line: string) => void;
-  onApproval: (request: {
-    action:
-      | "renderFinal"
-      | "tts-massal"
-      | "transkripsi"
-      | "tinjauan-render"
-      | "budget-proyek";
-    detail: string;
-    estimatedUsd?: number;
-  }) => Promise<boolean>;
+  /** Satu daftar aksi dengan guardrails agent — tidak ada salinan union di sini. */
+  onApproval: ApprovalFn;
 }
 
 export interface StudioContext {
