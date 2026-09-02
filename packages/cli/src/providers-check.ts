@@ -243,6 +243,10 @@ export const registerProvidersCheckCommand = (program: Command): void => {
         console.log(
           `Semua ${results.length} provider menjawab dengan bentuk yang dipahami renderer.`,
         );
+        console.log(
+          "  Perintah ini hanya memeriksa penyedia ASET (stok, stiker, efek suara, ikon).\n" +
+            "  Untuk TTS, transkripsi, model, dan token YouTube: dalang doctor --uji",
+        );
         return;
       }
       console.log(

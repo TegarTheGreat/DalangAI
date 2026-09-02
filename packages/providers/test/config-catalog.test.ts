@@ -133,6 +133,17 @@ describe("keadaan kemampuan dari env", () => {
     expect(statuses.find((status) => status.id === "transkrip")?.active).toBe(false);
   });
 
+  it("status membawa aturannya, supaya kalimat butuh memakai dan/atau yang benar", () => {
+    const statuses = capabilityStatuses({});
+    expect(statuses.find((status) => status.id === "cloud")?.rule).toBe("semua");
+    expect(statuses.find((status) => status.id === "stok")?.rule).toBe("salah-satu");
+    // Jalan lain ikut dibawa supaya jalur gratis whisper.cpp tidak hilang
+    // dari kalimat "yang dibutuhkan".
+    expect(
+      statuses.find((status) => status.id === "transkrip")?.alsoActiveWhen,
+    ).toContain("whisper.cpp");
+  });
+
   it("deteksi di luar env, mis. whisper.cpp terpasang, ikut menghidupkan", () => {
     const tanpa = capabilityStatuses({}).find((status) => status.id === "transkrip");
     expect(tanpa?.active).toBe(false);

@@ -68,6 +68,7 @@ import { registerMcpCommand } from "./mcp";
 import { planPathOf } from "./project-path";
 import { registerProvidersCheckCommand } from "./providers-check";
 import { registerReviewCommand } from "./review";
+import { registerSetupCommands } from "./setup";
 import { registerStudioCommand } from "./studio";
 
 /**
@@ -872,6 +873,9 @@ registerLogCommand(program);
 registerStudioCommand(program);
 
 registerProvidersCheckCommand(program);
+// Penyiapan ramah pemula (ADR-0032): dipasang lebih dulu supaya muncul di
+// urutan atas `dalang --help`, tempat orang baru melihat.
+registerSetupCommands(program);
 
 program.parseAsync().catch((error: unknown) => {
   console.error(`\nGAGAL: ${error instanceof Error ? error.message : String(error)}`);

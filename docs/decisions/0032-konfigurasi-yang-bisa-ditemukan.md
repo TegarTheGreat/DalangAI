@@ -69,6 +69,30 @@ offline" — transkripsi lokal memang tidak mengirim apa pun keluar, tetapi ia
 baru hidup setelah whisper.cpp terpasang, jadi `alsoActiveWhen` yang
 menjelaskannya dan yang mendeteksi adalah pemanggilnya, bukan katalog.
 
+### 4. Wizard yang memindai dulu, baru bertanya
+
+`dalang setup` mulai dengan APA YANG SUDAH ADA: kunci yang terpasang di
+lingkungan, whisper.cpp di PATH, Chromium untuk render, dan `.env` yang
+mungkin sudah ada. Yang bisa ditemukan sendiri tidak ditanyakan. Lalu ia
+menampilkan kemampuan yang SUDAH bisa dipakai sebelum menampilkan yang belum,
+karena orang baru perlu tahu bahwa programnya sudah berguna hari ini.
+
+Tiga hal yang dijaga saat menulis:
+
+- **Kunci diuji sebelum disimpan.** Kunci salah ketik terlihat persis seperti
+  kunci benar; tanpa pengujian, kesalahannya baru ketahuan di tengah
+  `generate` yang sudah berjalan lima menit, lewat pesan galat milik provider.
+- **`.env` milik orang tidak pernah ditulis ulang.** Komentar, urutan, dan
+  variabel yang bukan urusan Dalang tetap di tempatnya; kunci yang sudah ada
+  diganti di barisnya sendiri.
+- **Isi kunci tidak pernah dicetak.** Yang tampil hanya empat karakter
+  terakhir, cukup untuk mengenali kunci mana yang terpasang.
+
+`dalang doctor` adalah versi yang tidak bertanya: laporan keadaan, dan dengan
+`--uji` ia menghubungi tiap layanan. Ia juga menutup celah yang ditemukan
+audit — `providers:check` hanya memeriksa penyedia aset, sehingga TTS, ASR,
+dan token YouTube tidak pernah teruji. Kini keduanya saling menunjuk.
+
 ## Verifikasi
 
 - 8 tes katalog: pemindaian kode sumber, kesamaan `.env.example` dengan
@@ -80,6 +104,25 @@ menjelaskannya dan yang mendeteksi adalah pemanggilnya, bukan katalog.
   audit manual: `PLAYWRIGHT_BROWSERS_PATH` dan tiga lainnya. Yang milik
   Dalang masuk katalog; yang milik alat lain masuk daftar pengecualian
   beserta alasannya.
+- 10 tes untuk dua penopang wizard: penulis `.env` (mengganti di tempatnya,
+  menghidupkan baris yang dikomentari, mengutip nilai bertanda baca,
+  mengosongkan berarti mengomentari bukan menyisakan `KEY=`, berkas kosong
+  tetap sah) dan penguji kunci (skema otentikasi per layanan, 401 dan 403
+  berarti ditolak sementara 429 berarti diterima, token YouTube yang gagal
+  menyebut kedaluwarsa, setelan path diuji lewat keberadaan berkasnya, yang
+  tidak bisa diuji dikatakan apa adanya, dan layanan yang diam dilaporkan
+  sebagai gangguan jaringan, bukan kunci salah).
+- `dalang doctor` dijalankan pada folder tanpa konfigurasi: laporannya
+  menemukan dua kesalahan penulisan saya sendiri, yaitu aturan "semua"
+  dicetak sebagai "atau", dan jalur whisper.cpp yang gratis tidak muncul di
+  kalimat "yang dibutuhkan". Keduanya dibetulkan dengan membawa `rule` dan
+  `alsoActiveWhen` ke dalam status.
+- `dalang setup` dijalankan sungguhan lewat masukan terskrip: ia memilih
+  kemampuan, memandu, menyimpan `DEEPGRAM_API_KEY` ke `.env` di bawah judul
+  bertanggal, dan keluar dengan kode 0 tanpa pernah mencetak kuncinya. Uji
+  pertamanya MENGGANTUNG saat masukan habis, dan itu dibetulkan: setiap
+  pertanyaan kini memakai sinyal batal yang menyala saat masukan tertutup,
+  sehingga Ctrl+D menyimpan yang sudah terkumpul lalu berhenti.
 
 ## Batas
 

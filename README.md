@@ -548,6 +548,14 @@ Yang sudah berjalan:
   wajib berasal dari Studio sendiri, dan header `Host` ikut diperiksa supaya
   DNS rebinding tidak lolos. Pemanggil tanpa `Origin` (CLI, skrip) tetap bisa
   bekerja, karena peramban tidak bisa menghilangkan header itu.
+- **Penyiapan yang dipandu (ADR-0032)** — `dalang setup` memindai apa yang
+  sudah ada di mesin (kunci yang terpasang, whisper.cpp, Chromium), melaporkan
+  apa yang SUDAH bisa dipakai tanpa kunci apa pun, lalu menanyakan sisanya
+  satu per satu dengan bahasa biasa dan menguji tiap kunci ke layanannya
+  sebelum menyimpan. Berkas `.env` milikmu tidak pernah ditulis ulang: komentar
+  dan variabel lain tetap di tempatnya, dan isi kunci tidak pernah dicetak ke
+  layar. `dalang doctor` melaporkan keadaan tanpa bertanya apa pun, dan dengan
+  `--uji` ia menghubungi tiap layanan untuk memastikan kuncinya masih diterima.
 - **Konfigurasi yang bisa ditemukan tanpa membaca kode (ADR-0032)** — satu
   katalog memuat ke-33 setelan beserta kemampuan yang dibukanya dan langkah
   mendapatkannya, dikelompokkan dengan bahasa tujuan ("Ubah rekaman jadi teks
@@ -556,7 +564,7 @@ Yang sudah berjalan:
   program tetapi tidak dijelaskan ke siapa pun. Audit menemukan sembilan
   variabel seperti itu, yang diam-diam mengunci transkripsi, stiker, dan efek
   suara.
-- **Kualitas terjaga otomatis**: 1068 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1079 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -572,10 +580,12 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1068 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1079 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
+pnpm dalang setup                     # pandu penyiapan: pindai, tanya, uji, tulis .env
+pnpm dalang doctor --uji              # apa yang menyala, apa yang kurang, kunci mana yang ditolak
 pnpm dalang studio                    # lobi: daftar proyek di folder ini — ADR-0020
 pnpm dalang studio proyekku/          # langsung buka satu proyek (lobinya folder induk)
 pnpm dalang chat proyekku/            # chat agent di terminal — Fase 2

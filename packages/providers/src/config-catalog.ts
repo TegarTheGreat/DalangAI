@@ -257,7 +257,7 @@ export const CAPABILITIES: readonly Capability[] = [
     // Bukan "siap tanpa konfigurasi": whisper.cpp harus terpasang dulu.
     readyWithoutConfig: false,
     alsoActiveWhen:
-      "whisper.cpp terpasang di PATH beserta berkas modelnya. Ini jalur yang paling menjaga privasi: rekaman tidak pernah keluar dari mesinmu, dan Dalang mendahulukannya.",
+      "whisper.cpp terpasang di PATH beserta modelnya, yang membuat rekaman tidak pernah keluar dari mesinmu",
     settings: [
       {
         key: "WHISPER_CPP_BIN",
@@ -551,6 +551,16 @@ export const isFilled = (value: string | undefined): boolean =>
 export interface CapabilityStatus {
   id: string;
   title: string;
+  /**
+   * Cara ia hidup. Ikut dibawa supaya pemakainya bisa menulis kalimat yang
+   * benar tanpa menengok katalog lagi: "A atau B" untuk salah-satu, "A dan B"
+   * untuk semua. Versi pertama doctor menulis "atau" untuk keduanya, dan itu
+   * menyuruh orang mengisi satu dari empat setelan render cloud yang
+   * sebenarnya wajib semua.
+   */
+  rule: CapabilityRule;
+  /** Kalimat jalan lain di luar env, bila kemampuannya punya. */
+  alsoActiveWhen?: string;
   /** Kemampuannya bisa dipakai sekarang. */
   active: boolean;
   /** Sudah bisa dipakai tanpa mengisi apa pun. */
@@ -599,6 +609,8 @@ export const capabilityStatuses = (
     return {
       id: capability.id,
       title: capability.title,
+      rule: capability.rule,
+      ...(capability.alsoActiveWhen ? { alsoActiveWhen: capability.alsoActiveWhen } : {}),
       active,
       readyWithoutConfig: capability.readyWithoutConfig,
       filled,
