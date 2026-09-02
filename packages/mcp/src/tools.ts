@@ -15,9 +15,10 @@ import {
   displayPath,
   listProjects,
   readPlan,
+  readPlanWithHash,
   resolvePlanPath,
   type Workspace,
-  writePlan,
+  writePlanIfUnchanged,
 } from "./workspace";
 
 /**
@@ -151,16 +152,39 @@ export interface PatchResult {
   bisaUndo: boolean;
 }
 
+/**
+ * Baca → ubah → tulis dengan bandingkan-dan-tukar (koherensi Studio–MCP,
+ * ADR-0023). Bila berkasnya berubah di antara baca dan tulis — Studio sedang
+ * dipakai pada proyek yang sama — plan dibaca ulang dan perubahannya
+ * diterapkan lagi pada plan yang segar. Patch op adalah niat, bukan salinan
+ * berkas, jadi menerapkannya ulang adalah penggabungan yang benar.
+ */
+const commitWithRetry = <T extends { plan: ScenePlan }>(
+  context: ToolContext,
+  planPath: string,
+  change: (plan: ScenePlan) => T,
+): T => {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { plan, hash } = readPlanWithHash(planPath);
+    const result = change(plan);
+    if (writePlanIfUnchanged(context.workspace, planPath, hash, result.plan))
+      return result;
+  }
+  throw new Error(
+    "plan.json terus berubah selagi server ini menulis — ada proses lain yang menulis tanpa henti; coba lagi sebentar lagi.",
+  );
+};
+
 export const toolApplyPatch = (
   context: ToolContext,
   { proyek, ops }: { proyek: string; ops: PatchOpInput[] },
 ): PatchResult => {
   const planPath = resolvePlanPath(context.workspace, proyek);
-  const plan = readPlan(planPath);
   // origin "agent": pemanggilnya memang agent, dan pagar scene terkunci
   // berlaku untuknya persis seperti untuk agent Dalang sendiri.
-  const { plan: next, applied } = applyPatch(plan, ops, { origin: "agent" });
-  writePlan(context.workspace, planPath, next);
+  const { plan: next, applied } = commitWithRetry(context, planPath, (plan) =>
+    applyPatch(plan, ops, { origin: "agent" }),
+  );
 
   const stack = undoStacks.get(planPath) ?? [];
   stack.push(applied.inverse);
@@ -188,14 +212,11 @@ export const toolUndo = (context: ToolContext, { proyek }: { proyek: string }) =
         "Tidak ada yang bisa diurungkan lewat server ini. Riwayat undo hanya mencakup perubahan yang dibuat sesi server ini sendiri — bukan yang dibuat Studio atau CLI.",
     };
   }
-  const plan = readPlan(planPath);
   // enforce: false — kunci yang DIPASANG setelah sebuah editan tidak boleh
   // menghalangi pengurungan editan itu (kaidah yang sama dengan undo Studio).
-  const { plan: next, applied } = applyPatch(plan, inverse, {
-    origin: "agent",
-    enforce: false,
-  });
-  writePlan(context.workspace, planPath, next);
+  const { applied } = commitWithRetry(context, planPath, (plan) =>
+    applyPatch(plan, inverse, { origin: "agent", enforce: false }),
+  );
   undoStacks.set(planPath, stack);
   return { ok: true as const, ringkasan: applied.summary, sisaRiwayat: stack.length };
 };

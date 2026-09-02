@@ -248,9 +248,24 @@ salah di tes lain, lewat pesan validasi yang datang dari sisi klien.
 - **Gerbang tata letak mengukur dialog dalam keadaan AWAL**, sebelum isinya
   bertambah oleh hasil (laporan interop, temuan tinjauan). Yang menjaga keadaan
   setelah tumbuh adalah `max-height` pada `.dialog`, bukan gerbangnya.
-- **Server MCP tidak menyelaraskan diri dengan Studio yang sedang terbuka.**
-  Keduanya menulis plan.json yang sama; menjalankan keduanya bersamaan pada
-  satu proyek bisa saling menimpa.
+- ~~**Server MCP tidak menyelaraskan diri dengan Studio yang sedang terbuka.**~~
+  *DICABUT.* Keduanya masih menulis plan.json yang sama, tetapi kini tidak
+  saling menimpa. Sisi server MCP: setiap tool membaca berkas segar (tanpa
+  salinan di memori) dan menulis dengan BANDINGKAN-DAN-TUKAR terhadap hash
+  yang dibacanya; bila Studio menulis di antara baca dan tulis, plan dibaca
+  ulang dan patch-nya diterapkan lagi pada plan yang segar — patch op adalah
+  niat, bukan salinan berkas, jadi penerapan ulang adalah penggabungan yang
+  benar. Sisi Studio: pengawas berkas memuat ulang editan luar saat senggang
+  (sudah sejak Fase 3), dan dua jalan yang dulu menimpa kini tidak lagi —
+  tahap pipeline yang lama (TTS, aset, transkrip) menyimpan hasilnya sebagai
+  DELTA renderState di atas plan terbaru dari disk (`rebaseRenderState`,
+  murni di core), dan setiap job eksklusif membaca plan yang segar sebelum
+  menulis (`freshPlan`). Tes server Studio memaksa kedua jalan itu dan
+  keduanya gagal sebelum pembetulan: judul yang ditulis "dari luar" selagi
+  TTS berjalan, atau tepat sebelum rekaman didaftarkan, kembali ke judul lama.
+  Yang tersisa: riwayat undo server MCP tetap seumur sesinya (butir di
+  bawah), dan proses ketiga yang menulis tanpa henti akan ditolak server MCP
+  setelah lima percobaan, dengan pesan.
 
 ## Konsekuensi
 

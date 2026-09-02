@@ -399,7 +399,7 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
     try {
       const startedAt = Date.now();
       const result = await store.runExclusive("sources", async () => {
-        const current = session.plan;
+        const current = store.freshPlan();
         if (!current) throw new Error("Plan hilang di tengah pendaftaran");
         const asset: ResolvedAsset = {
           file,

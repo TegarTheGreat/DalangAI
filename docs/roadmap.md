@@ -220,6 +220,9 @@ FCPXML (spine utama), lewat CLI maupun lobi Studio. Batas yang tersisa ada di
 Cut yang sungguhan, dan connected clip di lane tidak dipulihkan karena garis
 waktu Dalang baru punya satu jalur video — batas terakhir ini DICABUT oleh
 ADR-0025 (§9.2): lane positif kini dipulihkan jadi lapisan video.
+Batas "server MCP tidak menyelaraskan diri dengan Studio" DICABUT: keduanya kini
+boleh memegang proyek yang sama tanpa saling menimpa (bandingkan-dan-tukar di
+server MCP, delta renderState di tahap pipeline Studio).
 
 > Membuka: Dalang jadi bagian alur kerja profesional, bukan pulau.
 

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync, watch } from "node:fs";
 import { basename, join } from "node:path";
 import type { ProjectSession } from "@dalang/agent";
-import type { PatchOpInput, ScenePlan } from "@dalang/core";
+import { type PatchOpInput, rebaseRenderState, type ScenePlan } from "@dalang/core";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
 import type {
   BusyKind,
@@ -86,6 +86,35 @@ export class StudioStore {
   endRender(): void {
     this.render = null;
     this.notifyBusy();
+  }
+
+  /**
+   * Plan yang SEGAR: kalau berkasnya diubah pihak lain (server MCP, CLI,
+   * editor teks) sejak tulisan terakhir, muat ulang dulu. Job eksklusif
+   * memanggil ini SEBELUM membaca `session.plan`, karena pengawas berkas
+   * sengaja diam selagi job berjalan — dan job yang menulis di atas plan basi
+   * mengembalikan editan orang lain ke keadaan lama tanpa suara.
+   */
+  freshPlan(): ScenePlan | null {
+    const note = this.session.detectExternalEdit();
+    if (note) this.notifyPlan("external");
+    return this.session.plan;
+  }
+
+  /**
+   * Simpan hasil tahap pipeline yang bekerja pada snapshot `before` dan
+   * menghasilkan `after`. Tahap bisa berjalan lama; kalau selama itu
+   * berkasnya diubah pihak lain, editan itu TIDAK ditimpa: yang dipindahkan
+   * hanya delta renderState milik tahap, di atas plan terbaru dari disk
+   * (`rebaseRenderState`). Tanpa editan luar, `after` ditulis apa adanya.
+   */
+  commitStage(before: ScenePlan, after: ScenePlan): { rebased: boolean } {
+    const external = this.session.detectExternalEdit();
+    const base = this.session.plan;
+    this.session.plan = external && base ? rebaseRenderState(base, before, after) : after;
+    this.session.persist();
+    if (external) this.notifyPlan("external");
+    return { rebased: Boolean(external) };
   }
 
   /** Patch cepat (form inspector, lock, reorder) — ditolak saat job berjalan. */

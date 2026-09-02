@@ -374,6 +374,10 @@ Yang sudah berjalan:
   - Potongan diletakkan di TENGAH tumpang-tindih transisi, titik yang sama
     dipakai Dalang untuk berpindah scene; memakai awalnya akan menggeser seluruh
     ekspor setengah transisi terhadap videonya sendiri.
+  - Studio dan server MCP boleh memegang proyek yang SAMA: server MCP menulis
+    dengan bandingkan-dan-tukar dan menerapkan ulang patch pada plan yang segar;
+    tahap pipeline Studio menyimpan hasilnya sebagai delta renderState di atas
+    plan terbaru, jadi editan dari luar selagi tahap berjalan tidak ditimpa.
 - **Dalang sebagai kemampuan: server MCP (ADR-0023)** — `dalang mcp [akar]`
   menyajikan garis waktu ke agent mana pun yang bicara MCP (Claude Code, dsb.):
   - baca rencana, ubah lewat patch op tervalidasi, urungkan, kritik struktur,
@@ -501,7 +505,7 @@ Yang sudah berjalan:
     `proxy-progress`, punya tombol batal, dan editor tetap bisa dipakai —
     patch, undo, dan render tidak menunggu; permintaan selagi berjalan antre.
     CLI `dalang proxy`/`generate` mencetak persen per berkas.
-- **Kualitas terjaga otomatis**: 1005 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1011 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -517,7 +521,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1005 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1011 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

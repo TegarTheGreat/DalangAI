@@ -149,7 +149,7 @@ export const registerMediaLibraryRoutes = (app: Hono, ctx: StudioContext): void 
         ...(body.data.color ? { color: body.data.color } : {}),
       });
       const result = await store.runExclusive("pick", async () => {
-        const plan = session.plan;
+        const plan = store.freshPlan();
         if (!plan) throw new Error("Plan hilang di tengah pemasangan ikon");
         const scene = plan.scenes.find((s) => s.id === body.data.sceneId);
         if (!scene) throw new Error(`Scene ${body.data.sceneId} tidak ada`);
@@ -276,7 +276,7 @@ export const registerMediaLibraryRoutes = (app: Hono, ctx: StudioContext): void 
     const startedAt = Date.now();
     try {
       const result = await store.runExclusive("pick", async () => {
-        const plan = session.plan;
+        const plan = store.freshPlan();
         if (!plan) throw new Error("Plan hilang di tengah pemasangan stiker");
         const scene = plan.scenes.find((s) => s.id === body.data.sceneId);
         if (!scene) throw new Error(`Scene ${body.data.sceneId} tidak ada`);
@@ -395,7 +395,7 @@ export const registerMediaLibraryRoutes = (app: Hono, ctx: StudioContext): void 
     const startedAt = Date.now();
     try {
       const result = await store.runExclusive("pick", async () => {
-        const plan = session.plan;
+        const plan = store.freshPlan();
         if (!plan) throw new Error("Plan hilang di tengah pemasangan efek suara");
         const cueId = uniqueSfxCueId(plan, `sfx-${body.data.sceneId}`);
         const file = await deps.saveMedia(session.paths.planPath, {

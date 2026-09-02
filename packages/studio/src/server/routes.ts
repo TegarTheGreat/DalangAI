@@ -225,8 +225,8 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           log: { info: () => {}, warn: () => {} },
         }),
       );
-      session.plan = outcome.plan;
-      session.persist();
+      // Editan dari luar selama tahap berjalan tidak ditimpa (ADR-0023).
+      store.commitStage(plan, outcome.plan);
       const costUsd = outcome.results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
       logUiEvent(
         "generateVoiceover",
@@ -283,8 +283,8 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           log: { info: () => {}, warn: () => {} },
         }),
       );
-      session.plan = loudness.plan;
-      session.persist();
+      // Editan dari luar selama tahap berjalan tidak ditimpa (ADR-0023).
+      store.commitStage(plan, loudness.plan);
       logUiEvent(
         "resolveAssets",
         { sceneIds: body.data.sceneIds ?? null },
@@ -364,8 +364,8 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           log: { info: () => {}, warn: () => {} },
         }),
       );
-      session.plan = outcome.plan;
-      session.persist();
+      // Editan dari luar selama tahap berjalan tidak ditimpa (ADR-0023).
+      store.commitStage(plan, outcome.plan);
       const costUsd = outcome.results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
       logUiEvent(
         "transcribeVideo",
@@ -716,7 +716,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         mkdirSync(join(session.paths.planDir, "assets"), { recursive: true });
         writeFileSync(join(session.paths.planDir, relPath), bytes);
         const dims = imageDims(bytes);
-        const current = session.plan;
+        const current = store.freshPlan();
         if (!current) throw new Error("Plan hilang di tengah upload");
         session.plan = setResolvedAsset(current, body.data.sceneId, {
           file: relPath,
@@ -781,7 +781,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     try {
       const startedAt = Date.now();
       const result = await store.runExclusive("pick", async () => {
-        const current = session.plan;
+        const current = store.freshPlan();
         if (!current) throw new Error("Plan hilang di tengah split");
         const asset = current.renderState.resolvedAssets[scene.id];
         if (asset) {
@@ -849,7 +849,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
       const result = await store.runExclusive("pick", async () => {
         const { plan: next, asset } = await materializeCandidate({
           paths: session.paths,
-          plan,
+          plan: store.freshPlan() ?? plan,
           db: session.db,
           sceneId: body.data.sceneId,
           ...(body.data.layerId ? { layerId: body.data.layerId } : {}),

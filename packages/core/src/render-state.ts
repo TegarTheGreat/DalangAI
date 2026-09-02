@@ -281,3 +281,47 @@ export const pruneRenderState = (plan: ScenePlan): ScenePlan => {
   }
   return next;
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Terapkan PERUBAHAN renderState dari `before` → `after` di atas `base`
+ * (koherensi Studio–server MCP, lanjutan ADR-0023).
+ *
+ * Tahap pipeline bekerja pada SNAPSHOT plan dan bisa berjalan lama. Kalau
+ * selama itu berkasnya diubah pihak lain (server MCP, CLI, editor teks),
+ * menulis `after` apa adanya menimpa editan itu tanpa suara. Yang dimiliki
+ * tahap hanyalah renderState-nya, jadi yang dipindahkan hanya DELTA
+ * renderState-nya: entri yang ditambah/diubah ditulis, entri yang dihapus
+ * dihapus, dan sisanya — kreatif maupun turunan — tetap milik `base`.
+ * Entri yang tidak disentuh tahap TIDAK ditulis ulang, supaya entri yang
+ * diubah pihak lain selama tahap berjalan tidak ikut tertimpa.
+ */
+export const rebaseRenderState = (
+  base: ScenePlan,
+  before: ScenePlan,
+  after: ScenePlan,
+): ScenePlan => {
+  const next = structuredClone(base);
+  const target = next.renderState as unknown as Record<string, unknown>;
+  const was = before.renderState as unknown as Record<string, unknown>;
+  const now = after.renderState as unknown as Record<string, unknown>;
+  for (const section of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    const prev = was[section];
+    const curr = now[section];
+    if (isRecord(prev) && isRecord(curr)) {
+      const existing = target[section];
+      const merged: Record<string, unknown> = isRecord(existing) ? { ...existing } : {};
+      for (const key of new Set([...Object.keys(prev), ...Object.keys(curr)])) {
+        if (JSON.stringify(prev[key]) === JSON.stringify(curr[key])) continue;
+        if (curr[key] === undefined) delete merged[key];
+        else merged[key] = structuredClone(curr[key]);
+      }
+      target[section] = merged;
+    } else if (JSON.stringify(prev) !== JSON.stringify(curr)) {
+      target[section] = structuredClone(curr);
+    }
+  }
+  return next;
+};

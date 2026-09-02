@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseScenePlan, type ScenePlan } from "@dalang/core";
@@ -68,6 +69,40 @@ export const resolvePlanPath = (workspace: Workspace, proyek: string): string =>
 
 export const readPlan = (planPath: string): ScenePlan =>
   parseScenePlan(JSON.parse(readFileSync(planPath, "utf8")));
+
+const hashOf = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+/** Plan beserta hash isi berkasnya — untuk tulis bandingkan-dan-tukar. */
+export const readPlanWithHash = (planPath: string): { plan: ScenePlan; hash: string } => {
+  const raw = readFileSync(planPath, "utf8");
+  return { plan: parseScenePlan(JSON.parse(raw)), hash: hashOf(raw) };
+};
+
+/**
+ * Tulis HANYA bila berkasnya masih persis seperti yang dibaca (`expectedHash`).
+ *
+ * Studio bisa memegang proyek yang sama (koherensi ADR-0023): antara "baca"
+ * dan "tulis" server ini, Studio mungkin sudah menulis. Menimpanya berarti
+ * membuang editan orang tanpa suara; mengembalikan false berarti pemanggil
+ * membaca ulang dan menerapkan patch-nya lagi pada plan yang segar — patch
+ * op memang dirancang untuk bisa diterapkan ulang.
+ */
+export const writePlanIfUnchanged = (
+  workspace: Workspace,
+  planPath: string,
+  expectedHash: string,
+  plan: ScenePlan,
+): boolean => {
+  if (workspace.readOnly) {
+    throw new WorkspaceError(
+      "Server MCP ini dijalankan hanya-baca. Jalankan ulang tanpa --hanya-baca untuk mengizinkan perubahan.",
+    );
+  }
+  const current = existsSync(planPath) ? hashOf(readFileSync(planPath, "utf8")) : null;
+  if (current !== expectedHash) return false;
+  atomicWriteFile(planPath, `${JSON.stringify(plan, null, 2)}\n`);
+  return true;
+};
 
 export const writePlan = (
   workspace: Workspace,

@@ -272,3 +272,29 @@ describe("server MCP Dalang", () => {
     await close();
   });
 });
+
+describe("tulis bandingkan-dan-tukar (koherensi Studio–MCP, ADR-0023)", () => {
+  it("menolak menulis bila berkas berubah sejak dibaca, dan menerima setelah dibaca ulang", async () => {
+    const { readPlanWithHash, writePlanIfUnchanged } = await import("../src/workspace");
+    const { root, planPath } = makeWorkspace();
+    const workspace = { root, readOnly: false } as Parameters<
+      typeof writePlanIfUnchanged
+    >[0];
+    const first = readPlanWithHash(planPath);
+    // "Studio" menulis di antara baca dan tulis.
+    const external = structuredClone(first.plan);
+    external.meta.title = "Diubah Studio";
+    writeFileSync(planPath, `${JSON.stringify(external, null, 2)}\n`);
+    const mine = structuredClone(first.plan);
+    mine.meta.title = "Diubah MCP";
+    expect(writePlanIfUnchanged(workspace, planPath, first.hash, mine)).toBe(false);
+    expect(JSON.parse(readFileSync(planPath, "utf8")).meta.title).toBe("Diubah Studio");
+
+    const fresh = readPlanWithHash(planPath);
+    fresh.plan.meta.title = "Diubah MCP di atas Studio";
+    expect(writePlanIfUnchanged(workspace, planPath, fresh.hash, fresh.plan)).toBe(true);
+    expect(JSON.parse(readFileSync(planPath, "utf8")).meta.title).toBe(
+      "Diubah MCP di atas Studio",
+    );
+  });
+});
