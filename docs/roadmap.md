@@ -301,8 +301,8 @@ render. Fase 9 dengan itu selesai seluruhnya; batasnya ada di "Batas" ADR-0028.
 
 | # | Item | Minta |
 | --- | --- | --- |
-| 9.1 | Manipulasi langsung di kanvas: seret/ubah ukuran teks & grafis di preview | Lapisan interaksi di atas Player; koordinat → patch op |
-| 9.2 | Multi-track video: overlay/PiP/B-roll sebagai lapisan | Perubahan skema besar → ADR |
+| 9.1 | Manipulasi langsung di kanvas: seret/ubah ukuran teks & grafis di preview | Selesai (ADR-0024; anotasi, penempelan ke elemen lain, dan pemilihan jamak menyusul) |
+| 9.2 | Multi-track video: overlay/PiP/B-roll sebagai lapisan | Selesai (ADR-0025) |
 | 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027) |
 | 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | Selesai (ADR-0026) |
 | 9.5 | Proxy + penanganan rekaman panjang | Selesai (ADR-0028) |
