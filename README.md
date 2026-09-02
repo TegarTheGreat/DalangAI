@@ -416,7 +416,10 @@ Yang sudah berjalan:
     diseret dan diubah ukurannya di atas tangkapan layar selama bingkai tidak
     sedang di-zoom — batas awal ADR-0024 dicabut.
   - menempel ke elemen lain saat diseret: pusat ke pusat, tepi ke tepi,
-    bersebelahan — garis bantunya digambar di tepi yang disejajarkan.
+    bersebelahan — garis bantunya digambar di tepi yang disejajarkan;
+  - pemilihan jamak: Shift+klik menambah anggota, menyeret salah satu
+    memindahkan semuanya sejauh yang sama dalam SATU patch — satu undo
+    mengembalikan semuanya; Escape mengosongkan seleksi.
 - **Lapisan video (ADR-0025)** — satu scene bisa punya dua sisipan video di atas
   visual dasarnya: B-roll yang menunjukkan apa yang sedang dikatakan,
   picture-in-picture, atau bukti visual:

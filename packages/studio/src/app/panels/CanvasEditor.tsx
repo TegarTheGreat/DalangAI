@@ -2,6 +2,7 @@ import {
   activeGuideLines,
   elementGuides,
   type FramePoint,
+  type GraphicPlacement,
   placeGraphic,
   placeLayer,
   placeText,
@@ -11,6 +12,7 @@ import {
   type SnapGuide,
   safeGuides,
   snapToGuides,
+  type TextPlacement,
 } from "@dalang/core";
 import {
   activeSceneIndex,
@@ -56,8 +58,23 @@ interface Handle {
   rect: { x: number; y: number; w: number; h: number };
 }
 
+/** Kunci seleksi: jenis + id, karena id anotasi (indeks) bisa sama dengan id teks. */
+const keyOf = (handle: Handle): string => `${handle.kind}:${handle.id}`;
+
+/** Satu anggota seretan kelompok (ADR-0024 §7): peganganannya + pusat awalnya. */
+interface DragMember {
+  handle: Handle;
+  origin: FramePoint;
+}
+
 interface DragState {
   handle: Handle;
+  /**
+   * Semua yang ikut bergerak: seleksi saat seretan dimulai (mode move), atau
+   * pegangan ini saja (ubah ukuran, anotasi). Selisih yang sama diterapkan
+   * ke tiap anggota, dan keluarannya SATU patch.
+   */
+  members: DragMember[];
   mode: "move" | "resize";
   /** Titik pusat awal, fraksi bingkai. */
   origin: FramePoint;
@@ -100,6 +117,37 @@ const sameHandles = (a: Handle[], b: Handle[]): boolean =>
     );
   });
 
+const escapeAttr = (value: string): string =>
+  typeof CSS !== "undefined" && typeof CSS.escape === "function"
+    ? CSS.escape(value)
+    : value;
+
+/**
+ * Akar scene yang sedang tampil di dalam kotak pemutar. Di tengah transisi
+ * DUA scene terpasang sekaligus; preset menandai akar tiap scene, dan
+ * pengukuran hanya boleh terjadi di dalam akar milik `sceneId`. Preset tanpa
+ * penanda akar jatuh ke seluruh kotak.
+ */
+const sceneRootOf = (box: HTMLElement, sceneId: string): HTMLElement =>
+  (sceneId
+    ? box.querySelector<HTMLElement>(`[data-dalang-scene="${escapeAttr(sceneId)}"]`)
+    : null) ?? box;
+
+const relativeRect = (element: Element, boxRect: DOMRect): Handle["rect"] => {
+  const rect = element.getBoundingClientRect();
+  return {
+    x: rect.left - boxRect.left,
+    y: rect.top - boxRect.top,
+    w: rect.width,
+    h: rect.height,
+  };
+};
+
+const isMember = (drag: DragState | null, handle: Handle): boolean =>
+  drag?.members.some((member) => keyOf(member.handle) === keyOf(handle)) ?? false;
+
+const NO_SELECTION: ReadonlySet<string> = new Set();
+
 const centerOf = (rect: Handle["rect"], box: DOMRect): FramePoint => ({
   x: (rect.x + rect.w / 2) / box.width,
   y: (rect.y + rect.h / 2) / box.height,
@@ -109,7 +157,13 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const [handles, setHandles] = useState<Handle[]>([]);
   const [annotationFrame, setAnnotationFrame] = useState<PxRect | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  // Seleksi jamak (ADR-0024 §7): kunci `jenis:id`, bisa lebih dari satu.
+  // Diikat ke id scene-nya: begitu scene berganti, seleksi lama otomatis
+  // kosong — tanpa effect yang mengejar perubahan.
+  const [selectionState, setSelectionState] = useState<{
+    scene: string | undefined;
+    keys: ReadonlySet<string>;
+  }>({ scene: undefined, keys: NO_SELECTION });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [ghost, setGhost] = useState<FramePoint | null>(null);
   // Pola yang sama dengan TimelineStrip: satu sumber kebenaran playhead.
@@ -157,15 +211,7 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       // elemen yang tidak ada — atau, lebih buruk, elemen scene lain yang
       // kebetulan ber-id sama. Preset menandai akar tiap scene; diukur hanya
       // di dalamnya. Preset tanpa penanda akar jatuh ke seluruh kotak.
-      const sceneId = scene?.id ?? "";
-      const escaped =
-        typeof CSS !== "undefined" && typeof CSS.escape === "function"
-          ? CSS.escape(sceneId)
-          : sceneId;
-      const root =
-        (sceneId
-          ? box.querySelector<HTMLElement>(`[data-dalang-scene="${escaped}"]`)
-          : null) ?? box;
+      const root = sceneRootOf(box, scene?.id ?? "");
       // Bingkai rujukan anotasi (tutorial-01): diukur bersama pegangannya,
       // karena target anotasi adalah fraksi kotak ini, bukan frame video.
       const frameElement = root.querySelector<HTMLElement>(
@@ -239,6 +285,35 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     };
   }, [frame, scene?.id, plan]);
 
+  /**
+   * Kotak SEGAR dari DOM saat ini, relatif kotak pemutar — dipakai saat
+   * menekan dan melepas. State `handles` diukur pada mutasi DOM terakhir,
+   * dan pemutar bisa menskalakan ulang isinya tanpa mutasi yang tertangkap;
+   * angka yang menentukan patch harus dibaca pada detik yang sama dengan
+   * jarinya, bukan dari ingatan.
+   */
+  const freshRect = (handle: Handle): Handle["rect"] => {
+    const box = hostRef.current?.parentElement;
+    if (!box) return handle.rect;
+    const element = sceneRootOf(box, scene?.id ?? "").querySelector<HTMLElement>(
+      `[data-dalang-${handle.kind}="${escapeAttr(handle.id)}"]`,
+    );
+    return element ? relativeRect(element, box.getBoundingClientRect()) : handle.rect;
+  };
+  const freshAnnotationFrame = (): PxRect | null => {
+    const box = hostRef.current?.parentElement;
+    if (!box) return annotationFrame;
+    const element = sceneRootOf(box, scene?.id ?? "").querySelector<HTMLElement>(
+      "[data-dalang-annotation-frame]",
+    );
+    return element ? relativeRect(element, box.getBoundingClientRect()) : annotationFrame;
+  };
+  // Dibaca lewat ref supaya effect seret tidak dipasang ulang tiap render
+  // (objek baru tiap render akan memasang ulang pendengar pointer di TENGAH
+  // seretan) — yang dibutuhkan hanya nilai terbaru saat melepas.
+  const freshAnnotationFrameRef = useRef(freshAnnotationFrame);
+  freshAnnotationFrameRef.current = freshAnnotationFrame;
+
   useEffect(() => {
     if (!drag) return;
     const host = hostRef.current?.parentElement;
@@ -246,6 +321,14 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
 
     const move = (event: PointerEvent) => {
       const box = host.getBoundingClientRect();
+      // Klik yang goyah dua-tiga piksel bukan seretan: tanpa ambang ini,
+      // sekadar memilih elemen sudah menjatuhkannya lagi di jangkar baru.
+      if (
+        !ghost &&
+        Math.hypot(event.clientX - drag.pointer.x, event.clientY - drag.pointer.y) < 3
+      ) {
+        return;
+      }
       const dx = (event.clientX - drag.pointer.x) / box.width;
       const dy = (event.clientY - drag.pointer.y) / box.height;
       if (drag.handle.kind === "annotation") {
@@ -266,11 +349,18 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     };
 
     const up = () => {
-      const target = ghost ?? drag.origin;
+      // Tidak pernah bergerak = klik untuk memilih, bukan seretan: tidak ada
+      // patch. Menjatuhkan elemen di titik yang sama pun akan mengubah
+      // offset-nya (jangkar dipilih ulang), dan itu bukan yang orang minta.
+      if (!ghost) {
+        setDrag(null);
+        return;
+      }
+      const target = ghost;
       const box = host.getBoundingClientRect();
       const ops = buildOps(scene, drag, target, safe, {
         box: { w: box.width, h: box.height },
-        annotationFrame,
+        annotationFrame: freshAnnotationFrameRef.current(),
       });
       setDrag(null);
       setGhost(null);
@@ -283,7 +373,24 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, ghost, safe, scene, annotationFrame]);
+  }, [drag, ghost, safe, scene]);
+
+  const selection =
+    scene && selectionState.scene === scene.id ? selectionState.keys : NO_SELECTION;
+
+  // Escape mengosongkan seleksi. Panah TIDAK menggeser seleksi: panah
+  // kiri/kanan milik transport (App.tsx), dan dua arti untuk satu tombol
+  // lebih buruk daripada tidak ada.
+  useEffect(() => {
+    if (selection.size === 0) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectionState({ scene: undefined, keys: NO_SELECTION });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selection]);
 
   // Pegangan disembunyikan saat memutar: teks bergerak sepanjang animasinya,
   // jadi kotaknya akan bergetar mengikuti — dan tidak ada editor yang
@@ -300,6 +407,41 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     event.preventDefault();
     const box = hostRef.current?.parentElement?.getBoundingClientRect();
     if (!box) return;
+    // Seleksi (ADR-0024 §7): Shift+klik menambah/mengurangi; klik biasa pada
+    // anggota mempertahankan seleksinya (itulah cara menyeret kelompok); klik
+    // biasa pada yang lain menggantinya. Anotasi selalu sendiri — koordinatnya
+    // milik bingkai screenshot, bukan frame video — begitu pula ubah ukuran.
+    const key = keyOf(handle);
+    let next: Set<string>;
+    if (mode === "resize" || handle.kind === "annotation") {
+      next = new Set([key]);
+    } else if (event.shiftKey) {
+      next = new Set([...selection].filter((other) => !other.startsWith("annotation:")));
+      if (next.has(key)) {
+        next.delete(key);
+        setSelectionState({ scene: scene.id, keys: next });
+        return;
+      }
+      next.add(key);
+    } else {
+      next = selection.has(key) ? new Set(selection) : new Set([key]);
+    }
+    setSelectionState({ scene: scene.id, keys: next });
+    // Kotak dibaca SEGAR saat menekan (lihat freshRect), untuk pegangan ini
+    // dan semua anggota seleksi.
+    const fresh: Handle = { ...handle, rect: freshRect(handle) };
+    const members: DragMember[] =
+      mode === "move"
+        ? handles
+            .filter((candidate) => next.has(keyOf(candidate)))
+            .map((candidate) => {
+              const current = { ...candidate, rect: freshRect(candidate) };
+              return { handle: current, origin: centerOf(current.rect, box) };
+            })
+        : [{ handle: fresh, origin: centerOf(fresh.rect, box) }];
+    if (!members.some((member) => keyOf(member.handle) === key)) {
+      members.push({ handle: fresh, origin: centerOf(fresh.rect, box) });
+    }
     const item =
       handle.kind === "graphic"
         ? scene.graphics.find((graphic) => graphic.id === handle.id)
@@ -310,8 +452,9 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     // yang sama saat diseret, lihat buildOps).
     const startSize =
       item && "size" in item ? item.size : item && "height" in item ? item.height : null;
-    setSelected(handle.id);
-    // Panduan: margin aman, lalu pusat/tepi elemen LAIN (anotasi tidak
+    const handleRect = fresh.rect;
+    // Panduan: margin aman, lalu pusat/tepi elemen di LUAR seleksi (anggota
+    // lain ikut bergerak, jadi tidak bisa jadi rujukan; anotasi tidak
     // menempel — koordinatnya milik bingkai screenshot, bukan frame video).
     const toFraction = (rect: Handle["rect"]) => ({
       x: rect.x / box.width,
@@ -320,19 +463,20 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       h: rect.h / box.height,
     });
     const others = handles
-      .filter((other) => other !== handle && other.id !== handle.id)
+      .filter((other) => !next.has(keyOf(other)))
       .map((other) => toFraction(other.rect));
     const fromSafe = safeGuides(safe);
     const fromElements =
       handle.kind === "annotation"
         ? { x: [], y: [] }
-        : elementGuides(toFraction(handle.rect), others);
+        : elementGuides(toFraction(handleRect), others);
     setDrag({
-      handle,
+      handle: fresh,
+      members,
       mode,
-      origin: centerOf(handle.rect, box),
+      origin: centerOf(handleRect, box),
       pointer: { x: event.clientX, y: event.clientY },
-      startSizeFrac: startSize ?? handle.rect.h / box.height,
+      startSizeFrac: startSize ?? handleRect.h / box.height,
       guides: {
         x: [...fromSafe.x, ...fromElements.x],
         y: [...fromSafe.y, ...fromElements.y],
@@ -364,8 +508,8 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       {handles.map((handle) => (
         <div
           key={`${handle.kind}-${handle.id}`}
-          className={`canvas-box ${handle.kind}${selected === handle.id ? " active" : ""}${
-            drag?.handle.id === handle.id ? " dragging" : ""
+          className={`canvas-box ${handle.kind}${selection.has(keyOf(handle)) ? " active" : ""}${
+            isMember(drag, handle) ? " dragging" : ""
           }`}
           style={{
             left: handle.rect.x,
@@ -376,7 +520,7 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
             // berpindah setelah dilepas (perpindahan lewat patch, dan patch
             // per gerakan pointer akan membanjiri log), jadi tanpa bayangan
             // ini seretan terasa seperti tidak terjadi apa-apa sampai lepas.
-            ...(drag?.handle.id === handle.id && ghost
+            ...(drag && ghost && isMember(drag, handle)
               ? {
                   translate: `${((ghost.x - drag.origin.x) * (hostRef.current?.clientWidth ?? 0)).toFixed(1)}px ${(
                     (ghost.y - drag.origin.y) * (hostRef.current?.clientHeight ?? 0)
@@ -455,45 +599,210 @@ const buildOps = (
     };
   }
 
+  if (drag.mode === "move") {
+    // Seretan kelompok (ADR-0024 §7): selisih yang SAMA untuk tiap anggota,
+    // dan SATU patch untuk semuanya — satu baris di log, satu undo.
+    const delta = { x: target.x - drag.origin.x, y: target.y - drag.origin.y };
+    const changes = drag.members
+      .map((member) => movedItem(scene, member.handle, member.origin, delta, safe))
+      .filter((change): change is MovedItem => change !== null);
+    if (changes.length === 0) return null;
+    const textChanges = changes.filter((change) => change.kind === "text");
+    const graphicChanges = changes.filter((change) => change.kind === "graphic");
+    const layerChanges = changes.filter((change) => change.kind === "layer");
+    const only = changes.length === 1 ? changes[0] : undefined;
+    return {
+      ops: [
+        {
+          op: "updateScene",
+          id: scene.id,
+          patch: {
+            ...(textChanges.length > 0
+              ? {
+                  texts: scene.texts.map((item) => {
+                    const hit = textChanges.find((change) => change.id === item.id);
+                    return hit && hit.kind === "text"
+                      ? { ...item, ...hit.placement }
+                      : item;
+                  }),
+                }
+              : {}),
+            ...(graphicChanges.length > 0
+              ? {
+                  graphics: scene.graphics.map((item) => {
+                    const hit = graphicChanges.find((change) => change.id === item.id);
+                    return hit && hit.kind === "graphic"
+                      ? { ...item, ...hit.placement }
+                      : item;
+                  }),
+                }
+              : {}),
+            ...(layerChanges.length > 0
+              ? {
+                  layers: scene.layers.map((item) => {
+                    const hit = layerChanges.find((change) => change.id === item.id);
+                    return hit && hit.kind === "layer"
+                      ? { ...item, ...hit.placement }
+                      : item;
+                  }),
+                }
+              : {}),
+          },
+        },
+      ],
+      label: only
+        ? `Geser ${KIND_LABEL[only.kind]} ${only.id}`
+        : `Geser ${changes.length} elemen sekaligus`,
+    };
+  }
+
   if (drag.handle.kind === "layer") {
     const layer = scene.layers.find((item) => item.id === drag.handle.id);
     if (!layer) return null;
-    if (drag.mode === "resize") {
-      // Ukuran lapisan berubah SERAGAM: tinggi dan lebar diskalakan dengan
-      // faktor yang sama. Sudut yang memetakan dx ke lebar dan dy ke tinggi
-      // memang lebih bebas, tapi hampir selalu memenceng-mencengkan sisipan
-      // 16:9 tanpa disadari — dan rasio bebas tetap tersedia di panel Properti.
-      const height = Math.min(
-        1,
-        Math.max(0.08, drag.startSizeFrac + (target.y - drag.origin.y) * 2),
-      );
-      const factor = drag.startSizeFrac > 0 ? height / drag.startSizeFrac : 1;
-      const width = Math.min(1, Math.max(0.08, layer.width * factor));
-      if (Math.abs(height - layer.height) < 0.001) return null;
-      return {
-        ops: [
-          {
-            op: "updateScene",
-            id: scene.id,
-            patch: {
-              layers: scene.layers.map((item) =>
-                item.id === layer.id
-                  ? {
-                      ...item,
-                      width: Number(width.toFixed(4)),
-                      height: Number(height.toFixed(4)),
-                    }
-                  : item,
-              ),
-            },
+    // Ukuran lapisan berubah SERAGAM: tinggi dan lebar diskalakan dengan
+    // faktor yang sama. Sudut yang memetakan dx ke lebar dan dy ke tinggi
+    // memang lebih bebas, tapi hampir selalu memenceng-mencengkan sisipan
+    // 16:9 tanpa disadari — dan rasio bebas tetap tersedia di panel Properti.
+    const height = Math.min(
+      1,
+      Math.max(0.08, drag.startSizeFrac + (target.y - drag.origin.y) * 2),
+    );
+    const factor = drag.startSizeFrac > 0 ? height / drag.startSizeFrac : 1;
+    const width = Math.min(1, Math.max(0.08, layer.width * factor));
+    if (Math.abs(height - layer.height) < 0.001) return null;
+    return {
+      ops: [
+        {
+          op: "updateScene",
+          id: scene.id,
+          patch: {
+            layers: scene.layers.map((item) =>
+              item.id === layer.id
+                ? {
+                    ...item,
+                    width: Number(width.toFixed(4)),
+                    height: Number(height.toFixed(4)),
+                  }
+                : item,
+            ),
           },
-        ],
-        label: `Ukuran lapisan ${layer.id}`,
-      };
+        },
+      ],
+      label: `Ukuran lapisan ${layer.id}`,
+    };
+  }
+
+  if (drag.handle.kind === "graphic") {
+    const graphic = scene.graphics.find((item) => item.id === drag.handle.id);
+    if (!graphic) return null;
+    // Turun = besar, naik = kecil; skalanya dua kali selisih supaya terasa
+    // langsung tanpa harus menyeret setengah layar.
+    const next = Math.min(
+      0.6,
+      Math.max(0.02, drag.startSizeFrac + (target.y - drag.origin.y) * 2),
+    );
+    if (Math.abs(next - graphic.size) < 0.001) return null;
+    return {
+      ops: [
+        {
+          op: "updateScene",
+          id: scene.id,
+          patch: {
+            graphics: scene.graphics.map((item) =>
+              item.id === graphic.id ? { ...item, size: Number(next.toFixed(4)) } : item,
+            ),
+          },
+        },
+      ],
+      label: `Ukuran grafis ${graphic.id}`,
+    };
+  }
+
+  return null;
+};
+
+const KIND_LABEL = { text: "teks", graphic: "grafis", layer: "lapisan" } as const;
+
+type MovedItem =
+  | { kind: "text"; id: string; placement: TextPlacement }
+  | { kind: "graphic"; id: string; placement: GraphicPlacement }
+  | { kind: "layer"; id: string; placement: ReturnType<typeof placeLayer> };
+
+const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.001;
+
+/** Geseran skema ±0,5, empat desimal. */
+const shifted = (value: number, delta: number): number =>
+  Number(Math.min(0.5, Math.max(-0.5, value + delta)).toFixed(4));
+
+/**
+ * Letak baru SATU elemen yang pusatnya (di layar, `origin`) digeser sejauh
+ * `delta`, atau null bila tidak berubah. Dipakai untuk seretan tunggal maupun
+ * kelompok.
+ *
+ * Selama jangkar/posisinya TIDAK berubah, geserannya RELATIF: offset lama +
+ * selisih seretan. Menghitung ulang dari jangkar (`placeText` dkk.) di sini
+ * salah, karena preset tidak menaruh elemen tepat di jangkar + offset —
+ * teks bertumpuk dalam satu kelompok, blok diangkat sedikit — dan hasilnya
+ * teks yang diseret mendatar melompat 30 px ke bawah pada seretan pertama.
+ * Jangkar dihitung ulang hanya saat pusatnya menyeberang ke wilayah lain;
+ * di situlah offset relatif akan menabrak batas ±0,5 (ADR-0024 §3).
+ */
+const movedItem = (
+  scene: Scene,
+  handle: Handle,
+  origin: FramePoint,
+  delta: FramePoint,
+  safe: SafeInsets,
+): MovedItem | null => {
+  const target = { x: origin.x + delta.x, y: origin.y + delta.y };
+  if (handle.kind === "text") {
+    const text = scene.texts.find((item) => item.id === handle.id);
+    if (!text) return null;
+    const absolute = placeText(target, safe);
+    const placement: TextPlacement =
+      absolute.position === text.position
+        ? {
+            position: text.position,
+            offsetX: shifted(text.offsetX, delta.x),
+            offsetY: shifted(text.offsetY, delta.y),
+          }
+        : absolute;
+    if (
+      placement.position === text.position &&
+      near(placement.offsetX, text.offsetX) &&
+      near(placement.offsetY, text.offsetY)
+    ) {
+      return null;
     }
+    return { kind: "text", id: text.id, placement };
+  }
+  if (handle.kind === "graphic") {
+    const graphic = scene.graphics.find((item) => item.id === handle.id);
+    if (!graphic) return null;
+    const absolute = placeGraphic(target, safe);
+    const placement: GraphicPlacement =
+      absolute.anchor === graphic.anchor
+        ? {
+            anchor: graphic.anchor,
+            offsetX: shifted(graphic.offsetX, delta.x),
+            offsetY: shifted(graphic.offsetY, delta.y),
+          }
+        : absolute;
+    if (
+      placement.anchor === graphic.anchor &&
+      near(placement.offsetX, graphic.offsetX) &&
+      near(placement.offsetY, graphic.offsetY)
+    ) {
+      return null;
+    }
+    return { kind: "graphic", id: graphic.id, placement };
+  }
+  if (handle.kind === "layer") {
+    const layer = scene.layers.find((item) => item.id === handle.id);
+    if (!layer) return null;
     // Titik jatuh adalah PUSAT kotak; `placeLayer` bekerja pada kotaknya,
     // karena jangkar kiri menempelkan TEPI kiri ke margin aman, bukan pusatnya.
-    const placement = placeLayer(
+    const absolute = placeLayer(
       {
         x: target.x - layer.width / 2,
         y: target.y - layer.height / 2,
@@ -502,103 +811,22 @@ const buildOps = (
       },
       safe,
     );
+    const placement =
+      absolute.anchor === layer.anchor
+        ? {
+            anchor: layer.anchor,
+            offsetX: shifted(layer.offsetX, delta.x),
+            offsetY: shifted(layer.offsetY, delta.y),
+          }
+        : absolute;
     if (
       placement.anchor === layer.anchor &&
-      Math.abs(placement.offsetX - layer.offsetX) < 0.001 &&
-      Math.abs(placement.offsetY - layer.offsetY) < 0.001
+      near(placement.offsetX, layer.offsetX) &&
+      near(placement.offsetY, layer.offsetY)
     ) {
       return null;
     }
-    return {
-      ops: [
-        {
-          op: "updateScene",
-          id: scene.id,
-          patch: {
-            layers: scene.layers.map((item) =>
-              item.id === layer.id ? { ...item, ...placement } : item,
-            ),
-          },
-        },
-      ],
-      label: `Geser lapisan ${layer.id}`,
-    };
+    return { kind: "layer", id: layer.id, placement };
   }
-
-  if (drag.handle.kind === "graphic") {
-    const graphic = scene.graphics.find((item) => item.id === drag.handle.id);
-    if (!graphic) return null;
-    if (drag.mode === "resize") {
-      // Turun = besar, naik = kecil; skalanya dua kali selisih supaya terasa
-      // langsung tanpa harus menyeret setengah layar.
-      const next = Math.min(
-        0.6,
-        Math.max(0.02, drag.startSizeFrac + (target.y - drag.origin.y) * 2),
-      );
-      if (Math.abs(next - graphic.size) < 0.001) return null;
-      return {
-        ops: [
-          {
-            op: "updateScene",
-            id: scene.id,
-            patch: {
-              graphics: scene.graphics.map((item) =>
-                item.id === graphic.id
-                  ? { ...item, size: Number(next.toFixed(4)) }
-                  : item,
-              ),
-            },
-          },
-        ],
-        label: `Ukuran grafis ${graphic.id}`,
-      };
-    }
-    const placement = placeGraphic(target, safe);
-    if (
-      placement.anchor === graphic.anchor &&
-      Math.abs(placement.offsetX - graphic.offsetX) < 0.001 &&
-      Math.abs(placement.offsetY - graphic.offsetY) < 0.001
-    ) {
-      return null;
-    }
-    return {
-      ops: [
-        {
-          op: "updateScene",
-          id: scene.id,
-          patch: {
-            graphics: scene.graphics.map((item) =>
-              item.id === graphic.id ? { ...item, ...placement } : item,
-            ),
-          },
-        },
-      ],
-      label: `Geser grafis ${graphic.id}`,
-    };
-  }
-
-  const text = scene.texts.find((item) => item.id === drag.handle.id);
-  if (!text) return null;
-  const placement = placeText(target, safe);
-  if (
-    placement.position === text.position &&
-    Math.abs(placement.offsetX - text.offsetX) < 0.001 &&
-    Math.abs(placement.offsetY - text.offsetY) < 0.001
-  ) {
-    return null;
-  }
-  return {
-    ops: [
-      {
-        op: "updateScene",
-        id: scene.id,
-        patch: {
-          texts: scene.texts.map((item) =>
-            item.id === text.id ? { ...item, ...placement } : item,
-          ),
-        },
-      },
-    ],
-    label: `Geser teks ${text.id}`,
-  };
+  return null;
 };

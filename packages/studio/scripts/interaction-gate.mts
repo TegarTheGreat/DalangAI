@@ -157,7 +157,7 @@ const main = async (): Promise<void> => {
   const cdp = page._client() as unknown as Cdp;
 
   // --- masukan sungguhan lewat CDP -------------------------------------------
-  const mouse = (type: string, x: number, y: number, pressed: boolean) =>
+  const mouse = (type: string, x: number, y: number, pressed: boolean, modifiers = 0) =>
     cdp.send("Input.dispatchMouseEvent", {
       type,
       x,
@@ -165,6 +165,7 @@ const main = async (): Promise<void> => {
       button: pressed || type !== "mouseMoved" ? "left" : "none",
       buttons: pressed ? 1 : 0,
       clickCount: type === "mouseMoved" ? 0 : 1,
+      modifiers,
     });
   const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) => {
     await mouse("mouseMoved", from.x, from.y, false);
@@ -328,7 +329,25 @@ const main = async (): Promise<void> => {
       await sleep(250);
       box = await rect(".canvas-box.annotation", 0);
     }
-    const frame = await rect("[data-dalang-annotation-frame]");
+    // Bingkai screenshot punya animasi masuk: ukur sampai dua pengukuran
+    // berturut-turut sama, supaya fraksi yang diharapkan memakai bingkai
+    // yang sudah diam — bingkai yang sama yang dipakai editor saat melepas.
+    let frame = await rect("[data-dalang-annotation-frame]");
+    for (let tries = 0; tries < 20; tries++) {
+      await sleep(250);
+      const again = await rect("[data-dalang-annotation-frame]");
+      if (
+        frame &&
+        again &&
+        Math.abs(again.w - frame.w) < 0.5 &&
+        Math.abs(again.h - frame.h) < 0.5
+      ) {
+        frame = again;
+        break;
+      }
+      frame = again;
+    }
+    box = await rect(".canvas-box.annotation", 0);
     if (!box || !frame) throw new Error("kotak anotasi / bingkai tidak muncul di kanvas");
     console.log(
       `  bingkai ${Math.round(frame.w)}×${Math.round(frame.h)}px; kotak anotasi ${Math.round(box.w)}×${Math.round(box.h)}px`,
@@ -415,6 +434,85 @@ const main = async (): Promise<void> => {
       "seretan yang menempel tetap menghasilkan patch teks",
       typeof subText?.offsetX === "number" && subText.offsetX !== 0,
       `offsetX tx-sub = ${subText?.offsetX}`,
+    );
+
+    console.log("\nPemilihan jamak di kanvas");
+    // Setelah seretan tadi tx-sub terpilih. Shift+klik pada teks lebar
+    // menambahkannya; menyeret yang lebar lalu memindahkan KEDUANYA sejauh
+    // yang sama dalam SATU patch — dan satu undo mengembalikan keduanya.
+    type TextPos = { id: string; offsetX: number; offsetY: number };
+    const textsOf = async (): Promise<Record<string, TextPos>> => {
+      const list =
+        (sceneOf(await plan(), "sc-step-1") as unknown as { texts?: TextPos[] }).texts ??
+        [];
+      return Object.fromEntries(list.map((text) => [text.id, text]));
+    };
+    const canvasTexts = async (): Promise<Rect[]> =>
+      ((await page.evaluate(
+        '(() => Array.from(document.querySelectorAll(".canvas-box.text")).map((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }))()',
+      )) as Rect[]) ?? [];
+    const beforeMulti = await textsOf();
+    let boxes: Rect[] = [];
+    for (let tries = 0; tries < 40 && boxes.length < 2; tries++) {
+      await sleep(150);
+      boxes = await canvasTexts();
+    }
+    const wideBox = [...boxes].sort((a, b) => b.w - a.w)[0];
+    if (!wideBox) throw new Error("kotak teks lebar tidak ada");
+    await mouse("mousePressed", center(wideBox).x, center(wideBox).y, true, SHIFT);
+    await mouse("mouseReleased", center(wideBox).x, center(wideBox).y, true, SHIFT);
+    await sleep(150);
+    const activeCount = (await page.evaluate(
+      'document.querySelectorAll(".canvas-box.text.active").length',
+    )) as number;
+    check(
+      "Shift+klik menambah teks kedua ke seleksi",
+      activeCount === 2,
+      `kotak teks aktif = ${activeCount}`,
+    );
+    const boxesBefore = [...boxes].sort((a, b) => b.w - a.w);
+    await drag(center(wideBox), { x: center(wideBox).x + 60, y: center(wideBox).y });
+    await sleep(SETTLE_MS);
+    // Yang dinilai adalah yang TERLIHAT: kedua kotak di layar bergeser 60 px
+    // ke kanan dan tidak ke arah lain. Offset di plan boleh berbeda per teks
+    // (jangkar dipilih ulang per elemen); yang harus sama adalah gerakannya.
+    const boxesAfter = [...(await canvasTexts())].sort((a, b) => b.w - a.w);
+    const shifts = boxesBefore.map((before, index) => ({
+      dx: (boxesAfter[index]?.x ?? Number.NaN) - before.x,
+      dy: (boxesAfter[index]?.y ?? Number.NaN) - before.y,
+    }));
+    check(
+      "menyeret satu anggota menggeser KEDUA teks 60 px ke kanan, tidak ke arah lain",
+      shifts.length === 2 &&
+        shifts.every((shift) => near(shift.dx, 60, 3) && near(shift.dy, 0, 3)),
+      shifts
+        .map((shift) => `(${shift.dx.toFixed(1)}, ${shift.dy.toFixed(1)}) px`)
+        .join(", "),
+    );
+    const afterMulti = await textsOf();
+    check(
+      "kedua teks berubah di plan dalam satu patch",
+      afterMulti["tx-judul"]?.offsetX !== beforeMulti["tx-judul"]?.offsetX &&
+        afterMulti["tx-sub"]?.offsetX !== beforeMulti["tx-sub"]?.offsetX,
+      `offsetX judul ${beforeMulti["tx-judul"]?.offsetX} → ${afterMulti["tx-judul"]?.offsetX}, sub ${beforeMulti["tx-sub"]?.offsetX} → ${afterMulti["tx-sub"]?.offsetX}`,
+    );
+    await shot("gate-multi.png");
+    await fetch(`${studio.url}/api/undo`, { method: "POST" });
+    await sleep(SETTLE_MS);
+    const undone = await textsOf();
+    check(
+      "satu undo mengembalikan kedua teks — seretan kelompok adalah satu patch",
+      near(
+        undone["tx-judul"]?.offsetX ?? Number.NaN,
+        beforeMulti["tx-judul"]?.offsetX ?? 0,
+        1e-6,
+      ) &&
+        near(
+          undone["tx-sub"]?.offsetX ?? Number.NaN,
+          beforeMulti["tx-sub"]?.offsetX ?? 0,
+          1e-6,
+        ),
+      `judul ${undone["tx-judul"]?.offsetX} (awal ${beforeMulti["tx-judul"]?.offsetX}), sub ${undone["tx-sub"]?.offsetX} (awal ${beforeMulti["tx-sub"]?.offsetX})`,
     );
 
     console.log("\nPegangan fade musik di timeline");

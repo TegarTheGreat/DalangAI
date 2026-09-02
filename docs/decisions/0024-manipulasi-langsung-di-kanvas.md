@@ -55,6 +55,20 @@ Jangkar tepi memakai **margin aman**, bukan tepi layar: menyeret sesuatu "ke
 pinggir" mendaratkannya di kolom aman yang sama dengan tempat preset menaruh
 teks, bukan menempel di tepi bingkai.
 
+**Amandemen (bersama §7).** Menghitung ulang offset dari jangkar pada
+SETIAP pelepasan ternyata salah untuk elemen yang tidak ditaruh preset tepat
+di jangkar + offset: teks bertumpuk dalam satu kelompok (yang kedua di bawah
+yang pertama) dan blok yang diangkat sedikit. Gerbang interaksi yang menilai
+kotak di LAYAR (bukan angka di plan) menangkapnya: seretan mendatar pertama
+pada judul melompat 32 px ke bawah. Kini, selama posisi/jangkarnya tidak
+berubah, offset digeser RELATIF sebesar selisih seretan — elemen bergerak
+persis sejauh jari — dan dihitung ulang dari jangkar hanya saat pusatnya
+menyeberang ke wilayah lain, tempat offset relatif akan menabrak batas ±0,5.
+Kotak elemen dan bingkai anotasi juga dibaca SEGAR dari DOM saat menekan dan
+melepas, bukan dari pengukuran mutasi terakhir: pemutar bisa menskalakan
+ulang isinya di antara dua mutasi, dan angka yang menentukan patch harus
+dibaca pada detik yang sama dengan jarinya.
+
 ### 4. Menyeret TIDAK mengubah `align`
 
 Perataan adalah keputusan tipografi (rata kiri, tengah, kanan di dalam
@@ -81,6 +95,20 @@ Ini bagian yang paling mudah salah dan paling mahal kalau salah: satu tanda
 minus yang keliru membuat tempelan melompat ke sisi berlawanan saat dilepas,
 dan itu tidak terlihat dari kode — hanya dari tangan. Sebagai fungsi murni,
 seluruh aturannya diuji sebagai angka.
+
+### 7. Pemilihan jamak: satu seretan, satu patch
+
+Shift+klik menambah (atau mengurangi) anggota seleksi; klik biasa pada
+anggota mempertahankan seleksinya — itulah cara menyeret kelompok — dan klik
+pada yang lain menggantinya. Menyeret salah satu anggota memindahkan
+semuanya sejauh yang sama, dan keluarannya SATU `updateScene` yang memuat
+semua elemen yang berubah: satu baris di log patch, satu undo untuk
+mengembalikannya. Garis bantu dihitung dari anggota yang diseret terhadap
+elemen di LUAR seleksi (anggota lain ikut bergerak, jadi tidak bisa jadi
+rujukan). Anotasi selalu sendiri karena koordinatnya milik bingkai
+screenshot; ubah ukuran selalu satu elemen. Panah TIDAK menggeser seleksi:
+panah kiri/kanan milik transport, dan dua arti untuk satu tombol lebih buruk
+daripada tidak ada.
 
 ## Bukti
 
@@ -144,7 +172,14 @@ tengah transisi.
   tetap di panel Properti.
 - **Video tidak ikut bergerak selama seretan**, hanya kotaknya. Itu
   konsekuensi langsung dari keputusan mengirim satu patch saat dilepas.
-- **Belum ada pemilihan jamak** (menyeret beberapa elemen sekaligus).
+- ~~**Belum ada pemilihan jamak** (menyeret beberapa elemen sekaligus).~~
+  *DICABUT (Keputusan 7):* Shift+klik menambah/mengurangi anggota seleksi,
+  klik biasa pada anggota mempertahankan seleksinya, menyeret salah satu
+  memindahkan SEMUANYA sejauh yang sama dalam SATU patch `updateScene` (satu
+  undo mengembalikan semuanya), Escape mengosongkan. Anotasi selalu sendiri;
+  ubah ukuran selalu satu elemen. Gerbang interaksi: Shift+klik menjadikan
+  dua kotak teks aktif, seretan 60 px menggeser keduanya sejauh yang sama,
+  dan satu undo mengembalikan keduanya.
   ~~Belum ada penempelan ke elemen lain~~ — *DICABUT:* selain tiga garis
   margin aman per sumbu, elemen yang diseret kini menempel ke elemen lain di
   scene — pusat ke pusat, tepi ke tepi (kiri/kanan, atas/bawah), dan
