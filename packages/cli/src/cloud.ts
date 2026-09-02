@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { parseScenePlan } from "@dalang/core";
 import {
   type CloudConfig,
@@ -75,7 +77,11 @@ export const registerCloudCommands = (program: Command): void => {
       const target = buildLambdaTarget(config);
       const estimate = await target.estimateCost({
         planPath: abs,
-        outputLocation: "/tmp/estimasi.mp4",
+        // Estimasi dihitung dari durasi plan saja; tidak ada berkas yang
+        // ditulis ke sini. Medannya wajib ada di RenderRequest, jadi diisi
+        // path sementara milik sistem — "/tmp" yang ditulis tangan membuat
+        // perintah ini gagal di Windows tanpa alasan yang bisa dilihat.
+        outputLocation: join(tmpdir(), "dalang-estimasi.mp4"),
         profile: "final",
       });
       console.log(`\nEstimasi untuk "${plan.meta.title}":`);
