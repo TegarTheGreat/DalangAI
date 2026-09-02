@@ -27,6 +27,26 @@ export interface BusyState {
   render: string | null;
 }
 
+/**
+ * Pekerjaan proxy DI LATAR (ADR-0028 §10). Bukan `BusyKind`: ia tidak
+ * mengunci editor — patch, undo, dan render tetap jalan selagi proxy dibuat.
+ */
+export interface ProxyJobLite {
+  running: boolean;
+  /** Berkas yang sedang dikerjakan (path relatif plan), atau null. */
+  file: string | null;
+  label: string | null;
+  /** Urutan berkas sekarang (mulai 1) dan jumlah seluruh antrean. */
+  index: number;
+  total: number;
+  /** Kemajuan berkas sekarang, 0..1. */
+  fraction: number;
+  /** Berkas yang sudah selesai (dibuat, dari cache, atau tidak perlu). */
+  done: number;
+  failed: number;
+  cancelled: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Ekspor (ADR-0014) — union literal disalin dari @dalang/renderer supaya
 // bundle browser tidak menyeret @remotion/renderer; server memvalidasi
@@ -92,6 +112,8 @@ export interface ProjectStatePayload {
   projectId: string;
   plan: ScenePlan | null;
   busy: BusyState;
+  /** Pekerjaan proxy di latar yang sedang berjalan, atau null (ADR-0028 §10). */
+  proxyJob: ProxyJobLite | null;
   patchLog: {
     canUndo: boolean;
     canRedo: boolean;
@@ -381,6 +403,8 @@ export type StudioEvent =
   | { type: "project-closed" }
   | { type: "plan-updated"; reason: PlanUpdateReason; revision: number }
   | { type: "busy"; busy: BusyState }
+  /** Kemajuan proxy di latar; `running: false` = selesai/dibatalkan. */
+  | { type: "proxy-progress"; job: ProxyJobLite }
   | {
       type: "stage-results";
       stage: "tts" | "assets" | "asr" | "loudness" | "proxy";

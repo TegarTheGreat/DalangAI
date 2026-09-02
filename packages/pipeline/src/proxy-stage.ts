@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
+  type MediaProbeNote,
   orphanMediaAssetIds,
   PROXY_SHORT_SIDE,
   type ProxyMedia,
@@ -34,6 +35,29 @@ import { consoleLogger, type SceneStageResult, type StageLogger } from "./stage-
 export interface ProxyJob {
   file: string;
   label: string;
+}
+
+/** Kemajuan satu berkas: `index`/`total` di antrean, `fraction` 0..1 di berkas itu. */
+export interface ProxyProgressEvent {
+  file: string;
+  label: string;
+  index: number;
+  total: number;
+  fraction: number;
+}
+
+/**
+ * Satu berkas SELESAI diproses (apa pun hasilnya). `proxy` hadir — null atau
+ * media — bila ada yang harus ditulis ke renderState pemanggil: Studio
+ * memakainya untuk menulis ke plan HIDUP per berkas, bukan menunggu seluruh
+ * antrean selesai lalu menimpa plan yang mungkin sudah diedit orang.
+ */
+export interface ProxyFileEvent {
+  file: string;
+  label: string;
+  result: SceneStageResult;
+  proxy?: ProxyMedia | null;
+  note?: MediaProbeNote;
 }
 
 /**
@@ -75,6 +99,15 @@ export interface ProxyStageOptions {
   files?: string[];
   force?: boolean;
   log?: StageLogger;
+  /** Kemajuan per berkas (ADR-0028 §10). */
+  onProgress?: (event: ProxyProgressEvent) => void;
+  /** Dipanggil setiap satu berkas selesai — done, cached, skipped, atau error. */
+  onFile?: (event: ProxyFileEvent) => void;
+  /**
+   * Pembatalan: berkas yang sedang dibuat dihentikan (ffmpeg dibunuh, berkas
+   * setengah jadi dibuang) dan sisanya dilaporkan "dibatalkan", bukan gagal.
+   */
+  signal?: AbortSignal;
 }
 
 export interface ProxyStageOutcome {
@@ -90,23 +123,42 @@ export const runProxyStage = async ({
   files,
   force = false,
   log = consoleLogger,
+  onProgress,
+  onFile,
+  signal,
 }: ProxyStageOptions): Promise<ProxyStageOutcome> => {
   const results: SceneStageResult[] = [];
   let current = plan;
   const wanted = files ? new Set(files) : null;
   const jobs = proxyCandidates(plan).filter((job) => !wanted || wanted.has(job.file));
   if (jobs.length === 0) return { plan: current, results };
+  const total = jobs.length;
 
-  for (const job of jobs) {
+  for (const [position, job] of jobs.entries()) {
+    const index = position + 1;
     // `sceneId` diisi PATH BERKAS: tahap ini memang bekerja per berkas.
     const row = { sceneId: job.file };
+    const finish = (
+      result: SceneStageResult,
+      applied?: { proxy: ProxyMedia | null; note: MediaProbeNote },
+    ) => {
+      results.push(result);
+      onFile?.({ file: job.file, label: job.label, result, ...(applied ?? {}) });
+    };
+    const progress = (fraction: number) =>
+      onProgress?.({ file: job.file, label: job.label, index, total, fraction });
+
+    if (signal?.aborted) {
+      finish({ ...row, status: "skipped", detail: `${job.label} · dibatalkan` });
+      continue;
+    }
     const absolute = join(paths.planDir, job.file);
     if (!existsSync(absolute)) {
-      results.push({ ...row, status: "error", detail: "berkas tidak ditemukan" });
+      finish({ ...row, status: "error", detail: "berkas tidak ditemukan" });
       continue;
     }
     if (!transcoder) {
-      results.push({
+      finish({
         ...row,
         status: "skipped",
         detail: "tidak ada transkoder — preview memakai berkas aslinya",
@@ -135,33 +187,35 @@ export const runProxyStage = async ({
       // entri ledger tanpa berkasnya membuat preview 404 dengan tenang.
       (stored.proxy === null || existsSync(join(paths.planDir, stored.proxy.file)))
     ) {
-      current = setProxy(current, job.file, stored.proxy, {
-        codec: stored.codec,
-        fps: stored.fps,
-      });
-      results.push({
-        ...row,
-        status: stored.proxy ? "cached" : "skipped",
-        detail: stored.proxy
-          ? `cache · ${stored.proxy.width}×${stored.proxy.height}`
-          : `cache · tidak perlu: ${stored.reason}`,
-        costUsd: 0,
-      });
+      const note: MediaProbeNote = { codec: stored.codec, fps: stored.fps };
+      current = setProxy(current, job.file, stored.proxy, note);
+      finish(
+        {
+          ...row,
+          status: stored.proxy ? "cached" : "skipped",
+          detail: stored.proxy
+            ? `cache · ${stored.proxy.width}×${stored.proxy.height}`
+            : `cache · tidak perlu: ${stored.reason}`,
+          costUsd: 0,
+        },
+        { proxy: stored.proxy, note },
+      );
       continue;
     }
 
     db.startRun(plan.projectId, job.file, "proxy", inputHash);
     const startedAt = Date.now();
     try {
+      progress(0);
       const info = await transcoder.probe(absolute);
       if (!info?.codec) {
         const reason = info ? "tidak punya jalur video" : "tidak terbaca sebagai media";
         db.failRun(plan.projectId, job.file, "proxy", reason, Date.now() - startedAt);
-        results.push({ ...row, status: "error", detail: `${job.label} · ${reason}` });
+        finish({ ...row, status: "error", detail: `${job.label} · ${reason}` });
         continue;
       }
       const decision = proxyDecision(info);
-      const note = { codec: info.codec, fps: info.fps };
+      const note: MediaProbeNote = { codec: info.codec, fps: info.fps };
       if (!decision.needed) {
         // Proxy lama dari sumber yang sudah berganti isi dibersihkan di sini
         // juga: berkas yang tidak dirujuk siapa pun hanya memenuhi disk.
@@ -180,13 +234,16 @@ export const runProxyStage = async ({
           costUsd: 0,
           durationMs: Date.now() - startedAt,
         });
-        results.push({
-          ...row,
-          status: "skipped",
-          detail: `${job.label} · tidak perlu: ${decision.reason}`,
-          provider: transcoder.id,
-          costUsd: 0,
-        });
+        finish(
+          {
+            ...row,
+            status: "skipped",
+            detail: `${job.label} · tidak perlu: ${decision.reason}`,
+            provider: transcoder.id,
+            costUsd: 0,
+          },
+          { proxy: null, note },
+        );
         continue;
       }
 
@@ -194,17 +251,41 @@ export const runProxyStage = async ({
       const fps = proxyFps(info.fps);
       mkdirSync(paths.proxiesDir, { recursive: true });
       const outputAbs = join(paths.proxiesDir, `${inputHash}-${PROXY_SHORT_SIDE}p.mp4`);
-      const made = await transcoder.makeProxy({
-        sourcePath: absolute,
-        outputPath: outputAbs,
-        width: dims.width,
-        height: dims.height,
-        ...(fps ? { fps } : {}),
-      });
+      // Ditulis ke berkas sementara lalu di-rename: dua penulis untuk berkas
+      // yang sama (Studio di latar dan agent `ingestVideo`) tidak pernah
+      // saling merusak — rename itu atomik, dan yang terakhir menang dengan
+      // berkas yang utuh. Ekstensinya tetap .mp4 supaya muxer-nya benar.
+      const outputTmp = join(
+        paths.proxiesDir,
+        `${inputHash}-${PROXY_SHORT_SIDE}p.${process.pid}-${startedAt}.tmp.mp4`,
+      );
+      const made = await transcoder.makeProxy(
+        {
+          sourcePath: absolute,
+          outputPath: outputTmp,
+          width: dims.width,
+          height: dims.height,
+          ...(fps ? { fps } : {}),
+          durationSec: info.durationSec,
+        },
+        { onProgress: progress, ...(signal ? { signal } : {}) },
+      );
       const durationMs = Date.now() - startedAt;
       if (!made.ok) {
+        rmSync(outputTmp, { force: true });
+        if (signal?.aborted) {
+          db.failRun(plan.projectId, job.file, "proxy", "dibatalkan", durationMs);
+          finish({
+            ...row,
+            status: "skipped",
+            detail: `${job.label} · dibatalkan`,
+            provider: transcoder.id,
+            durationMs,
+          });
+          continue;
+        }
         db.failRun(plan.projectId, job.file, "proxy", made.reason, durationMs);
-        results.push({
+        finish({
           ...row,
           status: "error",
           detail: `${job.label} · gagal membuat proxy: ${made.reason}`,
@@ -213,6 +294,8 @@ export const runProxyStage = async ({
         });
         continue;
       }
+      renameSync(outputTmp, outputAbs);
+      progress(1);
       if (stored?.proxy && stored.proxy.file !== paths.relFromPlan(outputAbs)) {
         rmSync(join(paths.planDir, stored.proxy.file), { force: true });
       }
@@ -236,18 +319,21 @@ export const runProxyStage = async ({
         durationMs,
       });
       log.info(`  proxy ${job.file} → ${proxy.file} (${decision.reason})`);
-      results.push({
-        ...row,
-        status: "done",
-        detail: `${job.label} · ${made.width}×${made.height}${made.fps ? ` ${Math.round(made.fps)} fps` : ""} · ${decision.reason}`,
-        provider: transcoder.id,
-        costUsd: 0,
-        durationMs,
-      });
+      finish(
+        {
+          ...row,
+          status: "done",
+          detail: `${job.label} · ${made.width}×${made.height}${made.fps ? ` ${Math.round(made.fps)} fps` : ""} · ${decision.reason}`,
+          provider: transcoder.id,
+          costUsd: 0,
+          durationMs,
+        },
+        { proxy, note },
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       db.failRun(plan.projectId, job.file, "proxy", message, Date.now() - startedAt);
-      results.push({ ...row, status: "error", detail: message });
+      finish({ ...row, status: "error", detail: message });
     }
   }
 

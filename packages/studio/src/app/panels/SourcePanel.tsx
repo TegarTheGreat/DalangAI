@@ -341,6 +341,7 @@ export const SourceSection: React.FC<{
 }> = ({ plan, scene, layerId }) => {
   const { project } = useStudio();
   const busy = project?.busy.mutation !== null;
+  const proxyJob = project?.proxyJob ?? null;
   const layer = layerId ? scene.layers.find((item) => item.id === layerId) : undefined;
   const visual = layer ? layer.visual : scene.visual;
   const asset = layerId
@@ -388,7 +389,14 @@ export const SourceSection: React.FC<{
         <div className="source-card">
           <div className="source-card-head">
             <span className="source-name">{asset.file.split("/").pop()}</span>
-            {asset.proxy ? (
+            {proxyJob?.running && proxyJob.file === asset.file ? (
+              <span
+                className="source-badge"
+                title="Proxy sedang dibuat di latar — editor tetap bisa dipakai"
+              >
+                proxy {Math.round(proxyJob.fraction * 100)}%
+              </span>
+            ) : asset.proxy ? (
               <span className="source-badge ok" title={asset.proxy.file}>
                 proxy {asset.proxy.width}×{asset.proxy.height}
               </span>
@@ -396,8 +404,8 @@ export const SourceSection: React.FC<{
               <button
                 type="button"
                 className="mini"
-                disabled={busy}
-                title="Buat salinan ringan 540p untuk preview & render draf; render final tetap memakai aslinya"
+                disabled={busy || Boolean(proxyJob?.running)}
+                title="Buat salinan ringan 540p di latar untuk preview & render draf; render final tetap memakai aslinya"
                 onClick={() => void studioClient.runProxies([asset.file])}
               >
                 Buat proxy

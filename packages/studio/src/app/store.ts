@@ -436,18 +436,28 @@ export class StudioClient {
     }
   }
 
+  /** Proxy dibuat DI LATAR (ADR-0028 §10): jawabannya segera, hasilnya lewat event. */
   async runProxies(files?: string[], force?: boolean): Promise<void> {
     try {
-      const { results } = await api.runProxies(files, force);
-      const made = results.filter((r) => r.status === "done").length;
-      const skipped = results.filter((r) => r.status === "skipped").length;
+      const reply = await api.runProxies(files, force);
+      if (!reply.started) {
+        this.toast(reply.reason ?? "Tidak ada berkas video yang perlu proxy");
+        return;
+      }
       this.toast(
-        results.length === 0
-          ? "Tidak ada berkas video yang perlu proxy"
-          : `Proxy: ${made} dibuat, ${skipped} tidak perlu, ${results.length - made - skipped} gagal`,
+        reply.queued
+          ? "Proxy antre di belakang yang sedang dibuat"
+          : `Proxy dibuat di latar (${reply.job.total} berkas) — editor tetap bisa dipakai`,
       );
-      await this.refresh();
-      void this.loadSources();
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  async cancelProxies(): Promise<void> {
+    try {
+      const { cancelled } = await api.cancelProxies();
+      if (!cancelled) this.toast("Tidak ada pembuatan proxy yang berjalan");
     } catch (error) {
       this.failure(error);
     }
@@ -538,6 +548,23 @@ export class StudioClient {
         const project = this.state.project;
         if (project) {
           this.set({ project: { ...project, busy: event.busy } });
+        }
+        break;
+      }
+      case "proxy-progress": {
+        const project = this.getState().project;
+        if (project)
+          this.set({
+            project: { ...project, proxyJob: event.job.running ? event.job : null },
+          });
+        if (!event.job.running) {
+          this.toast(
+            event.job.cancelled
+              ? `Proxy dibatalkan (${event.job.done} selesai sebelum berhenti)`
+              : `Proxy selesai: ${event.job.done} berkas${event.job.failed ? `, ${event.job.failed} gagal` : ""}`,
+          );
+          this.scheduleRefresh();
+          void this.loadSources();
         }
         break;
       }

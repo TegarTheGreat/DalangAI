@@ -156,6 +156,22 @@ const progressPrinter = () => {
   };
 };
 
+/** Kemajuan tahap proxy (ADR-0028 §10): satu baris per berkas, diperbarui di tempat. */
+const proxyProgressPrinter = () => {
+  let last = "";
+  return (event: { file: string; index: number; total: number; fraction: number }) => {
+    const line = `  proxy ${event.index}/${event.total} ${event.file} ${(event.fraction * 100).toFixed(0)}%`;
+    if (line !== last) {
+      process.stdout.write(`\r${line.padEnd(70)}`);
+      last = line;
+    }
+    if (event.fraction >= 1) {
+      process.stdout.write("\n");
+      last = "";
+    }
+  };
+};
+
 program
   .command("validate")
   .argument("<proyek>", "folder proyek atau path plan.json")
@@ -436,6 +452,7 @@ program
         audioProbe: remotionAudioProbe(),
         // ADR-0028: proxy pratinjau untuk rekaman panjang/berat.
         transcoder: remotionTranscoder(),
+        onProxyProgress: proxyProgressPrinter(),
         force: options.force,
         log: {
           info: (message) => console.log(message),
@@ -510,6 +527,7 @@ program
         transcoder: remotionTranscoder(),
         ...(options.file ? { files: options.file } : {}),
         ...(options.force !== undefined ? { force: options.force } : {}),
+        onProgress: proxyProgressPrinter(),
         log: {
           info: (message) => console.log(message),
           warn: (message) => console.warn(message),

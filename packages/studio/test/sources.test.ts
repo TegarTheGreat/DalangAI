@@ -12,10 +12,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import type {
   PeaksResponse,
   ProjectStatePayload,
+  ProxyJobLite,
   RegisterSourceResponse,
   SourcesResponse,
 } from "../src/shared/api-types";
-import { call, callJson, makeStudio, makeTempProject } from "./helpers";
+import { call, callJson, collectSse, makeStudio, makeTempProject } from "./helpers";
 
 /**
  * Sumber rekaman & proxy di panel MANUAL (ADR-0028).
@@ -43,7 +44,7 @@ const LONG: MediaProbeInfo = {
 
 const JPEG_STUB = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 
-const fakeTranscoder = () => {
+const fakeTranscoder = (proxyDelayMs = 0) => {
   const calls = { probe: 0, proxy: 0, frames: [] as number[], pcm: 0 };
   const transcoder: MediaTranscoder = {
     id: "fake-ff",
@@ -51,8 +52,24 @@ const fakeTranscoder = () => {
       calls.probe += 1;
       return sourcePath.endsWith(".mp4") || sourcePath.endsWith(".mov") ? LONG : null;
     },
-    makeProxy: async (request) => {
+    makeProxy: async (request, hooks) => {
       calls.proxy += 1;
+      if (proxyDelayMs > 0) {
+        // Transkoder "lambat" yang menghormati sinyal — untuk menguji latar & batal.
+        const cancelled = await new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => resolve(false), proxyDelayMs);
+          hooks?.signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              resolve(true);
+            },
+            { once: true },
+          );
+        });
+        if (cancelled) return { ok: false, reason: "dibatalkan" };
+      }
+      hooks?.onProgress?.(1);
       mkdirSync(join(request.outputPath, ".."), { recursive: true });
       writeFileSync(request.outputPath, "proxy-uji");
       return {
@@ -81,12 +98,14 @@ const fakeTranscoder = () => {
 };
 
 const cleanups: Array<() => void> = [];
-const boot = (options: { transcoder?: boolean } = { transcoder: true }) => {
+const boot = (
+  options: { transcoder?: boolean; proxyDelayMs?: number } = { transcoder: true },
+) => {
   const { dir, planPath } = makeTempProject();
   mkdirSync(join(dir, "assets"), { recursive: true });
   writeFileSync(join(dir, "assets/podcast.mp4"), "rekaman palsu satu");
   writeFileSync(join(dir, "assets/catatan.txt"), "bukan media");
-  const fake = fakeTranscoder();
+  const fake = fakeTranscoder(options.proxyDelayMs ?? 0);
   const studio = makeStudio(
     planPath,
     options.transcoder === false ? {} : { transcoder: () => fake.transcoder },
@@ -104,6 +123,22 @@ afterEach(() => {
 
 const getProject = async (studio: ReturnType<typeof boot>["studio"]) =>
   (await callJson<ProjectStatePayload>(studio, "/api/project")).body;
+
+/** Tunggu sesuatu yang dikerjakan DI LATAR muncul (proxy, pekerjaan selesai). */
+const waitFor = async <T>(
+  probe: () => Promise<T | null | undefined | false>,
+  timeoutMs = 4000,
+): Promise<T> => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await probe();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error("menunggu pekerjaan latar terlalu lama");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+};
+const proxyOfScene = (project: ProjectStatePayload, sceneId: string) =>
+  project.plan?.renderState.resolvedAssets[sceneId]?.proxy ?? null;
 
 describe("GET /api/sources", () => {
   it("mendaftar rekaman di folder proyek dengan fakta, pemakai, dan keputusan proxy", async () => {
@@ -223,9 +258,15 @@ describe("POST /api/sources/register", () => {
     );
     expect(status).toBe(200);
     expect(body.codec).toBe("hevc");
-    expect(body.proxy).toMatchObject({ width: 960, height: 540 });
+    // Proxy dibuat DI LATAR (ADR-0028 §10): jawabannya segera dan mengatakannya;
+    // proxy-nya menyusul ke plan hidup tanpa mengunci editor.
+    expect(body.proxyNote).toContain("di latar");
+    const settled = await waitFor(async () =>
+      proxyOfScene(await getProject(studio), "sc-batu"),
+    );
+    expect(settled).toMatchObject({ width: 960, height: 540 });
     expect(calls.proxy).toBe(1);
-    expect(existsSync(join(dir, body.proxy?.file ?? ""))).toBe(true);
+    expect(existsSync(join(dir, settled.file))).toBe(true);
 
     const project = await getProject(studio);
     const scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
@@ -297,7 +338,11 @@ describe("POST /api/sources/register", () => {
     expect(layer?.visual.assetId).toBe("assets/podcast.mp4");
     expect(layer?.visual.pinned).toBe(true);
     expect(layer?.visual.trimStartSec).toBe(12.5);
-    expect(project.plan?.renderState.layerAssets["lap-uji"]?.proxy?.width).toBe(960);
+    const proxy = await waitFor(
+      async () =>
+        (await getProject(studio)).plan?.renderState.layerAssets["lap-uji"]?.proxy,
+    );
+    expect(proxy.width).toBe(960);
   });
 
   it("menolak path keluar folder, berkas hilang, bukan-video, scene terkunci", async () => {
@@ -403,7 +448,12 @@ describe("thumbnail, gelombang, mount proxy", () => {
         body: JSON.stringify({ file: "assets/podcast.mp4", sceneId: "sc-batu" }),
       },
     );
-    const served = await call(studio, `/${body.proxy?.file}`);
+    // Proxy-nya dibuat di latar: tunggu ia tiba di plan, baru minta berkasnya.
+    expect(body.proxy).toBeNull();
+    const proxy = await waitFor(async () =>
+      proxyOfScene(await getProject(studio), "sc-batu"),
+    );
+    const served = await call(studio, `/${proxy.file}`);
     expect(served.status).toBe(200);
     expect(await served.text()).toBe("proxy-uji");
     expect((await call(studio, "/.dalang/pipeline.db")).status).toBe(404);
@@ -411,26 +461,128 @@ describe("thumbnail, gelombang, mount proxy", () => {
   });
 });
 
-describe("POST /api/pipeline/proxies", () => {
-  it("menjalankan tahap proxy untuk semua berkas video plan dan menyiarkan hasilnya", async () => {
-    const { studio, calls } = boot();
+describe("POST /api/pipeline/proxies — di latar (ADR-0028 §10)", () => {
+  it("202 segera; kemajuan lewat event proxy-progress; hasilnya di plan hidup", async () => {
+    const { studio, calls } = boot({ transcoder: true, proxyDelayMs: 40 });
     await call(studio, "/api/sources/register", {
       method: "POST",
       body: JSON.stringify({ file: "assets/podcast.mp4", sceneId: "sc-batu" }),
     });
-    const { status, body } = await callJson<{ results: Array<{ status: string }> }>(
+    await waitFor(async () => proxyOfScene(await getProject(studio), "sc-batu"));
+    expect(calls.proxy).toBe(1);
+
+    const events = call(studio, "/api/events").then((response) =>
+      collectSse(response, (list) =>
+        list.some(
+          (event) =>
+            event.event === "proxy-progress" &&
+            JSON.parse(event.data).job.running === false,
+        ),
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const { status, body } = await callJson<{
+      started: boolean;
+      queued: boolean;
+      job: ProxyJobLite;
+    }>(studio, "/api/pipeline/proxies", {
+      method: "POST",
+      body: JSON.stringify({ force: true }),
+    });
+    expect(status).toBe(202);
+    expect(body.started).toBe(true);
+    expect(body.queued).toBe(false);
+    expect(body.job).toMatchObject({ running: true, total: 1 });
+
+    const seen = (await events)
+      .filter((event) => event.event === "proxy-progress")
+      .map((event) => JSON.parse(event.data).job as ProxyJobLite);
+    expect(seen.some((job) => job.running && job.file === "assets/podcast.mp4")).toBe(
+      true,
+    );
+    expect(seen.at(-1)).toMatchObject({
+      running: false,
+      done: 1,
+      failed: 0,
+      cancelled: false,
+    });
+    expect(calls.proxy).toBe(2);
+
+    const project = await getProject(studio);
+    expect(project.proxyJob).toBeNull();
+    expect(proxyOfScene(project, "sc-batu")?.width).toBe(960);
+    expect(
+      project.stageRuns.some((run) => run.stage === "proxy" && run.status === "done"),
+    ).toBe(true);
+  });
+
+  it("tanpa berkas video yang perlu: 200 dan mengatakannya, bukan pekerjaan kosong", async () => {
+    const { studio } = boot();
+    const { status, body } = await callJson<{ started: boolean; reason?: string }>(
       studio,
       "/api/pipeline/proxies",
       { method: "POST", body: JSON.stringify({}) },
     );
     expect(status).toBe(200);
-    expect(body.results.map((r) => r.status)).toEqual(["cached"]);
-    const forced = await callJson<{ results: Array<{ status: string }> }>(
-      studio,
-      "/api/pipeline/proxies",
-      { method: "POST", body: JSON.stringify({ force: true }) },
+    expect(body.started).toBe(false);
+    expect(body.reason).toContain("tidak ada");
+  });
+
+  it("editor tetap menerima patch selagi proxy dibuat, dan pembuatannya bisa dibatalkan", async () => {
+    const { studio, calls } = boot({ transcoder: true, proxyDelayMs: 600 });
+    const events = call(studio, "/api/events").then((response) =>
+      collectSse(response, (list) =>
+        list.some(
+          (event) =>
+            event.event === "proxy-progress" &&
+            JSON.parse(event.data).job.running === false,
+        ),
+      ),
     );
-    expect(forced.body.results.map((r) => r.status)).toEqual(["done"]);
-    expect(calls.proxy).toBe(2);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const registered = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({ file: "assets/podcast.mp4", sceneId: "sc-batu" }),
+      },
+    );
+    expect(registered.status).toBe(200);
+    expect(registered.body.proxy).toBeNull();
+    expect((await getProject(studio)).proxyJob?.running).toBe(true);
+
+    // Selagi ffmpeg (palsu) berjalan: patch user TIDAK ditolak 409.
+    const patched = await call(studio, "/api/patch", {
+      method: "POST",
+      body: JSON.stringify({
+        ops: [{ op: "setMeta", patch: { title: "Diedit selagi proxy dibuat" } }],
+      }),
+    });
+    expect(patched.status).toBe(200);
+
+    const cancel = await callJson<{ cancelled: boolean }>(
+      studio,
+      "/api/pipeline/proxies/cancel",
+      { method: "POST" },
+    );
+    expect(cancel.body.cancelled).toBe(true);
+    const seen = (await events)
+      .filter((event) => event.event === "proxy-progress")
+      .map((event) => JSON.parse(event.data).job as ProxyJobLite);
+    expect(seen.at(-1)).toMatchObject({ running: false, cancelled: true, done: 0 });
+    expect(calls.proxy).toBe(1);
+
+    const project = await getProject(studio);
+    expect(project.plan?.meta.title).toBe("Diedit selagi proxy dibuat");
+    expect(proxyOfScene(project, "sc-batu")).toBeNull();
+    expect(project.proxyJob).toBeNull();
+    // Membatalkan lagi tanpa pekerjaan: jujur, false.
+    const again = await callJson<{ cancelled: boolean }>(
+      studio,
+      "/api/pipeline/proxies/cancel",
+      { method: "POST" },
+    );
+    expect(again.body.cancelled).toBe(false);
   });
 });

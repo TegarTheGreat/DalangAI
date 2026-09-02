@@ -8,7 +8,7 @@ import { readPlanFile } from "./load-plan";
 import { runLoudnessStage } from "./loudness-stage";
 import type { AudioProbe, MediaTranscoder, StockProvider, TtsProvider } from "./ports";
 import { projectPaths } from "./project-paths";
-import { runProxyStage } from "./proxy-stage";
+import { type ProxyStageOptions, runProxyStage } from "./proxy-stage";
 import {
   consoleLogger,
   countErrors,
@@ -42,6 +42,8 @@ export interface GenerateOptions {
    * dan dilaporkan — preview memakai aslinya, bukan menebak-nebak.
    */
   transcoder?: MediaTranscoder;
+  /** Kemajuan per berkas tahap proxy (ADR-0028 §10), untuk CLI. */
+  onProxyProgress?: ProxyStageOptions["onProgress"];
   force?: boolean;
   log?: StageLogger;
 }
@@ -66,6 +68,7 @@ export const generatePlan = async ({
   stockProviders,
   audioProbe,
   transcoder,
+  onProxyProgress,
   force = false,
   log = consoleLogger,
 }: GenerateOptions): Promise<GenerateSummary> => {
@@ -113,6 +116,7 @@ export const generatePlan = async ({
       plan: loudnessOutcome.plan,
       db,
       ...(transcoder ? { transcoder } : {}),
+      ...(onProxyProgress ? { onProgress: onProxyProgress } : {}),
       force,
       log,
     });

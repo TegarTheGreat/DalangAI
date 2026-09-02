@@ -492,8 +492,13 @@ Yang sudah berjalan:
     (toleransi ±1 LU, dipangkas di puncak -1 dBFS, video disalin tanpa enkode
     ulang); CLI dan Studio menyebut angkanya beserta koreksinya;
   - keputusan proxy juga melihat laju bit: di atas 25 Mbps diberi proxy walau
-    720p 30 fps.
-- **Kualitas terjaga otomatis**: 982 unit test (kontrak lock/pin/undo, timing
+    720p 30 fps;
+  - proxy dibuat DI LATAR: ffmpeg melaporkan kemajuan per berkas (`-progress`
+    lewat spawn) dan bisa dibatalkan; Studio membalas 202, menyiarkan
+    `proxy-progress`, punya tombol batal, dan editor tetap bisa dipakai —
+    patch, undo, dan render tidak menunggu; permintaan selagi berjalan antre.
+    CLI `dalang proxy`/`generate` mencetak persen per berkas.
+- **Kualitas terjaga otomatis**: 1002 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -509,7 +514,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 982 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1002 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -661,8 +666,9 @@ di `docs/decisions/`.
       *Batas §9.4 soal AAC dan campuran akhir DICABUT oleh ADR-0028; batas
       §9.3 soal berlian keyframe dan batas §9.1 soal anotasi juga DICABUT —
       keduanya kini bisa diseret. Yang tersisa: visual dasar scene belum bisa
-      di-keyframe (§9.3), proxy dibuat serial dan strip bingkai butuh
-      transkoder (§9.5) — selengkapnya di "Batas" ADR-0027 dan ADR-0028.*
+      di-keyframe (§9.3), dan strip bingkai butuh transkoder (§9.5); batas
+      §9.5 soal proxy sinkron DICABUT (kini di latar, dengan kemajuan dan
+      batal) — selengkapnya di "Batas" ADR-0027 dan ADR-0028.*
 
 Sisa Fase 9 dan Fase 10 ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -409,5 +410,122 @@ describe("runProxyStage", () => {
     expect(readFileSync(join(paths.planDir, stored.proxy.file), "utf8")).toContain(
       "960x540",
     );
+  });
+});
+
+describe("runProxyStage — kemajuan, kait per berkas, pembatalan (ADR-0028 §10)", () => {
+  /** Transkoder palsu yang melaporkan kemajuan dan menghormati sinyal. */
+  const progressiveTranscoder = (): FakeTranscoder => {
+    const base = fakeTranscoder(() => LONG);
+    const inner = base.makeProxy.bind(base);
+    base.makeProxy = async (request, hooks) => {
+      hooks?.onProgress?.(0.5);
+      if (hooks?.signal?.aborted) return { ok: false, reason: "dibatalkan" };
+      return inner(request, hooks);
+    };
+    return base;
+  };
+
+  it("melaporkan kemajuan per berkas dengan indeks/total, dan onFile membawa proxy-nya", async () => {
+    const { paths, db } = makeProject();
+    const progress: Array<{
+      file: string;
+      index: number;
+      total: number;
+      fraction: number;
+    }> = [];
+    const files: Array<{
+      file: string;
+      status: string;
+      proxy: string | null | undefined;
+    }> = [];
+    await runProxyStage({
+      paths,
+      plan: planWithVideos(),
+      db,
+      transcoder: progressiveTranscoder(),
+      log: silentLog,
+      onProgress: (event) =>
+        progress.push({
+          file: event.file,
+          index: event.index,
+          total: event.total,
+          fraction: event.fraction,
+        }),
+      onFile: (event) =>
+        files.push({
+          file: event.file,
+          status: event.result.status,
+          proxy: event.proxy === undefined ? undefined : (event.proxy?.file ?? null),
+        }),
+    });
+    expect(
+      progress.filter((p) => p.file === "assets/podcast.mp4").map((p) => p.fraction),
+    ).toEqual([0, 0.5, 1]);
+    expect(progress[0]).toMatchObject({ index: 1, total: 2 });
+    expect(progress.at(-1)).toMatchObject({
+      file: "assets/broll.mp4",
+      index: 2,
+      total: 2,
+    });
+    expect(files.map((f) => f.status)).toEqual(["done", "done"]);
+    expect(files[0]?.proxy?.endsWith("-540p.mp4")).toBe(true);
+    // Berkas sementara tidak tertinggal: yang ada hanya proxy jadinya.
+    expect(
+      readdirSync(paths.proxiesDir).every((name) => name.endsWith("-540p.mp4")),
+    ).toBe(true);
+  });
+
+  it("pembatalan menghentikan berkas berikutnya dan melaporkannya sebagai dibatalkan, bukan gagal", async () => {
+    const { paths, db } = makeProject();
+    const controller = new AbortController();
+    const { results, plan } = await runProxyStage({
+      paths,
+      plan: planWithVideos(),
+      db,
+      transcoder: progressiveTranscoder(),
+      log: silentLog,
+      signal: controller.signal,
+      onFile: () => controller.abort(),
+    });
+    expect(results.map((r) => [r.sceneId, r.status])).toEqual([
+      ["assets/podcast.mp4", "done"],
+      ["assets/broll.mp4", "skipped"],
+    ]);
+    expect(results[1]?.detail).toContain("dibatalkan");
+    expect(plan.renderState.resolvedAssets.a?.proxy).toBeDefined();
+    expect(plan.renderState.resolvedAssets.b?.proxy).toBeUndefined();
+  });
+
+  it("pembatalan di tengah ffmpeg: dicatat dibatalkan, tanpa proxy setengah jadi, dan jalan berikutnya membuatnya lagi", async () => {
+    const { paths, db } = makeProject();
+    const controller = new AbortController();
+    const transcoder = fakeTranscoder(() => LONG);
+    transcoder.makeProxy = async (_request, hooks) => {
+      controller.abort();
+      hooks?.onProgress?.(0.3);
+      return { ok: false, reason: "dibatalkan" };
+    };
+    const { results } = await runProxyStage({
+      paths,
+      plan: planWithVideos(),
+      db,
+      transcoder,
+      log: silentLog,
+      signal: controller.signal,
+    });
+    expect(results.map((r) => r.status)).toEqual(["skipped", "skipped"]);
+    expect(results[0]?.detail).toContain("dibatalkan");
+    expect(existsSync(paths.proxiesDir) ? readdirSync(paths.proxiesDir) : []).toEqual([]);
+
+    // Ledger tidak menganggapnya selesai: jalan berikutnya membuat proxy sungguhan.
+    const again = await runProxyStage({
+      paths,
+      plan: planWithVideos(),
+      db,
+      transcoder: fakeTranscoder(() => LONG),
+      log: silentLog,
+    });
+    expect(again.results.map((r) => r.status)).toEqual(["done", "done"]);
   });
 });

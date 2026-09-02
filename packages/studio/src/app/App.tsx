@@ -872,6 +872,28 @@ const Header: React.FC = () => {
             {busyLabel}
           </span>
         ) : null}
+        {/* Proxy di latar (ADR-0028 §10): bukan kunci editor, jadi bukan
+            busy-chip biasa — chip kemajuan dengan tombol batal. */}
+        {project?.proxyJob?.running ? (
+          <span
+            className="busy-chip proxy-chip"
+            title={project.proxyJob.file ?? undefined}
+          >
+            <IconSpinner />
+            {`Proxy ${project.proxyJob.index || 1}/${project.proxyJob.total}`}
+            {project.proxyJob.file ? ` · ${project.proxyJob.file.split("/").pop()}` : ""}
+            {` · ${Math.round(project.proxyJob.fraction * 100)}%`}
+            <button
+              type="button"
+              className="mini"
+              onClick={() => void studioClient.cancelProxies()}
+              data-tip="Hentikan pembuatan proxy; yang sudah jadi tetap dipakai"
+              data-tip-bottom=""
+            >
+              Batal
+            </button>
+          </span>
+        ) : null}
       </div>
 
       <div className={`topbar-actions ${actionsFade}`} ref={actionsRef}>

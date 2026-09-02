@@ -9,6 +9,7 @@ import type {
   PatchLogEntryLite,
   PlanUpdateReason,
   ProjectStatePayload,
+  ProxyJobLite,
   RenderOutput,
   StageRunLite,
   TranscriptSummary,
@@ -37,6 +38,8 @@ export class StudioStore {
   revision = 0;
   private mutation: BusyKind | null = null;
   private render: string | null = null;
+  /** Pekerjaan proxy di latar (ADR-0028 §10); ditulis oleh ProxyJobRunner. */
+  proxyJob: ProxyJobLite | null = null;
   private stopWatch: (() => void) | null = null;
 
   constructor(session: ProjectSession, bus: EventBus) {
@@ -165,6 +168,7 @@ export class StudioStore {
       projectId: session.projectId,
       plan,
       busy: this.busy,
+      proxyJob: this.proxyJob,
       patchLog: {
         canUndo: session.patchLog.canUndo,
         canRedo: session.patchLog.canRedo,

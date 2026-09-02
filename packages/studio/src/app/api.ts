@@ -7,6 +7,7 @@ import type {
   NewProjectRequest,
   PeaksResponse,
   ProjectStatePayload,
+  ProxyJobLite,
   RegisterSourceRequest,
   RegisterSourceResponse,
   RenderRequest,
@@ -327,13 +328,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify(req),
     }),
+  /** Mulai proxy DI LATAR (ADR-0028 §10); 202 = berjalan/antre, kemajuan lewat SSE. */
   runProxies: (files?: string[], force?: boolean) =>
     request<{
       ok: true;
-      results: Array<{ sceneId: string; status: string; detail: string }>;
+      started: boolean;
+      queued: boolean;
+      reason?: string;
+      job: ProxyJobLite;
     }>("/api/pipeline/proxies", {
       method: "POST",
       body: JSON.stringify({ files, force }),
+    }),
+  cancelProxies: () =>
+    request<{ ok: true; cancelled: boolean }>("/api/pipeline/proxies/cancel", {
+      method: "POST",
     }),
   sourcePeaks: (file: string, buckets: number) =>
     request<PeaksResponse>(

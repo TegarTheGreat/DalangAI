@@ -181,6 +181,35 @@ Di saat yang sama `proxyDecision` mendapat aturan kelima: laju bit di atas
 25 Mbps diberi proxy walau ringan menurut aturan lain, karena byte per detik —
 bukan jumlah piksel — yang membuat browser tersendat pada rekaman layar.
 
+### 10. Proxy dibuat DI LATAR, dengan kemajuan per berkas dan bisa dibatalkan
+
+Versi pertama menjalankan tahap proxy di dalam kunci mutasi Studio: satu
+rekaman satu jam berarti editor terkunci beberapa menit tanpa satu angka pun.
+Kini:
+
+- **`makeProxy` melaporkan kemajuan dan menghormati pembatalan.** ffmpeg
+  dijalankan langsung lewat `spawn` (biner, cwd, dan env yang sama dengan
+  yang dipakai Remotion) dengan `-progress pipe:1`; `out_time_us` dibagi
+  durasi sumber jadi 0..1, `progress=end` jadi 1. `AbortSignal` membunuh
+  prosesnya dan berkas setengah jadi dibuang.
+- **Tahap proxy punya tiga kait:** `onProgress` (indeks/total + fraksi),
+  `onFile` (satu berkas selesai, membawa proxy yang harus ditulis), dan
+  `signal` (sisa antrean dilaporkan "dibatalkan", bukan gagal; ledger tidak
+  menganggapnya selesai sehingga jalan berikutnya membuatnya lagi). Proxy
+  ditulis ke berkas sementara lalu di-rename: dua penulis untuk berkas yang
+  sama (Studio di latar, agent `ingestVideo`) tidak saling merusak.
+- **Studio menjalankannya sebagai pekerjaan latar** (`ProxyJobRunner`): POST
+  `/api/pipeline/proxies` membalas 202 segera, kemajuan lewat SSE
+  `proxy-progress`, ada `/cancel`, dan permintaan selagi berjalan ANTRE. Kunci
+  mutasi TIDAK dipegang — patch, undo, dan render tetap jalan — dan setiap
+  berkas yang selesai ditulis ke plan hidup lewat `setProxy` (data turunan di
+  luar log patch). Karena mutasi lain memegang snapshot plan dan menulisnya
+  kembali saat selesai, proxy diterapkan ulang setiap kali plan berubah atau
+  kunci lepas: idempoten, hanya menulis yang hilang.
+- **Mendaftarkan rekaman tidak lagi menunggu proxy-nya.** Jawabannya segera
+  dengan catatan "proxy dibuat di latar"; preview beralih ke proxy begitu
+  selesai. CLI `dalang proxy` dan `generate` mencetak persen per berkas.
+
 ## Verifikasi
 
 - **Pengukur & keputusan (murni):** 13 tes core — keputusan proxy per aturan
@@ -199,6 +228,17 @@ bukan jumlah piksel — yang membuat browser tersendat pada rekaman layar.
   melaporkan "campuran akhir -16,0 LUFS · sasaran -16 · pas sasaran ·
   dinaikkan +17,1 dB dari -33,1 LUFS" — draf 54,9 detik yang sebelumnya 17 LU
   terlalu pelan kini tepat sasaran, videonya disalin tanpa enkode ulang.
+- **Proxy di latar (Keputusan 10):** 3 tes tahap pipeline (kemajuan per
+  berkas dengan indeks/total dan `onFile` yang membawa proxy; pembatalan yang
+  menghentikan berkas berikutnya sebagai "dibatalkan", bukan gagal; pembatalan
+  di tengah ffmpeg tanpa proxy setengah jadi dan ledger yang membuatnya lagi
+  di jalan berikutnya), 2 tes ffmpeg SUNGGUHAN (kemajuan tidak pernah turun
+  dan berakhir tepat di 1; sinyal yang sudah dibatalkan tidak memulai ffmpeg),
+  3 tes server Studio (202 segera dan `proxy-progress` sampai `running:false`
+  dengan hasil di plan hidup; tanpa kandidat 200 dengan alasan; patch user
+  diterima selagi proxy dibuat dan `/cancel` menghentikannya dengan
+  `cancelled: true`). Di CLI: `dalang proxy --force` pada proyek uji mencetak
+  0% → 19% → 49% → 80% → 99% → 100% untuk rekaman 70 detik.
 - **Tahap pipeline (transkoder palsu):** 10 tes — kandidat per berkas video
   (lapisan yatim tidak ikut), cache dan `--force`, cache yang berkas proxy-nya
   hilang dibuat ulang, sumber yang berubah isi mendapat proxy baru dan yang
@@ -240,11 +280,14 @@ bukan jumlah piksel — yang membuat browser tersendat pada rekaman layar.
 
 ## Batas
 
-- **Proxy dibuat SERIAL, satu berkas per waktu**, dan sinkron di jalur
-  `register`/`ingestVideo`. Rekaman satu jam 4K butuh beberapa menit ffmpeg
-  di laptop; selama itu tombol/panelnya menunggu. Antrian latar dengan
-  kemajuan per berkas adalah langkah berikutnya yang wajar, dan tidak
-  dikerjakan di sini supaya ledger dan jalur patch-nya tetap satu.
+- ~~**Proxy dibuat SERIAL, satu berkas per waktu, dan sinkron di jalur
+  `register`/`ingestVideo`.**~~ *DICABUT (Keputusan 10) untuk yang sinkron:*
+  Studio membuatnya di latar dengan kemajuan per berkas dan tombol batal;
+  editor tidak terkunci, dan mendaftarkan rekaman menjawab segera. Yang
+  tersisa: tetap SATU ffmpeg pada satu waktu — dua ffmpeg paralel berebut
+  inti yang sama dengan Player, dan yang terasa lambat justru previewnya;
+  dan `ingestVideo` milik agent tetap menunggu proxy-nya selesai, karena
+  laporan tool-nya memang menyebut hasilnya.
 - **Strip bingkai, gelombang, dan proxy butuh transkoder.** Di mesin tanpa
   `@remotion/compositor-*` (tidak ada dalam pemasangan normal) rekaman tetap
   bisa dipasang; UI mengatakan apa yang tidak ia dapat.

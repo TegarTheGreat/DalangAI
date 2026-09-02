@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -17,6 +18,7 @@ import {
   type MediaProbeInfo,
   type MediaTranscoder,
   measureWavLoudness,
+  type ProxyHooks,
   type ProxyRequest,
   type ProxyResult,
 } from "@dalang/pipeline";
@@ -156,11 +158,97 @@ const probe = async (sourcePath: string): Promise<MediaProbeInfo | null> => {
   }
 };
 
-const makeProxy = async (request: ProxyRequest): Promise<ProxyResult> => {
+interface FfRun {
+  code: number | null;
+  stderr: string;
+  aborted: boolean;
+}
+
+/**
+ * ffmpeg yang dijalankan LANGSUNG lewat `spawn`, bukan `callFf`: `callFf`
+ * baru mengembalikan keluaran setelah selesai, sedangkan kemajuan per berkas
+ * dan pembatalan (ADR-0028 §10) butuh alirannya selagi jalan. Jalur biner,
+ * cwd, dan env-nya persis yang dipakai Remotion sendiri (`call-ffmpeg.js`),
+ * jadi ini biner yang sama dengan yang merender.
+ *
+ * Kemajuan dibaca dari `-progress pipe:1`: ffmpeg menulis `out_time_us=…`
+ * (mikrodetik keluaran) per blok, dan `progress=end` di akhir. Dibagi durasi
+ * sumber jadi 0..1; tanpa durasi, hanya 1 di akhir yang dilaporkan.
+ */
+const spawnFfmpeg = (
+  args: string[],
+  hooks: {
+    durationSec?: number;
+    onProgress?: (fraction: number) => void;
+    signal?: AbortSignal;
+  },
+): Promise<FfRun> =>
+  new Promise((resolve) => {
+    const bin = RenderInternals.getExecutablePath({
+      type: "ffmpeg",
+      indent: false,
+      logLevel: "error",
+      binariesDirectory: null,
+    });
+    (
+      RenderInternals as unknown as {
+        makeFileExecutableIfItIsNot?: (path: string) => void;
+      }
+    ).makeFileExecutableIfItIsNot?.(bin);
+    const cwd = dirname(bin);
+    const child = spawn(bin, args, {
+      cwd,
+      env: process.platform === "darwin" ? { DYLD_LIBRARY_PATH: cwd } : undefined,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
+    let pending = "";
+    let aborted = false;
+    child.stdout.on("data", (chunk: Buffer) => {
+      pending += chunk.toString("utf8");
+      let cut = pending.indexOf("\n");
+      while (cut >= 0) {
+        const line = pending.slice(0, cut).trim();
+        pending = pending.slice(cut + 1);
+        const time = /^out_time_us=(\d+)/.exec(line);
+        if (time && hooks.durationSec && hooks.durationSec > 0) {
+          hooks.onProgress?.(Math.min(1, Number(time[1]) / 1e6 / hooks.durationSec));
+        } else if (line === "progress=end") {
+          hooks.onProgress?.(1);
+        }
+        cut = pending.indexOf("\n");
+      }
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr = (stderr + chunk.toString("utf8")).slice(-8192);
+    });
+    const onAbort = () => {
+      aborted = true;
+      child.kill("SIGKILL");
+    };
+    hooks.signal?.addEventListener("abort", onAbort, { once: true });
+    child.on("error", (error) => {
+      hooks.signal?.removeEventListener("abort", onAbort);
+      resolve({ code: -1, stderr: `${stderr}\n${error.message}`, aborted });
+    });
+    child.on("close", (code) => {
+      hooks.signal?.removeEventListener("abort", onAbort);
+      resolve({ code, stderr, aborted });
+    });
+  });
+
+const makeProxy = async (
+  request: ProxyRequest,
+  hooks: ProxyHooks = {},
+): Promise<ProxyResult> => {
+  if (hooks.signal?.aborted) return { ok: false, reason: "dibatalkan" };
   mkdirSync(dirname(request.outputPath), { recursive: true });
-  try {
-    await callFf("ffmpeg", [
+  const run = await spawnFfmpeg(
+    [
       ...QUIET,
+      "-progress",
+      "pipe:1",
+      "-nostats",
       "-i",
       request.sourcePath,
       // Jalur video pertama wajib, jalur audio pertama KALAU ADA (tanda tanya):
@@ -199,10 +287,19 @@ const makeProxy = async (request: ProxyRequest): Promise<ProxyResult> => {
       "-movflags",
       "+faststart",
       request.outputPath,
-    ]);
-  } catch (error) {
+    ],
+    {
+      ...(request.durationSec ? { durationSec: request.durationSec } : {}),
+      ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}),
+      ...(hooks.signal ? { signal: hooks.signal } : {}),
+    },
+  );
+  if (run.aborted || run.code !== 0) {
     rmSync(request.outputPath, { force: true });
-    return { ok: false, reason: reasonOf(error) };
+    return {
+      ok: false,
+      reason: run.aborted ? "dibatalkan" : reasonOf({ stderr: run.stderr }),
+    };
   }
   const info = await probe(request.outputPath);
   if (!info?.codec) {

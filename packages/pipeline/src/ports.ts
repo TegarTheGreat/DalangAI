@@ -250,6 +250,17 @@ export interface ProxyRequest {
   height: number;
   /** Tidak diisi = laju bingkai sumber dipertahankan. */
   fps?: number;
+  /**
+   * Durasi sumber, detik — hanya untuk menghitung KEMAJUAN (ffmpeg melaporkan
+   * waktu keluaran, bukan persen). Tidak diisi = kemajuan tidak dilaporkan.
+   */
+  durationSec?: number;
+}
+
+/** Kait opsional pembuatan proxy (ADR-0028 §10): kemajuan 0..1 dan pembatalan. */
+export interface ProxyHooks {
+  onProgress?: (fraction: number) => void;
+  signal?: AbortSignal;
 }
 
 export type ProxyResult =
@@ -275,8 +286,12 @@ export interface MediaTranscoder {
   id: string;
   /** Baca fakta berkas; null bila bukan media yang bisa dibaca. */
   probe(sourcePath: string): Promise<MediaProbeInfo | null>;
-  /** Tulis proxy H.264/AAC ke `outputPath` dengan dimensi yang diminta. */
-  makeProxy(request: ProxyRequest): Promise<ProxyResult>;
+  /**
+   * Tulis proxy H.264/AAC ke `outputPath` dengan dimensi yang diminta.
+   * Kait kemajuan/pembatalan boleh diabaikan implementasi yang tidak
+   * mendukungnya; pembatalan yang dihormati mengembalikan `reason: "dibatalkan"`.
+   */
+  makeProxy(request: ProxyRequest, hooks?: ProxyHooks): Promise<ProxyResult>;
   /** Tulis satu bingkai (JPEG/PNG menurut ekstensi `outputPath`) pada detik ke-`atSec`. */
   extractFrame(
     sourcePath: string,

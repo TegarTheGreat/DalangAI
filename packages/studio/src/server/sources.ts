@@ -27,12 +27,12 @@ import {
   type MediaProbeInfo,
   PEAKS_SAMPLE_RATE,
   peaksFromPcm,
-  runProxyStage,
 } from "@dalang/pipeline";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { SourceLite, SourcesResponse } from "../shared/api-types";
 import type { StudioContext } from "./context";
+import { ProxyJobRunner } from "./proxy-jobs";
 import { StudioBusyError } from "./store";
 
 /**
@@ -123,6 +123,8 @@ const maxUploadBytes = (): number => {
 export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
   const { store, deps } = ctx;
   const { session } = store;
+  // Proxy dibuat DI LATAR (ADR-0028 §10): satu pelari per proyek, mengantre.
+  const runner = new ProxyJobRunner(ctx);
   const { planDir } = session.paths;
 
   const logUiEvent = (
@@ -460,34 +462,21 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
         }
         const { summary } = session.applyUserPatch(ops);
 
-        // Proxy DI SINI juga (seperti ingestVideo milik agent): rekaman yang
-        // baru dipasang adalah persis yang akan diseret-seret di preview.
-        let proxy: ProxyMedia | null = null;
+        // Proxy DI LATAR (ADR-0028 §10): rekaman yang baru dipasang adalah
+        // persis yang akan diseret-seret di preview, tapi satu jam rekaman
+        // tidak boleh membekukan editor selama proxy-nya dibuat. Jawaban ini
+        // kembali sekarang; proxy-nya menyusul lewat event `proxy-progress`
+        // dan `plan-updated`.
+        let proxy: ProxyMedia | null = proxyOf(session.plan as ScenePlan, file);
         let proxyNote = "tidak ada transkoder — preview memakai berkas aslinya";
-        const transcoder = deps.transcoder?.();
-        if (transcoder) {
-          const outcome = await runProxyStage({
-            paths: session.paths,
-            plan: session.plan as ScenePlan,
-            db: session.db,
-            transcoder,
-            files: [file],
-            log: { info: () => {}, warn: () => {} },
-          });
-          session.plan = outcome.plan;
-          session.persist();
-          const row = outcome.results[0];
-          proxyNote = row ? `${row.status}: ${row.detail}` : "tidak diproses";
-          proxy = proxyOf(outcome.plan, file);
-          store.bus.emit({
-            type: "stage-results",
-            stage: "proxy",
-            results: outcome.results.map((r) => ({
-              sceneId: r.sceneId,
-              status: r.status,
-              detail: r.detail,
-            })),
-          });
+        if (deps.transcoder) {
+          const started = runner.start([file], false);
+          proxyNote = started.started
+            ? started.queued
+              ? "proxy antre di latar, di belakang yang sedang dibuat"
+              : "proxy dibuat di latar — preview beralih ke proxy begitu selesai"
+            : `proxy: ${started.reason ?? "tidak diproses"}`;
+          proxy = proxyOf(session.plan as ScenePlan, file);
         }
         return { summary, proxy, proxyNote };
       });
@@ -621,45 +610,41 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
   app.post("/api/pipeline/proxies", async (c) => {
     const body = proxiesBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
-    const plan = session.plan;
-    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
-    try {
-      const startedAt = Date.now();
-      const outcome = await store.runExclusive("proxies", () =>
-        runProxyStage({
-          paths: session.paths,
-          plan,
-          db: session.db,
-          ...(deps.transcoder ? { transcoder: deps.transcoder() } : {}),
-          ...(body.data.files ? { files: body.data.files } : {}),
-          ...(body.data.force !== undefined ? { force: body.data.force } : {}),
-          log: { info: () => {}, warn: () => {} },
-        }),
-      );
-      session.plan = outcome.plan;
-      session.persist();
-      logUiEvent(
-        "buildProxies",
-        { files: body.data.files ?? null },
-        { berkas: outcome.results.length },
-        Date.now() - startedAt,
-      );
-      store.notifyPlan("pipeline");
-      store.bus.emit({
-        type: "stage-results",
-        stage: "proxy",
-        results: outcome.results.map((r) => ({
-          sceneId: r.sceneId,
-          status: r.status,
-          detail: r.detail,
-        })),
+    if (!session.plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const started = runner.start(body.data.files ?? null, body.data.force ?? false);
+    logUiEvent(
+      "buildProxies",
+      { files: body.data.files ?? null, force: body.data.force ?? false },
+      {
+        started: started.started,
+        queued: started.queued,
+        reason: started.reason ?? null,
+      },
+      0,
+    );
+    if (!started.started) {
+      return c.json({
+        ok: true,
+        started: false,
+        queued: false,
+        reason: started.reason,
+        job: started.job,
       });
-      return c.json({ ok: true, results: outcome.results });
-    } catch (error) {
-      if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
-      return c.json(errorPayload(error), 500);
     }
+    // 202: pekerjaannya berjalan di latar; kemajuan lewat SSE `proxy-progress`.
+    return c.json(
+      { ok: true, started: true, queued: started.queued, job: started.job },
+      202,
+    );
   });
+
+  app.post("/api/pipeline/proxies/cancel", (c) => {
+    const cancelled = runner.cancel();
+    logUiEvent("cancelProxies", {}, { cancelled }, 0);
+    return c.json({ ok: true, cancelled });
+  });
+
+  app.get("/api/pipeline/proxies", (c) => c.json({ ok: true, job: runner.status }));
 };
 
 /** Untuk pesan UI: "1 j 2 mnt" dsb. — diekspor supaya server dan tes memakai kata yang sama. */

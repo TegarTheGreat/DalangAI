@@ -361,3 +361,40 @@ describe("remotionAudioProbe — lapisan ffmpeg menangkap AAC sebelum browser", 
     await probe.close?.();
   }, 30_000);
 });
+
+describe("makeProxy — kemajuan dan pembatalan (ADR-0028 §10)", () => {
+  it("melaporkan kemajuan yang tidak pernah turun dan berakhir tepat di 1", async () => {
+    const seen: number[] = [];
+    const out = join(dir, "progress-proxy.mp4");
+    const made = await remotionTranscoder().makeProxy(
+      {
+        sourcePath: source,
+        outputPath: out,
+        width: 160,
+        height: 90,
+        fps: 30,
+        durationSec: SECONDS,
+      },
+      { onProgress: (fraction) => seen.push(fraction) },
+    );
+    expect(made.ok).toBe(true);
+    expect(seen.length).toBeGreaterThan(0);
+    for (let i = 1; i < seen.length; i++) {
+      expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1] ?? 0);
+    }
+    expect(seen.at(-1)).toBe(1);
+    expect(existsSync(out)).toBe(true);
+  }, 30_000);
+
+  it("sinyal yang sudah dibatalkan tidak memulai ffmpeg dan tidak meninggalkan berkas", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const out = join(dir, "batal-proxy.mp4");
+    const made = await remotionTranscoder().makeProxy(
+      { sourcePath: source, outputPath: out, width: 160, height: 90 },
+      { signal: controller.signal },
+    );
+    expect(made).toEqual({ ok: false, reason: "dibatalkan" });
+    expect(existsSync(out)).toBe(false);
+  });
+});
