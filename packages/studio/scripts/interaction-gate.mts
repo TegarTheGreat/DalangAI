@@ -329,57 +329,80 @@ const main = async (): Promise<void> => {
       await sleep(250);
       box = await rect(".canvas-box.annotation", 0);
     }
-    // Bingkai screenshot punya animasi masuk: ukur sampai dua pengukuran
-    // berturut-turut sama, supaya fraksi yang diharapkan memakai bingkai
-    // yang sudah diam — bingkai yang sama yang dipakai editor saat melepas.
-    let frame = await rect("[data-dalang-annotation-frame]");
-    for (let tries = 0; tries < 20; tries++) {
-      await sleep(250);
-      const again = await rect("[data-dalang-annotation-frame]");
-      if (
-        frame &&
-        again &&
-        Math.abs(again.w - frame.w) < 0.5 &&
-        Math.abs(again.h - frame.h) < 0.5
-      ) {
-        frame = again;
-        break;
+    // Bingkai screenshot diukur SEGAR sebelum tiap operasi, sampai dua
+    // pengukuran berturut-turut sama: ia punya animasi masuk, dan kotak
+    // pemutar bisa berubah ukuran di antara dua patch (editor pun membaca
+    // bingkainya segar saat melepas, ADR-0024 amandemen §3). Harapan yang
+    // dihitung dari bingkai basi akan meleset 10% tanpa ada yang salah.
+    const settledFrame = async (): Promise<Rect> => {
+      let current = await rect("[data-dalang-annotation-frame]");
+      for (let tries = 0; tries < 20; tries++) {
+        await sleep(250);
+        const again = await rect("[data-dalang-annotation-frame]");
+        if (
+          current &&
+          again &&
+          Math.abs(again.w - current.w) < 0.5 &&
+          Math.abs(again.h - current.h) < 0.5
+        ) {
+          return again;
+        }
+        current = again;
       }
-      frame = again;
-    }
+      if (!current) throw new Error("bingkai anotasi tidak muncul di kanvas");
+      return current;
+    };
+    let frame = await settledFrame();
     box = await rect(".canvas-box.annotation", 0);
-    if (!box || !frame) throw new Error("kotak anotasi / bingkai tidak muncul di kanvas");
+    if (!box) throw new Error("kotak anotasi tidak muncul di kanvas");
     console.log(
       `  bingkai ${Math.round(frame.w)}×${Math.round(frame.h)}px; kotak anotasi ${Math.round(box.w)}×${Math.round(box.h)}px`,
     );
-    const tol = 1.5 / frame.w;
 
     // 5. Geser +60px,+40px → target bergeser sebesar fraksi bingkai yang sama.
     const before = await annotation();
     await drag(center(box), { x: center(box).x + 60, y: center(box).y + 40 });
     await sleep(SETTLE_MS);
     const moved = await annotation();
+    // Editor membaca bingkai saat MELEPAS. Kotak pemutar sesekali berubah
+    // ukuran di sekitar seretan (transisi tata letak), jadi harapannya
+    // dihitung dari bingkai sebelum DAN sesudah; salah satu harus cocok.
+    const frameAfter = await settledFrame();
+    if (Math.round(frameAfter.w) !== Math.round(frame.w)) {
+      console.log(
+        `  bingkai berubah selama seretan: ${Math.round(frame.w)}px -> ${Math.round(frameAfter.w)}px`,
+      );
+    }
+    const matchesFrame = (f: Rect) =>
+      near(moved.x - before.x, 60 / f.w, 1.5 / f.w) &&
+      near(moved.y - before.y, 40 / f.h, 1.5 / f.w) &&
+      near(moved.w, before.w, 1e-6);
     check(
       "geser anotasi +60px,+40px",
-      near(moved.x - before.x, 60 / frame.w, tol) &&
-        near(moved.y - before.y, 40 / frame.h, tol) &&
-        near(moved.w, before.w, 1e-6),
-      `dx = ${fmt(moved.x - before.x)} (harap ${fmt(60 / frame.w)}), dy = ${fmt(moved.y - before.y)} (harap ${fmt(40 / frame.h)})`,
+      matchesFrame(frame) || matchesFrame(frameAfter),
+      `dx = ${fmt(moved.x - before.x)} (harap ${fmt(60 / frame.w)} atau ${fmt(60 / frameAfter.w)}), dy = ${fmt(moved.y - before.y)} (harap ${fmt(40 / frame.h)} atau ${fmt(40 / frameAfter.h)})`,
     );
     await shot("gate-canvas.png");
 
-    // 6. Ubah ukuran lewat pegangan sudut +30px,+20px.
+    // 6. Ubah ukuran lewat pegangan sudut +30px,+20px — bingkai diukur lagi.
+    frame = await settledFrame();
+    console.log(
+      `  bingkai sebelum ubah ukuran ${Math.round(frame.w)}×${Math.round(frame.h)}px`,
+    );
     const grip = await rect(".canvas-box.annotation .canvas-grip", 0);
     if (!grip) throw new Error("pegangan ubah ukuran anotasi tidak ada");
     await drag(center(grip), { x: center(grip).x + 30, y: center(grip).y + 20 });
     await sleep(SETTLE_MS);
     const resized = await annotation();
+    const frameAfterResize = await settledFrame();
+    const matchesResize = (f: Rect) =>
+      near(resized.w - moved.w, 30 / f.w, 1.5 / f.w) &&
+      near(resized.h - moved.h, 20 / f.h, 1.5 / f.w) &&
+      near(resized.x, moved.x, 1e-6);
     check(
       "ubah ukuran anotasi +30px,+20px",
-      near(resized.w - moved.w, 30 / frame.w, tol) &&
-        near(resized.h - moved.h, 20 / frame.h, tol) &&
-        near(resized.x, moved.x, 1e-6),
-      `dw = ${fmt(resized.w - moved.w)} (harap ${fmt(30 / frame.w)}), dh = ${fmt(resized.h - moved.h)} (harap ${fmt(20 / frame.h)})`,
+      matchesResize(frame) || matchesResize(frameAfterResize),
+      `dw = ${fmt(resized.w - moved.w)} (harap ${fmt(30 / frame.w)} atau ${fmt(30 / frameAfterResize.w)}), dh = ${fmt(resized.h - moved.h)} (harap ${fmt(20 / frame.h)} atau ${fmt(20 / frameAfterResize.h)})`,
     );
 
     console.log("\nPenempelan ke elemen lain di kanvas");
@@ -481,10 +504,18 @@ const main = async (): Promise<void> => {
       dx: (boxesAfter[index]?.x ?? Number.NaN) - before.x,
       dy: (boxesAfter[index]?.y ?? Number.NaN) - before.y,
     }));
+    // Penempelan boleh menggeser beberapa piksel (tepi teks lebar bisa jatuh
+    // dekat garis margin aman; ambangnya 1,2% lebar kotak) — yang harus
+    // persis SAMA adalah gerakan kedua kotak, dan tidak ada gerak tegak.
+    const [shiftA, shiftB] = shifts;
     check(
-      "menyeret satu anggota menggeser KEDUA teks 60 px ke kanan, tidak ke arah lain",
-      shifts.length === 2 &&
-        shifts.every((shift) => near(shift.dx, 60, 3) && near(shift.dy, 0, 3)),
+      "menyeret satu anggota menggeser KEDUA teks sejauh yang sama (sekitar 60 px), tanpa gerak tegak",
+      shiftA !== undefined &&
+        shiftB !== undefined &&
+        near(shiftA.dx, shiftB.dx, 0.6) &&
+        near(shiftA.dx, 60, 15) &&
+        near(shiftA.dy, 0, 3) &&
+        near(shiftB.dy, 0, 3),
       shifts
         .map((shift) => `(${shift.dx.toFixed(1)}, ${shift.dy.toFixed(1)}) px`)
         .join(", "),

@@ -319,44 +319,52 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     const host = hostRef.current?.parentElement;
     if (!host) return;
 
-    const move = (event: PointerEvent) => {
+    /**
+     * Titik sasaran untuk posisi pointer tertentu — dipakai saat bergerak
+     * (bayangan) DAN saat melepas. Melepas tidak boleh memakai `ghost` dari
+     * state: pointerup yang tiba sebelum React sempat menerapkan pointermove
+     * terakhir akan menjatuhkan elemen di posisi gerakan SEBELUMNYA (gerbang
+     * interaksi menangkapnya: 54 px dari 60 px yang diseret).
+     */
+    const targetFor = (clientX: number, clientY: number): FramePoint => {
       const box = host.getBoundingClientRect();
-      // Klik yang goyah dua-tiga piksel bukan seretan: tanpa ambang ini,
-      // sekadar memilih elemen sudah menjatuhkannya lagi di jangkar baru.
-      if (
-        !ghost &&
-        Math.hypot(event.clientX - drag.pointer.x, event.clientY - drag.pointer.y) < 3
-      ) {
-        return;
-      }
-      const dx = (event.clientX - drag.pointer.x) / box.width;
-      const dy = (event.clientY - drag.pointer.y) / box.height;
+      const dx = (clientX - drag.pointer.x) / box.width;
+      const dy = (clientY - drag.pointer.y) / box.height;
       if (drag.handle.kind === "annotation") {
         // Anotasi hidup di bingkai screenshot: garis bantu frame video tidak
         // berarti apa-apa baginya, jadi tanpa penempelan.
-        setGhost({ x: drag.origin.x + dx, y: drag.origin.y + dy });
-      } else if (drag.mode === "move") {
+        return { x: drag.origin.x + dx, y: drag.origin.y + dy };
+      }
+      if (drag.mode === "move") {
         const raw = { x: drag.origin.x + dx, y: drag.origin.y + dy };
-        setGhost({
+        return {
           x: snapToGuides(raw.x, drag.guides.x, SNAP),
           y: snapToGuides(raw.y, drag.guides.y, SNAP),
-        });
-      } else {
-        // Ubah ukuran memakai diagonal: satu angka, tidak pernah menghasilkan
-        // grafis yang gepeng — `size` memang satu nilai (tinggi fraksional).
-        setGhost({ x: drag.origin.x, y: drag.origin.y + dy });
+        };
       }
+      // Ubah ukuran memakai diagonal: satu angka, tidak pernah menghasilkan
+      // grafis yang gepeng — `size` memang satu nilai (tinggi fraksional).
+      return { x: drag.origin.x, y: drag.origin.y + dy };
+    };
+    const movedFar = (clientX: number, clientY: number): boolean =>
+      Math.hypot(clientX - drag.pointer.x, clientY - drag.pointer.y) >= 3;
+
+    const move = (event: PointerEvent) => {
+      // Klik yang goyah dua-tiga piksel bukan seretan: tanpa ambang ini,
+      // sekadar memilih elemen sudah menjatuhkannya lagi di jangkar baru.
+      if (!ghost && !movedFar(event.clientX, event.clientY)) return;
+      setGhost(targetFor(event.clientX, event.clientY));
     };
 
-    const up = () => {
+    const up = (event: PointerEvent) => {
       // Tidak pernah bergerak = klik untuk memilih, bukan seretan: tidak ada
       // patch. Menjatuhkan elemen di titik yang sama pun akan mengubah
       // offset-nya (jangkar dipilih ulang), dan itu bukan yang orang minta.
-      if (!ghost) {
+      if (!ghost && !movedFar(event.clientX, event.clientY)) {
         setDrag(null);
         return;
       }
-      const target = ghost;
+      const target = targetFor(event.clientX, event.clientY);
       const box = host.getBoundingClientRect();
       const ops = buildOps(scene, drag, target, safe, {
         box: { w: box.width, h: box.height },

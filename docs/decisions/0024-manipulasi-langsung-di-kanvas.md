@@ -67,7 +67,11 @@ menyeberang ke wilayah lain, tempat offset relatif akan menabrak batas ±0,5.
 Kotak elemen dan bingkai anotasi juga dibaca SEGAR dari DOM saat menekan dan
 melepas, bukan dari pengukuran mutasi terakhir: pemutar bisa menskalakan
 ulang isinya di antara dua mutasi, dan angka yang menentukan patch harus
-dibaca pada detik yang sama dengan jarinya.
+dibaca pada detik yang sama dengan jarinya. Dan titik jatuhnya dihitung dari
+koordinat pointerup itu sendiri, bukan dari bayangan (`ghost`) di state:
+pointerup yang tiba sebelum React menerapkan pointermove terakhir menjatuhkan
+elemen di posisi gerakan sebelumnya — gerbang interaksi menangkapnya sebagai
+seretan 60 px yang mendarat di 54 px pada kira-kira satu dari tiga percobaan.
 
 ### 4. Menyeret TIDAK mengubah `align`
 
