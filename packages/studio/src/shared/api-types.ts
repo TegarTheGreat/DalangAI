@@ -10,7 +10,15 @@ import type { PatchOpInput, ScenePlan } from "@dalang/core";
 // Snapshot proyek (GET /api/project)
 // ---------------------------------------------------------------------------
 
-export type BusyKind = "chat" | "tts" | "assets" | "transcribe" | "review" | "pick";
+export type BusyKind =
+  | "chat"
+  | "tts"
+  | "assets"
+  | "transcribe"
+  | "review"
+  | "pick"
+  | "proxies"
+  | "sources";
 
 export interface BusyState {
   /** Job yang sedang memutasi plan (satu-per-satu), atau null. */
@@ -62,7 +70,7 @@ export interface TranscriptSummary {
 
 export interface StageRunLite {
   sceneId: string;
-  stage: "tts" | "assets" | "asr" | "loudness";
+  stage: "tts" | "assets" | "asr" | "loudness" | "proxy";
   status: "running" | "done" | "error";
   provider: string | null;
   fallback: boolean;
@@ -228,6 +236,67 @@ export interface StockPickRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Sumber rekaman & proxy (ADR-0028, §9.5)
+// ---------------------------------------------------------------------------
+
+export interface SourceLite {
+  /** Path relatif-plan, mis. "assets/rekaman/podcast-3f2a9c1b.mp4". */
+  file: string;
+  kind: "video" | "audio";
+  sizeBytes: number;
+  modifiedAt: string;
+  /** Fakta ffprobe; null bila tidak terbaca (atau tanpa transkoder untuk audio). */
+  probe: {
+    durationSec: number;
+    width: number;
+    height: number;
+    fps: number | null;
+    codec: string | null;
+    hasAudio: boolean;
+  } | null;
+  usedBy: { sceneIds: string[]; layerIds: string[] };
+  /** Proxy pratinjau yang sudah tercatat di plan; null = belum/tidak perlu. */
+  proxy: { file: string; width: number; height: number; fps?: number } | null;
+  /** Keputusan "perlu proxy" beserta alasannya, untuk video yang terbaca. */
+  proxyDecision: { needed: boolean; reason: string } | null;
+  transcript: boolean;
+}
+
+export interface SourcesResponse {
+  ok: true;
+  /** false = mesin tanpa transkoder: tanpa proxy, tanpa thumbnail, tanpa gelombang. */
+  transcoder: boolean;
+  maxUploadBytes: number;
+  sources: SourceLite[];
+}
+
+export interface RegisterSourceRequest {
+  file: string;
+  sceneId: string;
+  layerId?: string | null;
+  trimStartSec?: number;
+}
+
+export interface RegisterSourceResponse {
+  ok: true;
+  file: string;
+  summary: string;
+  proxy: { file: string; width: number; height: number; fps?: number } | null;
+  proxyNote: string;
+  durationSec: number;
+  codec: string | null;
+}
+
+export interface PeaksResponse {
+  ok: true;
+  file: string;
+  durationSec: number;
+  hasAudio: boolean;
+  /** 0..1 per keranjang, dari kiri ke kanan sepanjang rekaman. */
+  peaks: number[];
+}
+
+// ---------------------------------------------------------------------------
 // Pustaka media (ADR-0018): ikon, stiker, efek suara
 // ---------------------------------------------------------------------------
 
@@ -314,7 +383,7 @@ export type StudioEvent =
   | { type: "busy"; busy: BusyState }
   | {
       type: "stage-results";
-      stage: "tts" | "assets" | "asr" | "loudness";
+      stage: "tts" | "assets" | "asr" | "loudness" | "proxy";
       results: { sceneId: string; status: string; detail: string }[];
     }
   | {
@@ -324,6 +393,10 @@ export type StudioEvent =
       label: string;
       url?: string;
       error?: string;
+      /** Kenyaringan campuran akhir berkas hasil, LUFS (ADR-0028); null = tidak terukur. */
+      mixLufs?: number | null;
+      /** Berapa berkas video yang dirender dari proxy-nya (ADR-0028). */
+      proxied?: number;
     };
 
 // ---------------------------------------------------------------------------

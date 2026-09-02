@@ -5,9 +5,13 @@ import type {
   ChatStreamEvent,
   IconSearchResponse,
   NewProjectRequest,
+  PeaksResponse,
   ProjectStatePayload,
+  RegisterSourceRequest,
+  RegisterSourceResponse,
   RenderRequest,
   SfxSearchResponse,
+  SourcesResponse,
   StickerSearchResponse,
   StockSearchResponse,
   StudioEvent,
@@ -315,6 +319,65 @@ export const api = {
       }
     });
   },
+
+  // --- Sumber rekaman & proxy (ADR-0028) -------------------------------------
+  listSources: () => request<SourcesResponse>("/api/sources"),
+  registerSource: (req: RegisterSourceRequest) =>
+    request<RegisterSourceResponse>("/api/sources/register", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+  runProxies: (files?: string[], force?: boolean) =>
+    request<{
+      ok: true;
+      results: Array<{ sceneId: string; status: string; detail: string }>;
+    }>("/api/pipeline/proxies", {
+      method: "POST",
+      body: JSON.stringify({ files, force }),
+    }),
+  sourcePeaks: (file: string, buckets: number) =>
+    request<PeaksResponse>(
+      `/api/sources/peaks?file=${encodeURIComponent(file)}&buckets=${buckets}`,
+    ),
+  /** URL bingkai rekaman pada detik `t`; server men-cache-nya di disk. */
+  sourceThumbUrl: (file: string, t: number, h: number): string =>
+    `/api/sources/thumb?file=${encodeURIComponent(file)}&t=${t.toFixed(1)}&h=${h}`,
+  /**
+   * Unggah STREAMING lewat XMLHttpRequest: `fetch` tidak punya kemajuan
+   * unggah, dan rekaman satu jam tanpa bilah kemajuan terasa seperti macet.
+   */
+  uploadSource: (
+    file: File,
+    onProgress: (fraction: number) => void,
+  ): Promise<{ ok: true; file: string; existed: boolean }> =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/sources/upload?name=${encodeURIComponent(file.name)}`);
+      xhr.setRequestHeader("content-type", "application/octet-stream");
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(event.loaded / event.total);
+      };
+      xhr.onerror = () => reject(new ApiError(0, "Koneksi terputus saat mengunggah"));
+      xhr.onload = () => {
+        let payload: Record<string, unknown> = {};
+        try {
+          payload = JSON.parse(xhr.responseText) as Record<string, unknown>;
+        } catch {
+          // badan bukan JSON — jatuh ke pesan status
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(payload as { ok: true; file: string; existed: boolean });
+        } else {
+          reject(
+            new ApiError(
+              xhr.status,
+              typeof payload.error === "string" ? payload.error : `HTTP ${xhr.status}`,
+            ),
+          );
+        }
+      };
+      xhr.send(file);
+    }),
 
   /** Langganan broadcast antar-panel; kembalikan fungsi stop. */
   uploadAsset: (sceneId: string, filename: string, dataUrl: string) =>

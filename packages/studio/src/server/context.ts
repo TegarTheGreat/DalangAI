@@ -3,6 +3,7 @@ import type {
   AsrProvider,
   AudioProbe,
   IconProvider,
+  MediaTranscoder,
   SfxProvider,
   StockProvider,
   TtsProvider,
@@ -27,6 +28,8 @@ export interface StudioDeps {
     profile: "draft" | "final";
     /** Pengaturan ekspor eksplisit (ADR-0014); tanpa ini profil jadi makro. */
     settings?: Partial<ExportSettings>;
+    /** Render draf dari proxy pratinjau (ADR-0028). */
+    useProxies?: boolean;
   }) => Promise<RenderVideoResult>;
   /**
    * Baca metadata video lokal (ADR-0017): (planPath, path relatif) -> info.
@@ -42,6 +45,13 @@ export interface StudioDeps {
    * boleh bergantung pada @dalang/renderer. Tanpa ini hanya WAV yang terukur.
    */
   audioProbe?: () => AudioProbe;
+  /**
+   * Transkoder media (ADR-0028): proxy pratinjau, bingkai rekaman, bentuk
+   * gelombang. Di-inject dengan alasan yang sama seperti `audioProbe`. Tanpa
+   * ini panel sumber tetap bisa mendaftarkan rekaman — hanya tanpa proxy dan
+   * tanpa strip bingkai, dan UI mengatakannya.
+   */
+  transcoder?: () => MediaTranscoder;
   /** Pustaka ikon terbuka (ADR-0018) — tanpa kunci. */
   iconProvider: () => IconProvider;
   /** Pustaka efek suara berlisensi terbuka (ADR-0018). */

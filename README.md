@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -435,7 +435,8 @@ Yang sudah berjalan:
   - berkas **mono** dikoreksi 3,01 LU karena campurannya stereo — tanpa itu
     narasi mendarat 3 dB di atas sasaran sementara musik stereo mendarat tepat;
   - belum diukur berarti penguatan 1, **bukan tebakan**; berkas yang kodeknya
-    tidak bisa didekode di mesin ini dilewati dengan alasan yang disebutkan;
+    tidak bisa didekode di mesin ini dilewati dengan alasan yang disebutkan
+    (sejak ADR-0028, AAC/MP4 ikut terukur lewat dekoder ffmpeg bawaan Remotion);
   - `audio.tracks` (maks 8) untuk ambience, wawancara, atau lagu berlisensi;
   - diverifikasi lewat render sungguhan: sumber mono dan stereo sama-sama
     mendarat di -16,00 LUFS.
@@ -454,7 +455,31 @@ Yang sudah berjalan:
   - dipasang di posisi playhead dari Studio dan terlihat sebagai berlian di
     timeline; menyeret berlian itu BELUM ada (lihat "Batas" ADR-0027);
   - diverifikasi dari piksel render sungguhan, bukan hanya unit test.
-- **Kualitas terjaga otomatis**: 906 unit test (kontrak lock/pin/undo, timing
+- **Proxy & rekaman panjang (ADR-0028)** — rekaman satu jam dan berkas 4K/HEVC
+  tidak lagi membekukan preview:
+  - proxy pratinjau H.264 sisi pendek 540 (laju dipangkas ke 30) dibuat oleh
+    **ffmpeg bawaan Remotion** — tanpa biner baru, tanpa "pasang ffmpeg dulu";
+  - dikunci per BERKAS di `renderState`, ber-cache lewat ledger, dan dipakai
+    HANYA oleh preview Studio dan render draf; render final selalu membaca
+    berkas aslinya, dan ekspor OTIO/FCPXML tidak pernah menyebut proxy;
+  - "perlu proxy" adalah keputusan MURNI dengan alasan yang terbaca: kodek
+    yang tidak diputar browser (HEVC/ProRes), rekaman ≥ 60 dtk, resolusi di
+    atas 720p, laju di atas 30 fps — yang ringan dibiarkan apa adanya;
+  - rekaman masuk dari Studio lewat unggah **streaming** ke disk (rekaman satu
+    jam tidak muat dalam data URL), dedup berdasarkan isi, batas lewat
+    `DALANG_MAX_UPLOAD_MB`;
+  - titik masuk dipilih dengan MELIHAT rekamannya: strip bingkai + bentuk
+    gelombang sepanjang seluruh rekaman, jendela scene digambar di atasnya,
+    hasilnya patch op biasa — juga untuk lapisan;
+  - agent: `ingestVideo` membuat proxy dan melaporkan kodek; `analyzeImage`
+    bisa melihat satu BINGKAI video (`detikKe`); `renderPreview` merender dari
+    proxy;
+  - CLI: `dalang proxy`, `generate` menjalankan tahap proxy, `render --proxy`;
+  - dua batas ADR-0026 dicabut oleh dekoder yang sama: AAC/MP4 kini terukur
+    tanpa browser, dan **campuran akhir** setiap render diukur dari berkas
+    hasilnya (CLI mencetaknya di samping sasaran; Studio menampilkannya di
+    strip render).
+- **Kualitas terjaga otomatis**: 964 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
@@ -467,7 +492,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 906 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 964 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -611,14 +636,14 @@ di `docs/decisions/`.
       *Catatan: belum pernah dibuka di Resolve/Premiere/Final Cut sungguhan —
       lihat "Batas yang dinyatakan" di ADR-0023.*
 
-- [~] **Fase 9 — Editor yang terasa seperti editor**: §9.1 (manipulasi langsung
+- [x] **Fase 9 — Editor yang terasa seperti editor**: §9.1 (manipulasi langsung
       di kanvas) selesai lewat ADR-0024, §9.2 (multi-track video) lewat
       ADR-0025, §9.3 (keyframe properti) lewat ADR-0027, §9.4 (audio per klip)
-      lewat ADR-0026. Hanya §9.5 (proxy + rekaman panjang) yang BELUM.
-      *Batas §9.4: AAC/MP4 tidak terukur pada Chromium tanpa kodek proprietary;
-      campuran akhirnya tidak diukur. Batas §9.3: berlian keyframe belum bisa
-      diseret, dan visual dasar scene belum bisa di-keyframe — selengkapnya di
-      "Batas" ADR-0026 dan ADR-0027.*
+      lewat ADR-0026, §9.5 (proxy + rekaman panjang) lewat ADR-0028.
+      *Batas §9.4 soal AAC dan campuran akhir DICABUT oleh ADR-0028. Batas
+      §9.3: berlian keyframe belum bisa diseret, dan visual dasar scene belum
+      bisa di-keyframe. Batas §9.5: proxy dibuat serial, dan strip bingkai
+      butuh transkoder — selengkapnya di "Batas" ADR-0027 dan ADR-0028.*
 
 Sisa Fase 9 dan Fase 10 ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

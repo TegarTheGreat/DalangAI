@@ -1,4 +1,4 @@
-import { parseScenePlan } from "@dalang/core";
+import { parseScenePlan, proxiedFiles, substituteProxies } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { type CallbackListener, Player, type PlayerRef } from "@remotion/player";
 import { useEffect, useMemo, useState } from "react";
@@ -24,7 +24,14 @@ export const PreviewPanel: React.FC = () => {
     if (!rawPlan) return null;
     try {
       const plan = parseScenePlan(rawPlan);
-      return { plan, meta: planMeta(plan) };
+      // ADR-0028: Player memutar PROXY-nya (540p H.264) bila ada — geometri,
+      // trim, dan kecepatan tidak berubah karena semuanya milik rekamannya.
+      return {
+        plan,
+        previewPlan: substituteProxies(plan),
+        proxied: proxiedFiles(plan).size,
+        meta: planMeta(plan),
+      };
     } catch {
       return null;
     }
@@ -81,7 +88,7 @@ export const PreviewPanel: React.FC = () => {
     );
   }
 
-  const { plan, meta } = parsed;
+  const { plan, previewPlan, proxied, meta } = parsed;
   const portrait = meta.height > meta.width;
 
   return (
@@ -94,7 +101,7 @@ export const PreviewPanel: React.FC = () => {
           <Player
             ref={setPlayer}
             component={DalangVideo}
-            inputProps={{ plan, debug: false }}
+            inputProps={{ plan: previewPlan, debug: false }}
             durationInFrames={meta.durationInFrames}
             compositionWidth={meta.width}
             compositionHeight={meta.height}
@@ -109,6 +116,14 @@ export const PreviewPanel: React.FC = () => {
           {/* Lapisan manipulasi langsung (ADR-0024) duduk DI ATAS pemutar dan
               membaca kotak elemen yang sudah ter-render di dalamnya. */}
           <CanvasEditor plan={plan} />
+          {proxied > 0 ? (
+            <span
+              className="proxy-flag"
+              title="Preview memutar proxy 540p; render final memakai berkas aslinya"
+            >
+              proxy
+            </span>
+          ) : null}
         </div>
       </div>
       {renderProgress?.status === "started" ||
@@ -121,6 +136,17 @@ export const PreviewPanel: React.FC = () => {
           {renderProgress?.status === "error" ? (
             <span className="render-note error">
               Render gagal: {renderProgress.error}
+            </span>
+          ) : null}
+          {renderProgress?.status === "done" &&
+          typeof renderProgress.mixLufs === "number" ? (
+            <span
+              className="render-note"
+              title="Kenyaringan terintegrasi berkas hasil, diukur dari berkasnya sendiri (EBU R128)"
+            >
+              campuran akhir {renderProgress.mixLufs.toFixed(1)} LUFS
+              {plan.meta.loudnessTarget ? ` · sasaran ${plan.meta.loudnessTarget}` : ""}
+              {renderProgress.proxied ? ` · ${renderProgress.proxied} dari proxy` : ""}
             </span>
           ) : null}
           {(project?.renders ?? []).map((render) => (

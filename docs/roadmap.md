@@ -150,6 +150,8 @@ ada memori preferensi lintas proyek ("saya selalu pakai caption tegas").
 
 Tidak ada proxy, tidak ada strategi untuk rekaman satu jam. `MAX_FILMSTRIP_FRAMES`
 membatasi thumbnail, tapi tidak ada jalur khusus untuk sumber besar.
+*(Ditutup oleh ADR-0028 — proxy per berkas, unggah streaming, strip bingkai +
+gelombang untuk memilih titik masuk.)*
 
 ### 3.11 Tanpa footage generatif
 
@@ -270,7 +272,19 @@ render: teks ber-track mendarat di 0,2888 / 0,4295 / 0,5688 lebar bingkai
 0,4988. Batas terbesarnya: berlian belum bisa diseret, dan visual dasar scene
 belum bisa di-keyframe — selengkapnya di "Batas" ADR-0027.
 
-Sisanya (§9.5) belum.
+**§9.5 sudah dikerjakan** (ADR-0028): rekaman panjang dan berkas berat kini
+punya PROXY pratinjau — H.264 sisi pendek 540, laju bingkai dipangkas ke 30 —
+yang dibuat ffmpeg bawaan Remotion (tanpa biner baru), dikunci per berkas di
+`renderState`, dan dipakai HANYA oleh preview Studio dan render draf; render
+final selalu membaca berkas aslinya. Keputusan "perlu proxy" adalah fungsi
+murni dengan alasan yang terbaca (kodek yang tidak diputar browser, rekaman
+≥ 60 detik, resolusi di atas 720p, laju di atas 30 fps). Rekaman masuk proyek
+dari Studio lewat unggah STREAMING ke disk (bukan data URL), lalu dipilih
+titik masuknya dengan MELIHAT rekamannya: strip bingkai dan bentuk gelombang
+sepanjang seluruh rekaman, jendela scene digambar di atasnya. Efek
+sampingnya yang paling berharga: dekoder ffmpeg yang sama mencabut batas
+"AAC/MP4 tidak terukur" milik ADR-0026 dan mengukur CAMPURAN AKHIR setiap
+render. Fase 9 dengan itu selesai seluruhnya; batasnya ada di "Batas" ADR-0028.
 
 > Membuka: pekerjaan yang hari ini harus dilakukan lewat form.
 
@@ -280,7 +294,7 @@ Sisanya (§9.5) belum.
 | 9.2 | Multi-track video: overlay/PiP/B-roll sebagai lapisan | Perubahan skema besar → ADR |
 | 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027) |
 | 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | Selesai (ADR-0026) |
-| 9.5 | Proxy + penanganan rekaman panjang | Terkait 6.x |
+| 9.5 | Proxy + penanganan rekaman panjang | Selesai (ADR-0028) |
 
 **Catatan urutan:** 9.1 memberi rasa paling besar per biaya. 9.2 memang yang
 paling mahal — ia menyentuh skema, kedua preset, pipeline, Studio, dan kedua

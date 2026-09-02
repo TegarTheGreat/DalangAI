@@ -1,6 +1,7 @@
 export * from "./audio-probe";
 export * from "./browser";
 export * from "./bundle-cache";
+export * from "./ffmpeg";
 export * from "./fingerprint";
 export * from "./probe";
 export * from "./render";

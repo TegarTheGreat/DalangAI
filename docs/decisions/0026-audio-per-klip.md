@@ -178,8 +178,13 @@ digital yang sudah dibuang gerbang mutlak; tesnya diperbaiki memakai materi
   dengan Chrome Headless Shell milik Remotion ia terukur; di lingkungan yang
   memblokir unduhannya, klip stok dilewati dengan alasan yang disebutkan
   ("audionya AAC; Chromium tidak bisa mendekodenya") dan dipakai apa adanya.
+  *DICABUT oleh ADR-0028:* dekoder ffmpeg bawaan Remotion kini menjadi lapisan
+  kedua `remotionAudioProbe`, jadi AAC/MP4 terukur di mesin mana pun.
 - **Campuran akhirnya tidak diukur.** Normalisasi per klip tidak menjamin
   keseluruhan video mendarat di sasaran; ia menjamin sumber-sumbernya setara.
+  *DICABUT oleh ADR-0028:* setiap render mengukur berkas hasilnya
+  (`mixLufs`) dan CLI/Studio menampilkannya di samping sasaran — diukur,
+  belum dikoreksi otomatis.
 - **Ducking hanya mengikuti jendela scene bernarasi**, bukan deteksi bunyi
   narasi yang sebenarnya. Scene bernarasi dengan jeda panjang tetap menduck
   sepanjang scene.

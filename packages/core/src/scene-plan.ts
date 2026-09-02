@@ -758,6 +758,27 @@ export const narrationAudioSchema = z.strictObject({
 });
 export type NarrationAudio = z.infer<typeof narrationAudioSchema>;
 
+/**
+ * Proxy pratinjau sebuah berkas VIDEO (ADR-0028, roadmap §9.5).
+ *
+ * Salinan RINGAN dari berkas aslinya — H.264 dengan sisi pendek 540 piksel,
+ * laju bingkai paling tinggi 30 — yang dipakai preview Studio dan render draf.
+ * Ia data TURUNAN yang selalu bisa dibuat ulang dari aslinya, hidup di
+ * `.dalang/proxies/`, dan tidak pernah menyentuh render final: berkas final
+ * selalu dibaca dari `file`, bukan dari sini.
+ *
+ * Absennya berarti "preview memakai aslinya" — keadaan normal untuk klip
+ * pendek beresolusi rendah — bukan kerusakan.
+ */
+export const proxyMediaSchema = z.strictObject({
+  /** Path relatif terhadap folder plan, di dalam `.dalang/proxies/`. */
+  file: z.string().min(1),
+  width: finitePositive,
+  height: finitePositive,
+  fps: finitePositive.optional(),
+});
+export type ProxyMedia = z.infer<typeof proxyMediaSchema>;
+
 export const resolvedAssetSchema = z.strictObject({
   /** Path relative to the render public dir. */
   file: z.string().min(1),
@@ -793,6 +814,17 @@ export const resolvedAssetSchema = z.strictObject({
    * mendarat tepat — persis ketimpangan yang seharusnya dihapus normalisasi.
    */
   channels: z.number().int().min(1).max(8).optional(),
+  /**
+   * Kodek video sumber hasil pemeriksaan (ADR-0028), mis. "h264", "hevc",
+   * "prores". Dipakai untuk memutuskan perlunya proxy dan untuk mengatakan
+   * pada pengguna KENAPA sebuah rekaman tidak bisa diputar langsung di
+   * browser — bukan sekadar menampilkan kotak hitam.
+   */
+  codec: z.string().min(1).optional(),
+  /** Laju bingkai sumber, bingkai/detik (ADR-0028). */
+  fps: finitePositive.optional(),
+  /** Proxy pratinjau (ADR-0028); tidak ada = preview memakai berkas aslinya. */
+  proxy: proxyMediaSchema.optional(),
 });
 export type ResolvedAsset = z.infer<typeof resolvedAssetSchema>;
 

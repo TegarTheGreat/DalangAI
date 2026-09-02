@@ -1,4 +1,9 @@
-import { MIN_SCENE_SEC, type Scene, type ScenePlan } from "@dalang/core";
+import {
+  MIN_SCENE_SEC,
+  type Scene,
+  type ScenePlan,
+  substituteProxies,
+} from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
 import { Thumbnail } from "@remotion/player";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -93,6 +98,9 @@ const Clip: React.FC<{
   // panjang tidak melahirkan ratusan Thumbnail sekaligus.
   const count = Math.max(1, Math.min(MAX_FILMSTRIP_FRAMES, Math.ceil(width / thumbW)));
   const frames = filmstripFrames(meta, index, count);
+  // ADR-0028: thumbnail juga dari proxy — tiap Thumbnail adalah satu dekoder
+  // video, dan empat puluh dekoder 4K sekaligus membekukan timeline.
+  const previewPlan = useMemo(() => substituteProxies(plan), [plan]);
   const busy = project?.busy.mutation !== null;
   const durSec = (meta.sceneFrames[index] ?? 1) / meta.fps;
 
@@ -171,7 +179,7 @@ const Clip: React.FC<{
             <span key={frame} className="clip-frame" style={{ width: thumbW }}>
               <Thumbnail
                 component={DalangVideo}
-                inputProps={{ plan, debug: false }}
+                inputProps={{ plan: previewPlan, debug: false }}
                 frameToDisplay={frame}
                 durationInFrames={meta.durationInFrames}
                 compositionWidth={meta.width}

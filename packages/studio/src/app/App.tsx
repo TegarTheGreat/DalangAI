@@ -62,6 +62,8 @@ const BUSY_LABEL: Record<BusyKind, string> = {
   transcribe: "Mentranskrip rekaman",
   review: "Meninjau render",
   pick: "Memasang aset",
+  proxies: "Membuat proxy pratinjau",
+  sources: "Mendaftarkan rekaman",
 };
 
 const RATIO_GLYPH: Record<(typeof ASPECT_RATIOS)[number], string> = {

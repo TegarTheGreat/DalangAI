@@ -31,6 +31,7 @@ import { studioClient, useStudio } from "../use-studio";
 import { AudioTab } from "./AudioTab";
 import { LapisanTab } from "./LayersTab";
 import { GrafisTab, SfxSection } from "./MediaLibrary";
+import { SourceSection } from "./SourcePanel";
 import { TranscriptTab } from "./TranscriptTab";
 
 /**
@@ -624,6 +625,8 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             Unggah gambar
           </button>
         </div>
+        {/* ADR-0028: rekaman (bukan gambar) — pilih/unggah, lihat, tentukan titik masuk. */}
+        {project?.plan ? <SourceSection plan={project.plan} scene={scene} /> : null}
         <label className="field">
           <span>Kata kunci pencarian aset (bahasa Inggris)</span>
           <input

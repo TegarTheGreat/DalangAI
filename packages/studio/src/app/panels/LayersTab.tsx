@@ -24,6 +24,7 @@ import { ClipAudioControls } from "./ClipAudioControls";
 import { SliderRow } from "./InspectorPanel";
 import { KeyframeControls } from "./KeyframeControls";
 import { ANCHOR_LABEL, AnchorPad } from "./MediaLibrary";
+import { SourceSection } from "./SourcePanel";
 
 /**
  * Panel lapisan video (ADR-0025, roadmap §9.2).
@@ -273,6 +274,8 @@ const LayerCard: React.FC<{
                     : "Belum ada berkas — lapisan ini tidak akan muncul di video."}
               </span>
             </div>
+            {/* ADR-0028: rekaman proyek sebagai sisipan, dengan titik masuk yang terlihat. */}
+            <SourceSection plan={plan} scene={scene} layerId={layer.id} />
 
             <div className="field">
               <span>Posisi</span>

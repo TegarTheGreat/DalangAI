@@ -20,6 +20,12 @@ export interface RenderRequest {
   outputLocation: string;
   profile: RenderProfile;
   settings?: Partial<ExportSettings>;
+  /**
+   * Render dari proxy pratinjau (ADR-0028) bila ada. Bagian KONTRAK, bukan
+   * perilaku target: pemanggil yang memutuskan sebuah render adalah draf, dan
+   * target cloud yang mengunggah aset perlu tahu berkas mana yang diunggah.
+   */
+  useProxies?: boolean;
   onProgress?: (event: RenderTargetProgress) => void;
   /** Batalkan render yang sedang berjalan. */
   signal?: AbortSignal;

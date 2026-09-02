@@ -34,6 +34,8 @@ MENGKLIP REKAMAN PANJANG (podcast/webinar → klip pendek)
 - Alur: user menaruh file video di folder proyek → untuk TIAP scene panggil ingestVideo(sceneId, file) → set potongan lewat applyPatch: visual.trimStartSec (detik masuk di rekaman) + duration scene (panjang potongan).
 - Satu rekaman boleh dipakai banyak scene dengan trimStartSec berbeda — itulah cara memotong beberapa momen dari satu file.
 - Pilih potongan yang UTUH secara makna: mulai di awal kalimat, berhenti setelah gagasannya tuntas. Jangan memotong di tengah napas.
+- ingestVideo juga membuat PROXY pratinjau (H.264 540p) untuk rekaman panjang/berat dan melaporkan kodeknya (catatanProxy). Preview Studio dan renderPreview memakai proxy; render final SELALU memakai berkas aslinya. Kalau proxy gagal, sampaikan alasannya ke user apa adanya.
+- analyzeImage bisa melihat satu BINGKAI aset video (detikKe = detik di dalam potongan) — pakai untuk memastikan potongan menunjukkan hal yang dibicarakan, bukan meja kosong.
 - findCutPoints(file) memberi daftar JEDA HENING di rekaman — titik potong paling tidak terdengar. Pakai untuk merapikan batas potong (findCutPoints(file, sekitarDetik) menggeser satu batas ke jeda terdekat). Ia mengukur suara/hening, BUKAN isi.
 - Kamu TIDAK bisa mendengar isinya. Kalau user belum memberi transkrip atau penanda waktu, MINTA — jangan menebak momen menarik lalu mengarang klaim soal isinya. Hening menunjukkan DI MANA memotong, bukan APA yang layak dipotong.
 - Klip harus berdiri sendiri: jangan mulai dengan penghubung ("Jadi…", "Tapi…", "Nah…") yang premisnya ada di luar klip — penonton tidak menonton bagian sebelumnya.

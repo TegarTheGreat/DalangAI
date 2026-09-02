@@ -14,6 +14,7 @@ import type { ChatBridge, StudioContext, StudioDeps } from "./context";
 import { registerMedia } from "./media";
 import { registerMediaLibraryRoutes } from "./media-library";
 import { registerJobRoutes, registerProjectRoutes } from "./routes";
+import { registerSourceRoutes } from "./sources";
 import { StudioStore } from "./store";
 
 /**
@@ -72,6 +73,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
     iconProvider: options.deps.iconProvider,
     sfxChain: options.deps.sfxChain,
     saveMedia: (media) => options.deps.saveMedia(session.paths.planPath, media),
+    ...(options.deps.transcoder ? { transcoder: options.deps.transcoder } : {}),
     ...(options.deps.volumeModel ? { volumeModel: options.deps.volumeModel } : {}),
     onToolActivity: (line) => bridge?.onActivity(line),
   };
@@ -92,6 +94,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
   registerJobRoutes(app, context);
   registerChatRoutes(app, context);
   registerMediaLibraryRoutes(app, context);
+  registerSourceRoutes(app, context);
   registerMedia(app, {
     templatesPublicDir,
     planDir: session.paths.planDir,

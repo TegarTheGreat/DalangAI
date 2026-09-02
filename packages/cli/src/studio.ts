@@ -18,6 +18,7 @@ import {
   detectSilence,
   probeLocalVideo,
   remotionAudioProbe,
+  remotionTranscoder,
   renderPlanStills,
   renderPlanToVideo,
   saveMediaToProject,
@@ -111,6 +112,8 @@ export const registerStudioCommand = (program: Command): void => {
             probeVideo: probeLocalVideo,
             // ADR-0026: tanpa ini hanya berkas WAV yang bisa diukur.
             audioProbe: remotionAudioProbe,
+            // ADR-0028: proxy pratinjau, bingkai rekaman, bentuk gelombang.
+            transcoder: remotionTranscoder,
             detectSilence,
             iconProvider: () => buildIconProvider(),
             sfxChain: () => buildSfxChain(),

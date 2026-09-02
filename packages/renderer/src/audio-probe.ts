@@ -8,6 +8,7 @@ import {
 } from "@dalang/pipeline";
 import { extractAudio, openBrowser } from "@remotion/renderer";
 import { findBrowserExecutable } from "./browser";
+import { remotionTranscoder } from "./ffmpeg";
 
 /**
  * Implementasi port `AudioProbe` (ADR-0026) di atas Remotion.
@@ -25,11 +26,15 @@ import { findBrowserExecutable } from "./browser";
  *      hasilnya PCM; untuk MP4 hasilnya AAC yang DIBUNGKUS kontainer WAV —
  *      berkas .wav yang sah dan sama sekali tidak bisa diukur. Karena itu
  *      keluarannya DIPERIKSA, bukan dipercaya.
- *   2. Chromium yang sudah dipakai merender, lewat `decodeAudioData`. Ia
- *      mendekode MP3, FLAC, Ogg/Opus, dan WAV di mana pun; AAC/MP4 hanya pada
- *      build ber-kodek proprietary (Chrome, dan Chrome Headless Shell yang
- *      diunduh Remotion sendiri) — Chromium biasa menolaknya.
- *   3. Menyerah dengan JUJUR: `{ ok: false, reason }`, bukan lemparan.
+ *   2. ffmpeg bawaan Remotion (ADR-0028) — dekoder aac/mp3/opus/vorbis/flac/pcm
+ *      ada di build-nya, tanpa browser, tanpa kodek proprietary. Sejak lapisan
+ *      ini ada, batas "AAC/MP4 tidak terukur pada Chromium" milik ADR-0026
+ *      DICABUT: klip stok dan musik MP4 terukur di mesin mana pun.
+ *   3. Chromium yang sudah dipakai merender, lewat `decodeAudioData` — untuk
+ *      kontainer yang demuxer-nya tidak ikut di build ramping ffmpeg Remotion.
+ *      Ia mendekode MP3, FLAC, Ogg/Opus, dan WAV di mana pun; AAC/MP4 hanya
+ *      pada build ber-kodek proprietary.
+ *   4. Menyerah dengan JUJUR: `{ ok: false, reason }`, bukan lemparan.
  *
  * Lapisan 1 sendirian pernah menjadi seluruh implementasi ini, dan komentarnya
  * mengklaim `extractAudio` menghasilkan PCM "dari media apa pun". Itu keliru,
@@ -133,6 +138,8 @@ export const remotionAudioProbe = (): AudioProbe => {
     return browser.newPage({ context: null, logLevel: "error", indent: false });
   };
 
+  const transcoder = remotionTranscoder();
+
   return {
     id: "remotion",
 
@@ -153,7 +160,12 @@ export const remotionAudioProbe = (): AudioProbe => {
         // berikutnya akan mengatakannya dengan kalimat yang lebih berguna.
       }
 
-      // --- Lapisan 2: dekode di Chromium -----------------------------------
+      // --- Lapisan 2: dekode lewat ffmpeg bawaan Remotion ------------------
+      const viaFfmpeg = await transcoder.toWav(sourcePath, wavPath);
+      if (viaFfmpeg.ok) return { ok: true };
+      const ffmpegReason = viaFfmpeg.reason;
+
+      // --- Lapisan 3: dekode di Chromium -----------------------------------
       const source = readFileSync(sourcePath);
       if (source.byteLength > BROWSER_MAX_BYTES) {
         return {
@@ -173,7 +185,7 @@ export const remotionAudioProbe = (): AudioProbe => {
             streamCopyFormat !== null
               ? `audionya ${wavFormatName(streamCopyFormat)}; `
               : "";
-          return { ok: false, reason: `${asal}${reply.reason}` };
+          return { ok: false, reason: `${asal}ffmpeg: ${ffmpegReason}; ${reply.reason}` };
         }
         writeFileSync(wavPath, Buffer.from(reply.wav, "base64"));
         return { ok: true };

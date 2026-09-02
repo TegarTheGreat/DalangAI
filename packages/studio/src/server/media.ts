@@ -9,7 +9,7 @@ import type { Hono } from "hono";
  *
  *   /fonts/*, /music/*          → templates/public (aset situs: font, bed musik)
  *   /assets/*                   → folder plan (aset lokal proyek)
- *   /.dalang/{tts,assets,renders}/* → keluaran pipeline & render
+ *   /.dalang/{tts,assets,renders,proxies}/* → keluaran pipeline & render
  *
  * dan komponen preset berjalan APA ADANYA di Player (tanpa perubahan).
  * File privat `.dalang` lain (pipeline.db, chat-history.json, patch-log.json)
@@ -17,7 +17,7 @@ import type { Hono } from "hono";
  * mendukung Range 206 (dibutuhkan seeking audio/video).
  */
 
-const DALANG_PUBLIC = /^\/\.dalang\/(tts|assets|renders)\//;
+const DALANG_PUBLIC = /^\/\.dalang\/(tts|assets|renders|proxies)\//;
 
 export const registerMedia = (
   app: Hono,

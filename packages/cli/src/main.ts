@@ -16,6 +16,7 @@ import {
   readPlanFile,
   recordingsInPlan,
   runAsrStage,
+  runProxyStage,
   type SceneStageResult,
 } from "@dalang/pipeline";
 import { buildAsrChain, buildStockChain, buildTtsChain } from "@dalang/providers";
@@ -29,6 +30,7 @@ import {
   type RenderProfile,
   type RenderTargetProgress,
   remotionAudioProbe,
+  remotionTranscoder,
   renderPlanStills,
   renderPlanToVideo,
   resolveExportSettings,
@@ -254,6 +256,10 @@ program
     parsePositiveInt,
   )
   .option("--no-cache", "jangan pakai bundle cache (selalu bundling ulang)")
+  .option(
+    "--proxy",
+    "render dari proxy pratinjau 540p bila ada (ADR-0028) — untuk draf, bukan final",
+  )
   .addOption(
     new Option("--target <tujuan>", "di mana render dijalankan (ADR-0019)")
       .choices(["local", "lambda"])
@@ -271,12 +277,18 @@ program
         quality?: EncodeQuality;
         concurrency?: number;
         cache: boolean;
+        proxy?: boolean;
         target: "local" | "lambda";
       },
     ) => {
       const absPlan = planPathOf(planPath);
       const plan = loadPlan(absPlan);
       printPlanSummary(plan);
+      if (options.proxy && options.profile === "final") {
+        console.warn(
+          "  PERHATIAN: --proxy pada profil final — hasilnya 540p yang diperbesar. Ini draf, bukan rilis.",
+        );
+      }
 
       const overrides = {
         ...(options.videoFormat ? { format: options.videoFormat } : {}),
@@ -328,6 +340,7 @@ program
         outputLocation: outPath,
         profile: options.profile,
         settings: overrides,
+        ...(options.proxy ? { useProxies: true } : {}),
         onProgress: progressPrinter(),
       });
       process.stdout.write("\n");
@@ -338,10 +351,26 @@ program
           `  ${result.settings.format} ${result.width}×${result.height} (${result.settings.quality}) · ` +
           `${formatSec(result.durationSec)} · ` +
           `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec(elapsed)}` +
-          `${result.bundleFromCache ? " · bundle cache: hit" : ""}`,
+          `${result.bundleFromCache ? " · bundle cache: hit" : ""}` +
+          `${result.proxied ? ` · ${result.proxied} berkas dari proxy` : ""}` +
+          mixLine(result.mixLufs, plan.meta.loudnessTarget),
       );
     },
   );
+
+/**
+ * Kenyaringan campuran akhir (ADR-0028) di samping sasarannya: angka yang
+ * benar-benar akan didengar penonton, bukan janji normalisasi per klip.
+ */
+const mixLine = (mixLufs: number | null | undefined, target: number | null): string => {
+  if (typeof mixLufs !== "number") return "";
+  if (!target)
+    return `\n  campuran akhir ${mixLufs.toFixed(1)} LUFS (normalisasi nonaktif)`;
+  const selisih = mixLufs - target;
+  const arah =
+    Math.abs(selisih) < 1 ? "pas sasaran" : selisih > 0 ? "lebih keras" : "lebih pelan";
+  return `\n  campuran akhir ${mixLufs.toFixed(1)} LUFS · sasaran ${target} · ${arah} (${selisih >= 0 ? "+" : ""}${selisih.toFixed(1)} LU)`;
+};
 
 const STATUS_ICON: Record<SceneStageResult["status"], string> = {
   done: "ok",
@@ -394,6 +423,8 @@ program
         stockProviders,
         // ADR-0026: tanpa port ini hanya berkas WAV yang bisa diukur.
         audioProbe: remotionAudioProbe(),
+        // ADR-0028: proxy pratinjau untuk rekaman panjang/berat.
+        transcoder: remotionTranscoder(),
         force: options.force,
         log: {
           info: (message) => console.log(message),
@@ -405,6 +436,7 @@ program
       printStageResults("TTS", summary.tts);
       printStageResults("Aset", summary.assets);
       printStageResults("Kenyaringan", summary.loudness);
+      printStageResults("Proxy", summary.proxies);
       console.log(
         `\n  ${summary.planChanged ? "renderState ditulis ke" : "Tidak ada perubahan pada"} ${summary.planPath}` +
           (summary.totalCostUsd > 0
@@ -430,17 +462,64 @@ program
           planPath: absPlan,
           outputLocation: outPath,
           profile: options.render,
+          // ADR-0028: draf dari proxy; final selalu dari berkas aslinya.
+          useProxies: options.render === "draft",
           onProgress: progressPrinter(),
         });
         process.stdout.write("\n");
         console.log(
           `selesai: ${result.outputLocation}\n` +
             `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
-            `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec((Date.now() - startedAt) / 1000)}`,
+            `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec((Date.now() - startedAt) / 1000)}` +
+            `${result.proxied ? ` · ${result.proxied} berkas dari proxy` : ""}` +
+            mixLine(result.mixLufs, summary.plan.meta.loudnessTarget),
         );
       }
     },
   );
+
+program
+  .command("proxy")
+  .argument("<proyek>", "folder proyek atau path plan.json")
+  .option("--file <path...>", "batasi ke berkas tertentu (path relatif plan)")
+  .option("--force", "abaikan cache — buat ulang proxy")
+  .description(
+    "Buat proxy pratinjau (H.264 540p) untuk rekaman panjang/berat di plan (ADR-0028); preview dan render draf memakainya, render final tidak",
+  )
+  .action(async (planPath: string, options: { file?: string[]; force?: boolean }) => {
+    const absPlan = planPathOf(planPath);
+    const paths = projectPaths(absPlan);
+    const plan = readPlanFile(absPlan);
+    const db = new PipelineDb(paths.dbPath);
+    try {
+      const outcome = await runProxyStage({
+        paths,
+        plan,
+        db,
+        transcoder: remotionTranscoder(),
+        ...(options.file ? { files: options.file } : {}),
+        ...(options.force !== undefined ? { force: options.force } : {}),
+        log: {
+          info: (message) => console.log(message),
+          warn: (message) => console.warn(message),
+        },
+      });
+      console.log("");
+      printStageResults("Proxy", outcome.results);
+      const next = `${JSON.stringify(outcome.plan, null, 2)}\n`;
+      if (next !== `${JSON.stringify(plan, null, 2)}\n`) {
+        atomicWriteFile(absPlan, next);
+        console.log(`\n  renderState ditulis ke ${absPlan}`);
+      } else {
+        console.log("\n  Tidak ada perubahan pada renderState.");
+      }
+      if (outcome.results.some((result) => result.status === "error")) {
+        process.exitCode = 1;
+      }
+    } finally {
+      db.close();
+    }
+  });
 
 program
   .command("transcribe")

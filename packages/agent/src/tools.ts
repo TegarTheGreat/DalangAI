@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   critiquePlan,
@@ -10,6 +11,7 @@ import {
   LAYER_ENTRANCES,
   LAYER_SHAPES,
   MAX_LAYERS,
+  type ProxyMedia,
   patchOpSchema,
   recipeFor,
   type ScenePlanInput,
@@ -26,13 +28,14 @@ import {
   uniqueSfxCueId,
   uniqueTrackId,
 } from "@dalang/core";
-import type { IconProvider, SfxProvider } from "@dalang/pipeline";
+import type { IconProvider, MediaTranscoder, SfxProvider } from "@dalang/pipeline";
 import {
   type AsrProvider,
   materializeCandidate,
   recordingsInPlan,
   runAsrStage,
   runAssetStage,
+  runProxyStage,
   runTtsStage,
   type SceneStageResult,
   type StockProvider,
@@ -100,6 +103,8 @@ export interface AgentDeps {
     planPath: string;
     outputLocation: string;
     profile: "draft" | "final";
+    /** Render dari proxy pratinjau (ADR-0028) — hanya untuk draf. */
+    useProxies?: boolean;
   }) => Promise<RenderVideoResult>;
   /** Model tier-2 (murah/multimodal) untuk researchTopic & analyzeImage. */
   volumeModel?: ResolvedModel;
@@ -138,6 +143,12 @@ export interface AgentDeps {
    * adanya, bukan disamarkan jadi "tidak ada rekaman".
    */
   asrChain: () => AsrProvider[];
+  /**
+   * Transkoder media (ADR-0028): proxy pratinjau, bingkai video untuk
+   * analisis, dan fakta kodek. Boleh kosong — ingestVideo tetap bekerja tanpa
+   * proxy, dan analyzeImage pada video mengatakan kenapa ia tidak bisa.
+   */
+  transcoder?: () => MediaTranscoder;
   onToolActivity?: (line: string) => void;
 }
 
@@ -261,6 +272,12 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
               error: `Tidak bisa membaca video "${input.file}" — pastikan path relatif terhadap folder plan dan formatnya didukung`,
             };
           }
+          // ADR-0028: fakta kodek/laju bingkai dari ffprobe, kalau transkodernya
+          // ada. Tanpa itu aset tetap terdaftar — hanya tanpa dua bidang ini.
+          const transcoder = deps.transcoder?.();
+          const info = transcoder
+            ? await transcoder.probe(join(session.paths.planDir, input.file))
+            : null;
           session.plan = setResolvedAsset(plan, input.sceneId, {
             file: input.file,
             kind: "video",
@@ -269,6 +286,8 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             width: meta.width,
             height: meta.height,
             durationSec: meta.durationSec,
+            ...(info?.codec ? { codec: info.codec } : {}),
+            ...(info?.fps ? { fps: info.fps } : {}),
           });
           const { summary } = session.applyAgentPatch([
             {
@@ -283,12 +302,41 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
               patch: { visual: { type: "image" } },
             },
           ]);
+
+          // Proxy pratinjau (ADR-0028) dibuat DI SINI, bukan menunggu
+          // resolveAssets: rekaman panjang yang baru didaftarkan adalah persis
+          // berkas yang paling berat dimainkan preview, dan agent yang
+          // mendaftarkannya adalah yang paling tahu ia akan segera dipotong.
+          let proxy: ProxyMedia | undefined;
+          let catatanProxy = "tidak ada transkoder — preview memakai berkas aslinya";
+          if (transcoder) {
+            const outcome = await runProxyStage({
+              paths: session.paths,
+              plan: requirePlan(),
+              db: session.db,
+              transcoder,
+              files: [input.file],
+              log: { info: activity, warn: activity },
+            });
+            session.plan = outcome.plan;
+            session.persist();
+            const row = outcome.results[0];
+            catatanProxy = row ? `${row.status}: ${row.detail}` : "tidak diproses";
+            proxy = outcome.plan.renderState.resolvedAssets[input.sceneId]?.proxy;
+          }
+
           return {
             ok: true,
             file: input.file,
             durasiDetik: Number(meta.durationSec.toFixed(2)),
             lebar: meta.width,
             tinggi: meta.height,
+            kodek: info?.codec ?? null,
+            fps: info?.fps ?? null,
+            proxy: proxy
+              ? { file: proxy.file, lebar: proxy.width, tinggi: proxy.height }
+              : null,
+            catatanProxy,
             ringkasanPerubahan: summary,
             catatan:
               "Pilih potongan lewat applyPatch: visual.trimStartSec = detik mulai, dan duration scene = panjang potongan.",
@@ -1499,12 +1547,18 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             planPath: session.paths.planPath,
             outputLocation,
             profile: "draft",
+            // ADR-0028: draf dirender dari proxy — 540p persis skala draf.
+            useProxies: true,
           });
           return {
             ok: true,
             file: result.outputLocation,
             durasiSec: result.durationSec,
             ukuranMB: Number((result.sizeBytes / 1024 / 1024).toFixed(1)),
+            ...(result.proxied ? { dariProxy: result.proxied } : {}),
+            ...(typeof result.mixLufs === "number"
+              ? { campuranAkhirLufs: Number(result.mixLufs.toFixed(1)) }
+              : {}),
           };
         }),
     }),
@@ -1708,10 +1762,17 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     analyzeImage: tool({
       description:
-        "Analisis visual aset gambar sebuah scene dengan model vision tier-volume (deskripsi/OCR/kecocokan dengan narasi).",
+        "Analisis visual aset sebuah scene dengan model vision tier-volume (deskripsi/OCR/kecocokan dengan narasi). Untuk aset VIDEO, satu BINGKAI diambil dari potongan scene (detikKe dihitung dari trimStartSec; bawaan 0) — pakai untuk memeriksa apakah potongan benar-benar menunjukkan yang dibicarakan.",
       inputSchema: z.object({
         sceneId: z.string(),
         question: z.string().min(3),
+        detikKe: z
+          .number()
+          .min(0)
+          .optional()
+          .describe(
+            "Hanya aset VIDEO: detik di dalam potongan scene (0 = bingkai pertama potongan).",
+          ),
       }),
       execute: (input) =>
         run("analyzeImage", input, async () => {
@@ -1720,8 +1781,17 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           if (!asset) {
             throw new Error(`Scene ${input.sceneId} belum punya aset ter-resolve`);
           }
-          if (asset.kind !== "image") {
-            throw new Error("Analisis frame video belum didukung — hanya aset gambar");
+          if (asset.kind === "audio") {
+            throw new Error("Aset audio tidak punya gambar untuk dianalisis");
+          }
+          // Prasyarat bingkai diperiksa SEBELUM prasyarat model: "tidak ada
+          // transkoder" adalah keadaan yang bisa diperbaiki pemasang, dan pesan
+          // yang menyebut model padahal masalahnya ffmpeg menyesatkan.
+          const transcoderForFrame = asset.kind === "video" ? deps.transcoder?.() : null;
+          if (asset.kind === "video" && !transcoderForFrame) {
+            throw new Error(
+              "Analisis bingkai video butuh transkoder ffmpeg, dan sesi ini tidak punya — sampaikan ke user; jangan menebak isi videonya",
+            );
           }
           const volume = deps.volumeModel;
           if (!volume) {
@@ -1732,14 +1802,43 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
               `Model ${volume.key} tidak mendukung input gambar — pilih model vision`,
             );
           }
-          const bytes = readFileSync(join(session.paths.planDir, asset.file));
-          const extension = asset.file.split(".").at(-1)?.toLowerCase();
-          const mediaType =
-            extension === "svg"
-              ? "image/svg+xml"
-              : extension === "png"
-                ? "image/png"
-                : "image/jpeg";
+          let bytes: Uint8Array;
+          let mediaType: string;
+          if (asset.kind === "video" && transcoderForFrame) {
+            // ADR-0028: bingkai diambil lewat transkoder pada detik yang diminta
+            // DI DALAM potongan — bukan dari awal rekaman satu jam.
+            const transcoder = transcoderForFrame;
+            const scene = plan.scenes.find((candidate) => candidate.id === input.sceneId);
+            const atSec = (scene?.visual.trimStartSec ?? 0) + (input.detikKe ?? 0);
+            const scratch = mkdtempSync(join(tmpdir(), "dalang-frame-"));
+            try {
+              const framePath = join(scratch, "frame.jpg");
+              const frame = await transcoder.extractFrame(
+                join(session.paths.planDir, asset.file),
+                atSec,
+                framePath,
+                { height: 720 },
+              );
+              if (!frame.ok) {
+                throw new Error(
+                  `Tidak bisa mengambil bingkai pada detik ${atSec.toFixed(1)}: ${frame.reason}`,
+                );
+              }
+              bytes = readFileSync(framePath);
+            } finally {
+              rmSync(scratch, { recursive: true, force: true });
+            }
+            mediaType = "image/jpeg";
+          } else {
+            bytes = readFileSync(join(session.paths.planDir, asset.file));
+            const extension = asset.file.split(".").at(-1)?.toLowerCase();
+            mediaType =
+              extension === "svg"
+                ? "image/svg+xml"
+                : extension === "png"
+                  ? "image/png"
+                  : "image/jpeg";
+          }
           const result = await generateText({
             model: volume.model,
             messages: [

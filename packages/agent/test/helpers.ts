@@ -207,15 +207,21 @@ export const fakeStock = (
 };
 
 export const fakeRender = (): AgentDeps["renderVideo"] & {
-  calls: Array<{ profile: string; outputLocation: string }>;
+  calls: Array<{ profile: string; outputLocation: string; useProxies?: boolean }>;
 } => {
-  const calls: Array<{ profile: string; outputLocation: string }> = [];
+  const calls: Array<{ profile: string; outputLocation: string; useProxies?: boolean }> =
+    [];
   const fn = (async (options: {
     planPath: string;
     outputLocation: string;
     profile: "draft" | "final";
+    useProxies?: boolean;
   }): Promise<RenderVideoResult> => {
-    calls.push({ profile: options.profile, outputLocation: options.outputLocation });
+    calls.push({
+      profile: options.profile,
+      outputLocation: options.outputLocation,
+      ...(options.useProxies !== undefined ? { useProxies: options.useProxies } : {}),
+    });
     return {
       outputLocation: options.outputLocation,
       durationInFrames: 1500,
@@ -348,6 +354,7 @@ export const makeDeps = (
       overrides.saveMedia ??
       (async ({ folder, name, fileExt }) => `assets/${folder}/${name}.${fileExt}`),
     volumeModel: overrides.volumeModel,
+    ...(overrides.transcoder ? { transcoder: overrides.transcoder } : {}),
     onToolActivity: () => {},
   };
   return { deps, approvals, render };

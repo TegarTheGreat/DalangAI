@@ -9,6 +9,7 @@ export * from "./media-ids";
 export * from "./patch";
 export * from "./patch-log";
 export * from "./prose";
+export * from "./proxy";
 export * from "./render-state";
 export * from "./scene-plan";
 export * from "./syllables";

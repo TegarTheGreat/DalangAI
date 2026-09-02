@@ -4,6 +4,8 @@ import type {
   ExportSettingsLite,
   NewProjectRequest,
   ProjectStatePayload,
+  RegisterSourceRequest,
+  SourceLite,
   StockCandidateLite,
   StudioEvent,
   WorkspacePayload,
@@ -59,12 +61,25 @@ export interface AssetSearchState {
   error: string | null;
 }
 
+/** Daftar rekaman proyek (ADR-0028) — diambil saat panel sumber dibuka. */
+export interface SourcesState {
+  loading: boolean;
+  error: string | null;
+  transcoder: boolean;
+  maxUploadBytes: number;
+  items: SourceLite[];
+}
+
 export interface RenderProgress {
   /** Deskripsi ekspor, mis. "mp4 1080p seimbang". */
   label: string;
   status: "started" | "done" | "error";
   url?: string;
   error?: string;
+  /** Kenyaringan campuran akhir hasil render (ADR-0028); null = tidak terukur. */
+  mixLufs?: number | null;
+  /** Berkas video yang dirender dari proxy (ADR-0028). */
+  proxied?: number;
 }
 
 export interface StudioState {
@@ -88,6 +103,10 @@ export interface StudioState {
   pendingImages: string[];
   assetSearch: AssetSearchState | null;
   renderProgress: RenderProgress | null;
+  /** Daftar rekaman proyek (ADR-0028); null = belum pernah dibuka. */
+  sources: SourcesState | null;
+  /** Unggahan rekaman yang sedang berjalan (ADR-0028). */
+  sourceUpload: { name: string; progress: number } | null;
   toast: string | null;
   /** Status SSE: false = terputus, EventSource sedang menyambung ulang. */
   connected: boolean;
@@ -110,6 +129,8 @@ const emptyState: StudioState = {
   pendingImages: [],
   assetSearch: null,
   renderProgress: null,
+  sources: null,
+  sourceUpload: null,
   toast: null,
   connected: true,
 };
@@ -203,6 +224,8 @@ export class StudioClient {
       confirm: null,
       assetSearch: null,
       renderProgress: null,
+      sources: null,
+      sourceUpload: null,
       connected: true,
       switching: null,
       ...(workspace ? { workspace } : {}),
@@ -327,6 +350,106 @@ export class StudioClient {
     }
   }
 
+  // --- Sumber rekaman & proxy (ADR-0028) -------------------------------------
+
+  async loadSources(): Promise<void> {
+    const previous = this.state.sources;
+    this.set({
+      sources: {
+        loading: true,
+        error: null,
+        transcoder: previous?.transcoder ?? true,
+        maxUploadBytes: previous?.maxUploadBytes ?? 0,
+        items: previous?.items ?? [],
+      },
+    });
+    try {
+      const payload = await api.listSources();
+      this.set({
+        sources: {
+          loading: false,
+          error: null,
+          transcoder: payload.transcoder,
+          maxUploadBytes: payload.maxUploadBytes,
+          items: payload.sources,
+        },
+      });
+    } catch (error) {
+      this.set({
+        sources: {
+          loading: false,
+          error: error instanceof Error ? error.message : String(error),
+          transcoder: previous?.transcoder ?? true,
+          maxUploadBytes: previous?.maxUploadBytes ?? 0,
+          items: previous?.items ?? [],
+        },
+      });
+    }
+  }
+
+  /** Pasang rekaman yang sudah ada di folder proyek ke scene/lapisan. */
+  async registerSource(req: RegisterSourceRequest): Promise<boolean> {
+    try {
+      const result = await api.registerSource(req);
+      this.toast(
+        result.proxy
+          ? `Rekaman terpasang · proxy ${result.proxy.width}×${result.proxy.height} siap`
+          : `Rekaman terpasang · ${result.proxyNote}`,
+      );
+      await this.refresh();
+      void this.loadSources();
+      return true;
+    } catch (error) {
+      this.failure(error);
+      return false;
+    }
+  }
+
+  /** Unggah rekaman (streaming, dengan kemajuan) lalu pasang ke scene/lapisan. */
+  async uploadSource(
+    file: File,
+    target: { sceneId: string; layerId?: string | null } | null,
+  ): Promise<void> {
+    this.set({ sourceUpload: { name: file.name, progress: 0 } });
+    try {
+      const uploaded = await api.uploadSource(file, (progress) =>
+        this.set({ sourceUpload: { name: file.name, progress } }),
+      );
+      this.set({ sourceUpload: null });
+      if (uploaded.existed) this.toast(`Rekaman yang sama sudah ada: ${uploaded.file}`);
+      if (target) {
+        await this.registerSource({
+          file: uploaded.file,
+          sceneId: target.sceneId,
+          ...(target.layerId ? { layerId: target.layerId } : {}),
+        });
+      } else {
+        this.toast(`Rekaman tersimpan: ${uploaded.file}`);
+        void this.loadSources();
+      }
+    } catch (error) {
+      this.set({ sourceUpload: null });
+      this.failure(error);
+    }
+  }
+
+  async runProxies(files?: string[], force?: boolean): Promise<void> {
+    try {
+      const { results } = await api.runProxies(files, force);
+      const made = results.filter((r) => r.status === "done").length;
+      const skipped = results.filter((r) => r.status === "skipped").length;
+      this.toast(
+        results.length === 0
+          ? "Tidak ada berkas video yang perlu proxy"
+          : `Proxy: ${made} dibuat, ${skipped} tidak perlu, ${results.length - made - skipped} gagal`,
+      );
+      await this.refresh();
+      void this.loadSources();
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
   /** Belah scene di titik waktu lokal (ADR-0015); bisa di-undo. */
   async splitScene(sceneId: string, atSec: number): Promise<void> {
     try {
@@ -437,10 +560,16 @@ export class StudioClient {
             status: event.status,
             ...(event.url ? { url: event.url } : {}),
             ...(event.error ? { error: event.error } : {}),
+            ...(event.mixLufs !== undefined ? { mixLufs: event.mixLufs } : {}),
+            ...(event.proxied ? { proxied: event.proxied } : {}),
           },
         });
         if (event.status === "done") {
-          this.toast(`Ekspor ${event.label} selesai`);
+          this.toast(
+            typeof event.mixLufs === "number"
+              ? `Ekspor ${event.label} selesai · campuran akhir ${event.mixLufs.toFixed(1)} LUFS`
+              : `Ekspor ${event.label} selesai`,
+          );
           this.scheduleRefresh();
         }
         if (event.status === "error") this.toast(`Render gagal: ${event.error}`);

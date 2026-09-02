@@ -1,7 +1,12 @@
 import { cpSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseScenePlan, type ScenePlan } from "@dalang/core";
+import {
+  parseScenePlan,
+  proxiedFiles,
+  type ScenePlan,
+  substituteProxies,
+} from "@dalang/core";
 import { COMPOSITION_ID, FPS } from "@dalang/templates/layout";
 import {
   type LogLevel,
@@ -11,6 +16,7 @@ import {
 } from "@remotion/renderer";
 import { findBrowserExecutable } from "./browser";
 import { getBundle } from "./bundle-cache";
+import { measureMediaLoudness } from "./ffmpeg";
 import { copyPlanAssets } from "./stage";
 import type { RenderTarget } from "./target";
 
@@ -183,6 +189,13 @@ export interface RenderBehaviorOptions {
   assetBaseUrl?: string | null;
   /** Peta path aset -> URL penuh (mis. presigned). Mendahului assetBaseUrl. */
   assetUrls?: Record<string, string> | null;
+  /**
+   * Pakai proxy pratinjau (ADR-0028) sebagai ganti berkas video aslinya.
+   * Untuk render DRAF: proxy 540p persis skala draf, dan mendekode 4K per
+   * bingkai adalah bagian paling lambat dari render draf. Render final tidak
+   * pernah memakainya — pemanggil yang memutuskan, bukan profil.
+   */
+  useProxies?: boolean;
 }
 
 interface PreparedRender {
@@ -201,7 +214,8 @@ const prepare = async (
   options: RenderBehaviorOptions,
 ): Promise<PreparedRender> => {
   const logLevel = options.logLevel ?? "warn";
-  const plan = loadPlan(planPath);
+  const loaded = loadPlan(planPath);
+  const plan = options.useProxies ? substituteProxies(loaded) : loaded;
   const browserExecutable = findBrowserExecutable();
 
   const bundleResult = await getBundle({
@@ -257,6 +271,15 @@ export interface RenderVideoResult {
   height: number;
   bundleFromCache: boolean;
   settings: ExportSettings;
+  /**
+   * Kenyaringan terintegrasi CAMPURAN AKHIR berkas ini, LUFS (ADR-0028).
+   * Diukur dari berkas yang benar-benar ditulis — bukan dihitung dari
+   * sumber-sumbernya — jadi ini angka yang akan didengar penonton.
+   * null = tidak terukur (target yang tidak mengukur, atau dekode gagal).
+   */
+  mixLufs?: number | null;
+  /** Berapa berkas video yang dirender dari proxy-nya (ADR-0028); 0 = semua asli. */
+  proxied?: number;
 }
 
 export const renderPlanToVideo = async (
@@ -299,6 +322,12 @@ export const renderPlanToVideo = async (
         }),
     });
 
+    // Ukur campuran akhirnya dari berkas yang ditulis: normalisasi per klip
+    // (ADR-0026) menjanjikan sumber yang setara, bukan program yang tepat
+    // sasaran — angka ini yang menutup celah itu. Kegagalan mengukur tidak
+    // pernah menggagalkan render yang sudah jadi.
+    const mix = await measureMediaLoudness(options.outputLocation);
+
     return {
       outputLocation: options.outputLocation,
       durationInFrames: prepared.composition.durationInFrames,
@@ -308,6 +337,8 @@ export const renderPlanToVideo = async (
       height: Math.round(prepared.composition.height * enc.scale),
       bundleFromCache: prepared.bundleFromCache,
       settings,
+      mixLufs: mix?.lufs ?? null,
+      proxied: options.useProxies ? proxiedFiles(loadPlan(options.planPath)).size : 0,
     };
   } finally {
     prepared.cleanup();
@@ -393,6 +424,7 @@ export const localRenderTarget = (
       outputLocation: request.outputLocation,
       profile: request.profile,
       ...(request.settings ? { settings: request.settings } : {}),
+      ...(request.useProxies ? { useProxies: true } : {}),
       ...behavior,
       ...(request.onProgress
         ? {

@@ -1,6 +1,8 @@
 import {
   type NarrationAudio,
   narrationAudioSchema,
+  type ProxyMedia,
+  proxyMediaSchema,
   type ResolvedAsset,
   resolvedAssetSchema,
   type ScenePlan,
@@ -154,6 +156,42 @@ export const setLoudness = (
     if (audio.file === file) {
       audio.lufs = lufs;
       if (channels !== undefined) audio.channels = channels;
+    }
+  }
+  return next;
+};
+
+/** Fakta sumber yang ikut dicatat bersama proxy-nya (ADR-0028). */
+export interface MediaProbeNote {
+  codec?: string | null;
+  fps?: number | null;
+}
+
+/**
+ * Proxy pratinjau satu berkas video (ADR-0028), ditulis ke SEMUA entri
+ * lumbung VIDEO yang menunjuk berkas itu — pola yang sama dengan `setLoudness`,
+ * dengan alasan yang sama: proxy milik REKAMANNYA, bukan milik scene yang
+ * kebetulan memakainya.
+ *
+ * `proxy` null berarti "sudah diperiksa, tidak perlu proxy": entri proxy
+ * lamanya (bila ada) DIHAPUS supaya preview kembali memakai aslinya, dan fakta
+ * sumbernya (kodek, laju bingkai) tetap dicatat.
+ */
+export const setProxy = (
+  plan: ScenePlan,
+  file: string,
+  proxy: ProxyMedia | null,
+  note: MediaProbeNote = {},
+): ScenePlan => {
+  const next = structuredClone(plan);
+  const parsed = proxy ? proxyMediaSchema.parse(proxy) : null;
+  for (const store of [next.renderState.resolvedAssets, next.renderState.layerAssets]) {
+    for (const asset of Object.values(store)) {
+      if (asset.file !== file) continue;
+      if (parsed) asset.proxy = parsed;
+      else delete asset.proxy;
+      if (note.codec) asset.codec = note.codec;
+      if (note.fps) asset.fps = note.fps;
     }
   }
   return next;

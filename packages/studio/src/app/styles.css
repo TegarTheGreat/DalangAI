@@ -4281,3 +4281,212 @@ button.ghost.danger.confirm {
   border: 1px solid rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
+
+/* --- Sumber rekaman & proxy (ADR-0028, §9.5) ------------------------------ */
+
+.source-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 4px;
+}
+
+.source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--hover);
+}
+
+.source-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.source-name {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.source-badge {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.source-badge.ok {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/*
+ * Strip bingkai: gambar-gambar rapat menutupi seluruh rekaman; jendela scene
+ * dan titik masuk digambar DI ATASNYA. Seluruh strip adalah slider — klik di
+ * mana pun memindahkan titik masuk ke sana.
+ */
+.source-strip-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.source-strip {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.source-strip:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.source-strip.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.source-frames {
+  display: flex;
+  width: 100%;
+}
+
+.source-frame {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.source-wave {
+  display: block;
+  width: 100%;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.source-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-left: 1px solid var(--accent);
+  border-right: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  pointer-events: none;
+}
+
+.source-in {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.source-ruler {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.source-in-label {
+  color: var(--text-dim);
+}
+
+.source-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.source-progress progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+}
+
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.source-row.current {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.source-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.group-hint.error {
+  color: var(--danger, #e5484d);
+}
+
+/* Penanda kecil di sudut panggung: yang diputar adalah proxy. */
+.proxy-flag {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+  pointer-events: none;
+}

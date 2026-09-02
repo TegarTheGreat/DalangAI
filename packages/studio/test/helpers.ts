@@ -155,6 +155,8 @@ export interface StudioOverrides {
   renderStills?: StudioDeps["renderStills"];
   /** Model tier-volume (ADR-0022); bawaannya kosong = mesin tanpa model vision. */
   volumeModel?: StudioDeps["volumeModel"];
+  /** Transkoder (ADR-0028); bawaannya kosong = mesin tanpa ffmpeg. */
+  transcoder?: StudioDeps["transcoder"];
 }
 
 export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
@@ -238,6 +240,7 @@ export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
   // Tanpa override = tidak ada model vision, keadaan mesin polos: rute
   // /api/review harus menolak dengan 501, bukan pura-pura bisa.
   ...(overrides?.volumeModel ? { volumeModel: overrides.volumeModel } : {}),
+  ...(overrides?.transcoder ? { transcoder: overrides.transcoder } : {}),
   registrySource: "uji",
 });
 

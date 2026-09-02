@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { DIMENSIONS, parseScenePlan, type ScenePlan } from "@dalang/core";
+import {
+  DIMENSIONS,
+  parseScenePlan,
+  type ScenePlan,
+  substituteProxies,
+} from "@dalang/core";
 import {
   assertSafeRelative,
   DEFAULT_EXPORT_SETTINGS,
@@ -188,7 +193,10 @@ export const createLambdaRenderTarget = (
       costOf(loadPlan(request.planPath), request.profile),
 
     render: async (request: RenderRequest): Promise<RenderVideoResult> => {
-      const plan = loadPlan(request.planPath);
+      // ADR-0028: draf dari proxy berarti yang DIUNGGAH pun proxy-nya —
+      // penukarannya terjadi sebelum daftar aset disusun, bukan sesudahnya.
+      const loaded = loadPlan(request.planPath);
+      const plan = request.useProxies ? substituteProxies(loaded) : loaded;
       const settings = resolveExportSettings(request.profile, request.settings);
       const report = request.onProgress;
 

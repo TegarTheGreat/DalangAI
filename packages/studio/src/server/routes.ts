@@ -575,12 +575,19 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         outputLocation,
         profile,
         ...(explicit ? { settings: { format, resolution, quality } } : {}),
+        // ADR-0028: draf dari proxy; ekspor final/eksplisit dari berkas asli.
+        useProxies: profile === "draft" && !explicit,
       })
       .then((result) => {
         logUiEvent(
           "render",
           { profile, settings: result.settings },
-          { file: result.outputLocation, sizeBytes: result.sizeBytes },
+          {
+            file: result.outputLocation,
+            sizeBytes: result.sizeBytes,
+            mixLufs: result.mixLufs ?? null,
+            proxied: result.proxied ?? 0,
+          },
           0,
           Date.now() - startedAt,
         );
@@ -589,6 +596,8 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           status: "done",
           label,
           url: `/.dalang/renders/${fileName}`,
+          mixLufs: result.mixLufs ?? null,
+          ...(result.proxied ? { proxied: result.proxied } : {}),
         });
       })
       .catch((error: unknown) => {

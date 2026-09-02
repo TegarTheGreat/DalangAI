@@ -6,8 +6,9 @@ import { atomicWriteFile } from "./fs-utils";
 import { stableStringify } from "./hash";
 import { readPlanFile } from "./load-plan";
 import { runLoudnessStage } from "./loudness-stage";
-import type { AudioProbe, StockProvider, TtsProvider } from "./ports";
+import type { AudioProbe, MediaTranscoder, StockProvider, TtsProvider } from "./ports";
 import { projectPaths } from "./project-paths";
+import { runProxyStage } from "./proxy-stage";
 import {
   consoleLogger,
   countErrors,
@@ -36,6 +37,11 @@ export interface GenerateOptions {
    * bukan dinormalisasi berdasarkan angka karangan.
    */
   audioProbe?: AudioProbe;
+  /**
+   * Transkoder untuk tahap proxy (ADR-0028). Tanpa ini berkas video dilewati
+   * dan dilaporkan — preview memakai aslinya, bukan menebak-nebak.
+   */
+  transcoder?: MediaTranscoder;
   force?: boolean;
   log?: StageLogger;
 }
@@ -48,6 +54,8 @@ export interface GenerateSummary {
   assets: SceneStageResult[];
   /** Hasil ukur kenyaringan per BERKAS (ADR-0026), bukan per scene. */
   loudness: SceneStageResult[];
+  /** Hasil tahap proxy per BERKAS video (ADR-0028). */
+  proxies: SceneStageResult[];
   errorCount: number;
   totalCostUsd: number;
 }
@@ -57,6 +65,7 @@ export const generatePlan = async ({
   ttsProviders,
   stockProviders,
   audioProbe,
+  transcoder,
   force = false,
   log = consoleLogger,
 }: GenerateOptions): Promise<GenerateSummary> => {
@@ -96,7 +105,19 @@ export const generatePlan = async ({
       log,
     });
 
-    const finalPlan = loudnessOutcome.plan;
+    // Proxy juga SETELAH aset ter-resolve, dan setelah kenyaringan supaya
+    // kegagalan proxy tidak pernah menghalangi pengukuran.
+    log.info("→ Tahap proxy");
+    const proxyOutcome = await runProxyStage({
+      paths,
+      plan: loudnessOutcome.plan,
+      db,
+      ...(transcoder ? { transcoder } : {}),
+      force,
+      log,
+    });
+
+    const finalPlan = proxyOutcome.plan;
     const planChanged = stableStringify(finalPlan) !== stableStringify(original);
     if (planChanged) {
       atomicWriteFile(paths.planPath, `${JSON.stringify(finalPlan, null, 2)}\n`);
@@ -114,7 +135,8 @@ export const generatePlan = async ({
       tts: ttsOutcome.results,
       assets: assetOutcome.results,
       loudness: loudnessOutcome.results,
-      // Tahap kenyaringan SENGAJA tidak ikut dihitung sebagai kegagalan:
+      proxies: proxyOutcome.results,
+      // Tahap kenyaringan (dan proxy) SENGAJA tidak ikut dihitung sebagai kegagalan:
       // berkas yang gagal diukur cuma berarti klip itu tidak dinormalisasi,
       // dan videonya tetap bisa dirender. Alasannya tetap dilaporkan per
       // baris — dilewati diam-diam adalah yang tidak boleh, bukan dilewati.

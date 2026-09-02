@@ -221,3 +221,74 @@ export interface AudioProbe {
   /** Melepas sumber daya (browser) setelah semua pengukuran selesai. */
   close?(): Promise<void>;
 }
+
+// ---------------------------------------------------------------------------
+// Transkoder media — proxy & rekaman panjang (ADR-0028, roadmap §9.5)
+// ---------------------------------------------------------------------------
+
+/** Fakta sebuah berkas media hasil ffprobe; null di bidang yang tidak ada. */
+export interface MediaProbeInfo {
+  durationSec: number;
+  width: number;
+  height: number;
+  fps: number | null;
+  /** Kodek video, huruf kecil, mis. "h264" | "hevc" | "prores"; null = tanpa video. */
+  codec: string | null;
+  hasAudio: boolean;
+  audioCodec: string | null;
+  channels: number | null;
+  sampleRate: number | null;
+  /** Laju bit keseluruhan, bit/detik; null bila kontainer tidak menyebutnya. */
+  bitrate: number | null;
+  sizeBytes: number;
+}
+
+export interface ProxyRequest {
+  sourcePath: string;
+  outputPath: string;
+  width: number;
+  height: number;
+  /** Tidak diisi = laju bingkai sumber dipertahankan. */
+  fps?: number;
+}
+
+export type ProxyResult =
+  | { ok: true; width: number; height: number; durationSec: number; fps: number | null }
+  | { ok: false; reason: string };
+
+export type FrameResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Port transkoder: satu-satunya pintu pipeline ke ffmpeg.
+ *
+ * PORT, dengan alasan yang sama seperti `AudioProbe` di atas: biner ffmpeg yang
+ * ada di tumpukan ini milik paket renderer (dibundel Remotion), dan pipeline
+ * tidak boleh bergantung pada renderer. Pemanggil (CLI, Studio) menyuntikkan
+ * implementasinya; tes memberi yang palsu.
+ *
+ * Semua kegagalan yang WAJAR — kodek yang tidak dikenal, berkas tanpa jalur
+ * video — dikembalikan sebagai nilai `{ ok: false, reason }`, bukan lemparan,
+ * supaya tahap pipeline bisa melaporkannya apa adanya dan melanjutkan berkas
+ * berikutnya.
+ */
+export interface MediaTranscoder {
+  id: string;
+  /** Baca fakta berkas; null bila bukan media yang bisa dibaca. */
+  probe(sourcePath: string): Promise<MediaProbeInfo | null>;
+  /** Tulis proxy H.264/AAC ke `outputPath` dengan dimensi yang diminta. */
+  makeProxy(request: ProxyRequest): Promise<ProxyResult>;
+  /** Tulis satu bingkai (JPEG/PNG menurut ekstensi `outputPath`) pada detik ke-`atSec`. */
+  extractFrame(
+    sourcePath: string,
+    atSec: number,
+    outputPath: string,
+    options?: { height?: number },
+  ): Promise<FrameResult>;
+  /** Dekode audio jadi WAV PCM 16-bit — semua kanal, laju cuplik sumber. */
+  toWav(sourcePath: string, wavPath: string): Promise<AudioProbeResult>;
+  /**
+   * Dekode audio jadi PCM MONO 16-bit pada laju cuplik rendah, untuk
+   * bentuk gelombang rekaman panjang. null = tidak ada jalur audio.
+   */
+  decodeMonoPcm(sourcePath: string, sampleRate: number): Promise<Int16Array | null>;
+}
