@@ -37,9 +37,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findBrowserExecutable } from "@dalang/renderer";
-import { openBrowser } from "@remotion/renderer";
 import { startStudioServer } from "../src/server/index";
+import { exitSoon, launchBrowser } from "./browser";
 import { stubDeps } from "./stub-deps";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -151,9 +150,10 @@ const main = async (): Promise<void> => {
     port: 0,
     appDistDir: join(repoRoot, "packages", "studio", "dist"),
   });
-  const browser = await openBrowser("chrome", {
-    logLevel: "error",
-    browserExecutable: findBrowserExecutable() ?? null,
+  // Peramban gagal dibuka = server ditutup dulu, supaya prosesnya keluar.
+  const browser = await launchBrowser().catch((error: unknown) => {
+    studio.close();
+    throw error;
   });
   const page = await browser.newPage({
     context: () => null,
@@ -793,7 +793,11 @@ const main = async (): Promise<void> => {
   console.log("\nGerbang interaksi lulus.");
 };
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
-  process.exitCode = 1;
-});
+main()
+  .catch((error: unknown) => {
+    console.error(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    );
+    process.exitCode = 1;
+  })
+  .finally(() => exitSoon());
