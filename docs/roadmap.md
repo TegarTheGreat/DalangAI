@@ -261,6 +261,8 @@ campurannya stereo. Diverifikasi lewat render sungguhan: sumber mono dan stereo
 sama-sama mendarat di -16,00 LUFS. Batasnya ada di "Batas" ADR-0026 — yang
 terbesar: AAC/MP4 tidak terukur pada Chromium tanpa kodek proprietary, dan
 klip seperti itu dilewati dengan alasan yang disebutkan, bukan ditebak.
+Fade masuk/keluar musik dan trek kini juga bisa DISERET di timeline (pegangan di
+ujung bar, ramp digambar) — batas "tidak bisa di-fade lewat kanvas" dicabut.
 
 **§9.3 sudah dikerjakan** (ADR-0027): keyframe kini DATA PLAN, bukan lagi kode
 preset. `tracks` pada grafis, teks, dan lapisan menganimasikan properti yang

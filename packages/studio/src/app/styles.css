@@ -1276,16 +1276,11 @@ input[type="color"]::-webkit-color-swatch {
   position: absolute;
   top: 2px;
   bottom: 2px;
-  min-height: 0;
-  padding: 0 6px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
   border-radius: 4px;
   border: 1px solid rgba(126, 200, 160, 0.42);
   background: rgba(126, 200, 160, 0.14);
 }
-.track-bar:hover:not(:disabled) {
+.track-bar:hover {
   border-color: rgba(126, 200, 160, 0.75);
 }
 .track-bar.kosong {
@@ -1293,6 +1288,68 @@ input[type="color"]::-webkit-color-swatch {
   background: transparent;
 }
 .track-bar .layer-bar-label {
+  color: rgba(126, 200, 160, 0.95);
+}
+
+/*
+ * Pegangan fade (batas ADR-0026 dicabut): ramp gelap menggambar amplop yang
+ * berlaku, titik di ujungnya adalah pegangan. Bar musik `pointer-events: none`,
+ * jadi pegangannya menyalakan pointer-nya sendiri. Area sentuh lebih besar
+ * daripada titiknya lewat pseudo-elemen.
+ */
+.fade-ramp {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-radius: 4px;
+}
+.fade-ramp.in {
+  left: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.5), transparent);
+}
+.fade-ramp.out {
+  right: 0;
+  background: linear-gradient(270deg, rgba(0, 0, 0, 0.5), transparent);
+}
+.fade-handle {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--panel-2, #14171d);
+  border: 1.5px solid currentColor;
+  color: var(--info);
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+  z-index: 2;
+  transition: scale 100ms ease;
+}
+.fade-handle.in {
+  margin-left: -4.5px;
+}
+.fade-handle.out {
+  margin-right: -4.5px;
+}
+.fade-handle::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.fade-handle:hover,
+.fade-handle:focus-visible,
+.fade-handle.dragging {
+  scale: 1.35;
+  background: currentColor;
+}
+.fade-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.track-bar .fade-handle {
   color: rgba(126, 200, 160, 0.95);
 }
 
@@ -4552,5 +4609,14 @@ button.ghost.danger.confirm {
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   padding: 2px 8px;
+  pointer-events: none;
+}
+
+/*
+ * Toast adalah KABAR, bukan kendali: ia tidak boleh menangkap pointer. Gerbang
+ * interaksi menangkap ini — toast "Ukuran anotasi" yang belum hilang menutupi
+ * pegangan fade di baris musik timeline, dan seretannya jatuh ke toast.
+ */
+.toast {
   pointer-events: none;
 }

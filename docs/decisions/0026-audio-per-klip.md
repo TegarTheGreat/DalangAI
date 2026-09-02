@@ -191,7 +191,16 @@ digital yang sudah dibuang gerbang mutlak; tesnya diperbaiki memakai materi
   narasi, jendela ducking mengikuti rentang bicara nyata (jeda di bawah
   `DUCK_HOLD_SEC` 1,2 dtk tetap diduck supaya musik tidak memompa); tanpa
   word timestamp, perilaku lama dipertahankan.
-- **Trek audio tidak bisa di-fade lewat kanvas** — hanya lewat panel.
+- ~~**Trek audio tidak bisa di-fade lewat kanvas** — hanya lewat panel.~~
+  *DICABUT:* bar musik dan bar trek di timeline punya pegangan fade di kedua
+  ujungnya — ramp gelap menggambar amplopnya, titiknya diseret (satu patch
+  `setAudio` saat dilepas) atau digeser dengan panah (0,1 dtk; Shift 1 dtk).
+  Dipangkas ke batas skema (10 dtk) dan setengah panjang bar. Gerbang
+  interaksi (`gate:interaksi`) membuktikannya dengan pointer sungguhan: 48 px
+  pada 24 px/dtk menjadi tepat +2,0 dtk fade keluar — dan percobaan pertamanya
+  gagal karena toast dari langkah sebelumnya menutupi baris musik timeline dan
+  menangkap pointer; toast kini tembus pointer (`pointer-events: none`), karena
+  kabar tidak boleh menghalangi kendali.
 
 ## Konsekuensi
 

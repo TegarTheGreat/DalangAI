@@ -450,6 +450,9 @@ Yang sudah berjalan:
   - `audio.tracks` (maks 8) untuk ambience, wawancara, atau lagu berlisensi;
   - diverifikasi lewat render sungguhan: sumber mono dan stereo sama-sama
     mendarat di -16,00 LUFS.
+  - fade masuk/keluar musik dan trek bisa DISERET di timeline: pegangan di
+    ujung bar dengan ramp yang menggambar amplopnya, atau panah dari papan
+    ketik — satu patch saat dilepas, bisa Ctrl+Z.
 - **Keyframe properti (ADR-0027)** — gerak tidak lagi harus dipilih dari daftar:
   - `tracks` pada grafis, teks, dan lapisan menganimasikan properti pada waktu
     yang DIPILIH, bukan yang tersedia — "geser kartu ini ke tengah tepat saat
@@ -498,7 +501,7 @@ Yang sudah berjalan:
     `proxy-progress`, punya tombol batal, dan editor tetap bisa dipakai —
     patch, undo, dan render tidak menunggu; permintaan selagi berjalan antre.
     CLI `dalang proxy`/`generate` mencetak persen per berkas.
-- **Kualitas terjaga otomatis**: 1002 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1005 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -514,7 +517,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1002 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1005 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

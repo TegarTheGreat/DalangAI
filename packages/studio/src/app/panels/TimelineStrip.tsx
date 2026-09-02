@@ -1,5 +1,6 @@
 import {
   MIN_SCENE_SEC,
+  type Music,
   moveKeyframe,
   type Scene,
   type ScenePlan,
@@ -31,6 +32,7 @@ import {
 } from "../model/timeline-scale";
 import { playback } from "../playback";
 import { studioClient, useStudio } from "../use-studio";
+import { FadeHandles } from "./FadeHandles";
 
 /**
  * Timeline editor di dasar layar: ruler waktu yang bisa di-scrub, track
@@ -795,17 +797,40 @@ export const TimelineStrip: React.FC = () => {
             */}
             <div className="tl-track audio mix">
               {plan.audio.music ? (
-                <span
+                <div
                   className="music-bar"
                   style={{ left: 0, width }}
                   title={`Musik: ${plan.audio.music.assetId} · volume ${Math.round(
                     plan.audio.music.volume * 100,
-                  )}%${plan.audio.music.ducking ? " · ducking aktif" : ""}`}
+                  )}%${plan.audio.music.ducking ? " · ducking aktif" : ""} · fade ${plan.audio.music.fadeInSec.toFixed(1)}/${plan.audio.music.fadeOutSec.toFixed(1)} dtk`}
                 >
                   <span className="music-label">
                     {plan.audio.music.assetId.replace("pustaka:", "")}
                   </span>
-                </span>
+                  {/* Amplop musik bisa diseret di sini (batas ADR-0026 dicabut):
+                      fade adalah keputusan WAKTU, dan waktu hidup di timeline. */}
+                  <FadeHandles
+                    fadeInSec={plan.audio.music.fadeInSec}
+                    fadeOutSec={plan.audio.music.fadeOutSec}
+                    spanSec={meta.totalSec}
+                    pxPerSec={pxPerSec}
+                    disabled={busy}
+                    name="musik"
+                    onCommit={(patch, label) =>
+                      void studioClient.applyPatch(
+                        [
+                          {
+                            op: "setAudio",
+                            patch: {
+                              music: { ...(plan.audio.music as Music), ...patch },
+                            },
+                          },
+                        ],
+                        label,
+                      )
+                    }
+                  />
+                </div>
               ) : null}
               {/* Trek audio tambahan (ADR-0026) di baris yang sama dengan
                   musik: keduanya bunyi yang bukan narasi, dan memisahkannya ke
@@ -823,22 +848,55 @@ export const TimelineStrip: React.FC = () => {
                   ? Math.max(6, asset.durationSec * pxPerSec)
                   : 24;
                 return (
-                  <button
+                  <div
                     key={track.id}
-                    type="button"
                     className={asset ? "track-bar" : "track-bar kosong"}
                     style={{ left: x, width: w }}
-                    onClick={() =>
-                      track.sceneId ? studioClient.selectScene(track.sceneId) : undefined
-                    }
-                    title={`Trek ${track.id} · volume ${Math.round(
-                      track.audio.volume * 100,
-                    )}%${track.loop ? " · diulang" : ""}${
-                      asset ? "" : " · berkas belum ada, tidak berbunyi"
-                    }`}
                   >
-                    <span className="layer-bar-label">{track.id}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="layer-bar-hit"
+                      onClick={() =>
+                        track.sceneId
+                          ? studioClient.selectScene(track.sceneId)
+                          : undefined
+                      }
+                      title={`Trek ${track.id} · volume ${Math.round(
+                        track.audio.volume * 100,
+                      )}%${track.loop ? " · diulang" : ""} · fade ${track.audio.fadeInSec.toFixed(1)}/${track.audio.fadeOutSec.toFixed(1)} dtk${
+                        asset ? "" : " · berkas belum ada, tidak berbunyi"
+                      }`}
+                    >
+                      <span className="layer-bar-label">{track.id}</span>
+                    </button>
+                    {asset?.durationSec ? (
+                      <FadeHandles
+                        fadeInSec={track.audio.fadeInSec}
+                        fadeOutSec={track.audio.fadeOutSec}
+                        spanSec={asset.durationSec}
+                        pxPerSec={pxPerSec}
+                        disabled={busy}
+                        name={`trek ${track.id}`}
+                        onCommit={(patch, label) =>
+                          void studioClient.applyPatch(
+                            [
+                              {
+                                op: "setAudio",
+                                patch: {
+                                  tracks: plan.audio.tracks.map((item) =>
+                                    item.id === track.id
+                                      ? { ...item, audio: { ...item.audio, ...patch } }
+                                      : item,
+                                  ),
+                                },
+                              },
+                            ],
+                            label,
+                          )
+                        }
+                      />
+                    ) : null}
+                  </div>
                 );
               })}
               {plan.audio.sfx.map((cue) => {

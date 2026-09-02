@@ -60,6 +60,7 @@ interface Target {
   h: number;
 }
 interface PlanLite {
+  audio: { music: { fadeInSec: number; fadeOutSec: number } | null };
   scenes: {
     id: string;
     annotations: { target: Target }[];
@@ -95,6 +96,15 @@ const main = async (): Promise<void> => {
       property: "opacity",
     } as unknown as { points: { at: number }[] },
   ];
+  // Musik latar disuntikkan supaya bar musik (dan pegangan fade-nya) ada.
+  (seed.audio as Record<string, unknown>).music = {
+    assetId: "pustaka:tenang",
+    volume: 0.14,
+    ducking: true,
+    fadeInSec: 1,
+    fadeOutSec: 2,
+    normalize: true,
+  };
   writeFileSync(planPath, JSON.stringify(seed, null, 2));
 
   const studio = await startStudioServer({
@@ -324,6 +334,43 @@ const main = async (): Promise<void> => {
         near(resized.x, moved.x, 1e-6),
       `dw = ${fmt(resized.w - moved.w)} (harap ${fmt(30 / frame.w)}), dh = ${fmt(resized.h - moved.h)} (harap ${fmt(20 / frame.h)})`,
     );
+
+    console.log("\nPegangan fade musik di timeline");
+    const musicBar = await rect(".music-bar");
+    const outHandle = await rect(".music-bar .fade-handle.out");
+    if (!musicBar || !outHandle) throw new Error("bar musik / pegangan fade tidak ada");
+    const musicBefore = (await plan()).audio.music;
+    if (!musicBefore) throw new Error("musik hilang dari plan");
+    // 48 px pada 24 px/dtk = 2 detik: fade keluar 2,0 → 4,0.
+    await drag(center(outHandle), {
+      x: center(outHandle).x - 48,
+      y: center(outHandle).y,
+    });
+    await sleep(SETTLE_MS);
+    const musicDragged = (await plan()).audio.music;
+    check(
+      "seret pegangan fade keluar 48px ke kiri = +2,0 dtk",
+      near(musicDragged?.fadeOutSec ?? Number.NaN, musicBefore.fadeOutSec + 2, 0.15),
+      `fadeOutSec ${musicBefore.fadeOutSec} → ${musicDragged?.fadeOutSec}`,
+    );
+    await page.evaluate('document.querySelector(".music-bar .fade-handle.in").focus()');
+    await key("ArrowRight", 39);
+    await sleep(SETTLE_MS);
+    const musicNudged = (await plan()).audio.music;
+    check(
+      "panah kanan pada fade masuk = +0,1 dtk",
+      near(musicNudged?.fadeInSec ?? Number.NaN, musicBefore.fadeInSec + 0.1, 0.01),
+      `fadeInSec ${musicBefore.fadeInSec} → ${musicNudged?.fadeInSec}`,
+    );
+    await key("ArrowRight", 39, SHIFT);
+    await sleep(SETTLE_MS);
+    const musicShifted = (await plan()).audio.music;
+    check(
+      "Shift+panah kanan = +1,0 dtk",
+      near(musicShifted?.fadeInSec ?? Number.NaN, musicBefore.fadeInSec + 1.1, 0.01),
+      `fadeInSec → ${musicShifted?.fadeInSec}`,
+    );
+    await shot("gate-fade.png");
   } finally {
     await page.close().catch(() => undefined);
     await browser.close({ silent: true }).catch(() => undefined);
