@@ -36,6 +36,10 @@
   --info: #5aa9f2;
   --serif: "Fraunces", Georgia, serif;
   --sans: "Inter", system-ui, -apple-system, sans-serif;
+  /* Satu tinggi untuk semua kendali sebaris. Sebelum ini input 35px dan
+     tombol 32px, jadi setiap baris "kolom + tombol" duduk tiga piksel tidak
+     sejajar — kecil, tapi ada di hampir setiap panel. */
+  --ctl: 34px;
   --r-sm: 6px;
   --r: 8px;
   --r-lg: 10px;
@@ -124,6 +128,7 @@ button {
   border-radius: var(--r-sm);
   padding: 7px 12px;
   cursor: pointer;
+  min-height: var(--ctl);
   transition:
     background 120ms ease,
     color 120ms ease,
@@ -195,9 +200,13 @@ select {
   background: var(--bg-deep);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
-  padding: 8px 10px;
+  padding: 7px 10px;
   width: 100%;
   transition: border-color 120ms ease;
+}
+input:not([type="range"]):not([type="checkbox"]),
+select {
+  min-height: var(--ctl);
 }
 input:hover,
 textarea:hover,
@@ -277,8 +286,14 @@ textarea::placeholder {
 }
 input[type="color"] {
   padding: 3px;
-  height: 34px;
+  height: var(--ctl);
   cursor: pointer;
+}
+input[type="color"]::-webkit-color-swatch {
+  /* Warna dasar proyek nyaris hitam, dan tanpa garis tepi contoh warnanya
+     lenyap ke dalam latar dialog — terbaca sebagai kolom kosong, bukan
+     sebagai warna yang sedang dipilih. */
+  border: 1px solid var(--line-strong);
 }
 input[type="color"]::-webkit-color-swatch-wrapper {
   padding: 2px;
@@ -750,11 +765,27 @@ input[type="color"]::-webkit-color-swatch {
 .render-strip {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding: 8px 16px;
+  padding: 6px 14px;
   border-top: 1px solid var(--line);
   background: var(--panel);
+  /* Riwayat render adalah catatan kaki, bukan toolbar kedua: dibatasi tinggi
+     dua baris supaya proyek dengan belasan ekspor tidak mendorong preview ke
+     atas, dan digulung sendiri kalau lebih. */
+  max-height: 74px;
+  overflow-y: auto;
+}
+.render-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.render-size {
+  flex: none;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }
 .render-note {
   font-size: 11.5px;
@@ -778,6 +809,10 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: var(--r-sm);
   padding: 4px 10px;
   font-variant-numeric: tabular-nums;
+  /* Dibatasi supaya satu nama berkas panjang tidak memakan seluruh baris
+     riwayat; yang dipendekkan hanya namanya, ukurannya tetap terbaca. */
+  max-width: 38ch;
+  min-width: 0;
 }
 .render-link:hover {
   color: var(--text);
@@ -1253,6 +1288,12 @@ input[type="color"]::-webkit-color-swatch {
   bottom: 2px;
   display: flex;
   align-items: center;
+  /* Label DITENGAHKAN, bukan di kiri. Pegangan fade masuk selalu berada di
+     dekat tepi kiri bar (fade selalu mulai dari nol), jadi kiri adalah satu
+     tempat yang PASTI ditimpa — dan memang tertimpa di setiap tinggi layar
+     yang diukur. Tengah bar adalah satu-satunya wilayah yang tidak pernah
+     ditempati pegangan mana pun pada fade yang wajar. */
+  justify-content: center;
   border-radius: 4px;
   border: 1px solid rgba(90, 169, 242, 0.28);
   background: repeating-linear-gradient(
@@ -1263,12 +1304,20 @@ input[type="color"]::-webkit-color-swatch {
   pointer-events: none;
 }
 .music-label {
-  padding: 0 8px;
+  padding: 1px 7px;
   font-size: 9.5px;
   font-weight: 650;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--info);
+  /* Alas tipis: bar bermotif garis miring, dan teks tanpa alas di atasnya
+     terbaca kotor. */
+  background: rgba(13, 14, 18, 0.72);
+  border-radius: 3px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* Trek audio tambahan (ADR-0026): berbagi baris dengan musik, tapi warnanya
    sendiri supaya bisa dibedakan dari bed. */
@@ -1287,8 +1336,17 @@ input[type="color"]::-webkit-color-swatch {
   border-style: dashed;
   background: transparent;
 }
+.track-bar .layer-bar-hit {
+  /* Sama seperti bar musik: labelnya ditengahkan supaya tidak duduk di bawah
+     pegangan fade masuk, yang selalu berada di dekat tepi kiri. */
+  justify-content: center;
+}
 .track-bar .layer-bar-label {
   color: rgba(126, 200, 160, 0.95);
+  padding: 1px 7px;
+  background: rgba(13, 14, 18, 0.72);
+  border-radius: 3px;
+  max-width: 70%;
 }
 
 /*
@@ -2260,12 +2318,12 @@ input[type="color"]::-webkit-color-swatch {
 .radio-card {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
   text-align: left;
   white-space: normal;
-  padding: 12px 14px;
+  padding: 9px 12px;
   border: 1px solid var(--line-strong);
   border-radius: var(--r);
   background: var(--bg-deep);
@@ -2318,19 +2376,19 @@ input[type="color"]::-webkit-color-swatch {
 .radio-card-desc {
   font-size: 11.5px;
   color: var(--text-dim);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 .radio-stack {
   display: grid;
-  gap: 8px;
-  margin: 12px 0 2px;
+  gap: 6px;
+  margin: 10px 0 2px;
 }
 
 /* Dialog Ekspor (ADR-0014) */
 .export-fields {
   display: grid;
-  gap: 12px;
-  margin-top: 14px;
+  gap: 10px;
+  margin-top: 12px;
 }
 .export-hint {
   margin: 10px 0 0;
@@ -3221,7 +3279,7 @@ input[type="color"]::-webkit-color-swatch {
   justify-content: space-between;
   gap: 24px;
   flex-wrap: wrap;
-  padding: 26px clamp(20px, 5vw, 56px) 20px;
+  padding: 20px clamp(20px, 5vw, 56px) 14px;
 }
 .lobby-hero h1 {
   margin: 0;
@@ -3253,9 +3311,9 @@ button.lg {
 .lobby-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 0 clamp(20px, 5vw, 56px) 18px;
+  padding: 0 clamp(20px, 5vw, 56px) 14px;
 }
 .lobby-search {
   display: flex;
@@ -3614,6 +3672,17 @@ button.ghost.danger.confirm {
     background 180ms ease,
     transform 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
+@media (max-width: 620px) {
+  .new-card {
+    flex-direction: row;
+    min-height: 0;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .new-card small {
+    display: none;
+  }
+}
 .new-card:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
@@ -3721,7 +3790,7 @@ button.ghost.danger.confirm {
 .radio-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 .ratio-choices {
   display: grid;
@@ -3744,6 +3813,14 @@ button.ghost.danger.confirm {
   border-color: var(--accent);
   background: rgba(232, 163, 61, 0.09);
   color: var(--text);
+  /* Cincin fokus lebih mencolok daripada keadaan terpilih pada versi
+     sebelumnya, jadi kartu yang SEDANG disentuh keyboard terlihat lebih
+     terpilih daripada yang benar-benar terpilih. Garis dalam ini membalik
+     urutannya. */
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.ratio-choice.active .ratio-glyph {
+  color: var(--accent);
 }
 /* Tinggi yang dikunci, lebar yang mengikuti rasio: kalau lebarnya yang
    dikunci, kotak 9:16 jadi tiga kali lebih tinggi daripada 16:9 dan label di
@@ -4145,7 +4222,7 @@ button.ghost.danger.confirm {
 .offline-guide {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   padding: 2px 0 8px;
 }
 /* Nama env var panjang tanpa spasi; ia harus boleh patah di mana saja supaya
@@ -4173,9 +4250,9 @@ button.ghost.danger.confirm {
 }
 .offline-list li {
   display: flex;
-  gap: 11px;
+  gap: 10px;
   align-items: flex-start;
-  padding: 10px 11px;
+  padding: 7px 9px;
   border-radius: var(--r);
   border: 1px solid transparent;
   transition:
@@ -4190,8 +4267,8 @@ button.ghost.danger.confirm {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   flex: none;
   border-radius: var(--r-sm);
   background: var(--panel-2);
@@ -4206,7 +4283,7 @@ button.ghost.danger.confirm {
 .offline-list p {
   margin: 0;
   font-size: 11.5px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--text-dim);
 }
 .offline-hint {

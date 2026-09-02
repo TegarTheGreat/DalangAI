@@ -209,7 +209,13 @@ export const PreviewPanel: React.FC = () => {
                   rel="noreferrer"
                 >
                   <IconDownload />
-                  {name} ({(render.sizeBytes / 1024 / 1024).toFixed(1)} MB)
+                  {/* Nama berkas yang dipendekkan, UKURAN tidak: memotong
+                      seluruh tautan membuat ukurannya — bagian yang justru
+                      dibaca orang — yang lebih dulu hilang. */}
+                  <span className="render-name">{name}</span>
+                  <span className="render-size">
+                    {(render.sizeBytes / 1024 / 1024).toFixed(1)} MB
+                  </span>
                 </a>
                 {render.published ? (
                   <a
