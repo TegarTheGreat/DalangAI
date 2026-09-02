@@ -84,6 +84,10 @@ semuanya bisa ditimpa sebelum unggah.
 - Gerbang tata letak (tujuan palsu di stub, berkas render disemai): dialog
   Unggah dibuka dan diukur di 18 lebar layar — tidak boleh keluar layar, dan
   tombolnya WAJIB ada.
+- Gerbang interaksi, alur penuh dengan tujuan palsu di proses yang sama:
+  tombol Unggah aktif, dialog terbuka dengan judul proyek terisi dari plan,
+  klik Unggah, event `publish` lewat SSE, dan tautan terbit muncul di
+  riwayat render — tujuan menerima tepat satu unggahan.
 
 ## Batas
 

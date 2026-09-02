@@ -249,6 +249,10 @@ const main = async (): Promise<void> => {
       `(() => { const hits = Array.from(document.querySelectorAll(".clip-hit")); const hit = hits.find((h) => (h.querySelector(".clip-id") || {}).textContent === ${JSON.stringify(sceneId)}); if (hit) hit.click(); return Boolean(hit); })()`,
     );
 
+  // Server kedua (dengan tujuan unggah palsu) dibuka di akhir; yang pertama
+  // ditutup dulu karena satu proyek hanya boleh dipegang satu sesi.
+  let studioClosed = false;
+  let studio2: Awaited<ReturnType<typeof startStudioServer>> | null = null;
   try {
     await page.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
     await page.goto({ url: studio.url, timeout: 30_000 });
@@ -699,10 +703,84 @@ const main = async (): Promise<void> => {
       `teks = ${publishText ?? "-"}`,
     );
     await shot("gate-publish.png");
+
+    console.log("\nAlur unggah dengan tujuan palsu (ADR-0030)");
+    // Tombol -> dialog dengan metadata bawaan dari plan -> Unggah -> event
+    // publish lewat SSE -> tautan terbit di riwayat render. Tujuannya palsu
+    // dan berjalan di proses ini; yang diuji adalah seluruh jalur UI-nya.
+    studio.close();
+    studioClosed = true;
+    const uploads: string[] = [];
+    studio2 = await startStudioServer({
+      workspaceRoot: root,
+      planPath,
+      deps: stubDeps({
+        publishTargets: () => [
+          {
+            id: "youtube-uji",
+            label: "YouTube (uji)",
+            publish: async (request) => {
+              uploads.push(request.title);
+              for (const fraction of [0.3, 0.7, 1]) {
+                await sleep(60);
+                request.onProgress?.(fraction);
+              }
+              return {
+                providerId: "youtube-uji",
+                videoId: `gate-${uploads.length}`,
+                url: `https://youtu.be/gate-${uploads.length}`,
+              };
+            },
+          },
+        ],
+      }),
+      port: 0,
+      appDistDir: join(repoRoot, "packages", "studio", "dist"),
+    });
+    await page.goto({ url: studio2.url, timeout: 30_000 });
+    let publishEnabled = false;
+    for (let tries = 0; tries < 60 && !publishEnabled; tries++) {
+      await sleep(250);
+      publishEnabled = (await page.evaluate(
+        '(() => { const el = document.querySelector(".render-publish"); return el ? !el.disabled : false; })()',
+      )) as boolean;
+    }
+    check(
+      "dengan tujuan, tombol Unggah aktif",
+      publishEnabled,
+      `aktif = ${publishEnabled}`,
+    );
+    await page.evaluate('document.querySelector(".render-publish").click()');
+    await sleep(250);
+    const titleValue = (await page.evaluate(
+      '(() => { const el = document.querySelector(".publish-dialog input"); return el ? el.value : null; })()',
+    )) as string | null;
+    check(
+      "dialog unggah terbuka dengan judul proyek terisi dari plan",
+      typeof titleValue === "string" && titleValue.trim().length > 0,
+      `judul = ${titleValue ?? "-"}`,
+    );
+    await page.evaluate(
+      '(() => { const buttons = Array.from(document.querySelectorAll(".publish-dialog .dialog-actions button")); const go = buttons.find((b) => b.textContent && b.textContent.trim().startsWith("Unggah")); if (go) go.click(); })()',
+    );
+    let publishedHref: string | null = null;
+    for (let tries = 0; tries < 40 && !publishedHref; tries++) {
+      await sleep(250);
+      publishedHref = (await page.evaluate(
+        '(() => { const a = document.querySelector(".render-published"); return a ? a.getAttribute("href") : null; })()',
+      )) as string | null;
+    }
+    check(
+      "setelah Unggah, tautan terbit muncul di riwayat render dari event publish",
+      publishedHref === "https://youtu.be/gate-1" && uploads.length === 1,
+      `href = ${publishedHref ?? "-"}; unggahan diterima tujuan = ${uploads.length}`,
+    );
+    await shot("gate-publish-done.png");
   } finally {
     await page.close().catch(() => undefined);
     await browser.close({ silent: true }).catch(() => undefined);
-    studio.close();
+    if (!studioClosed) studio.close();
+    studio2?.close();
     rmSync(root, { recursive: true, force: true });
   }
 
