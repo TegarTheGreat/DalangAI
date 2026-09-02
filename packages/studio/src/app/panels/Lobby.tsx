@@ -23,6 +23,7 @@ import {
   IconSpinner,
   IconTrash,
   IconX,
+  LogoMark,
 } from "../icons";
 import { studioClient, useStudio } from "../use-studio";
 import { SettingsDialog } from "./Settings";
@@ -698,6 +699,9 @@ export const Lobby: React.FC = () => {
     <div className="lobby">
       <header className="lobby-top">
         <div className="lobby-brand">
+          <span className="brand-logo" aria-hidden>
+            <LogoMark size={24} />
+          </span>
           <span className="brand-mark">Dalang</span>
           <span className="brand-sub">Studio</span>
         </div>

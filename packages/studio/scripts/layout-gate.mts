@@ -76,6 +76,38 @@ const DIALOGS = [
 ] as const;
 
 /**
+ * Isi yang TERGUNTING di dalam panel bergulung.
+ *
+ * Kelas cacat ini tak terlihat oleh pengukuran mana pun di atas: dialognya
+ * muat di layar, halamannya tidak bisa digeser, dan tidak ada yang menindih.
+ * Yang terjadi ada di dalamnya — anak flex boleh MENYUSUT di bawah tinggi
+ * isinya secara bawaan, jadi kartu setinggi 1500 piksel dipencet jadi 32 dan
+ * `overflow: hidden` menggunting sisanya tanpa suara. Panel Pengaturan lahir
+ * dengan cacat itu, dan yang menemukannya adalah tangkapan layar untuk README,
+ * bukan gerbang ini.
+ *
+ * Jadi: tiap elemen yang disebut harus setinggi isinya sendiri.
+ */
+const clippedProbe = (selector: string, name: string): string =>
+  `(() => {
+    const nodes = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+    const bad = nodes
+      .map((el) => {
+        if (el.scrollHeight > el.clientHeight + 1) {
+          return "tinggi " + el.clientHeight + "px untuk isi " + el.scrollHeight + "px";
+        }
+        if (el.scrollWidth > el.clientWidth + 1) {
+          return "lebar " + el.clientWidth + "px untuk isi " + el.scrollWidth + "px";
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (bad.length === 0) return null;
+    return "${name}: " + bad.length + " dari " + nodes.length
+      + " tergunting isinya (mis. " + bad[0] + ")";
+  })()`;
+
+/**
  * Membuka satu dialog, mengukur kotaknya terhadap viewport, lalu menutupnya.
  * Mengembalikan kalimat masalah, atau null kalau muat.
  *
@@ -361,6 +393,18 @@ const main = async (): Promise<void> => {
       for (const width of WIDTHS) {
         await page.setViewport({ width, height: 860, deviceScaleFactor: 1 });
         await sleep(180);
+        // Dibuka sekali lagi TANPA ditutup, supaya isinya bisa diperiksa:
+        // dialogProbe menutup dialognya setelah mengukur.
+        await page.evaluate(
+          '(() => { const b = document.querySelector(".lobby-settings"); if (b) b.click(); })()',
+        );
+        await sleep(160);
+        const terpencet = (await page.evaluate(
+          clippedProbe(".settings-dialog .cap-card", "kartu Pengaturan"),
+        )) as string | null;
+        await page.evaluate(
+          'document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))',
+        );
         const overflow = (await page.evaluate(
           dialogProbe(".lobby-settings", "Pengaturan", true),
         )) as string | null;
@@ -369,6 +413,7 @@ const main = async (): Promise<void> => {
         )) as number;
         const problems = [
           ...(overflow ? [overflow] : []),
+          ...(terpencet ? [terpencet] : []),
           ...(sideways > 0 ? [`lobi bisa digeser ke samping ${sideways}px`] : []),
         ];
         if (problems.length === 0) {

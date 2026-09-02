@@ -813,6 +813,18 @@ const main = async (): Promise<void> => {
 
     if (diLobi) {
       await page.evaluate('document.querySelector(".lobby-settings").click()');
+      await sleep(400);
+      // Kartu kemampuan mulai tertutup kecuali yang pertama, jadi kartu stok
+      // dibuka dulu lewat baris judulnya — sekaligus menguji bahwa membuka
+      // kartu memang memunculkan setelannya.
+      const dibuka = (await page.evaluate(
+        '(() => { const cards = Array.from(document.querySelectorAll(".cap-card")); const card = cards.find((c) => (c.querySelector(".cap-title strong") || {}).textContent === "Cari video dan foto stok otomatis"); if (!card) return false; const ada = card.querySelector(".setting-list") !== null; if (!ada) card.querySelector(".cap-head").click(); return true; })()',
+      )) as boolean;
+      check(
+        "kartu kemampuan bisa dibuka dari baris judulnya",
+        dibuka,
+        `ketemu = ${dibuka}`,
+      );
       let adaBaris = false;
       for (let tries = 0; tries < 40 && !adaBaris; tries++) {
         await sleep(200);

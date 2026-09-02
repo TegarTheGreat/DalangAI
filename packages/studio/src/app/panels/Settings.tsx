@@ -178,11 +178,19 @@ const CapabilityCard: React.FC<{
   capability: CapabilityLite;
   draft: Draft;
   hasil: Record<string, Hasil>;
+  /**
+   * Kartu mulai TERTUTUP, kecuali satu. Membuka semua yang belum menyala
+   * sekaligus menghasilkan lima ribu piksel gulungan dan mengubur daftarnya —
+   * padahal baris judulnya sudah menyebut nama kemampuan dan apa yang
+   * dibutuhkannya. Satu yang terbuka cukup untuk memperlihatkan bahwa kartu
+   * ini bisa dibuka.
+   */
+  defaultOpen: boolean;
   onDraft: (key: string, value: string) => void;
   onTest: (setting: SettingLite) => void;
   onClear: (key: string) => void;
-}> = ({ capability, draft, hasil, onDraft, onTest, onClear }) => {
-  const [open, setOpen] = useState(!capability.active);
+}> = ({ capability, draft, hasil, defaultOpen, onDraft, onTest, onClear }) => {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <section className={capability.active ? "cap-card on" : "cap-card"}>
       <button
@@ -382,6 +390,7 @@ export const SettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = 
                   capability={capability}
                   draft={draft}
                   hasil={hasil}
+                  defaultOpen={false}
                   onDraft={(key, value) =>
                     setDraft((prev) => ({ ...prev, [key]: value }))
                   }
@@ -395,12 +404,13 @@ export const SettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = 
           {belum.length > 0 ? (
             <>
               <h4 className="settings-group">Belum menyala</h4>
-              {belum.map((capability) => (
+              {belum.map((capability, index) => (
                 <CapabilityCard
                   key={capability.id}
                   capability={capability}
                   draft={draft}
                   hasil={hasil}
+                  defaultOpen={index === 0}
                   onDraft={(key, value) =>
                     setDraft((prev) => ({ ...prev, [key]: value }))
                   }

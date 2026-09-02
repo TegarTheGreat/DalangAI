@@ -3205,6 +3205,15 @@ input[type="color"]::-webkit-color-swatch {
   align-items: baseline;
   gap: 8px;
 }
+/* Mark gunungan di sebelah nama. Sejajar dengan garis dasar teks, bukan
+   dengan kotaknya: badan mark memanjang ke bawah, jadi menengahkannya secara
+   kotak justru membuatnya terlihat melayang di atas huruf. */
+.brand-logo {
+  display: inline-flex;
+  align-self: center;
+  color: var(--accent);
+  margin-right: 2px;
+}
 
 .lobby-hero {
   display: flex;
@@ -4875,6 +4884,7 @@ button.ghost.danger.confirm {
   min-height: 120px;
 }
 .settings-group {
+  flex-shrink: 0;
   margin: 8px 0 0;
   font-size: 11px;
   font-weight: 700;
@@ -4893,6 +4903,12 @@ button.ghost.danger.confirm {
   border-radius: var(--r);
   background: var(--panel-2);
   overflow: hidden;
+  /* Anak flex boleh MENYUSUT di bawah tinggi isinya secara bawaan, dan
+     `overflow: hidden` di atas lalu menggunting sisanya tanpa suara. Itu
+     persis yang terjadi di tangkapan layar pertama panel ini: kartu terpencet
+     jadi 32 piksel, isinya terpotong, dan `.settings-body` melaporkan tidak
+     ada yang perlu digulung karena memang semuanya sudah dipipihkan. */
+  flex-shrink: 0;
 }
 .cap-card.on {
   border-color: rgba(79, 195, 128, 0.28);
@@ -4908,6 +4924,11 @@ button.ghost.danger.confirm {
   text-align: left;
   color: inherit;
   cursor: pointer;
+  /* Tombol di sistem ini `nowrap` secara bawaan, dan itu benar untuk tombol
+     berlabel pendek. Yang ini seluruh baris judul kartu, berisi kalimat
+     "butuh A dan B dan C dan D" — tanpa penimpaan ini kalimatnya tidak bisa
+     dipatahkan sama sekali dan tergunting di tepi kartu. */
+  white-space: normal;
 }
 .cap-head:hover {
   background: var(--hover);
@@ -4930,6 +4951,10 @@ button.ghost.danger.confirm {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* `flex: 1` supaya kolom judul MENGISI lebar yang tersisa. Tanpa itu ia
+     berukuran sebesar isinya, dan kalimat "butuh A atau B atau C atau D"
+     memanjang keluar kartu lalu tergunting di tepinya. */
+  flex: 1;
   min-width: 0;
 }
 .cap-title strong {
@@ -4938,7 +4963,9 @@ button.ghost.danger.confirm {
 }
 .cap-note {
   font-size: 11.5px;
+  line-height: 1.5;
   color: var(--text-dim);
+  overflow-wrap: anywhere;
 }
 .cap-chevron {
   margin-left: auto;

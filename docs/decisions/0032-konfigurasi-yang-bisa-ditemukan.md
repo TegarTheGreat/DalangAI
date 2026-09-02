@@ -179,6 +179,22 @@ kalau tidak dikatakan.
 - Gerbang tata letak kini mengukur dialog Pengaturan di 18 lebar layar, pada
   mesin TANPA kunci apa pun: semua kemampuan belum menyala, jadi tiap kartu
   terbuka dan dialognya ada di keadaan paling tinggi yang mungkin.
+- Tangkapan layar untuk README menemukan DUA cacat tata letak yang lolos dari
+  seluruh gerbang. Pertama: kartu kemampuan adalah anak flex, dan anak flex
+  boleh menyusut di bawah tinggi isinya — kartu setinggi 1500 piksel dipencet
+  jadi 32 dan `overflow: hidden` menggunting sisanya tanpa suara, sementara
+  panelnya melaporkan tidak ada yang perlu digulung karena memang semuanya
+  sudah dipipihkan. Kedua: tombol di sistem ini `nowrap` secara bawaan, dan
+  baris judul kartu adalah tombol, jadi kalimat "butuh A dan B dan C dan D"
+  tidak bisa dipatahkan sama sekali dan tergunting di tepi kartu.
+  Gerbang tata letak kini memeriksa kelas cacat itu sendiri: tiap kartu harus
+  setinggi DAN selebar isinya, diukur dengan `scrollHeight`/`scrollWidth`
+  terhadap `clientHeight`/`clientWidth`. Dialog yang muat di layar tanpa
+  halaman yang bisa digeser tidak lagi cukup untuk lulus.
+- Kartu kemampuan kini mulai TERTUTUP kecuali satu. Membuka semua yang belum
+  menyala sekaligus menghasilkan hampir lima ribu piksel gulungan dan mengubur
+  daftarnya, padahal baris judulnya sudah menyebut nama kemampuan dan apa yang
+  dibutuhkannya.
 - Pemindai katalog sempat merah karena tes panel ini menyebut `NODE_OPTIONS`
   untuk membuktikan bahwa ia ditolak. Yang dijaga pemindai adalah kode PROGRAM
   yang membaca konfigurasi tanpa menjelaskannya, jadi berkas tes kini dilewati

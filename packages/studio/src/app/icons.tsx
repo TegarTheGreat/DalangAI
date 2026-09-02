@@ -164,6 +164,28 @@ export const IconSliders: React.FC = () => (
 );
 
 /**
+ * Mark Dalang: gunungan (kayon) yang disederhanakan, dengan segitiga play
+ * sebagai ruang negatif. Di wayang kulit, gunungan-lah yang ditancapkan
+ * dalang untuk membuka lakon dan menandai pergantian adegan — penanda adegan,
+ * di editor yang seluruh datanya adalah rencana adegan.
+ *
+ * Kanvasnya 40x48, bukan 24x24 seperti ikon lain, karena bentuknya memang
+ * lebih tinggi daripada lebar; memaksanya ke grid ikon akan menggepengkannya.
+ */
+export const LogoMark: React.FC<{ size?: number }> = ({ size = 22 }) => (
+  <svg
+    aria-hidden="true"
+    width={(size * 40) / 48}
+    height={size}
+    viewBox="0 0 40 48"
+    fill="currentColor"
+    fillRule="evenodd"
+  >
+    <path d="M20 2C22.6 8.5 26.2 13.2 30.2 17.4C34.6 22 37.2 26.4 36.8 30.8C36.4 35.4 34.4 40.6 31.4 44.6L8.6 44.6C5.6 40.6 3.6 35.4 3.2 30.8C2.8 26.4 5.4 22 9.8 17.4C13.8 13.2 17.4 8.5 20 2ZM16.4 22.6 27.2 29 16.4 35.4Z" />
+  </svg>
+);
+
+/**
  * Roda gigi enam mata: bentuk yang sudah baku untuk "pengaturan" di hampir
  * setiap sistem operasi, jadi tidak perlu dipelajari siapa pun.
  */
