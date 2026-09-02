@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -54,7 +54,11 @@ describe("katalog menutup seluruh konfigurasi yang dibaca program", () => {
     const packagesDir = join(repoRoot, "packages");
     const found = new Map<string, string>();
     for (const file of sourceFiles(packagesDir)) {
-      if (file.includes(`${join("packages", "providers", "test")}`)) continue;
+      // Berkas tes dilewati SELURUHNYA. Yang dijaga pemindai ini adalah kode
+      // PROGRAM yang membaca konfigurasi tanpa menjelaskannya; tes menyebut
+      // nama variabel untuk hal lain — mis. `NODE_OPTIONS` di tes panel
+      // Pengaturan ada di sana justru untuk membuktikan bahwa ia DITOLAK.
+      if (file.includes(`${sep}test${sep}`)) continue;
       const text = readFileSync(file, "utf8");
       for (const pattern of [
         /process\.env\.([A-Z_][A-Z0-9_]*)/g,

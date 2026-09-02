@@ -15,6 +15,7 @@ import { z } from "zod";
 import type { WorkspacePayload } from "../shared/api-types";
 import { type CreateStudioOptions, createStudioApp, type Studio } from "./app";
 import { localOnlyGuard } from "./guard";
+import { registerSettingsRoutes } from "./settings";
 import {
   createProject,
   createProjectFromPlan,
@@ -92,6 +93,17 @@ export interface StudioHostOptions
    * supaya bisa dibuka dari tablet di jaringan yang sama.
    */
   allowedHosts?: readonly string[];
+  /**
+   * Panel Pengaturan (ADR-0032). Bawaannya `.env` di folder tempat perintah
+   * dijalankan, yaitu berkas yang sama dengan yang dimuat CLI saat start.
+   */
+  settings?: {
+    envPath?: string;
+    /** Pengganti fetch saat menguji kunci; tes memakainya agar tidak keluar jaringan. */
+    fetchImpl?: typeof fetch;
+    /** Pengganti pemeriksa berkas untuk setelan berjenis path. */
+    exists?: (path: string) => boolean;
+  };
 }
 
 export class StudioHost {
@@ -137,10 +149,14 @@ export class StudioHost {
 
   private openPlan(planPath: string): void {
     this.closeProject();
+    // Yang di bawah ini urusan host, bukan urusan satu proyek: dibuang di
+    // sini supaya tidak ada satu pun rute proyek yang bisa membacanya.
     const {
       workspaceRoot: _drop,
       planPath: _drop2,
       memoryPath: _drop3,
+      allowedHosts: _drop4,
+      settings: _drop5,
       ...rest
     } = this.options;
     this.studio = createStudioApp({ ...rest, planPath, memory: this.memory });
@@ -202,6 +218,16 @@ export class StudioHost {
     const { app } = this;
 
     app.get("/api/workspace", (c) => c.json(this.payload()));
+
+    // -- panel Pengaturan (ADR-0032) -----------------------------------------
+    // Juga milik lobi: setelan berlaku untuk seluruh mesin, bukan satu proyek.
+    registerSettingsRoutes(app, {
+      envPath: this.options.settings?.envPath ?? resolve(process.cwd(), ".env"),
+      ...(this.options.settings?.fetchImpl
+        ? { fetchImpl: this.options.settings.fetchImpl }
+        : {}),
+      ...(this.options.settings?.exists ? { exists: this.options.settings.exists } : {}),
+    });
 
     // -- memori preferensi lintas proyek (ADR-0029) --------------------------
     // Milik lobi, bukan proyek: satu berkas untuk semua proyek, terlihat dan

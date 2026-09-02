@@ -159,6 +159,12 @@ export interface StudioOverrides {
   transcoder?: StudioDeps["transcoder"];
   /** Tujuan publikasi (ADR-0030); bawaannya kosong = mesin tanpa token. */
   publishTargets?: StudioDeps["publishTargets"];
+  /** Panel Pengaturan (ADR-0032): berkas .env uji dan penguji kunci palsu. */
+  settings?: {
+    envPath?: string;
+    fetchImpl?: typeof fetch;
+    exists?: (path: string) => boolean;
+  };
 }
 
 export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
@@ -269,6 +275,12 @@ export const makeHost = (
     // Memori preferensi (ADR-0029) di folder uji — jangan pernah rumah pengguna.
     memoryPath: join(workspaceRoot, ".memori-uji.json"),
     ...(planPath ? { planPath } : {}),
+    // Panel Pengaturan (ADR-0032): tanpa ini bawaannya `.env` di cwd, yaitu
+    // berkas sungguhan milik repo. Tes menulisnya, jadi selalu ke folder uji.
+    settings: {
+      envPath: join(workspaceRoot, ".env-uji"),
+      ...(overrides?.settings ?? {}),
+    },
     approvalTimeoutMs: 2000,
     deps: fakeDeps(overrides),
   });

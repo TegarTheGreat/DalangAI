@@ -4813,3 +4813,300 @@ button.ghost.danger.confirm {
 .layer-bar {
   touch-action: none;
 }
+
+/*
+ * Panel Pengaturan (ADR-0032) — `dalang setup` untuk yang tidak memakai
+ * terminal. Bentuknya kartu per KEMAMPUAN, bukan tabel variabel: orang datang
+ * ke sini karena ingin "bisa transkrip rekaman", bukan karena ingin mengisi
+ * DEEPGRAM_API_KEY. Yang sudah menyala tampil lebih dulu dan terlipat, supaya
+ * mata langsung jatuh ke yang belum.
+ */
+.lobby-settings {
+  margin-left: auto;
+}
+.settings-dialog {
+  width: min(720px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 18px 14px;
+}
+.settings-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.settings-top h3 {
+  margin: 0 0 4px;
+}
+.settings-top p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  max-width: 62ch;
+}
+.settings-top .icon-btn {
+  margin-left: auto;
+}
+.settings-machine {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.6;
+  word-break: break-word;
+}
+.notice-ok {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: var(--r-sm);
+  background: rgba(79, 195, 128, 0.08);
+  border: 1px solid rgba(79, 195, 128, 0.28);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.settings-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+  min-height: 120px;
+}
+.settings-group {
+  margin: 8px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.settings-group:first-child {
+  margin-top: 0;
+}
+
+/* -- satu kemampuan -------------------------------------------------------- */
+
+.cap-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.cap-card.on {
+  border-color: rgba(79, 195, 128, 0.28);
+}
+.cap-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: none;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.cap-head:hover {
+  background: var(--hover);
+}
+.cap-dot {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--ok);
+  flex-shrink: 0;
+}
+.cap-card.on .cap-dot {
+  border-color: rgba(79, 195, 128, 0.5);
+  background: rgba(79, 195, 128, 0.12);
+}
+.cap-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cap-title strong {
+  font-size: 13.5px;
+  font-weight: 620;
+}
+.cap-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.cap-chevron {
+  margin-left: auto;
+  font-size: 16px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.cap-body {
+  padding: 2px 12px 12px;
+  border-top: 1px solid var(--line);
+}
+.cap-plain,
+.cap-without,
+.cap-rule {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 68ch;
+}
+.cap-without {
+  color: var(--text-faint);
+}
+.cap-rule {
+  color: var(--warn);
+}
+
+/* -- satu setelan ---------------------------------------------------------- */
+
+.setting-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setting-row {
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+.setting-row.filled {
+  border-color: var(--line-strong);
+}
+.setting-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.setting-mark {
+  color: var(--text-faint);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.setting-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.setting-title strong {
+  font-size: 12.5px;
+  font-weight: 620;
+}
+.setting-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.setting-opt {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.setting-now {
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--ok);
+  white-space: nowrap;
+}
+.setting-effect,
+.setting-fallback,
+.setting-hint,
+.setting-warn,
+.setting-ok {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  max-width: 70ch;
+}
+.setting-fallback,
+.setting-hint {
+  color: var(--text-faint);
+}
+.setting-warn {
+  color: var(--warn);
+}
+.setting-ok {
+  color: var(--ok);
+}
+.setting-input {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.setting-input input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+}
+.setting-clear {
+  color: var(--error);
+}
+.setting-howto {
+  margin-top: 7px;
+}
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--info);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.setting-howto ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+/* -- kaki dialog ----------------------------------------------------------- */
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.settings-count {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+@media (max-width: 640px) {
+  .setting-input {
+    flex-wrap: wrap;
+  }
+  .setting-now {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}

@@ -556,6 +556,12 @@ Yang sudah berjalan:
   dan variabel lain tetap di tempatnya, dan isi kunci tidak pernah dicetak ke
   layar. `dalang doctor` melaporkan keadaan tanpa bertanya apa pun, dan dengan
   `--uji` ia menghubungi tiap layanan untuk memastikan kuncinya masih diterima.
+  Yang tidak memakai terminal mendapat hal yang sama di **panel Pengaturan**
+  di lobi Studio: kartu per kemampuan, tombol Uji per kunci, dan penyimpanan
+  ke `.env` yang berlaku seketika. Isi kunci tidak pernah dikirim ke peramban
+  — yang tampil hanya empat huruf terakhirnya — dan hanya setelan yang ada di
+  katalog yang boleh ditulis, supaya kotak teks di halaman web tidak pernah
+  bisa menitipkan `NODE_OPTIONS` ke berkas `.env`.
 - **Konfigurasi yang bisa ditemukan tanpa membaca kode (ADR-0032)** — satu
   katalog memuat ke-33 setelan beserta kemampuan yang dibukanya dan langkah
   mendapatkannya, dikelompokkan dengan bahasa tujuan ("Ubah rekaman jadi teks
@@ -564,13 +570,15 @@ Yang sudah berjalan:
   program tetapi tidak dijelaskan ke siapa pun. Audit menemukan sembilan
   variabel seperti itu, yang diam-diam mengunci transkripsi, stiker, dan efek
   suara.
-- **Kualitas terjaga otomatis**: 1079 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1093 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
-  tata letak di 18 lebar layar, dan **gerbang interaksi**: berlian keyframe
-  dan kotak anotasi diseret dengan pointer/papan ketik sungguhan lewat CDP,
-  lalu plan di server yang diperiksa.
+  tata letak di 18 lebar layar (editor dan lobi), dan **gerbang interaksi**:
+  berlian keyframe dan kotak anotasi diseret dengan pointer/papan ketik
+  sungguhan lewat CDP, lalu plan di server yang diperiksa. Panel Pengaturan
+  diuji dengan ukuran yang sama: kunci diketik lewat CDP, dan yang diperiksa
+  setelah Simpan adalah berkas `.env` di disk, bukan layar.
 - Hasil ukur di container CPU-only: draft 540p **85 dtk**, final 1080p
   **4m38s** untuk video 51 dtk (8 scene) — lihat ADR-0004. E2E pipeline:
   MP4 hasil `generate --render` terverifikasi ber-stream audio AAC.
@@ -580,7 +588,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1079 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1093 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

@@ -163,6 +163,25 @@ export const IconSliders: React.FC = () => (
   </Icon>
 );
 
+/**
+ * Roda gigi enam mata: bentuk yang sudah baku untuk "pengaturan" di hampir
+ * setiap sistem operasi, jadi tidak perlu dipelajari siapa pun.
+ */
+export const IconGear: React.FC = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="3.1" />
+    <path d="M12 2.6v2.6M12 18.8v2.6M21.4 12h-2.6M5.2 12H2.6M18.6 5.4l-1.8 1.8M7.2 16.8l-1.8 1.8M18.6 18.6l-1.8-1.8M7.2 7.2 5.4 5.4" />
+  </Icon>
+);
+
+/** Kunci: penanda baris setelan yang isinya rahasia. */
+export const IconKey: React.FC = () => (
+  <Icon>
+    <circle cx="8" cy="12" r="3.6" />
+    <path d="M11.6 12H21M18 12v3.2M15 12v2.4" />
+  </Icon>
+);
+
 /** Bintang empat titik + kilau kecil — bahasa visual "AI/generatif". */
 export const IconSparkles: React.FC = () => (
   <Icon>

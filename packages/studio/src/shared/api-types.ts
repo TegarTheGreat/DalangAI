@@ -234,6 +234,92 @@ export interface NewProjectRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Panel Pengaturan (ADR-0032) - bentuk katalog konfigurasi yang aman dikirim
+// ke peramban. Nilai rahasia SUDAH disamarkan di server; tidak ada satu pun
+// medan di bawah ini yang memuat isi kunci.
+// ---------------------------------------------------------------------------
+
+export interface SettingLite {
+  key: string;
+  label: string;
+  kind: "rahasia" | "teks" | "path" | "angka" | "url";
+  /** false = penghalus; kemampuannya tetap hidup tanpa ini. */
+  required: boolean;
+  effect: string;
+  howTo: string[];
+  /** Bentuk nilainya untuk placeholder. BUKAN nilai sungguhan. */
+  example?: string;
+  /** Yang berlaku bila dikosongkan. */
+  fallback?: string;
+  filled: boolean;
+  /**
+   * Yang boleh tampil di layar: samaran untuk yang rahasia, nilai apa adanya
+   * untuk path, URL, dan angka - yang justru perlu dilihat saat salah ketik.
+   */
+  shown: string;
+  /**
+   * "berkas" = nilainya datang dari .env, jadi menyuntingnya di sini menang.
+   * "lingkungan" = di-export di terminal, dan itu MENANG atas .env setelah
+   * Studio dijalankan ulang. null = belum terisi.
+   */
+  source: "berkas" | "lingkungan" | null;
+  /** Bisa diuji ke layanannya lewat tombol Uji. */
+  testable: boolean;
+  /** Perubahannya baru berlaku setelah Studio dijalankan ulang. */
+  needsRestart: boolean;
+}
+
+export interface CapabilityLite {
+  id: string;
+  title: string;
+  plain: string;
+  withoutIt: string;
+  rule: "salah-satu" | "semua";
+  active: boolean;
+  readyWithoutConfig: boolean;
+  activeByDetection: boolean;
+  alsoActiveWhen?: string;
+  /** Untuk aturan salah-satu ini daftar PILIHAN, bukan daftar tuntutan. */
+  missing: string[];
+  settings: SettingLite[];
+}
+
+export interface SettingsPayload {
+  envPath: string;
+  envExists: boolean;
+  machine: { node: string; browser: boolean; whisper: boolean };
+  capabilities: CapabilityLite[];
+}
+
+export interface SettingsSaveRequest {
+  /** Nilai kosong berarti hapus setelan itu. */
+  updates: Record<string, string>;
+}
+
+export interface SettingsSaveResponse {
+  ok: true;
+  replaced: string[];
+  added: string[];
+  removed: string[];
+  /** Yang tersimpan tetapi baru berlaku setelah Studio dijalankan ulang. */
+  needsRestart: string[];
+  settings: SettingsPayload;
+}
+
+export interface SettingTestRequest {
+  key: string;
+  /** Kosong = uji nilai yang sedang terpasang. Tidak pernah dikembalikan. */
+  value?: string;
+}
+
+export interface SettingTestResponse {
+  ok: true;
+  key: string;
+  status: "ok" | "gagal" | "tak-diuji";
+  detail: string;
+}
+
+// ---------------------------------------------------------------------------
 // Mutasi
 // ---------------------------------------------------------------------------
 

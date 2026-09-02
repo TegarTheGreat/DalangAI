@@ -66,6 +66,8 @@ export type { ChatBridge, StudioContext, StudioDeps } from "./context";
 export { guardDecision, hostnameOf, isLoopbackHostname, localOnlyGuard } from "./guard";
 export type { StudioHostOptions } from "./host";
 export { StudioHost } from "./host";
+export type { SettingsRoutesOptions } from "./settings";
+export { registerSettingsRoutes, settingsPayload } from "./settings";
 export { StudioBusyError, StudioStore } from "./store";
 export {
   createProject,

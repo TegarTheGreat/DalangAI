@@ -93,6 +93,45 @@ Tiga hal yang dijaga saat menulis:
 audit — `providers:check` hanya memeriksa penyedia aset, sehingga TTS, ASR,
 dan token YouTube tidak pernah teruji. Kini keduanya saling menunjuk.
 
+### 5. Panel Pengaturan: wizard yang sama, tanpa terminal
+
+Orang yang membuka Studio dari ikon di desktop tidak pernah melihat `dalang
+setup`. Panel Pengaturan di lobi memberi mereka isi yang persis sama —
+kemampuan disebut dengan apa yang bisa dilakukan, yang sudah menyala tampil
+lebih dulu, tiap kemampuan menyatakan apa yang tetap jalan tanpanya, dan tiap
+kunci punya tombol Uji sendiri.
+
+Ia duduk di LOBI, bukan di editor, karena setelan berlaku untuk seluruh mesin
+dan orang mencarinya sebelum punya proyek.
+
+Tiga hal yang dijaga rute-rutenya, dan masing-masing punya tesnya:
+
+- **Isi kunci tidak pernah sampai ke peramban.** Untuk setelan berjenis
+  rahasia, server hanya mengirim empat huruf terakhirnya. Yang BUKAN rahasia
+  (path, URL, angka) dikirim apa adanya — justru itu yang perlu dilihat mata
+  saat ada salah ketik. Rute uji kunci tidak pernah mengembalikan nilai yang
+  dikirim kepadanya, supaya jawabannya tidak jadi cara membaca ulang kunci
+  lewat riwayat jaringan peramban.
+- **Hanya kunci katalog yang boleh ditulis.** Tanpa ini, satu permintaan bisa
+  menitipkan `NODE_OPTIONS` atau `PATH` ke `.env`, yaitu menjalankan kode di
+  mesin orang lewat kotak teks di halaman web. Kunci asing menolak SELURUH
+  permintaan, bukan dilewati diam-diam: keadaan setengah tertulis lebih
+  membingungkan daripada penolakan yang menyebut kuncinya.
+- **Nilai tidak boleh memuat baris baru.** Satu baris baru cukup untuk
+  menyelundupkan variabel kedua yang tidak pernah dilihat siapa pun.
+
+Yang tersimpan berlaku SEKETIKA untuk sebagian besar setelan, karena rantai
+penyedia dibangun ulang tiap kali dipakai. Yang tidak begitu disebutkan apa
+adanya: model orkestrator dipilih sekali sebelum server berdiri, jadi kunci
+model dilaporkan "baru berlaku setelah Studio dijalankan ulang" alih-alih
+diam-diam tidak bekerja.
+
+Panel juga membedakan nilai yang datang dari `.env` dan yang di-export di
+terminal. `process.loadEnvFile` tidak menimpa yang sudah ada di lingkungan,
+jadi menyimpan kunci lain lewat panel akan berlaku sekarang lalu seolah-olah
+hilang setelah start ulang. Itu jenis kebingungan yang memakan waktu berjam-jam
+kalau tidak dikatakan.
+
 ## Verifikasi
 
 - 8 tes katalog: pemindaian kode sumber, kesamaan `.env.example` dengan
@@ -123,12 +162,37 @@ dan token YouTube tidak pernah teruji. Kini keduanya saling menunjuk.
   pertamanya MENGGANTUNG saat masukan habis, dan itu dibetulkan: setiap
   pertanyaan kini memakai sinyal batal yang menyala saat masukan tertutup,
   sehingga Ctrl+D menyimpan yang sudah terkumpul lalu berhenti.
+- 14 tes rute panel Pengaturan: penyamaran rahasia diperiksa terhadap SELURUH
+  jawaban, bukan cuma medan yang kebetulan diingat; nilai bukan rahasia tampil
+  apa adanya; asal nilai dibedakan antara berkas dan terminal; menyimpan tidak
+  merusak isi `.env` orang dan langsung berlaku di proses; mengosongkan
+  mematikan setelan di berkas dan di proses; kunci model dilaporkan butuh start
+  ulang; `NODE_OPTIONS` ditolak beserta seluruh permintaannya; nilai berisi
+  baris baru ditolak; dan rute uji tidak pernah menyebut kembali nilai yang
+  dikirim.
+- Gerbang interaksi menjalankan jalur orang yang tidak memakai terminal di
+  peramban sungguhan: buka lobi, klik kolom, ketik kunci lewat CDP, tekan Uji,
+  tekan Simpan. Yang diperiksa setelah itu adalah BERKAS `.env` di disk, bukan
+  layar — panel yang menghijaukan layar tanpa menulis apa pun adalah cacat yang
+  mahal — lalu bahwa kunci utuh tidak pernah muncul kembali di halaman dan
+  kemampuannya pindah ke daftar yang sudah menyala.
+- Gerbang tata letak kini mengukur dialog Pengaturan di 18 lebar layar, pada
+  mesin TANPA kunci apa pun: semua kemampuan belum menyala, jadi tiap kartu
+  terbuka dan dialognya ada di keadaan paling tinggi yang mungkin.
+- Pemindai katalog sempat merah karena tes panel ini menyebut `NODE_OPTIONS`
+  untuk membuktikan bahwa ia ditolak. Yang dijaga pemindai adalah kode PROGRAM
+  yang membaca konfigurasi tanpa menjelaskannya, jadi berkas tes kini dilewati
+  seluruhnya — bukan `NODE_OPTIONS` yang didaftarkan sebagai pengecualian.
 
 ## Batas
 
+- **Panel tidak bisa menjalankan ulang Studio sendiri.** Kunci model yang baru
+  disimpan dilaporkan butuh start ulang, dan orangnya yang melakukannya. Server
+  yang mematikan dirinya sendiri atas permintaan halaman web adalah kemampuan
+  yang tidak ingin kami berikan.
 - **Katalog tidak memvalidasi nilai.** Ia tahu sebuah kunci ada dan untuk
   apa, bukan apakah isinya benar. Yang menguji ke layanan sungguhan adalah
-  `dalang setup` dan `dalang doctor`.
+  `dalang setup`, `dalang doctor`, dan tombol Uji di panel Pengaturan.
 - **Bahasa Indonesia saja.** Tidak ada lapisan terjemahan, sejalan dengan
   seluruh antarmuka Dalang.
 - **Kredensial AWS ikut dicatat walau bukan kami yang membacanya.** SDK AWS
@@ -141,3 +205,7 @@ dan token YouTube tidak pernah teruji. Kini keduanya saling menunjuk.
   dengan langkah mendapatkannya.
 - Menambah provider baru sekarang berarti menambah entri katalog, kalau tidak
   tesnya merah. Itu memang maksudnya.
+- Konfigurasi kini punya empat permukaan yang membaca satu katalog yang sama,
+  seperti yang dijanjikan bagian 1: `.env.example`, `dalang setup`, `dalang
+  doctor`, dan panel Pengaturan. Menambah entri katalog memunculkannya di
+  keempatnya sekaligus, tanpa menyentuh satu pun dari mereka.

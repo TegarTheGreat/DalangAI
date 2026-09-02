@@ -227,6 +227,9 @@ const main = async (): Promise<void> => {
   const studio = await startStudioServer({
     workspaceRoot: root,
     planPath: join(root, "demo", "plan.json"),
+    // Panel Pengaturan (ADR-0032) menyunting `.env`. Diarahkan ke folder
+    // sementara: gerbang tidak boleh bisa menyentuh berkas .env milik repo.
+    settings: { envPath: join(root, ".env") },
     deps: stubDeps({
       publishTargets: () => [
         {
@@ -332,6 +335,53 @@ const main = async (): Promise<void> => {
         }
       }
     }
+
+    // -- fase lobi: dialog Pengaturan (ADR-0032) ----------------------------
+    // Panel ini hanya ada di lobi, jadi proyeknya ditutup dulu lewat rute
+    // yang sama dengan tombol "tutup" (bekerja walau server dipatok ke satu
+    // proyek). Dijalankan PALING AKHIR supaya seluruh pemeriksaan editor di
+    // atas tidak terpengaruh kalau bagian ini rusak.
+    //
+    // Isinya sengaja diukur di mesin TANPA kunci apa pun: semua kemampuan
+    // belum menyala, jadi tiap kartu terbuka dan dialognya berada di keadaan
+    // paling tinggi yang mungkin.
+    await page.evaluate('fetch("/api/workspace/close", { method: "POST" })');
+    let diLobi = false;
+    for (let tries = 0; tries < 60; tries++) {
+      diLobi = (await page.evaluate(
+        'document.querySelector(".lobby-settings") !== null',
+      )) as boolean;
+      if (diLobi) break;
+      await sleep(250);
+    }
+    if (!diLobi) {
+      failures.push("lobi: tombol Pengaturan tidak muncul setelah proyek ditutup");
+    } else {
+      console.log("\n  lobi — dialog Pengaturan");
+      for (const width of WIDTHS) {
+        await page.setViewport({ width, height: 860, deviceScaleFactor: 1 });
+        await sleep(180);
+        const overflow = (await page.evaluate(
+          dialogProbe(".lobby-settings", "Pengaturan", true),
+        )) as string | null;
+        const sideways = (await page.evaluate(
+          "Math.max(0, document.documentElement.scrollWidth - window.innerWidth)",
+        )) as number;
+        const problems = [
+          ...(overflow ? [overflow] : []),
+          ...(sideways > 0 ? [`lobi bisa digeser ke samping ${sideways}px`] : []),
+        ];
+        if (problems.length === 0) {
+          console.log(`  ${String(width).padStart(4)}px  ok`);
+        } else {
+          console.log(`  ${String(width).padStart(4)}px  MASALAH`);
+          for (const problem of problems) {
+            console.log(`          ${problem}`);
+            failures.push(`${width}px lobi: ${problem}`);
+          }
+        }
+      }
+    }
   } finally {
     await page.close().catch(() => undefined);
     await browser.close({ silent: true }).catch(() => undefined);
@@ -345,7 +395,9 @@ const main = async (): Promise<void> => {
     process.exitCode = 1;
     return;
   }
-  console.log(`\nGerbang tata letak lulus di ${WIDTHS.length} lebar layar.`);
+  console.log(
+    `\nGerbang tata letak lulus: editor dan lobi, ${WIDTHS.length} lebar layar masing-masing.`,
+  );
 };
 
 main()

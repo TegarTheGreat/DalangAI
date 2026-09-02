@@ -23,11 +23,17 @@
  *     yang persis sama dengan jarak seretannya (di awal transisi, renderer
  *     masih menganggap scene sebelumnya yang aktif dan seretan itu hilang).
  *
+ * Panel Pengaturan (ADR-0032) diuji dengan ukuran yang sama: yang diperiksa
+ * setelah menekan Simpan adalah BERKAS `.env` di disk, bukan layar, karena
+ * panel yang menghijaukan layar tanpa menulis apa pun adalah cacat yang mahal
+ * — dan sekaligus bahwa kunci utuh tidak pernah muncul kembali di halaman.
+ *
  * Jalankan: pnpm --filter @dalang/studio gate:interaksi [folder-tangkapan-layar]
  */
 
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -711,6 +717,8 @@ const main = async (): Promise<void> => {
     studio.close();
     studioClosed = true;
     const uploads: string[] = [];
+    const envUji = join(root, ".env-gerbang");
+    let probes = 0;
     studio2 = await startStudioServer({
       workspaceRoot: root,
       planPath,
@@ -734,6 +742,16 @@ const main = async (): Promise<void> => {
           },
         ],
       }),
+      // Panel Pengaturan (ADR-0032): berkas .env di folder sementara, dan
+      // penguji kunci yang menjawab sendiri — gerbang tidak boleh menyentuh
+      // .env milik repo, dan tidak boleh butuh jaringan.
+      settings: {
+        envPath: envUji,
+        fetchImpl: (async () => {
+          probes += 1;
+          return new Response(null, { status: 200 });
+        }) as unknown as typeof fetch,
+      },
       port: 0,
       appDistDir: join(repoRoot, "packages", "studio", "dist"),
     });
@@ -776,6 +794,141 @@ const main = async (): Promise<void> => {
       `href = ${publishedHref ?? "-"}; unggahan diterima tujuan = ${uploads.length}`,
     );
     await shot("gate-publish-done.png");
+
+    // --- panel Pengaturan di lobi (ADR-0032) --------------------------------
+    // Ini jalur orang yang tidak memakai terminal: buka lobi, isi kunci,
+    // tekan Uji, tekan Simpan. Yang diperiksa BUKAN state React melainkan
+    // berkas .env di disk — panel yang cuma menghijaukan layar tanpa menulis
+    // apa pun adalah persis cacat yang mahal di sini.
+    console.log("\nPanel Pengaturan di lobi (ADR-0032)");
+    await page.evaluate('fetch("/api/workspace/close", { method: "POST" })');
+    let diLobi = false;
+    for (let tries = 0; tries < 60 && !diLobi; tries++) {
+      await sleep(250);
+      diLobi = (await page.evaluate(
+        'document.querySelector(".lobby-settings") !== null',
+      )) as boolean;
+    }
+    check("lobi punya tombol Pengaturan", diLobi, `ada = ${diLobi}`);
+
+    if (diLobi) {
+      await page.evaluate('document.querySelector(".lobby-settings").click()');
+      let adaBaris = false;
+      for (let tries = 0; tries < 40 && !adaBaris; tries++) {
+        await sleep(200);
+        adaBaris = (await page.evaluate(
+          "document.querySelector('[data-setting=\"PEXELS_API_KEY\"] input') !== null",
+        )) as boolean;
+      }
+      check(
+        "dialog Pengaturan memuat katalog dari server",
+        adaBaris,
+        `baris PEXELS_API_KEY ada = ${adaBaris}`,
+      );
+
+      // Kemampuan disebut dengan bahasa tujuan, bukan nama teknologi: itu
+      // seluruh alasan panel ini bisa dipakai orang yang belum pernah.
+      const judulStok = (await page.evaluate(
+        '(() => { const row = document.querySelector(\'[data-setting="PEXELS_API_KEY"]\'); const card = row ? row.closest(".cap-card") : null; const el = card ? card.querySelector(".cap-title strong") : null; return el ? el.textContent : null; })()',
+      )) as string | null;
+      check(
+        "kunci dikelompokkan di bawah kemampuan berbahasa manusia",
+        (judulStok ?? "").toLowerCase().includes("stok"),
+        `judul kartu = ${judulStok ?? "-"}`,
+      );
+
+      // Isi dialog bisa lebih tinggi dari layarnya, jadi barisnya digulung
+      // ke tengah DULU. Tanpa ini koordinat kliknya jatuh di luar dialog dan
+      // yang terfokus bukan kolomnya — persis kegagalan pertama gerbang ini.
+      await page.evaluate(
+        '(() => { const el = document.querySelector(\'[data-setting="PEXELS_API_KEY"]\'); if (el) el.scrollIntoView({ block: "center" }); })()',
+      );
+      await sleep(200);
+      const kotak = await rect('[data-setting="PEXELS_API_KEY"] input');
+      if (kotak) {
+        const titik = center(kotak);
+        await mouse("mouseMoved", titik.x, titik.y, false);
+        await mouse("mousePressed", titik.x, titik.y, true);
+        await mouse("mouseReleased", titik.x, titik.y, true);
+        await sleep(120);
+      }
+      const terfokus = (await page.evaluate(
+        "(() => { const el = document.querySelector('[data-setting=\"PEXELS_API_KEY\"] input'); return el !== null && document.activeElement === el; })()",
+      )) as boolean;
+      check(
+        "klik pada kolomnya memindahkan fokus ke sana",
+        terfokus,
+        `terfokus = ${terfokus}`,
+      );
+      await cdp.send("Input.insertText", { text: "px-gerbang-1234" });
+      await sleep(150);
+      const terketik = (await page.evaluate(
+        "(() => { const el = document.querySelector('[data-setting=\"PEXELS_API_KEY\"] input'); return el ? el.value : null; })()",
+      )) as string | null;
+      check(
+        "kunci bisa diketik dengan papan ketik sungguhan",
+        terketik === "px-gerbang-1234",
+        `isi kolom = ${terketik ?? "-"}`,
+      );
+
+      // Uji: memanggil layanannya lewat server, dan menampilkan hasilnya.
+      await page.evaluate(
+        '(() => { const row = document.querySelector(\'[data-setting="PEXELS_API_KEY"]\'); const buttons = Array.from(row.querySelectorAll("button")); const uji = buttons.find((b) => b.textContent.trim() === "Uji"); if (uji) uji.click(); })()',
+      );
+      let kabarUji: string | null = null;
+      for (let tries = 0; tries < 40 && !kabarUji; tries++) {
+        await sleep(200);
+        kabarUji = (await page.evaluate(
+          "(() => { const el = document.querySelector('[data-setting=\"PEXELS_API_KEY\"] .setting-ok'); return el ? el.textContent : null; })()",
+        )) as string | null;
+      }
+      check(
+        "tombol Uji menghubungi layanannya dan melaporkan hasilnya",
+        kabarUji !== null && probes > 0,
+        `pesan = ${kabarUji ?? "-"}; layanan dihubungi ${probes}x`,
+      );
+
+      await page.evaluate(
+        '(() => { const buttons = Array.from(document.querySelectorAll(".settings-actions button")); const simpan = buttons.find((b) => b.textContent.trim() === "Simpan"); if (simpan) simpan.click(); })()',
+      );
+      let tersimpan = false;
+      for (let tries = 0; tries < 40 && !tersimpan; tries++) {
+        await sleep(200);
+        tersimpan = existsSync(envUji)
+          ? readFileSync(envUji, "utf8").includes("PEXELS_API_KEY=px-gerbang-1234")
+          : false;
+      }
+      check(
+        "Simpan menulis kuncinya ke berkas .env, bukan cuma ke layar",
+        tersimpan,
+        `isi berkas memuat kuncinya = ${tersimpan}`,
+      );
+
+      await sleep(400);
+      const layar = (await page.evaluate(
+        '(() => { const el = document.querySelector(".settings-dialog"); return el ? el.textContent : ""; })()',
+      )) as string;
+      check(
+        "kunci utuh TIDAK PERNAH muncul kembali di layar",
+        !layar.includes("px-gerbang-1234"),
+        `kunci utuh terlihat = ${layar.includes("px-gerbang-1234")}`,
+      );
+      // Kemampuannya kini menyala, jadi kartunya pindah ke kelompok atas dan
+      // terlipat. Dibuka lagi untuk melihat nilai yang tersimpan.
+      const pindah = (await page.evaluate(
+        '(() => { const cards = Array.from(document.querySelectorAll(".cap-card")); const card = cards.find((c) => (c.querySelector(".cap-title strong") || {}).textContent === "Cari video dan foto stok otomatis"); if (!card) return null; const on = card.classList.contains("on"); card.querySelector(".cap-head").click(); return on; })()',
+      )) as boolean | null;
+      await sleep(250);
+      const samaran = (await page.evaluate(
+        "(() => { const el = document.querySelector('[data-setting=\"PEXELS_API_KEY\"] .setting-now'); return el ? el.textContent : null; })()",
+      )) as string | null;
+      check(
+        "kemampuannya menyala dan nilainya hanya tampil sebagai samaran",
+        pindah === true && samaran !== null && samaran.endsWith("1234"),
+        `kartu menyala = ${pindah}; yang tampil = ${samaran ?? "-"}`,
+      );
+      await shot("gate-pengaturan.png");
+    }
   } finally {
     await page.close().catch(() => undefined);
     await browser.close({ silent: true }).catch(() => undefined);

@@ -17,6 +17,7 @@ import {
   IconDownload,
   IconFilm,
   IconFolder,
+  IconGear,
   IconPlus,
   IconSearch,
   IconSpinner,
@@ -24,6 +25,7 @@ import {
   IconX,
 } from "../icons";
 import { studioClient, useStudio } from "../use-studio";
+import { SettingsDialog } from "./Settings";
 
 /**
  * Lobi: layar pertama Dalang Studio.
@@ -672,6 +674,7 @@ export const Lobby: React.FC = () => {
   const [sort, setSort] = useState<SortKey>("terbaru");
   const [newOpen, setNewOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const projects = workspace?.projects ?? [];
   const visible = useMemo(() => {
@@ -698,6 +701,17 @@ export const Lobby: React.FC = () => {
           <span className="brand-mark">Dalang</span>
           <span className="brand-sub">Studio</span>
         </div>
+        {/* Pengaturan duduk di lobi, bukan di editor: kunci berlaku untuk
+            seluruh mesin, dan orang mencarinya sebelum punya proyek. */}
+        <button
+          type="button"
+          className="with-icon lobby-settings"
+          data-tip="Kunci API, transkripsi, render cloud"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <IconGear />
+          Pengaturan
+        </button>
       </header>
 
       <div className="lobby-hero">
@@ -813,6 +827,7 @@ export const Lobby: React.FC = () => {
 
       <NewProjectDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 };

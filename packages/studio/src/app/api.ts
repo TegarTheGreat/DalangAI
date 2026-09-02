@@ -20,6 +20,9 @@ import type {
   RegisterSourceRequest,
   RegisterSourceResponse,
   RenderRequest,
+  SettingsPayload,
+  SettingsSaveResponse,
+  SettingTestResponse,
   SfxSearchResponse,
   SourcesResponse,
   StickerSearchResponse,
@@ -199,6 +202,22 @@ export const api = {
         method: "DELETE",
       },
     ),
+
+  // -- panel Pengaturan (ADR-0032) -------------------------------------------
+  // Nilai rahasia sudah disamarkan di server; tidak ada satu pun jawaban di
+  // bawah ini yang memuat isi kunci.
+  getSettings: () =>
+    request<{ ok: true; settings: SettingsPayload }>("/api/workspace/settings"),
+  saveSettings: (updates: Record<string, string>) =>
+    request<SettingsSaveResponse>("/api/workspace/settings", {
+      method: "POST",
+      body: JSON.stringify({ updates }),
+    }),
+  testSetting: (key: string, value?: string) =>
+    request<SettingTestResponse>("/api/workspace/settings/test", {
+      method: "POST",
+      body: JSON.stringify(value === undefined ? { key } : { key, value }),
+    }),
 
   openProject: (id: string) =>
     request<{ ok: true; workspace: WorkspacePayload }>("/api/workspace/open", {
