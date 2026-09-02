@@ -579,6 +579,11 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   diperintahkan meminta transkrip, bukan menebak.
 - **Visual dasar scene belum bisa di-keyframe**, dan **screen recording**
   (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Satu scene = satu klip dasar.** Memotong rekaman panjang berarti membuat
+  banyak scene, dan ripple lintas scene tidak bisa dinyatakan — jadi Dalang
+  menyusun rekaman, bukan menyuntingnya halus seperti NLE.
+  [ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) mengusulkan
+  perubahan skemanya, lengkap dengan jalur migrasi dan batasnya sendiri.
 
 Batas per keputusan ditulis lengkap di bagian "Batas" masing-masing ADR.
 
@@ -673,6 +678,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0030](docs/decisions/0030-publikasi-langsung.md) | Publikasi langsung ke YouTube |
 | [0031](docs/decisions/0031-studio-hanya-menerima-perintah-dirinya-sendiri.md) | Studio hanya menerima perintah dari dirinya sendiri |
 | [0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md) | Konfigurasi yang bisa ditemukan tanpa membaca kode |
+| [0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) | Beberapa klip dalam satu scene (diusulkan) |
 
 </details>
 
