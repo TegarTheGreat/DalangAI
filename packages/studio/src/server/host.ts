@@ -14,6 +14,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { WorkspacePayload } from "../shared/api-types";
 import { type CreateStudioOptions, createStudioApp, type Studio } from "./app";
+import { localOnlyGuard } from "./guard";
 import {
   createProject,
   createProjectFromPlan,
@@ -85,6 +86,12 @@ export interface StudioHostOptions
    * Tes memberi path sementara supaya tidak menyentuh rumah pengguna.
    */
   memoryPath?: string;
+  /**
+   * Nama host tambahan yang boleh memerintah Studio (ADR-0031). Bawaannya
+   * hanya loopback. Diisi bila server sengaja diikat ke alamat lain, mis.
+   * supaya bisa dibuka dari tablet di jaringan yang sama.
+   */
+  allowedHosts?: readonly string[];
 }
 
 export class StudioHost {
@@ -99,6 +106,13 @@ export class StudioHost {
   constructor(options: StudioHostOptions) {
     this.options = options;
     this.workspaceRoot = resolve(options.workspaceRoot);
+    // PALING AWAL, sebelum rute apa pun: permintaan yang mengubah hanya boleh
+    // datang dari Studio sendiri (ADR-0031). Dipasang di app LUAR supaya ikut
+    // menjaga rute proyek yang didelegasikan dan mount media.
+    this.app.use(
+      "*",
+      localOnlyGuard(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
+    );
     this.memory = fileMemoryStore(options.memoryPath ?? defaultMemoryPath());
     if (options.planPath) {
       this.openPlan(options.planPath);

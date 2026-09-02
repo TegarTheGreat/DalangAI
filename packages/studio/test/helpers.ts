@@ -263,6 +263,9 @@ export const makeHost = (
 ): StudioHost =>
   new StudioHost({
     workspaceRoot,
+    // ADR-0031: tes memanggil host bernama studio.local, jadi ia disahkan
+    // di sini — bukan dengan melonggarkan bawaan yang hanya loopback.
+    allowedHosts: ["studio.local"],
     // Memori preferensi (ADR-0029) di folder uji — jangan pernah rumah pengguna.
     memoryPath: join(workspaceRoot, ".memori-uji.json"),
     ...(planPath ? { planPath } : {}),

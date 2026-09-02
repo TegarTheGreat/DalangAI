@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) + Fase 10.1: memori preferensi lintas proyek (ADR-0029) + Fase 10.3: publikasi langsung ke YouTube (ADR-0030) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) + Fase 10.1: memori preferensi lintas proyek (ADR-0029) + Fase 10.3: publikasi langsung ke YouTube (ADR-0030) + Keamanan: Studio hanya menerima perintah dari dirinya sendiri (ADR-0031) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -540,7 +540,15 @@ Yang sudah berjalan:
   (Dalang tidak menjalankan alur OAuth); tanpa token, ketiga permukaan
   berkata apa adanya. Jalurnya diuji terhadap HTTP palsu yang mengikuti
   dokumentasi Google, belum terhadap YouTube sungguhan.
-- **Kualitas terjaga otomatis**: 1053 unit test (kontrak lock/pin/undo, timing
+- **Studio hanya menerima perintah dari dirinya sendiri (ADR-0031)** — server
+  memang hanya mendengar di 127.0.0.1, tapi itu tidak menjaga peramban milikmu
+  sendiri: situs web mana pun yang terbuka di tab lain dulu bisa mengubah
+  scene-plan, memulai render, bahkan memicu unggahan YouTube publik lewat form
+  `text/plain` yang tidak butuh preflight CORS. Kini permintaan yang MENGUBAH
+  wajib berasal dari Studio sendiri, dan header `Host` ikut diperiksa supaya
+  DNS rebinding tidak lolos. Pemanggil tanpa `Origin` (CLI, skrip) tetap bisa
+  bekerja, karena peramban tidak bisa menghilangkan header itu.
+- **Kualitas terjaga otomatis**: 1060 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -556,7 +564,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1053 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1060 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

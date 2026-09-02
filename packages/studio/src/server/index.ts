@@ -27,7 +27,15 @@ export interface StartedStudioHost {
 export const startStudioServer = (
   options: StudioHostOptions & { port?: number; hostname?: string },
 ): Promise<StartedStudioHost> => {
-  const host = new StudioHost(options);
+  // Alamat ikat sendiri selalu sah sebagai host (ADR-0031): mengikat ke LAN
+  // dengan sengaja tidak boleh berarti server menolak dirinya sendiri.
+  const host = new StudioHost({
+    ...options,
+    allowedHosts: [
+      ...(options.allowedHosts ?? []),
+      ...(options.hostname ? [options.hostname] : []),
+    ],
+  });
   return new Promise((resolve, reject) => {
     const server = serve(
       {
@@ -55,6 +63,7 @@ export const startStudioServer = (
 export type { CreateStudioOptions, Studio } from "./app";
 export { createStudioApp } from "./app";
 export type { ChatBridge, StudioContext, StudioDeps } from "./context";
+export { guardDecision, hostnameOf, isLoopbackHostname, localOnlyGuard } from "./guard";
 export type { StudioHostOptions } from "./host";
 export { StudioHost } from "./host";
 export { StudioBusyError, StudioStore } from "./store";
