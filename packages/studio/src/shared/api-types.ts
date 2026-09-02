@@ -336,6 +336,25 @@ export interface SourcesResponse {
   sources: SourceLite[];
 }
 
+/** ADR-0028 §11: sampai byte ke berapa potongan `id` sudah sampai di server. */
+export interface UploadStatusResponse {
+  ok: true;
+  id: string;
+  offset: number;
+}
+
+export type UploadChunkResponse =
+  | { ok: true; done: false; id: string; offset: number }
+  | {
+      ok: true;
+      done: true;
+      id: string;
+      offset: number;
+      file: string;
+      existed: boolean;
+      source: SourceLite;
+    };
+
 export interface RegisterSourceRequest {
   file: string;
   sceneId: string;

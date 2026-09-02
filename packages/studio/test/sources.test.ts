@@ -586,3 +586,158 @@ describe("POST /api/pipeline/proxies — di latar (ADR-0028 §10)", () => {
     expect(again.body.cancelled).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// ADR-0028 §11: unggahan per potongan yang bisa dilanjutkan
+// ---------------------------------------------------------------------------
+
+const chunkUpload = (
+  studio: ReturnType<typeof boot>["studio"],
+  name: string,
+  id: string,
+  offset: number,
+  total: number,
+  body: Buffer,
+) =>
+  Promise.resolve(
+    studio.app.fetch(
+      new Request(
+        `http://studio.local/api/sources/upload?name=${encodeURIComponent(name)}&id=${id}&offset=${offset}&total=${total}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: new Uint8Array(body),
+        },
+      ),
+    ),
+  );
+
+const uploadOffset = async (
+  studio: ReturnType<typeof boot>["studio"],
+  id: string,
+  size?: number,
+): Promise<number> =>
+  (
+    await callJson<{ offset: number }>(
+      studio,
+      `/api/sources/upload/status?id=${id}${size !== undefined ? `&size=${size}` : ""}`,
+    )
+  ).body.offset;
+
+describe("POST /api/sources/upload per potongan (bisa dilanjutkan)", () => {
+  it("status memberi offset; offset salah 409 dengan offset benar; selesai = berkas utuh dengan nama/hash yang sama seperti unggahan sekali jalan", async () => {
+    const { studio, dir } = boot();
+    const bytes = Buffer.alloc(300_000, 7);
+    const id = "a1b2c3d4e5f60718";
+    expect(await uploadOffset(studio, id)).toBe(0);
+
+    const first = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      0,
+      bytes.length,
+      bytes.subarray(0, 100_000),
+    );
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ ok: true, done: false, offset: 100_000 });
+
+    // "Putus": klien baru (tab lain, esok hari) bertanya sampai mana, lalu
+    // lanjut dari sana. Mengulang dari 0 ditolak dengan offset yang benar.
+    expect(await uploadOffset(studio, id, bytes.length)).toBe(100_000);
+    const wrong = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      0,
+      bytes.length,
+      bytes.subarray(0, 100_000),
+    );
+    expect(wrong.status).toBe(409);
+    expect(await wrong.json()).toMatchObject({ offset: 100_000 });
+
+    const second = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      100_000,
+      bytes.length,
+      bytes.subarray(100_000, 200_000),
+    );
+    expect(await second.json()).toMatchObject({ ok: true, done: false, offset: 200_000 });
+    const last = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      200_000,
+      bytes.length,
+      bytes.subarray(200_000),
+    );
+    expect(last.status).toBe(200);
+    const done = (await last.json()) as {
+      done: boolean;
+      file: string;
+      existed: boolean;
+      source: { file: string; sizeBytes: number };
+    };
+    expect(done.done).toBe(true);
+    expect(done.existed).toBe(false);
+    expect(done.file).toMatch(/^assets\/rekaman\/rekaman-panjang-[0-9a-f]{10}\.mov$/);
+    expect(done.source.sizeBytes).toBe(bytes.length);
+    expect(readFileSync(join(dir, done.file)).equals(bytes)).toBe(true);
+    expect(
+      readdirSync(join(dir, "assets/rekaman")).filter((name) => name.endsWith(".part")),
+    ).toEqual([]);
+    expect(await uploadOffset(studio, id)).toBe(0);
+
+    // Hash-nya sama dengan jalur sekali jalan: isi yang sama tidak disalin dua kali.
+    const oneShot = (await (await upload(studio, "lain.mov", bytes)).json()) as {
+      file: string;
+      existed: boolean;
+    };
+    expect(oneShot).toMatchObject({ existed: true, file: done.file });
+  });
+
+  it("menolak total di atas batas sebelum satu byte pun, potongan yang melewati total, id bukan heksa; bagian yang lebih besar dari berkasnya dibuang", async () => {
+    const { studio, dir } = boot();
+    const id = "0123456789abcdef";
+    const before = process.env.DALANG_MAX_UPLOAD_MB;
+    process.env.DALANG_MAX_UPLOAD_MB = "0.0001"; // ~105 byte
+    try {
+      const declared = await chunkUpload(
+        studio,
+        "besar.mp4",
+        id,
+        0,
+        10_000_000,
+        Buffer.alloc(10),
+      );
+      expect(declared.status).toBe(413);
+    } finally {
+      if (before === undefined) delete process.env.DALANG_MAX_UPLOAD_MB;
+      else process.env.DALANG_MAX_UPLOAD_MB = before;
+    }
+    expect(
+      (await chunkUpload(studio, "x.mp4", "zz", 0, 10, Buffer.alloc(5))).status,
+    ).toBe(400);
+    expect((await chunkUpload(studio, "x.mp4", id, 5, 4, Buffer.alloc(1))).status).toBe(
+      400,
+    );
+    const over = await chunkUpload(studio, "x.mp4", id, 0, 10, Buffer.alloc(20));
+    expect(over.status).toBe(400);
+    expect(
+      readdirSync(join(dir, "assets/rekaman")).filter((name) => name.endsWith(".part")),
+    ).toEqual([]);
+    expect((await chunkUpload(studio, "x.mp4", id, 0, 10, Buffer.alloc(0))).status).toBe(
+      400,
+    );
+
+    // Bagian 50 byte tersisa, lalu berkas lain berukuran 30 byte memakai
+    // identitas yang sama: bagiannya dibuang, mulai dari nol — tidak pernah
+    // berkas yang tercampur.
+    await chunkUpload(studio, "y.mp4", id, 0, 100, Buffer.alloc(50));
+    expect(await uploadOffset(studio, id)).toBe(50);
+    expect(await uploadOffset(studio, id, 30)).toBe(0);
+    expect(await uploadOffset(studio, id)).toBe(0);
+  });
+});

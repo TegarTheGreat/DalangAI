@@ -506,7 +506,11 @@ Yang sudah berjalan:
     lewat spawn) dan bisa dibatalkan; Studio membalas 202, menyiarkan
     `proxy-progress`, punya tombol batal, dan editor tetap bisa dipakai —
     patch, undo, dan render tidak menunggu; permintaan selagi berjalan antre.
-    CLI `dalang proxy`/`generate` mencetak persen per berkas.
+    CLI `dalang proxy`/`generate` mencetak persen per berkas;
+  - unggahan rekaman BISA DILANJUTKAN setelah putus: per potongan 8 MiB
+    dengan offset yang bertahan di server (muat ulang tab atau restart pun
+    tidak mengulang byte yang sudah sampai), coba ulang dengan jeda membesar,
+    dan hasil akhirnya lewat jalur hash/dedup yang sama dengan sekali jalan.
 - **Memori preferensi lintas proyek (ADR-0029)** — agent mengingat kebiasaan
   kamu di semua proyek, dengan tiga sifat yang disengaja:
   - EKSPLISIT: `rememberPreference` hanya untuk yang kamu nyatakan sebagai
@@ -527,7 +531,7 @@ Yang sudah berjalan:
   (Dalang tidak menjalankan alur OAuth); tanpa token, ketiga permukaan
   berkata apa adanya. Jalurnya diuji terhadap HTTP palsu yang mengikuti
   dokumentasi Google, belum terhadap YouTube sungguhan.
-- **Kualitas terjaga otomatis**: 1042 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1048 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -543,7 +547,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1042 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1048 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

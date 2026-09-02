@@ -210,6 +210,25 @@ Kini:
   dengan catatan "proxy dibuat di latar"; preview beralih ke proxy begitu
   selesai. CLI `dalang proxy` dan `generate` mencetak persen per berkas.
 
+### 11. Unggahan bisa dilanjutkan setelah putus
+
+Rekaman satu jam adalah gigabyte, dan Wi-Fi yang putus di menit ke-40
+tidak boleh berarti mulai dari nol. `POST /api/sources/upload` kini juga
+menerima `?id=&offset=&total=` per POTONGAN (klien memakai 8 MiB): server
+menambahkan ke `assets/rekaman/.unggah-<id>.part` yang bertahan melewati
+muat ulang tab dan restart server, `GET /api/sources/upload/status?id=`
+mengatakan sampai byte ke berapa, dan offset yang tidak cocok dijawab 409
+BESERTA offset yang benar — klien lanjut dari sana, bukan gagal. Potongan
+terakhir memicu jalur akhir yang SAMA dengan unggahan sekali jalan: hash
+seluruh berkas (satu lintasan baca), nama ber-hash, dedup isi, rename
+atomik. Identitas `id` dihitung klien dari nama + ukuran + mtime (bukan
+sesi), dan bagian yang lebih besar dari berkas yang kini diunggah dibuang;
+bagian yang tak pernah dilanjutkan disapu setelah seminggu. Klien mencoba
+ulang putus jaringan dengan jeda membesar (1, 2, 4, 8, 15 dtk; enam kali),
+menanyakan offset ke server sebelum tiap percobaan, dan mengatakan sekali
+"melanjutkan dari 40%" supaya bilah yang mulai di tengah tidak
+membingungkan. Jalur sekali jalan (tanpa `id`) tetap ada apa adanya.
+
 ## Verifikasi
 
 - **Pengukur & keputusan (murni):** 13 tes core — keputusan proxy per aturan
@@ -251,9 +270,14 @@ Kini:
   bingkai detik ke-0 dan ke-1 BERBEDA; `toWav` mendekode AAC jadi PCM stereo
   48 kHz; `measureMediaLoudness` mengukur MP4; `remotionAudioProbe` mengukur
   MP4 tanpa membuka browser.
-- **Studio (HTTP, transkoder palsu):** 14 tes — daftar sumber, unggah
+- **Studio (HTTP, transkoder palsu):** 16 tes — daftar sumber, unggah
   streaming 300 KB byte-per-byte + dedup isi + batas 413 sebelum/selama
-  streaming + pembersihan `.part`, daftar ke scene (patch user ter-pin, proxy,
+  streaming + pembersihan `.part`, unggah per potongan yang dilanjutkan
+  (status → offset, offset salah 409 dengan offset benar, selesai = berkas
+  utuh dengan hash yang SAMA seperti sekali jalan sehingga dedup menyatu,
+  413 sebelum satu byte pun, potongan melewati total ditolak dan bagiannya
+  dibuang, bagian yang lebih besar dari berkas baru dibuang) + 4 tes murni
+  identitas/pemotongan/jeda coba-ulang klien, daftar ke scene (patch user ter-pin, proxy,
   undo) dan ke lapisan (dengan titik masuk), penolakan path keluar folder /
   bukan video / scene terkunci, thumb ber-cache dan dipangkas ke durasi, peaks
   ber-cache, mount `/.dalang/proxies/*` terbuka sementara `pipeline.db` dan
@@ -301,9 +325,11 @@ Kini:
   dan koreksi hanya menggeser, tidak pernah memampatkan — program yang
   puncaknya sudah di langit-langit tetapi rata-ratanya jauh di bawah sasaran
   dilaporkan "tidak ada ruang", bukan dilimit.
-- **Unggahan tidak bisa dilanjutkan** setelah putus; ia diulang dari awal.
-  Dedup isi membuat pengulangan yang sudah sampai tidak menyalin dua kali,
-  tapi byte-nya tetap dikirim ulang.
+- ~~**Unggahan tidak bisa dilanjutkan** setelah putus; ia diulang dari
+  awal.~~ *DICABUT (Keputusan 11):* per potongan dengan offset yang
+  bertahan di server, dilanjutkan dari byte terakhir yang sampai. Yang
+  tersisa: satu unggahan pada satu waktu per tab (bilah kemajuannya satu),
+  dan pembatalan hanya lewat menutup tab — bagiannya menunggu seminggu.
 - **Tanpa transkoder, `probe` jatuh ke `getVideoMetadata`** milik Remotion:
   durasi dan dimensi ada, kodek/laju tidak — dan keputusan proxy tanpa kodek
   hanya memakai tiga aturan lain.

@@ -468,10 +468,19 @@ export class StudioClient {
     target: { sceneId: string; layerId?: string | null } | null,
   ): Promise<void> {
     this.set({ sourceUpload: { name: file.name, progress: 0 } });
+    let announced = false;
     try {
-      const uploaded = await api.uploadSource(file, (progress) =>
-        this.set({ sourceUpload: { name: file.name, progress } }),
-      );
+      const uploaded = await api.uploadSource(file, (progress, resumedFrom) => {
+        // ADR-0028 §11: byte yang sudah sampai sebelumnya tidak dikirim ulang;
+        // katakan itu sekali, supaya bilah yang mulai di 40% tidak membingungkan.
+        if (resumedFrom > 0 && !announced) {
+          announced = true;
+          this.toast(
+            `Melanjutkan unggahan ${file.name} dari ${Math.round((resumedFrom / file.size) * 100)}%`,
+          );
+        }
+        this.set({ sourceUpload: { name: file.name, progress } });
+      });
       this.set({ sourceUpload: null });
       if (uploaded.existed) this.toast(`Rekaman yang sama sudah ada: ${uploaded.file}`);
       if (target) {

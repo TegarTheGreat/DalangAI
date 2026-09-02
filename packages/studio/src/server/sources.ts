@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  createReadStream,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -46,7 +47,11 @@ import { StudioBusyError } from "./store";
  *   - GET  /api/sources          daftar rekaman di folder proyek + faktanya
  *   - POST /api/sources/upload   unggah STREAMING ke disk (rekaman satu jam
  *                                tidak muat dalam data URL base64 — dan tidak
- *                                boleh dimuat ke memori dulu)
+ *                                boleh dimuat ke memori dulu); dengan
+ *                                ?id=&offset=&total= per potongan, BISA
+ *                                DILANJUTKAN setelah putus (§11)
+ *   - GET  /api/sources/upload/status  sampai byte ke berapa potongan id itu
+ *                                sudah sampai
  *   - POST /api/sources/register pasang rekaman ke scene/lapisan + proxy-nya
  *   - GET  /api/sources/thumb    satu bingkai pada detik tertentu (cache disk)
  *   - GET  /api/sources/peaks    bentuk gelombang (cache disk)
@@ -62,6 +67,9 @@ const AUDIO_EXT = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".op
 const SOURCE_DIRS = ["assets", "rekaman", "media"];
 const MAX_SCAN_DEPTH = 3;
 const DEFAULT_MAX_UPLOAD_MB = 4096;
+/** Bagian unggahan yang tak pernah dilanjutkan dibuang setelah seminggu. */
+const UPLOAD_PART_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const UPLOAD_ID = /^[0-9a-f]{8,64}$/;
 /** Tinggi thumbnail yang dilayani; di luar rentang ini dipangkas, bukan ditolak. */
 const THUMB_MIN_H = 40;
 const THUMB_MAX_H = 360;
@@ -274,6 +282,64 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
   // -------------------------------------------------------------------------
   // Unggah streaming: body mentah -> disk, hash dihitung sambil lewat
   // -------------------------------------------------------------------------
+  const uploadDir = join(planDir, "assets", "rekaman");
+  const partPath = (id: string) => join(uploadDir, `.unggah-${id}.part`);
+  const partSize = (id: string): number =>
+    existsSync(partPath(id)) ? statSync(partPath(id)).size : 0;
+  const sweepStaleParts = () => {
+    if (!existsSync(uploadDir)) return;
+    for (const entry of readdirSync(uploadDir)) {
+      if (!entry.startsWith(".unggah-") || !entry.endsWith(".part")) continue;
+      const full = join(uploadDir, entry);
+      if (Date.now() - statSync(full).mtimeMs > UPLOAD_PART_MAX_AGE_MS) {
+        rmSync(full, { force: true });
+      }
+    }
+  };
+  /** SHA-256 (10 heksa pertama) satu lintasan baca — untuk bagian yang dirakit per potongan. */
+  const digestOfFile = async (path: string): Promise<string> => {
+    const hash = createHash("sha256");
+    for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
+    return hash.digest("hex").slice(0, 10);
+  };
+  /**
+   * Jalur akhir yang SAMA untuk unggahan sekali jalan maupun per potongan:
+   * nama ber-hash, dedup isi, rename atomik, lalu deskripsi.
+   */
+  const finalizeUpload = async (temp: string, name: string, digest: string) => {
+    const ext = extname(name).toLowerCase();
+    // Unggahan yang ISINYA sama tidak disalin dua kali, apa pun namanya:
+    // rekaman empat gigabyte yang diunggah ulang dari folder lain bukan
+    // rekaman baru, dan disk proyek bukan tempat menyimpan dua salinannya.
+    const twin = readdirSync(uploadDir).find((entry) =>
+      entry.endsWith(`-${digest}${ext}`),
+    );
+    const finalAbs = join(uploadDir, twin ?? `${safeBaseName(name)}-${digest}${ext}`);
+    const file = relative(planDir, finalAbs).split(sep).join("/");
+    const existed = twin !== undefined;
+    if (existed) rmSync(temp, { force: true });
+    else renameSync(temp, finalAbs);
+    probeCache.clear();
+    const source = await describe(session.plan, file);
+    return { file, existed, source };
+  };
+
+  // ADR-0028 §11: sampai byte ke berapa potongan `id` sudah sampai. `size`
+  // (ukuran berkas yang kini hendak diunggah) membuang bagian yang lebih
+  // besar dari itu — identitas yang sama untuk berkas yang berbeda.
+  app.get("/api/sources/upload/status", (c) => {
+    const id = c.req.query("id") ?? "";
+    if (!UPLOAD_ID.test(id)) return c.json({ error: "id unggahan tidak valid" }, 400);
+    sweepStaleParts();
+    const size = Number(c.req.query("size") ?? Number.NaN);
+    let offset = partSize(id);
+    if (Number.isFinite(size) && offset > size) {
+      rmSync(partPath(id), { force: true });
+      offset = 0;
+    }
+    return c.json({ ok: true, id, offset });
+  });
+
   app.post("/api/sources/upload", async (c) => {
     const name = c.req.query("name") ?? "";
     const kind = kindOf(name);
@@ -297,10 +363,90 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
     }
     const body = c.req.raw.body;
     if (!body) return c.json({ error: "Body kosong" }, 400);
+    mkdirSync(uploadDir, { recursive: true });
+    const startedAt = Date.now();
 
-    const dir = join(planDir, "assets", "rekaman");
-    mkdirSync(dir, { recursive: true });
-    const temp = join(dir, `.unggah-${process.pid}-${Date.now()}.part`);
+    // --- ADR-0028 §11: per potongan, bisa dilanjutkan --------------------
+    const id = c.req.query("id");
+    if (id !== undefined) {
+      if (!UPLOAD_ID.test(id)) return c.json({ error: "id unggahan tidak valid" }, 400);
+      const total = Number(c.req.query("total"));
+      const offset = Number(c.req.query("offset"));
+      if (
+        !Number.isInteger(total) ||
+        total <= 0 ||
+        !Number.isInteger(offset) ||
+        offset < 0 ||
+        offset > total
+      ) {
+        return c.json({ error: "offset/total tidak valid" }, 400);
+      }
+      if (total > limit) {
+        return c.json(
+          {
+            error: `Berkas ${Math.round(total / 1024 / 1024)} MB melampaui batas ${Math.round(limit / 1024 / 1024)} MB (DALANG_MAX_UPLOAD_MB)`,
+          },
+          413,
+        );
+      }
+      const temp = partPath(id);
+      const current = partSize(id);
+      // Offset yang tidak cocok bukan galat fatal: jawabannya memberi tahu
+      // klien sampai mana byte-nya sudah sampai, dan klien lanjut dari sana.
+      if (current !== offset) {
+        return c.json(
+          {
+            error: `Offset tidak cocok: server sudah punya ${current} byte`,
+            offset: current,
+          },
+          409,
+        );
+      }
+      let bytes = 0;
+      let overflow = false;
+      const counter = new Transform({
+        transform(chunk: Buffer, _encoding, callback) {
+          bytes += chunk.length;
+          if (offset + bytes > total) {
+            overflow = true;
+            callback(new Error("melampaui total"));
+            return;
+          }
+          callback(null, chunk);
+        },
+      });
+      try {
+        await pipeline(
+          Readable.fromWeb(body as import("node:stream/web").ReadableStream),
+          counter,
+          createWriteStream(temp, { flags: "a" }),
+        );
+      } catch (error) {
+        if (overflow) {
+          rmSync(temp, { force: true });
+          return c.json({ error: "Potongan melampaui total yang diumumkan" }, 400);
+        }
+        // Putus di tengah potongan: byte yang sudah ditulis TETAP di bagian;
+        // itulah titik lanjutnya. Klien yang masih hidup bertanya ke /status.
+        return c.json(errorPayload(error), 500);
+      }
+      if (bytes === 0) return c.json({ error: "Potongan kosong" }, 400);
+      const reached = offset + bytes;
+      if (reached < total) return c.json({ ok: true, done: false, id, offset: reached });
+      // Selesai: hash seluruh berkas sekali (satu lintasan baca), lalu jalur
+      // akhir yang sama dengan unggahan sekali jalan.
+      const result = await finalizeUpload(temp, name, await digestOfFile(temp));
+      logUiEvent(
+        "uploadSource",
+        { name, bytes: total, resumable: true },
+        { file: result.file, existed: result.existed },
+        Date.now() - startedAt,
+      );
+      return c.json({ ok: true, done: true, id, offset: total, ...result });
+    }
+
+    // --- sekali jalan: hash dihitung sambil lewat ------------------------
+    const temp = join(uploadDir, `.unggah-${process.pid}-${Date.now()}.part`);
     const hash = createHash("sha256");
     let bytes = 0;
     let overflow = false;
@@ -316,7 +462,6 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
         callback(null, chunk);
       },
     });
-    const startedAt = Date.now();
     try {
       await pipeline(
         Readable.fromWeb(body as import("node:stream/web").ReadableStream),
@@ -339,26 +484,14 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
       rmSync(temp, { force: true });
       return c.json({ error: "Berkas kosong" }, 400);
     }
-    const digest = hash.digest("hex").slice(0, 10);
-    const ext = extname(name).toLowerCase();
-    // Unggahan yang ISINYA sama tidak disalin dua kali, apa pun namanya:
-    // rekaman empat gigabyte yang diunggah ulang dari folder lain bukan
-    // rekaman baru, dan disk proyek bukan tempat menyimpan dua salinannya.
-    const twin = readdirSync(dir).find((entry) => entry.endsWith(`-${digest}${ext}`));
-    const finalAbs = join(dir, twin ?? `${safeBaseName(name)}-${digest}${ext}`);
-    const file = relative(planDir, finalAbs).split(sep).join("/");
-    const existed = twin !== undefined;
-    if (existed) rmSync(temp, { force: true });
-    else renameSync(temp, finalAbs);
-    probeCache.clear();
-    const source = await describe(session.plan, file);
+    const result = await finalizeUpload(temp, name, hash.digest("hex").slice(0, 10));
     logUiEvent(
       "uploadSource",
       { name, bytes },
-      { file, existed },
+      { file: result.file, existed: result.existed },
       Date.now() - startedAt,
     );
-    return c.json({ ok: true, file, existed, source });
+    return c.json({ ok: true, ...result });
   });
 
   // -------------------------------------------------------------------------

@@ -25,9 +25,18 @@ import type {
   StickerSearchResponse,
   StockSearchResponse,
   StudioEvent,
+  UploadChunkResponse,
+  UploadStatusResponse,
   WorkspacePayload,
   WorkspaceProjectLite,
 } from "../shared/api-types";
+import {
+  nextChunk,
+  retryDelayMs,
+  UPLOAD_MAX_RETRIES,
+  uploadFraction,
+  uploadId,
+} from "./model/resumable-upload";
 import { readSseBody } from "./sse";
 
 /**
@@ -116,6 +125,59 @@ export type TimelineExportResult = {
   /** Apa yang tidak punya padanan di format tujuan. Wajib ditampilkan. */
   tidakIkut: string[];
 };
+
+type ChunkOutcome =
+  | { kind: "ok"; body: UploadChunkResponse }
+  | { kind: "offset"; offset: number }
+  | { kind: "network" };
+
+/**
+ * Satu potongan lewat XMLHttpRequest — `fetch` tidak punya kemajuan unggah,
+ * dan rekaman satu jam tanpa bilah kemajuan terasa seperti macet. Putus
+ * jaringan dan 409 (offset tidak cocok) dikembalikan sebagai DATA supaya
+ * pemanggil bisa melanjutkan; galat HTTP lain dilempar.
+ */
+const sendChunk = (
+  url: string,
+  blob: Blob,
+  onLoaded: (loaded: number) => void,
+): Promise<ChunkOutcome> =>
+  new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("content-type", "application/octet-stream");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onLoaded(event.loaded);
+    };
+    xhr.onerror = () => resolve({ kind: "network" });
+    xhr.ontimeout = () => resolve({ kind: "network" });
+    xhr.onload = () => {
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = JSON.parse(xhr.responseText) as Record<string, unknown>;
+      } catch {
+        // badan bukan JSON — jatuh ke pesan status
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve({ kind: "ok", body: payload as unknown as UploadChunkResponse });
+        return;
+      }
+      if (xhr.status === 409 && typeof payload.offset === "number") {
+        resolve({ kind: "offset", offset: payload.offset });
+        return;
+      }
+      reject(
+        new ApiError(
+          xhr.status,
+          typeof payload.error === "string" ? payload.error : `HTTP ${xhr.status}`,
+        ),
+      );
+    };
+    xhr.send(blob);
+  });
+
+const uploadStatus = (id: string, size: number) =>
+  request<UploadStatusResponse>(`/api/sources/upload/status?id=${id}&size=${size}`);
 
 export const api = {
   getProject: () => request<ProjectStatePayload>("/api/project"),
@@ -389,41 +451,56 @@ export const api = {
   sourceThumbUrl: (file: string, t: number, h: number): string =>
     `/api/sources/thumb?file=${encodeURIComponent(file)}&t=${t.toFixed(1)}&h=${h}`,
   /**
-   * Unggah STREAMING lewat XMLHttpRequest: `fetch` tidak punya kemajuan
-   * unggah, dan rekaman satu jam tanpa bilah kemajuan terasa seperti macet.
+   * Unggah rekaman yang BISA DILANJUTKAN (ADR-0028 §11): per potongan 8 MiB.
+   * Putus di tengah → tanya server sampai mana byte-nya sampai, lanjut dari
+   * sana, coba ulang dengan jeda membesar. Identitasnya dari nama+ukuran+mtime,
+   * jadi muat ulang tab pun tidak mengirim ulang byte yang sudah sampai.
+   * `resumedFrom` = byte yang sudah ada di server saat mulai (0 = dari awal).
    */
-  uploadSource: (
+  uploadSource: async (
     file: File,
-    onProgress: (fraction: number) => void,
-  ): Promise<{ ok: true; file: string; existed: boolean }> =>
-    new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `/api/sources/upload?name=${encodeURIComponent(file.name)}`);
-      xhr.setRequestHeader("content-type", "application/octet-stream");
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) onProgress(event.loaded / event.total);
-      };
-      xhr.onerror = () => reject(new ApiError(0, "Koneksi terputus saat mengunggah"));
-      xhr.onload = () => {
-        let payload: Record<string, unknown> = {};
-        try {
-          payload = JSON.parse(xhr.responseText) as Record<string, unknown>;
-        } catch {
-          // badan bukan JSON — jatuh ke pesan status
-        }
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(payload as { ok: true; file: string; existed: boolean });
-        } else {
-          reject(
-            new ApiError(
-              xhr.status,
-              typeof payload.error === "string" ? payload.error : `HTTP ${xhr.status}`,
-            ),
+    onProgress: (fraction: number, resumedFrom: number) => void,
+  ): Promise<{ ok: true; file: string; existed: boolean }> => {
+    if (file.size === 0) throw new ApiError(400, "Berkas kosong");
+    const id = uploadId(file.name, file.size, file.lastModified);
+    let offset = (await uploadStatus(id, file.size)).offset;
+    const resumedFrom = offset;
+    let attempt = 0;
+    for (;;) {
+      const chunk = nextChunk(offset, file.size);
+      if (!chunk)
+        throw new ApiError(500, "Unggahan berakhir tanpa jawaban selesai dari server");
+      const url = `/api/sources/upload?name=${encodeURIComponent(file.name)}&id=${id}&offset=${chunk.start}&total=${file.size}`;
+      const outcome = await sendChunk(url, file.slice(chunk.start, chunk.end), (loaded) =>
+        onProgress(uploadFraction(offset, loaded, file.size), resumedFrom),
+      );
+      if (outcome.kind === "network") {
+        if (attempt >= UPLOAD_MAX_RETRIES) {
+          throw new ApiError(
+            0,
+            "Koneksi terputus saat mengunggah dan sudah dicoba ulang beberapa kali. Coba lagi nanti: unggahan akan dilanjutkan dari byte terakhir yang sampai.",
           );
         }
-      };
-      xhr.send(file);
-    }),
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+        attempt += 1;
+        // Server yang tahu sampai mana; kalau ia pun tak terjangkau, coba
+        // offset yang sama — 409 akan mengoreksinya begitu tersambung.
+        const again = await uploadStatus(id, file.size).catch(() => null);
+        if (again) offset = again.offset;
+        continue;
+      }
+      attempt = 0;
+      if (outcome.kind === "offset") {
+        offset = outcome.offset;
+        continue;
+      }
+      if (outcome.body.done) {
+        onProgress(1, resumedFrom);
+        return { ok: true, file: outcome.body.file, existed: outcome.body.existed };
+      }
+      offset = outcome.body.offset;
+    }
+  },
 
   /** Langganan broadcast antar-panel; kembalikan fungsi stop. */
   uploadAsset: (sceneId: string, filename: string, dataUrl: string) =>
