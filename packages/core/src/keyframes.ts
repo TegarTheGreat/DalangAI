@@ -147,3 +147,49 @@ export const moveKeyframe = (
     item.property === property ? { ...item, points: moved } : item,
   );
 };
+
+/** Ambang penempelan berlian ke keyframe track lain: 2% durasi elemen. */
+export const KEYFRAME_SNAP = 0.02;
+
+export interface KeyframeSnap {
+  at: number;
+  /** Keyframe track lain yang ditempeli, atau null bila tidak ada yang cukup dekat. */
+  snappedTo: { property: AnimatableProperty; at: number } | null;
+}
+
+/**
+ * Waktu jatuh setelah menempel ke keyframe TRACK LAIN pada lapisan yang sama
+ * (mencabut batas ADR-0027 "belum ada snap ke keyframe track lain"): dua
+ * properti yang berubah pada saat yang sama terasa disengaja, dan menyamakan
+ * waktunya dengan tangan sampai seperseribu tidak masuk akal. Titik pada
+ * track yang SAMA bukan sasaran — mendarat di atasnya ditolak `moveKeyframe`
+ * — jadi kandidat yang bertabrakan dengan titik sendiri dilewati. Murni:
+ * pemanggil memutuskan kapan memakainya (seretan ya, papan ketik tidak).
+ */
+export const snapKeyframeTime = (
+  tracks: readonly KeyframeTrack[],
+  property: AnimatableProperty,
+  fromAt: number,
+  toAt: number,
+  threshold = KEYFRAME_SNAP,
+): KeyframeSnap => {
+  const own = tracks.find((track) => track.property === property);
+  let best: KeyframeSnap["snappedTo"] = null;
+  let bestDistance = threshold;
+  for (const track of tracks) {
+    if (track.property === property) continue;
+    for (const point of track.points) {
+      const distance = Math.abs(point.at - toAt);
+      if (distance > bestDistance + 1e-9) continue;
+      const collides = own?.points.some(
+        (mine) =>
+          Math.abs(mine.at - fromAt) > KEYFRAME_EPSILON &&
+          Math.abs(mine.at - point.at) <= KEYFRAME_EPSILON,
+      );
+      if (collides) continue;
+      best = { property: track.property, at: point.at };
+      bestDistance = distance;
+    }
+  }
+  return best ? { at: best.at, snappedTo: best } : { at: toAt, snappedTo: null };
+};

@@ -151,7 +151,18 @@ sekarang tertangkap.
   Gerbang yang sama (`gate:interaksi`, di CI) membuktikan seretan 25% ke 50%,
   panah kiri 1%/Shift 5%/End, fokus yang kembali ke berlian yang sama setelah
   React memasang ulang elemennya, dan undo yang mengembalikan langkah nyata.
-  Yang belum ada: snap ke keyframe track lain dan pemilihan jamak.
+  ~~Yang belum ada: snap ke keyframe track lain~~ — *DICABUT:* berlian yang
+  diseret menempel ke keyframe track LAIN pada lapisan yang sama (ambang 2%
+  durasi elemen, `snapKeyframeTime` murni di core; kandidat yang bertabrakan
+  dengan titik track sendiri dilewati; nudge papan ketik tidak menempel karena
+  langkahnya sudah eksplisit), dengan garis bantu putus-putus di bar selama
+  ditahan. Gerbang interaksi menyeret berlian opacity ke 1,5% dari keyframe
+  offsetX@60%: garis bantunya muncul di x keyframe itu, pelepasannya mendarat
+  tepat di 0,6, dan seretan yang dilepas 4% darinya tidak menempel. Yang
+  masih belum ada: pemilihan jamak berlian, dan urutan tumpukan — dua berlian
+  dari track berbeda pada waktu yang SAMA bertumpuk, dan yang digambar
+  belakangan yang tertangkap tekanan (yang di bawahnya tetap bisa digeser
+  lewat papan ketik).
 - **Properti yang bisa dianimasikan masih sedikit** — tidak ada warna, blur,
   atau parameter filter. Menambahnya berarti menambah entri di satu tabel, dan
   sengaja ditunda sampai ada permintaan nyata.

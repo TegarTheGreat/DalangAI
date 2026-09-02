@@ -102,6 +102,15 @@ const main = async (): Promise<void> => {
       ],
       property: "opacity",
     } as unknown as { points: { at: number }[] },
+    // Track kedua: sasaran penempelan berlian antar track (ADR-0027). Ada di
+    // urutan KEDUA supaya indeks berlian opacity (0 dan 1) tidak bergeser.
+    {
+      points: [
+        { at: 0.1, value: 0, easing: "settle" },
+        { at: 0.6, value: 0.2, easing: "settle" },
+      ],
+      property: "offsetX",
+    } as unknown as { points: { at: number }[] },
   ];
   // Dua teks di kelompok posisi yang sama pada sc-step-1: yang pendek akan
   // diseret sampai tepi kirinya sejajar tepi kiri yang panjang (penempelan
@@ -251,6 +260,21 @@ const main = async (): Promise<void> => {
     }
 
     console.log("\nBerlian keyframe di timeline");
+    // Timeline diperbesar dulu (24 -> 64 px/dtk): pada zoom bawaan bar lapisan
+    // contoh hanya 82 px, dan dua track berarti area sentuh berlian (19 px,
+    // diputar 45 derajat) saling tumpang tindih — tekanan di pusat satu
+    // berlian jatuh ke berlian track lain yang digambar di atasnya. Itu
+    // bukan cacat: pada 82 px orang juga akan memperbesar dulu.
+    const zoomClicks = async (tip: string, times: number) => {
+      for (let i = 0; i < times; i++) {
+        await page.evaluate(
+          `(() => { const el = document.querySelector('[data-tip="${tip}"]'); if (el) el.click(); })()`,
+        );
+        await sleep(60);
+      }
+    };
+    await zoomClicks("Perbesar timeline", 5);
+    await sleep(300);
     const bar = await rect(".layer-bar");
     const first = await rect(".kf-diamond", 0);
     if (!bar || !first)
@@ -321,6 +345,68 @@ const main = async (): Promise<void> => {
       near(at(pts, 1), 0.69, 0.0005),
       `at = ${at(pts, 1)} (undo: ${undo.summary ?? "-"})`,
     );
+
+    // 5. Penempelan antar track (batas ADR-0027 dicabut): berlian opacity
+    //    kedua (69%) diseret ke 1,5% dari keyframe offsetX@60% — DITAHAN
+    //    (garis bantunya harus ada), lalu dilepas tepat di 60%. Seretan yang
+    //    4% lebih jauh tidak menempel.
+    // Bar diukur ULANG: fokus papan ketik tadi bisa menggulirkan timeline
+    // yang kini lebih lebar dari jendelanya, dan koordinat bar lama basi.
+    const barNow = await rect(".layer-bar");
+    const secondDiamond = await rect(".kf-diamond", 1);
+    if (!barNow || !secondDiamond) throw new Error("bar / berlian kedua hilang");
+    const snapTarget = { x: barNow.x + barNow.w * 0.615, y: center(secondDiamond).y };
+    await mouse("mouseMoved", center(secondDiamond).x, center(secondDiamond).y, false);
+    await mouse("mousePressed", center(secondDiamond).x, center(secondDiamond).y, true);
+    for (let i = 1; i <= 8; i++) {
+      await mouse(
+        "mouseMoved",
+        center(secondDiamond).x + ((snapTarget.x - center(secondDiamond).x) * i) / 8,
+        snapTarget.y,
+        true,
+      );
+      await sleep(16);
+    }
+    await sleep(120);
+    const snapLine = await rect(".kf-snap-line");
+    check(
+      "garis bantu muncul saat berlian ditahan dekat keyframe track lain",
+      snapLine !== null && near(snapLine.x, barNow.x + barNow.w * 0.6, 2.5),
+      snapLine
+        ? `garis di x = ${snapLine.x.toFixed(1)}; keyframe offsetX di x = ${(barNow.x + barNow.w * 0.6).toFixed(1)}`
+        : "tidak ada",
+    );
+    await mouse("mouseReleased", snapTarget.x, snapTarget.y, true);
+    await sleep(SETTLE_MS);
+    pts = await points();
+    check(
+      "dilepas 1,5% dari keyframe offsetX mendarat TEPAT di 60%",
+      near(at(pts, 1), 0.6, 1e-6),
+      `at = ${pts.join(", ")}`,
+    );
+    // Berlian opacity yang barusan menempel kini BERTUMPUK dengan berlian
+    // offsetX di 60%, dan yang digambar belakangan yang tertangkap tekanan —
+    // batas yang disebut ADR-0027. Jadi seretan "4% tidak menempel" memakai
+    // berlian opacity pertama (50%) ke 64%: melewati keyframe offsetX@60% di
+    // tengah jalan, tapi dilepas 4% darinya.
+    const barLater = (await rect(".layer-bar")) ?? barNow;
+    const firstDiamond = await rect(".kf-diamond", 0);
+    if (!firstDiamond) throw new Error("berlian pertama hilang setelah menempel");
+    await drag(center(firstDiamond), {
+      x: barLater.x + barLater.w * 0.64,
+      y: center(firstDiamond).y,
+    });
+    await sleep(SETTLE_MS);
+    pts = await points();
+    check(
+      "dilepas 4% dari keyframe track lain tidak menempel",
+      near(at(pts, 1), 0.64, 0.006) && near(at(pts, 0), 0.6, 1e-6),
+      `at = ${pts.join(", ")}`,
+    );
+
+    // Kembalikan zoom: bagian fade musik menghitung dari 24 px/dtk.
+    await zoomClicks("Perkecil timeline", 5);
+    await sleep(300);
 
     console.log("\nAnotasi di kanvas");
     await clickClip("sc-step-1");

@@ -1,9 +1,11 @@
 import {
+  type AnimatableProperty,
   MIN_SCENE_SEC,
   type Music,
   moveKeyframe,
   type Scene,
   type ScenePlan,
+  snapKeyframeTime,
   substituteProxies,
 } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
@@ -289,6 +291,8 @@ export const TimelineStrip: React.FC = () => {
     property: string;
     fromAt: number;
     at: number;
+    /** Keyframe track lain yang sedang ditempeli (garis bantu di bar). */
+    snappedTo: { property: AnimatableProperty; at: number } | null;
   } | null>(null);
   /**
    * Berlian yang harus difokus ULANG setelah plan diperbarui. Berlian di-key
@@ -641,6 +645,13 @@ export const TimelineStrip: React.FC = () => {
                             HTML melarang unsur interaktif di dalam <button>,
                             dan berlian yang bisa difokus (slider, dengan
                             panah kiri/kanan) adalah unsur interaktif. */}
+                        {kfDrag?.layerId === layer.id && kfDrag.snappedTo ? (
+                          <span
+                            className="kf-snap-line"
+                            style={{ left: `${kfDrag.snappedTo.at * 100}%` }}
+                            title={`menempel ke keyframe ${kfDrag.snappedTo.property} @ ${Math.round(kfDrag.snappedTo.at * 100)}%`}
+                          />
+                        ) : null}
                         {layer.tracks.flatMap((track) =>
                           track.points.map((point) => {
                             const dragging =
@@ -712,19 +723,42 @@ export const TimelineStrip: React.FC = () => {
                                     property: track.property,
                                     fromAt: point.at,
                                     at: point.at,
+                                    snappedTo: null,
                                   });
                                 }}
                                 onPointerMove={(event) => {
                                   if (!dragging) return;
-                                  const next = atFrom(event.clientX, event.currentTarget);
+                                  // Menempel ke keyframe track LAIN pada
+                                  // lapisan ini (batas ADR-0027 dicabut);
+                                  // papan ketik tidak menempel — langkahnya
+                                  // sudah eksplisit.
+                                  const snap = snapKeyframeTime(
+                                    layer.tracks,
+                                    track.property,
+                                    point.at,
+                                    atFrom(event.clientX, event.currentTarget),
+                                  );
                                   setKfDrag((current) =>
-                                    current ? { ...current, at: next } : current,
+                                    current
+                                      ? {
+                                          ...current,
+                                          at: snap.at,
+                                          snappedTo: snap.snappedTo,
+                                        }
+                                      : current,
                                   );
                                 }}
                                 onPointerUp={(event) => {
                                   if (!dragging) return;
                                   setKfDrag(null);
-                                  commit(atFrom(event.clientX, event.currentTarget));
+                                  commit(
+                                    snapKeyframeTime(
+                                      layer.tracks,
+                                      track.property,
+                                      point.at,
+                                      atFrom(event.clientX, event.currentTarget),
+                                    ).at,
+                                  );
                                 }}
                                 onKeyDown={(event) => {
                                   if (busy || scene.locked) return;

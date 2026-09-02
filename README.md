@@ -477,6 +477,8 @@ Yang sudah berjalan:
   - dipasang di posisi playhead dari Studio dan terlihat sebagai berlian di
     timeline yang bisa DISERET (atau difokus dan digeser dengan panah
     kiri/kanan) — mendarat di atas keyframe lain ditolak, bukan ditumpuk;
+  - berlian yang diseret menempel ke keyframe track lain pada lapisan yang
+    sama (ambang 2%), dengan garis bantu selama ditahan; papan ketik tidak.
   - diverifikasi dari piksel render sungguhan, bukan hanya unit test.
 - **Proxy & rekaman panjang (ADR-0028)** — rekaman satu jam dan berkas 4K/HEVC
   tidak lagi membekukan preview:
@@ -538,7 +540,7 @@ Yang sudah berjalan:
   (Dalang tidak menjalankan alur OAuth); tanpa token, ketiga permukaan
   berkata apa adanya. Jalurnya diuji terhadap HTTP palsu yang mengikuti
   dokumentasi Google, belum terhadap YouTube sungguhan.
-- **Kualitas terjaga otomatis**: 1050 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1053 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -554,7 +556,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1050 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1053 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
