@@ -1,5 +1,6 @@
 import {
   MIN_SCENE_SEC,
+  moveKeyframe,
   type Scene,
   type ScenePlan,
   substituteProxies,
@@ -170,7 +171,10 @@ const Clip: React.FC<{
         className="clip-hit"
         onClick={() => {
           studioClient.selectScene(scene.id);
-          playback.requestSeek((meta.sceneStarts[index] ?? 0) + 1);
+          // Ke frame pertama scene tampil utuh, bukan ke awal transisinya:
+          // di awal transisi yang terlihat (dan yang dianggap aktif oleh
+          // renderer) masih scene sebelumnya.
+          playback.requestSeek(meta.sceneSettledStarts[index] ?? 0);
         }}
         title={scene.narration || scene.id}
       >
@@ -272,6 +276,36 @@ export const TimelineStrip: React.FC = () => {
   const playing = useSyncExternalStore(playback.subscribe, playback.getPlaying);
   const [pxPerSec, setPxPerSec] = useState(24);
   const [drag, setDrag] = useState<string | null>(null);
+  /**
+   * Berlian keyframe yang sedang diseret (mencabut batas ADR-0027). Posisi
+   * sementaranya hidup di sini; patch baru dikirim saat dilepas — satu patch
+   * per seretan, bukan per gerakan pointer.
+   */
+  const [kfDrag, setKfDrag] = useState<{
+    sceneId: string;
+    layerId: string;
+    property: string;
+    fromAt: number;
+    at: number;
+  } | null>(null);
+  /**
+   * Berlian yang harus difokus ULANG setelah plan diperbarui. Berlian di-key
+   * dari waktunya, jadi menggesernya dari papan ketik membuat React memasang
+   * ulang elemennya dan fokus jatuh ke halaman — panah kedua lalu menggulir
+   * timeline, bukan menggeser berlian yang sama. Efek tanpa daftar dependensi:
+   * pencariannya satu querySelector dan hanya berjalan selagi ada yang ditunggu.
+   */
+  const focusAfter = useRef<{ key: string; at: number } | null>(null);
+  useEffect(() => {
+    const want = focusAfter.current;
+    if (!want) return;
+    const element = document.querySelector<HTMLElement>(
+      `[data-kf="${want.key}"][data-kf-at="${want.at}"]`,
+    );
+    if (!element) return;
+    focusAfter.current = null;
+    element.focus();
+  });
   const [dropHint, setDropHint] = useState<{
     id: string;
     side: "before" | "after";
@@ -342,8 +376,10 @@ export const TimelineStrip: React.FC = () => {
    * Batas scene di kiri/kanan playhead. Navigasi antar-scene adalah kontrol
    * transport baku di editor mana pun, dan datanya sudah ada — tanpa ini
    * satu-satunya cara berpindah scene adalah menyeret playhead dengan mata.
+   * Batasnya frame scene tampil UTUH, bukan awal transisi: melompat ke awal
+   * transisi menampilkan (dan mengedit) scene sebelumnya.
    */
-  const boundaries = meta.sceneStarts;
+  const boundaries = meta.sceneSettledStarts;
   const prevBoundary = (() => {
     for (let i = boundaries.length - 1; i >= 0; i--) {
       const start = boundaries[i] ?? 0;
@@ -576,34 +612,145 @@ export const TimelineStrip: React.FC = () => {
                     const x = box.x + layer.startFrac * box.w;
                     const w = Math.max(6, (layer.endFrac - layer.startFrac) * box.w);
                     return (
-                      <button
+                      <div
                         key={layer.id}
-                        type="button"
                         className={asset ? "layer-bar" : "layer-bar kosong"}
                         style={{ left: x, width: w }}
-                        onClick={() => studioClient.selectScene(scene.id)}
-                        title={`Lapisan ${layer.id} di ${scene.id} · ${Math.round(
-                          layer.startFrac * 100,
-                        )}%–${Math.round(layer.endFrac * 100)}% durasi scene${
-                          asset ? "" : " · berkas belum ada, tidak akan muncul"
-                        }`}
                       >
-                        <span className="layer-bar-label">{layer.id}</span>
+                        <button
+                          type="button"
+                          className="layer-bar-hit"
+                          onClick={() => studioClient.selectScene(scene.id)}
+                          title={`Lapisan ${layer.id} di ${scene.id} · ${Math.round(
+                            layer.startFrac * 100,
+                          )}%–${Math.round(layer.endFrac * 100)}% durasi scene${
+                            asset ? "" : " · berkas belum ada, tidak akan muncul"
+                          }`}
+                        >
+                          <span className="layer-bar-label">{layer.id}</span>
+                        </button>
                         {/* Berlian keyframe (ADR-0027): waktu adalah tempat
                             keyframe hidup, jadi ia harus terlihat di garis
-                            waktu — bukan hanya sebagai daftar di panel.
-                            Menyeretnya belum ada; lihat "Batas" ADR-0027. */}
+                            waktu — dan bisa DISERET di sana (batas ADR-0027
+                            dicabut): posisi sementara di state, patch saat
+                            dilepas lewat moveKeyframe milik core.
+
+                            Berlian adalah SAUDARA tombol bar, bukan anaknya:
+                            HTML melarang unsur interaktif di dalam <button>,
+                            dan berlian yang bisa difokus (slider, dengan
+                            panah kiri/kanan) adalah unsur interaktif. */}
                         {layer.tracks.flatMap((track) =>
-                          track.points.map((point) => (
-                            <span
-                              key={`${track.property}-${point.at}`}
-                              className="kf-diamond"
-                              style={{ left: `${point.at * 100}%` }}
-                              title={`${track.property} @ ${Math.round(point.at * 100)}%`}
-                            />
-                          )),
+                          track.points.map((point) => {
+                            const dragging =
+                              kfDrag?.layerId === layer.id &&
+                              kfDrag.property === track.property &&
+                              Math.abs(kfDrag.fromAt - point.at) < 0.0005;
+                            const at = dragging ? (kfDrag?.at ?? point.at) : point.at;
+                            const atFrom = (clientX: number, element: HTMLElement) => {
+                              const bar = element.parentElement?.getBoundingClientRect();
+                              if (!bar || bar.width <= 0) return point.at;
+                              const fraction = (clientX - bar.left) / bar.width;
+                              return (
+                                Math.round(Math.min(1, Math.max(0, fraction)) * 1000) /
+                                1000
+                              );
+                            };
+                            const kfKey = `${scene.id}/${layer.id}/${track.property}`;
+                            const commit = (next: number): boolean => {
+                              if (Math.abs(next - point.at) < 0.005) return false;
+                              const tracks = moveKeyframe(
+                                layer.tracks,
+                                track.property,
+                                point.at,
+                                next,
+                              );
+                              if (tracks === layer.tracks) return false;
+                              void studioClient.applyPatch(
+                                [
+                                  {
+                                    op: "updateScene",
+                                    id: scene.id,
+                                    patch: {
+                                      layers: scene.layers.map((item) =>
+                                        item.id === layer.id ? { ...item, tracks } : item,
+                                      ),
+                                    },
+                                  },
+                                ],
+                                `Keyframe ${track.property} lapisan ${layer.id} ke ${Math.round(next * 100)}%`,
+                              );
+                              return true;
+                            };
+                            const percent = Math.round(at * 100);
+                            return (
+                              <span
+                                key={`${track.property}-${point.at}`}
+                                className={
+                                  dragging ? "kf-diamond dragging" : "kf-diamond"
+                                }
+                                style={{ left: `${at * 100}%` }}
+                                data-kf={kfKey}
+                                data-kf-at={point.at}
+                                role="slider"
+                                tabIndex={0}
+                                aria-label={`Keyframe ${track.property} lapisan ${layer.id}`}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={percent}
+                                aria-valuetext={`${percent}% durasi scene`}
+                                title={`${track.property} @ ${percent}% — seret, atau panah kiri/kanan (Shift: 5%)`}
+                                onPointerDown={(event) => {
+                                  if (busy || scene.locked) return;
+                                  event.stopPropagation();
+                                  event.preventDefault();
+                                  event.currentTarget.setPointerCapture(event.pointerId);
+                                  setKfDrag({
+                                    sceneId: scene.id,
+                                    layerId: layer.id,
+                                    property: track.property,
+                                    fromAt: point.at,
+                                    at: point.at,
+                                  });
+                                }}
+                                onPointerMove={(event) => {
+                                  if (!dragging) return;
+                                  const next = atFrom(event.clientX, event.currentTarget);
+                                  setKfDrag((current) =>
+                                    current ? { ...current, at: next } : current,
+                                  );
+                                }}
+                                onPointerUp={(event) => {
+                                  if (!dragging) return;
+                                  setKfDrag(null);
+                                  commit(atFrom(event.clientX, event.currentTarget));
+                                }}
+                                onKeyDown={(event) => {
+                                  if (busy || scene.locked) return;
+                                  const step = event.shiftKey ? 0.05 : 0.01;
+                                  const target =
+                                    event.key === "ArrowRight"
+                                      ? point.at + step
+                                      : event.key === "ArrowLeft"
+                                        ? point.at - step
+                                        : event.key === "Home"
+                                          ? 0
+                                          : event.key === "End"
+                                            ? 1
+                                            : null;
+                                  if (target === null) return;
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  const next =
+                                    Math.round(Math.min(1, Math.max(0, target)) * 1000) /
+                                    1000;
+                                  if (commit(next))
+                                    focusAfter.current = { key: kfKey, at: next };
+                                }}
+                              />
+                            );
+                          }),
                         )}
-                      </button>
+                      </div>
                     );
                   });
                 })}

@@ -16,6 +16,12 @@ import {
   computeFrameLayout,
 } from "@dalang/templates/layout";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  movedAnnotationTarget,
+  type PxRect,
+  resizedAnnotationTarget,
+  sameTarget,
+} from "../model/annotation-drag";
 import { playback } from "../playback";
 import { studioClient } from "../use-studio";
 
@@ -42,7 +48,7 @@ import { studioClient } from "../use-studio";
 const SNAP = 0.012;
 
 interface Handle {
-  kind: "text" | "graphic" | "layer";
+  kind: "text" | "graphic" | "layer" | "annotation";
   id: string;
   /** Kotak dalam koordinat kotak pemutar (piksel CSS). */
   rect: { x: number; y: number; w: number; h: number };
@@ -55,6 +61,13 @@ interface DragState {
   origin: FramePoint;
   pointer: { x: number; y: number };
   startSizeFrac: number;
+}
+
+/** Ukuran kotak pemutar + bingkai screenshot (anotasi), piksel CSS. */
+interface DragContext {
+  box: { w: number; h: number };
+  /** Bingkai rujukan anotasi tutorial; null = preset tanpa bingkai. */
+  annotationFrame: PxRect | null;
 }
 
 /**
@@ -87,6 +100,7 @@ const centerOf = (rect: Handle["rect"], box: DOMRect): FramePoint => ({
 export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const [handles, setHandles] = useState<Handle[]>([]);
+  const [annotationFrame, setAnnotationFrame] = useState<PxRect | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [ghost, setGhost] = useState<FramePoint | null>(null);
@@ -130,13 +144,54 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       raf = 0;
       const boxRect = box.getBoundingClientRect();
       const found: Handle[] = [];
+      // Di tengah transisi DUA scene terpasang sekaligus, dan penanda scene
+      // yang sedang pergi bukan milik `scene`: pegangannya akan menunjuk
+      // elemen yang tidak ada — atau, lebih buruk, elemen scene lain yang
+      // kebetulan ber-id sama. Preset menandai akar tiap scene; diukur hanya
+      // di dalamnya. Preset tanpa penanda akar jatuh ke seluruh kotak.
+      const sceneId = scene?.id ?? "";
+      const escaped =
+        typeof CSS !== "undefined" && typeof CSS.escape === "function"
+          ? CSS.escape(sceneId)
+          : sceneId;
+      const root =
+        (sceneId
+          ? box.querySelector<HTMLElement>(`[data-dalang-scene="${escaped}"]`)
+          : null) ?? box;
+      // Bingkai rujukan anotasi (tutorial-01): diukur bersama pegangannya,
+      // karena target anotasi adalah fraksi kotak ini, bukan frame video.
+      const frameElement = root.querySelector<HTMLElement>(
+        "[data-dalang-annotation-frame]",
+      );
+      if (frameElement) {
+        const rect = frameElement.getBoundingClientRect();
+        const next = {
+          x: rect.left - boxRect.left,
+          y: rect.top - boxRect.top,
+          w: rect.width,
+          h: rect.height,
+        };
+        setAnnotationFrame((previous) =>
+          previous &&
+          Math.round(previous.x) === Math.round(next.x) &&
+          Math.round(previous.y) === Math.round(next.y) &&
+          Math.round(previous.w) === Math.round(next.w) &&
+          Math.round(previous.h) === Math.round(next.h)
+            ? previous
+            : next,
+        );
+      } else {
+        setAnnotationFrame((previous) => (previous === null ? previous : null));
+      }
       for (const [attribute, kind] of [
         ["data-dalang-text", "text"],
         ["data-dalang-graphic", "graphic"],
         // ADR-0025: lapisan video ikut bisa diseret & diubah ukurannya.
         ["data-dalang-layer", "layer"],
+        // Anotasi tutorial: batas ADR-0024 dicabut.
+        ["data-dalang-annotation", "annotation"],
       ] as const) {
-        for (const element of box.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
+        for (const element of root.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
           const id = element.getAttribute(attribute);
           if (!id) continue;
           const rect = element.getBoundingClientRect();
@@ -185,7 +240,11 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       const box = host.getBoundingClientRect();
       const dx = (event.clientX - drag.pointer.x) / box.width;
       const dy = (event.clientY - drag.pointer.y) / box.height;
-      if (drag.mode === "move") {
+      if (drag.handle.kind === "annotation") {
+        // Anotasi hidup di bingkai screenshot: garis bantu frame video tidak
+        // berarti apa-apa baginya, jadi tanpa penempelan.
+        setGhost({ x: drag.origin.x + dx, y: drag.origin.y + dy });
+      } else if (drag.mode === "move") {
         const lines = snapLinesFor(safe);
         const raw = { x: drag.origin.x + dx, y: drag.origin.y + dy };
         setGhost({
@@ -201,7 +260,11 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
 
     const up = () => {
       const target = ghost ?? drag.origin;
-      const ops = buildOps(scene, drag, target, safe);
+      const box = host.getBoundingClientRect();
+      const ops = buildOps(scene, drag, target, safe, {
+        box: { w: box.width, h: box.height },
+        annotationFrame,
+      });
       setDrag(null);
       setGhost(null);
       if (ops) void studioClient.applyPatch(ops.ops, ops.label);
@@ -213,16 +276,17 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, ghost, safe, scene]);
+  }, [drag, ghost, safe, scene, annotationFrame]);
 
   // Pegangan disembunyikan saat memutar: teks bergerak sepanjang animasinya,
   // jadi kotaknya akan bergetar mengikuti — dan tidak ada editor yang
   // menampilkan pegangan transform di atas video yang sedang jalan.
   if (!scene || playing) return null;
   const locked = scene.locked;
-  const lines = ghost
-    ? activeSnapLines(ghost, snapLinesFor(safe), SNAP)
-    : { x: [], y: [] };
+  const lines =
+    ghost && drag?.handle.kind !== "annotation"
+      ? activeSnapLines(ghost, snapLinesFor(safe), SNAP)
+      : { x: [], y: [] };
 
   const start = (handle: Handle, mode: DragState["mode"], event: React.PointerEvent) => {
     if (locked) return;
@@ -295,8 +359,18 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
           }}
           onPointerDown={(event) => start(handle, "move", event)}
         >
-          <span className="canvas-tag">{handle.id}</span>
-          {handle.kind === "graphic" || handle.kind === "layer" ? (
+          <span className="canvas-tag">
+            {handle.kind === "annotation"
+              ? `anotasi ${Number(handle.id) + 1}${
+                  scene.annotations[Number(handle.id)]
+                    ? ` · ${scene.annotations[Number(handle.id)]?.type}`
+                    : ""
+                }`
+              : handle.id}
+          </span>
+          {handle.kind === "graphic" ||
+          handle.kind === "layer" ||
+          handle.kind === "annotation" ? (
             <button
               type="button"
               className="canvas-grip"
@@ -322,8 +396,37 @@ const buildOps = (
   drag: DragState,
   target: FramePoint,
   safe: SafeInsets,
+  context: DragContext,
 ): { ops: Parameters<typeof studioClient.applyPatch>[0]; label: string } | null => {
   if (!scene || scene.locked) return null;
+
+  if (drag.handle.kind === "annotation") {
+    const index = Number(drag.handle.id);
+    const annotation = scene.annotations[index];
+    const frame = context.annotationFrame;
+    if (!annotation || !frame || frame.w <= 0 || frame.h <= 0) return null;
+    const dx = (target.x - drag.origin.x) * context.box.w;
+    const dy = (target.y - drag.origin.y) * context.box.h;
+    const next =
+      drag.mode === "resize"
+        ? resizedAnnotationTarget(frame, drag.handle.rect, dx, dy)
+        : movedAnnotationTarget(frame, drag.handle.rect, dx, dy);
+    if (sameTarget(next, annotation.target)) return null;
+    return {
+      ops: [
+        {
+          op: "updateScene",
+          id: scene.id,
+          patch: {
+            annotations: scene.annotations.map((item, i) =>
+              i === index ? { ...item, target: next } : item,
+            ),
+          },
+        },
+      ],
+      label: `${drag.mode === "resize" ? "Ukuran" : "Geser"} anotasi ${index + 1} (${annotation.type})`,
+    };
+  }
 
   if (drag.handle.kind === "layer") {
     const layer = scene.layers.find((item) => item.id === drag.handle.id);

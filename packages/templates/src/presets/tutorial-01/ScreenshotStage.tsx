@@ -236,7 +236,12 @@ export const ScreenshotStage: React.FC<{
         }}
       >
         <Titlebar theme={theme} />
-        <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
+        <div
+          // Bingkai rujukan anotasi untuk lapisan manipulasi langsung Studio:
+          // target anotasi adalah fraksi kotak INI, bukan frame video.
+          data-dalang-annotation-frame=""
+          style={{ position: "relative", flex: 1, overflow: "hidden" }}
+        >
           <div
             style={{
               position: "absolute",
@@ -299,6 +304,36 @@ export const ScreenshotStage: React.FC<{
               return <BlurLayer key={key} annotation={annotation} presence={presence} />;
             })}
           </div>
+          {/* Penanda target tiap anotasi untuk Studio (mencabut batas ADR-0024
+              "anotasi tidak bisa diseret"). DI LUAR lapisan zoom supaya
+              kotaknya geometri sebenarnya, dan hanya saat zoom TIDAK aktif —
+              kotak yang tidak sejajar dengan yang terlihat lebih menyesatkan
+              daripada tidak ada. Anotasi zoom ditandai kapan pun zoom tidak
+              aktif (targetnya baru terlihat justru saat ia aktif). */}
+          {zoom.scale === 1
+            ? scene.annotations.map((annotation, index) => {
+                const presence = annotationPresence(
+                  frame,
+                  annotationWindow(annotation, durationInFrames, fps),
+                  durationInFrames,
+                );
+                if (annotation.type !== "zoom" && presence <= 0) return null;
+                return (
+                  <div
+                    key={`penanda-${index}-${annotation.type}`}
+                    data-dalang-annotation={String(index)}
+                    style={{
+                      position: "absolute",
+                      left: `${annotation.target.x * 100}%`,
+                      top: `${annotation.target.y * 100}%`,
+                      width: `${annotation.target.w * 100}%`,
+                      height: `${annotation.target.h * 100}%`,
+                      pointerEvents: "none",
+                    }}
+                  />
+                );
+              })
+            : null}
         </div>
       </div>
     </AbsoluteFill>

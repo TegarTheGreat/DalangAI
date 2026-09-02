@@ -1,5 +1,5 @@
 import { DIMENSIONS, type ScenePlan } from "@dalang/core";
-import { computeFrameLayout, FPS } from "@dalang/templates/layout";
+import { computeFrameLayout, FPS, sceneSettledFrame } from "@dalang/templates/layout";
 
 /**
  * Metadata Player diturunkan dari plan — logika yang SAMA dengan
@@ -13,6 +13,12 @@ export interface PlanMeta {
   width: number;
   height: number;
   sceneStarts: number[];
+  /**
+   * Frame pertama tiap scene tampil UTUH (transisi masuk selesai). Ke sinilah
+   * klik klip melompat: pada `sceneStarts` scene sebelumnya masih menutupi
+   * dan renderer pun masih menganggapnya yang aktif.
+   */
+  sceneSettledStarts: number[];
   sceneFrames: number[];
   totalSec: number;
 }
@@ -26,6 +32,9 @@ export const planMeta = (plan: ScenePlan): PlanMeta => {
     width,
     height,
     sceneStarts: layout.sceneStarts,
+    sceneSettledStarts: layout.sceneStarts.map((_, index) =>
+      sceneSettledFrame(layout, index),
+    ),
     sceneFrames: layout.sceneFrames,
     totalSec: layout.totalFrames / FPS,
   };

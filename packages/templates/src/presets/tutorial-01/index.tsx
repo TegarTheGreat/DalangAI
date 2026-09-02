@@ -139,7 +139,9 @@ const SceneRouter: React.FC<{
   }
 
   return (
-    <AbsoluteFill>
+    // Akar scene DITANDAI: di tengah transisi dua scene terpasang sekaligus,
+    // dan kanvas Studio hanya boleh mengukur penanda milik scene yang aktif.
+    <AbsoluteFill data-dalang-scene={scene.id}>
       {content}
       {/* Lapisan video juga berlaku untuk KEDUA preset (ADR-0025) — sisipan
           bukti di samping screenshot adalah kegunaan aslinya. */}

@@ -54,6 +54,22 @@ export const computeFrameLayout = (plan: ScenePlan): FrameLayout => {
   return { sceneFrames, sceneStarts, boundaryFrames, totalFrames: cursor };
 };
 
+/**
+ * Frame pertama scene `index` tampil UTUH: transisi masuknya sudah selesai.
+ *
+ * `sceneStarts[index]` adalah awal scene di garis waktu, tapi pada frame itu
+ * scene sebelumnya masih menutupinya hampir penuh (crossfade baru mulai), dan
+ * menurut aturan titik-tengah di bawah scene yang "aktif" pun masih scene
+ * sebelumnya. Klik klip di Studio yang melompat ke `sceneStarts + 1` pernah
+ * membuat kanvas menampilkan pegangan scene yang diklik sementara editor
+ * menganggap scene lain yang aktif — seretan lalu tidak menghasilkan apa-apa.
+ */
+export const sceneSettledFrame = (layout: FrameLayout, index: number): number => {
+  if (index <= 0) return 0;
+  const start = layout.sceneStarts[index] ?? 0;
+  return start + (layout.boundaryFrames[index - 1] ?? TRANSITION_FRAMES);
+};
+
 /** Index of the scene considered "active" at a global frame (transition midpoint rule). */
 export const activeSceneIndex = (layout: FrameLayout, frame: number): number => {
   for (let i = layout.sceneStarts.length - 1; i >= 0; i--) {

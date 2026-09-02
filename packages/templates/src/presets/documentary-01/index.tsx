@@ -81,7 +81,9 @@ const SceneRouter: React.FC<{
   }
 
   return (
-    <AbsoluteFill>
+    // Akar scene DITANDAI: di tengah transisi dua scene terpasang sekaligus,
+    // dan kanvas Studio hanya boleh mengukur penanda milik scene yang aktif.
+    <AbsoluteFill data-dalang-scene={scene.id}>
       {content}
       {/* Lapisan video (ADR-0025) duduk DI ATAS visual dasar tapi DI BAWAH
           teks, caption, dan tempelan: sisipan adalah gambar, dan gambar tidak

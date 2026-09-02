@@ -137,11 +137,21 @@ sekarang tertangkap.
 
 ## Batas
 
-- **Menyeret berlian di timeline belum ada.** Keyframe TERLIHAT di bar
-  timeline sebagai berlian, tapi memindahkannya dilakukan lewat panel. Ini
-  batas yang paling terasa, dan ia disengaja: pegangan seret butuh model
-  interaksi tersendiri (pilih, geser, snap) yang lebih besar daripada sisa ADR
-  ini.
+- ~~**Menyeret berlian di timeline belum ada.**~~ *DICABUT.* Berlian di bar
+  lapisan kini pegangan: diseret dengan pointer capture (posisi sementara di
+  state, satu patch `updateScene` saat dilepas), atau difokus dari papan ketik
+  dan digeser dengan panah kiri/kanan (1%, Shift 5%), Home/End ke ujung.
+  Pemindahannya lewat `moveKeyframe` yang MURNI: waktu dipangkas ke 0..1, dan
+  seretan yang mendarat tepat di atas keyframe lain pada track yang sama
+  ditolak tanpa mengubah apa pun, karena dua titik pada waktu yang sama tidak
+  bisa dibedakan dan skema pun menolaknya. Penolakan mengembalikan larik yang
+  SAMA (identitas) — versi pertama mengembalikan salinan, dan gerbang interaksi
+  menangkapnya: seretan yang ditolak tetap mengirim patch kosong, tercatat di
+  log, dan undo berikutnya memakan patch kosong itu alih-alih langkah nyata.
+  Gerbang yang sama (`gate:interaksi`, di CI) membuktikan seretan 25% ke 50%,
+  panah kiri 1%/Shift 5%/End, fokus yang kembali ke berlian yang sama setelah
+  React memasang ulang elemennya, dan undo yang mengembalikan langkah nyata.
+  Yang belum ada: snap ke keyframe track lain dan pemilihan jamak.
 - **Properti yang bisa dianimasikan masih sedikit** — tidak ada warna, blur,
   atau parameter filter. Menambahnya berarti menambah entri di satu tabel, dan
   sengaja ditunda sampai ada permintaan nyata.
@@ -179,5 +189,5 @@ sekarang tertangkap.
 - **Bezier per titik sebagai empat angka**. Ditolak: plan berhenti bisa dibaca
   manusia, dan bahasa geraknya lepas dari preset yang sudah ada.
 - **Kurva editor penuh (grafik nilai-terhadap-waktu)**. Ditunda, bukan ditolak:
-  ia menuntut kanvas interaksi tersendiri, dan tanpa penyeretan berlian di
-  timeline ia belum punya tempat yang wajar untuk hidup.
+  ia menuntut kanvas interaksi tersendiri. Sejak berlian bisa diseret di
+  timeline, tempatnya sudah wajar; yang belum ada adalah kebutuhannya.

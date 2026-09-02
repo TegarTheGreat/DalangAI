@@ -22,7 +22,7 @@ Yang sudah nyata, bukan rencana:
 | Pipeline | TTS + aset, cache content-hash, resume, fallback berjenjang, ledger biaya SQLite |
 | Agent | 21 tool, guardrail (batas langkah, batas anggaran, approval gate), resep per format konten, `critiqueDraft` |
 | Render | Remotion 4.0.518, lokal + Lambda lewat port `RenderTarget`, 4 format × 3 resolusi × 3 mutu |
-| Studio | lobi + editor 3 panel, timeline NLE, pustaka media (ikon/stiker/SFX), gerbang tata letak 18 lebar |
+| Studio | lobi + editor 3 panel, timeline NLE, pustaka media (ikon/stiker/SFX), gerbang tata letak 18 lebar + gerbang interaksi (seretan sungguhan lewat CDP) |
 | Preset | `documentary-01`, `tutorial-01` |
 
 **Kekuatan yang tidak dimiliki kebanyakan pesaing.** Riset agent 2026
@@ -238,7 +238,9 @@ bisa dipakai agent mana pun.
 
 **§9.1 sudah dikerjakan** (ADR-0024): teks dan grafis bisa diseret dan diubah
 ukurannya langsung di atas preview, keluarannya patch op biasa. Skema teks
-bertambah `offsetX`/`offsetY`.
+bertambah `offsetX`/`offsetY`. Anotasi tutorial menyusul: preset menandainya di
+DOM dan kotak `target`-nya bisa diseret dan diubah ukurannya di kanvas — batas
+awal ADR-0024 dicabut.
 
 **§9.2 sudah dikerjakan** (ADR-0025): satu scene bisa punya dua lapisan video di
 atas visual dasarnya — B-roll, picture-in-picture, sisipan bukti. Lapisan
@@ -269,8 +271,9 @@ tanpa mematikan preset untuk properti lain. Dipasang di posisi playhead lewat
 Studio, terlihat sebagai berlian di timeline, dan diverifikasi dari PIKSEL
 render: teks ber-track mendarat di 0,2888 / 0,4295 / 0,5688 lebar bingkai
 (ramalan 0,290 / 0,430 / 0,570), sementara plan yang sama tanpa track diam di
-0,4988. Batas terbesarnya: berlian belum bisa diseret, dan visual dasar scene
-belum bisa di-keyframe — selengkapnya di "Batas" ADR-0027.
+0,4988. Berlian di timeline kini bisa diseret dan digeser dari papan ketik
+(batas awalnya dicabut); yang tersisa: visual dasar scene belum bisa
+di-keyframe — selengkapnya di "Batas" ADR-0027.
 
 **§9.5 sudah dikerjakan** (ADR-0028): rekaman panjang dan berkas berat kini
 punya PROXY pratinjau — H.264 sisi pendek 540, laju bingkai dipangkas ke 30 —

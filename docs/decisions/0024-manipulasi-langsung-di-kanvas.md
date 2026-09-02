@@ -109,13 +109,35 @@ Menambah `offsetX`/`offsetY` membuat tes artefak skema merah sampai
 `pnpm schema:gen` dijalankan. Itu gerbang yang bekerja: skema §5.1 tidak boleh
 berubah diam-diam.
 
+**Gerbang interaksi di CI** (`gate:interaksi`) menyeret kotak anotasi dengan
+pointer sungguhan lewat CDP dan memeriksa plan di server: geser +60/+40 px
+menghasilkan `dx = 0,1215` / `dy = 0,1441` fraksi bingkai 494×278 px (harapan
+0,1215 / 0,1441), ubah ukuran +30/+20 px menghasilkan `dw = 0,0607` /
+`dh = 0,0721` (harapan 0,0607 / 0,0721). Gerbang ini GAGAL pada percobaan
+pertamanya dan menemukan cacat yang tidak tertangkap unit test mana pun: klik
+klip melompat ke `sceneStarts + 1`, yaitu AWAL transisi, dan pada frame itu
+renderer (aturan titik-tengah transisi) masih menganggap scene sebelumnya yang
+aktif — kanvas mengukur penanda scene yang diklik, `buildOps` mencari
+anotasinya di scene lain, dan seretan menghilang tanpa patch dan tanpa pesan.
+Dua pembetulan: klik klip (dan tombol scene sebelumnya/berikutnya) kini
+melompat ke `sceneSettledFrame`, frame pertama scene tampil utuh; dan preset
+menandai akar tiap scene dengan `data-dalang-scene`, sehingga kanvas hanya
+mengukur penanda milik scene yang aktif walau dua scene terpasang sekaligus di
+tengah transisi.
+
 ## Batas yang dinyatakan
 
-- **Yang bisa diseret baru teks dan grafis.** Anotasi tutorial (zoom, sorot,
-  panah, blur) punya `target` berupa persegi ternormalisasi dan secara teknis
-  bisa ikut, tapi anotasi digambar dengan aturan lain per preset dan belum
-  ditandai di DOM. Caption tidak bisa dan tidak akan bisa: letaknya milik
-  preset.
+- ~~**Yang bisa diseret baru teks dan grafis.**~~ *DICABUT untuk anotasi.*
+  Preset tutorial-01 kini menandai setiap anotasi di DOM
+  (`data-dalang-annotation` pada penanda di dalam bingkai
+  `data-dalang-annotation-frame`), dan kanvas membaca penanda itu seperti
+  membaca teks/grafis: `target` (persegi ternormalisasi) bisa digeser dan
+  diubah ukurannya, sisi minimalnya 2% bingkai, tanpa snap — anotasi mengikuti
+  isi tangkapan layar, bukan kisi kanvas. Penanda hanya dipasang saat bingkai
+  tidak sedang di-zoom (skala 1): di tengah zoom, koordinat layar dan
+  koordinat tangkapan layar tidak lagi sebangun, dan pegangan yang menipu
+  lebih buruk daripada tidak ada. Caption tetap tidak bisa dan tidak akan
+  bisa: letaknya milik preset.
 - **Ubah ukuran hanya untuk grafis.** Ukuran teks adalah `s`/`m`/`l` (skala
   relatif terhadap peran tipografinya), bukan angka bebas — menyeret sudut
   untuk menghasilkan tiga nilai diskret akan terasa rusak, jadi ukuran teks

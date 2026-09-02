@@ -101,6 +101,11 @@ Yang sudah berjalan:
   saling menindih, kontrol yang tergunting habis, tab yang terpotong di wadah
   tak-tergulir, dan halaman yang bisa digeser ke samping. Memakai Chromium
   yang sama dengan render smoke test.
+- **Gerbang interaksi** — `pnpm --filter @dalang/studio gate:interaksi`
+  menyeret berlian keyframe di timeline dan kotak anotasi di kanvas dengan
+  peristiwa pointer/papan ketik SUNGGUHAN lewat CDP, lalu memeriksa plan di
+  server: seretan yang cuma menggeser kotak di layar tanpa patch adalah
+  cacat yang tidak ditangkap unit test mana pun. Ikut di CI.
 - **UI hybrid (Fase 3)** — `dalang studio`:
   - **Perangkat sinematik lewat kontrak data (ADR-0011)**: filter per scene
     (6 preset + cerah/kontras/saturasi/opacity), transisi per scene
@@ -402,7 +407,10 @@ Yang sudah berjalan:
   - jangkar dipilih ulang saat dilepas dan tepinya memakai margin aman, jadi
     menyeret "ke pinggir" mendarat di kolom aman yang sama dengan teks lain;
   - keluarannya patch op biasa: tercatat, bisa Ctrl+Z, terlihat agent;
-  - menyeret TIDAK mengubah perataan teks — itu keputusan tipografi, bukan letak.
+  - menyeret TIDAK mengubah perataan teks — itu keputusan tipografi, bukan letak;
+  - anotasi tutorial (zoom, sorot, panah, blur) ikut: kotak `target`-nya
+    diseret dan diubah ukurannya di atas tangkapan layar selama bingkai tidak
+    sedang di-zoom — batas awal ADR-0024 dicabut.
 - **Lapisan video (ADR-0025)** — satu scene bisa punya dua sisipan video di atas
   visual dasarnya: B-roll yang menunjukkan apa yang sedang dikatakan,
   picture-in-picture, atau bukti visual:
@@ -455,7 +463,8 @@ Yang sudah berjalan:
   - properti yang punya track ditentukan PENUH olehnya — preset tidak lagi
     ikut menghitung properti itu, tapi tetap hidup untuk properti lain;
   - dipasang di posisi playhead dari Studio dan terlihat sebagai berlian di
-    timeline; menyeret berlian itu BELUM ada (lihat "Batas" ADR-0027);
+    timeline yang bisa DISERET (atau difokus dan digeser dengan panah
+    kiri/kanan) — mendarat di atas keyframe lain ditolak, bukan ditumpuk;
   - diverifikasi dari piksel render sungguhan, bukan hanya unit test.
 - **Proxy & rekaman panjang (ADR-0028)** — rekaman satu jam dan berkas 4K/HEVC
   tidak lagi membekukan preview:
@@ -481,10 +490,13 @@ Yang sudah berjalan:
     tanpa browser, dan **campuran akhir** setiap render diukur dari berkas
     hasilnya (CLI mencetaknya di samping sasaran; Studio menampilkannya di
     strip render).
-- **Kualitas terjaga otomatis**: 964 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 982 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
-  GitHub Actions dengan **render smoke-test** nyata (prekursor R-8).
+  GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
+  tata letak di 18 lebar layar, dan **gerbang interaksi**: berlian keyframe
+  dan kotak anotasi diseret dengan pointer/papan ketik sungguhan lewat CDP,
+  lalu plan di server yang diperiksa.
 - Hasil ukur di container CPU-only: draft 540p **85 dtk**, final 1080p
   **4m38s** untuk video 51 dtk (8 scene) — lihat ADR-0004. E2E pipeline:
   MP4 hasil `generate --render` terverifikasi ber-stream audio AAC.
@@ -494,7 +506,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 964 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 982 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
@@ -520,6 +532,7 @@ pnpm dalang render   proyekku/plan.json --target lambda    # render di AWS (butu
 pnpm studio:remotion      # Remotion Studio (alat pengembang preset/template)
 
 pnpm --filter @dalang/studio gate:layout   # geometri UI di 15 lebar layar (ADR-0020)
+pnpm --filter @dalang/studio gate:interaksi   # seretan berlian & anotasi sungguhan lewat CDP
 pnpm --filter @dalang/renderer asset-url-parity  # paritas aset lokal vs URL (ADR-0019)
 ```
 
@@ -642,10 +655,11 @@ di `docs/decisions/`.
       di kanvas) selesai lewat ADR-0024, §9.2 (multi-track video) lewat
       ADR-0025, §9.3 (keyframe properti) lewat ADR-0027, §9.4 (audio per klip)
       lewat ADR-0026, §9.5 (proxy + rekaman panjang) lewat ADR-0028.
-      *Batas §9.4 soal AAC dan campuran akhir DICABUT oleh ADR-0028. Batas
-      §9.3: berlian keyframe belum bisa diseret, dan visual dasar scene belum
-      bisa di-keyframe. Batas §9.5: proxy dibuat serial, dan strip bingkai
-      butuh transkoder — selengkapnya di "Batas" ADR-0027 dan ADR-0028.*
+      *Batas §9.4 soal AAC dan campuran akhir DICABUT oleh ADR-0028; batas
+      §9.3 soal berlian keyframe dan batas §9.1 soal anotasi juga DICABUT —
+      keduanya kini bisa diseret. Yang tersisa: visual dasar scene belum bisa
+      di-keyframe (§9.3), proxy dibuat serial dan strip bingkai butuh
+      transkoder (§9.5) — selengkapnya di "Batas" ADR-0027 dan ADR-0028.*
 
 Sisa Fase 9 dan Fase 10 ada di [docs/roadmap.md](docs/roadmap.md) — disusun dari
 inventaris kode repo ini dibanding lapangan (editor video, kerangka agentik,

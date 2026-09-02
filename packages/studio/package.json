@@ -12,7 +12,8 @@
     "build": "vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
-    "gate:layout": "tsx scripts/layout-gate.mts"
+    "gate:layout": "tsx scripts/layout-gate.mts",
+    "gate:interaksi": "tsx scripts/interaction-gate.mts"
   },
   "dependencies": {
     "@dalang/agent": "workspace:*",

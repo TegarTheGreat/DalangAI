@@ -63,6 +63,15 @@ jobs:
         timeout-minutes: 6
         run: pnpm --filter @dalang/studio gate:layout
 
+      # Gerbang tata letak membuktikan kendali MUAT; yang ini membuktikan
+      # kendali BEKERJA saat disentuh: berlian keyframe dan kotak anotasi
+      # diseret dengan pointer/papan ketik sungguhan lewat CDP, lalu plan di
+      # server yang diperiksa — seretan yang tidak mengirim patch adalah cacat
+      # yang tidak ditangkap unit test mana pun.
+      - name: Interaction gate (studio UI)
+        timeout-minutes: 6
+        run: pnpm --filter @dalang/studio gate:interaksi
+
       - name: Validate demo scene-plan
         run: pnpm dalang validate examples/borobudur-60s/plan.json
 
