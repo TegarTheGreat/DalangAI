@@ -45,6 +45,9 @@ import { FadeHandles } from "./FadeHandles";
 
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 64;
+/** Selisih lajur vertikal antar track di bar lapisan (px): 7 px cukup untuk berlian 7 px. */
+const laneOffsetPx = (index: number, count: number): number =>
+  (index - (count - 1) / 2) * 7;
 /** Batas atas bingkai filmstrip per klip — penjaga biaya render thumbnail. */
 const MAX_FILMSTRIP_FRAMES = 40;
 
@@ -293,6 +296,17 @@ export const TimelineStrip: React.FC = () => {
     at: number;
     /** Keyframe track lain yang sedang ditempeli (garis bantu di bar). */
     snappedTo: { property: AnimatableProperty; at: number } | null;
+  } | null>(null);
+  /**
+   * Berlian yang paling dekat ke pointer di bar lapisan — dinaikkan ke atas
+   * supaya berlian dua track yang berdekatan (atau bertumpuk pada waktu yang
+   * sama) tetap bisa ditangkap dari pusatnya sendiri, bukan yang kebetulan
+   * digambar belakangan.
+   */
+  const [kfNear, setKfNear] = useState<{
+    layerId: string;
+    property: string;
+    at: number;
   } | null>(null);
   /**
    * Berlian yang harus difokus ULANG setelah plan diperbarui. Berlian di-key
@@ -622,6 +636,54 @@ export const TimelineStrip: React.FC = () => {
                         key={layer.id}
                         className={asset ? "layer-bar" : "layer-bar kosong"}
                         style={{ left: x, width: w }}
+                        onPointerMove={(event) => {
+                          if (kfDrag) return;
+                          const barRect = event.currentTarget.getBoundingClientRect();
+                          if (barRect.width <= 0) return;
+                          let best: { property: string; at: number; d: number } | null =
+                            null;
+                          for (const [trackIndex, track] of layer.tracks.entries()) {
+                            for (const point of track.points) {
+                              const cx = barRect.left + point.at * barRect.width;
+                              const cy =
+                                barRect.top +
+                                barRect.height / 2 +
+                                laneOffsetPx(trackIndex, layer.tracks.length);
+                              const d = Math.hypot(
+                                event.clientX - cx,
+                                event.clientY - cy,
+                              );
+                              if (!best || d < best.d) {
+                                best = { property: track.property, at: point.at, d };
+                              }
+                            }
+                          }
+                          const nearest = best as {
+                            property: string;
+                            at: number;
+                            d: number;
+                          } | null;
+                          const next =
+                            nearest && nearest.d <= 14
+                              ? {
+                                  layerId: layer.id,
+                                  property: nearest.property,
+                                  at: nearest.at,
+                                }
+                              : null;
+                          setKfNear((current) =>
+                            current?.layerId === next?.layerId &&
+                            current?.property === next?.property &&
+                            current?.at === next?.at
+                              ? current
+                              : next,
+                          );
+                        }}
+                        onPointerLeave={() =>
+                          setKfNear((current) =>
+                            current?.layerId === layer.id ? null : current,
+                          )
+                        }
                       >
                         <button
                           type="button"
@@ -652,12 +714,20 @@ export const TimelineStrip: React.FC = () => {
                             title={`menempel ke keyframe ${kfDrag.snappedTo.property} @ ${Math.round(kfDrag.snappedTo.at * 100)}%`}
                           />
                         ) : null}
-                        {layer.tracks.flatMap((track) =>
+                        {layer.tracks.flatMap((track, trackIndex) =>
                           track.points.map((point) => {
                             const dragging =
                               kfDrag?.layerId === layer.id &&
                               kfDrag.property === track.property &&
                               Math.abs(kfDrag.fromAt - point.at) < 0.0005;
+                            const near =
+                              kfNear?.layerId === layer.id &&
+                              kfNear.property === track.property &&
+                              Math.abs(kfNear.at - point.at) < 0.0005;
+                            // Tiap track punya LAJUR sendiri di bar: berlian
+                            // dua track pada waktu yang sama tidak lagi
+                            // bertumpuk persis.
+                            const lane = laneOffsetPx(trackIndex, layer.tracks.length);
                             const at = dragging ? (kfDrag?.at ?? point.at) : point.at;
                             const atFrom = (clientX: number, element: HTMLElement) => {
                               const bar = element.parentElement?.getBoundingClientRect();
@@ -698,10 +768,11 @@ export const TimelineStrip: React.FC = () => {
                             return (
                               <span
                                 key={`${track.property}-${point.at}`}
-                                className={
-                                  dragging ? "kf-diamond dragging" : "kf-diamond"
-                                }
-                                style={{ left: `${at * 100}%` }}
+                                className={`kf-diamond${dragging ? " dragging" : ""}${near ? " near" : ""}`}
+                                style={{
+                                  left: `${at * 100}%`,
+                                  top: `calc(50% + ${lane}px)`,
+                                }}
                                 data-kf={kfKey}
                                 data-kf-at={point.at}
                                 role="slider"

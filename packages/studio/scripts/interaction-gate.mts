@@ -223,10 +223,11 @@ const main = async (): Promise<void> => {
     if (!scene) throw new Error(`scene ${id} hilang dari plan`);
     return scene;
   };
-  const points = async (): Promise<number[]> =>
-    (sceneOf(await plan(), "sc-step-3").layers[0]?.tracks[0]?.points ?? []).map(
+  const pointsOf = async (trackIndex: number): Promise<number[]> =>
+    (sceneOf(await plan(), "sc-step-3").layers[0]?.tracks[trackIndex]?.points ?? []).map(
       (point) => point.at,
     );
+  const points = (): Promise<number[]> => pointsOf(0);
   const at = (pts: number[], index: number): number => pts[index] ?? Number.NaN;
   const annotation = async (): Promise<Target> => {
     const target = sceneOf(await plan(), "sc-step-1").annotations[0]?.target;
@@ -384,24 +385,28 @@ const main = async (): Promise<void> => {
       near(at(pts, 1), 0.6, 1e-6),
       `at = ${pts.join(", ")}`,
     );
-    // Berlian opacity yang barusan menempel kini BERTUMPUK dengan berlian
-    // offsetX di 60%, dan yang digambar belakangan yang tertangkap tekanan —
-    // batas yang disebut ADR-0027. Jadi seretan "4% tidak menempel" memakai
-    // berlian opacity pertama (50%) ke 64%: melewati keyframe offsetX@60% di
-    // tengah jalan, tapi dilepas 4% darinya.
+    // Berlian opacity yang barusan menempel kini berbagi waktu 60% dengan
+    // berlian offsetX. Tiap track punya lajur sendiri (selisih 7 px) dan yang
+    // terdekat ke pointer naik ke atas, jadi berlian opacity tetap bisa
+    // ditangkap dari pusatnya SENDIRI — lalu dilepas 4% dari keyframe
+    // offsetX: tidak menempel, dan offsetX tidak ikut bergeser.
     const barLater = (await rect(".layer-bar")) ?? barNow;
-    const firstDiamond = await rect(".kf-diamond", 0);
-    if (!firstDiamond) throw new Error("berlian pertama hilang setelah menempel");
-    await drag(center(firstDiamond), {
+    const stacked = await rect(".kf-diamond", 1);
+    if (!stacked) throw new Error("berlian opacity kedua hilang setelah menempel");
+    const offsetXBefore = await pointsOf(1);
+    await drag(center(stacked), {
       x: barLater.x + barLater.w * 0.64,
-      y: center(firstDiamond).y,
+      y: center(stacked).y,
     });
     await sleep(SETTLE_MS);
     pts = await points();
+    const offsetXAfter = await pointsOf(1);
     check(
-      "dilepas 4% dari keyframe track lain tidak menempel",
-      near(at(pts, 1), 0.64, 0.006) && near(at(pts, 0), 0.6, 1e-6),
-      `at = ${pts.join(", ")}`,
+      "berlian yang bertumpuk ditangkap dari pusatnya sendiri; dilepas 4% dari keyframe track lain tidak menempel; track lain tetap",
+      near(at(pts, 1), 0.64, 0.006) &&
+        near(at(pts, 0), 0.5, 1e-6) &&
+        JSON.stringify(offsetXAfter) === JSON.stringify(offsetXBefore),
+      `opacity = ${pts.join(", ")}; offsetX ${offsetXBefore.join(", ")} -> ${offsetXAfter.join(", ")}`,
     );
 
     // Kembalikan zoom: bagian fade musik menghitung dari 24 px/dtk.

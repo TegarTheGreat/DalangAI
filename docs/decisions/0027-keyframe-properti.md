@@ -158,11 +158,13 @@ sekarang tertangkap.
   langkahnya sudah eksplisit), dengan garis bantu putus-putus di bar selama
   ditahan. Gerbang interaksi menyeret berlian opacity ke 1,5% dari keyframe
   offsetX@60%: garis bantunya muncul di x keyframe itu, pelepasannya mendarat
-  tepat di 0,6, dan seretan yang dilepas 4% darinya tidak menempel. Yang
-  masih belum ada: pemilihan jamak berlian, dan urutan tumpukan — dua berlian
-  dari track berbeda pada waktu yang SAMA bertumpuk, dan yang digambar
-  belakangan yang tertangkap tekanan (yang di bawahnya tetap bisa digeser
-  lewat papan ketik).
+  tepat di 0,6, dan seretan yang dilepas 4% darinya tidak menempel. Dua
+  berlian dari track berbeda pada waktu yang SAMA tidak bertumpuk persis:
+  tiap track punya lajur sendiri di bar (selisih 7 px), dan berlian yang
+  paling dekat ke pointer naik ke atas saat pointer bergerak di bar — gerbang
+  menyeret berlian opacity yang berbagi waktu 60% dengan offsetX dari
+  pusatnya sendiri, dan offsetX tetap di tempat. Yang masih belum ada:
+  pemilihan jamak berlian.
 - **Properti yang bisa dianimasikan masih sedikit** — tidak ada warna, blur,
   atau parameter filter. Menambahnya berarti menambah entri di satu tabel, dan
   sengaja ditunda sampai ada permintaan nyata.

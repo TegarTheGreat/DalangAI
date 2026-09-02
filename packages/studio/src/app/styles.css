@@ -4803,3 +4803,8 @@ button.ghost.danger.confirm {
   pointer-events: none;
   z-index: 3;
 }
+
+/* Berlian terdekat ke pointer naik ke atas (bar lapisan, ADR-0027) */
+.kf-diamond.near {
+  z-index: 4;
+}
