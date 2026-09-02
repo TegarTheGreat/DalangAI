@@ -81,6 +81,9 @@ semuanya bisa ditimpa sebelum unggah.
   lain; system prompt memuat larangannya.
 - Gerbang interaksi (browser sungguhan, tanpa token): tombol Unggah di
   riwayat render ada, nonaktif, dan judulnya menyebut token yang kurang.
+- Gerbang tata letak (tujuan palsu di stub, berkas render disemai): dialog
+  Unggah dibuka dan diukur di 18 lebar layar — tidak boleh keluar layar, dan
+  tombolnya WAJIB ada.
 
 ## Batas
 

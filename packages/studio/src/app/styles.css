@@ -4780,3 +4780,14 @@ button.ghost.danger.confirm {
   margin-top: 3px;
   flex: none;
 }
+
+/* Pertentangan preferensi di lobi (ADR-0029) */
+.memory-conflicts {
+  margin: 0 0 12px;
+}
+.memory-conflicts ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.55;
+}

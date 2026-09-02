@@ -26,7 +26,15 @@
  * Jalankan: pnpm --filter @dalang/studio gate:layout
  */
 
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,10 +66,14 @@ const WIDTHS = [
  * terpanjang muat, yang lain juga.
  */
 const DIALOGS = [
-  { tip: "Render video", name: "Ekspor" },
-  { tip: "Gaya proyek", name: "Gaya" },
-  { tip: "Catatan sutradara", name: "Catatan" },
-  { tip: "Tinjauan render", name: "Tinjau" },
+  { opener: '[data-tip^="Render video"]', name: "Ekspor", required: false },
+  { opener: '[data-tip^="Gaya proyek"]', name: "Gaya", required: false },
+  { opener: '[data-tip^="Catatan sutradara"]', name: "Catatan", required: false },
+  { opener: '[data-tip^="Tinjauan render"]', name: "Tinjau", required: false },
+  // Dialog Unggah (ADR-0030) dibuka dari riwayat render: berkas render
+  // disemai dan tujuan palsu diberi ke stub supaya tombolnya aktif. WAJIB
+  // ada: kalau tombolnya hilang, itu regresi, bukan alasan untuk melewati.
+  { opener: ".render-publish", name: "Unggah", required: true },
 ] as const;
 
 /**
@@ -71,10 +83,11 @@ const DIALOGS = [
  * Ditulis sebagai string kode: sama seperti MEASURE, ia berjalan di dalam
  * peramban dan tidak boleh mengandung sintaks TypeScript apa pun.
  */
-const dialogProbe = (tip: string, name: string): string =>
+const dialogProbe = (opener: string, name: string, required: boolean): string =>
   `(() => {
-    const opener = document.querySelector('[data-tip^="${tip}"]');
-    if (!opener) return null;
+    const opener = document.querySelector(${JSON.stringify(opener)});
+    if (!opener) return ${required ? `"dialog ${name}: pembukanya tidak ada di DOM"` : "null"};
+    if (opener.disabled) return "dialog ${name}: pembukanya nonaktif";
     opener.click();
     const dialog = document.querySelector(".dialog-backdrop .dialog");
     if (!dialog) return null;
@@ -206,11 +219,26 @@ const main = async (): Promise<void> => {
   // (.dalang/pipeline.db), dan proyek contoh di repo harus tetap bersih.
   const root = mkdtempSync(join(tmpdir(), "dalang-gate-layout-"));
   cpSync(DEMO, join(root, "demo"), { recursive: true });
+  // Satu berkas render palsu supaya riwayat render — dan tombol Unggah
+  // (ADR-0030) — ada di layar untuk diukur.
+  const rendersDir = join(root, "demo", ".dalang", "renders");
+  mkdirSync(rendersDir, { recursive: true });
+  writeFileSync(join(rendersDir, "preview.mp4"), "mp4-gerbang");
 
   const studio = await startStudioServer({
     workspaceRoot: root,
     planPath: join(root, "demo", "plan.json"),
-    deps: stubDeps(),
+    deps: stubDeps({
+      publishTargets: () => [
+        {
+          id: "youtube-uji",
+          label: "YouTube (uji)",
+          publish: async () => {
+            throw new Error("gerbang tata letak tidak mengunggah");
+          },
+        },
+      ],
+    }),
     port: 0,
     appDistDir: join(repoRoot, "packages", "studio", "dist"),
   });
@@ -263,9 +291,9 @@ const main = async (): Promise<void> => {
       // dialog Ekspor tumbuh melewati kedua tepi layar begitu bagian interop
       // masuk (ADR-0023), dan tombol "Mulai ekspor" jadi tak terjangkau.
       for (const dialog of DIALOGS) {
-        const overflow = (await page.evaluate(dialogProbe(dialog.tip, dialog.name))) as
-          | string
-          | null;
+        const overflow = (await page.evaluate(
+          dialogProbe(dialog.opener, dialog.name, dialog.required),
+        )) as string | null;
         if (overflow) problems.push(overflow);
       }
 

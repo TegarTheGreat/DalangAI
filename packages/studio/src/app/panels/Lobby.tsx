@@ -6,6 +6,7 @@ import {
   MEMORY_KIND_LABEL,
   MEMORY_KINDS,
   type MemoryKind,
+  memoryConflicts,
 } from "@dalang/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WorkspaceProjectLite } from "../../shared/api-types";
@@ -579,6 +580,7 @@ const MemorySection: React.FC = () => {
   const [kind, setKind] = useState<MemoryKind>("gaya");
   const [text, setText] = useState("");
   const entries = memory?.entries ?? [];
+  const conflicts = memory ? memoryConflicts(memory) : [];
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const teks = text.trim();
@@ -595,6 +597,19 @@ const MemorySection: React.FC = () => {
           kamu nyatakan eksplisit sebagai kebiasaan tetap. Hapus kapan saja.
         </p>
       </div>
+      {conflicts.length > 0 ? (
+        <div className="notice-warn memory-conflicts" role="alert">
+          <strong>Ada preferensi yang bertentangan</strong>
+          <ul>
+            {conflicts.map((conflict) => (
+              <li key={`${conflict.a.id}-${conflict.b.id}`}>
+                “{conflict.a.text}” dan “{conflict.b.text}” — {conflict.reason}. Hapus
+                salah satunya; sampai itu, agent akan bertanya alih-alih memilih sendiri.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {entries.length === 0 ? (
         <p className="group-hint">
           Belum ada. Contoh: “Selalu pakai caption tegas untuk klip”, “Jangan pernah pakai

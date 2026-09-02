@@ -128,6 +128,25 @@ describe("memori preferensi lintas proyek", () => {
     expect(event?.outputJson ?? "").toContain("tidak tersedia");
   });
 
+  it("dua preferensi mutlak yang bertabrakan masuk konteks sebagai PERTENTANGAN yang menyuruh bertanya", async () => {
+    const project = open();
+    let seeded = emptyMemory();
+    for (const text of ["Selalu 9:16 untuk semua video", "Setiap video wajib 16:9"]) {
+      const added = addMemoryEntry(seeded, { kind: "format", text, source: "user" });
+      if (!added.ok) throw new Error(added.reason);
+      seeded = added.memory;
+    }
+    const memory = memoryStoreInMemory(seeded);
+    const { deps } = makeDeps({ memory });
+    const model = resolvedScripted([textStep("Baik.")]);
+    await runAgentTurn({ session: project.session, deps, model, userText: "Halo" });
+    const prompt = JSON.stringify(
+      (model.model as MockLanguageModelV3).doGenerateCalls[0]?.prompt,
+    );
+    expect(prompt).toContain("PERTENTANGAN");
+    expect(prompt).toContain("tanyakan user mana yang berlaku");
+  });
+
   it("system prompt memuat kaidah memori: eksplisit saja, tanpa data pribadi", () => {
     expect(SYSTEM_PROMPT).toContain("MEMORI PREFERENSI LINTAS PROYEK");
     expect(SYSTEM_PROMPT).toContain("data pribadi");

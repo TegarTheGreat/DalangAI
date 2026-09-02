@@ -12,7 +12,12 @@ const nope = (what: string) => async (): Promise<never> => {
   throw new Error(`${what} tidak tersedia di gerbang UI`);
 };
 
-export const stubDeps = (): StudioDeps => ({
+export const stubDeps = (
+  options: { publishTargets?: StudioDeps["publishTargets"] } = {},
+): StudioDeps => ({
+  // Gerbang tata letak memberi tujuan palsu supaya tombol Unggah aktif dan
+  // dialognya bisa diukur; gerbang interaksi justru menguji keadaan TANPA token.
+  ...(options.publishTargets ? { publishTargets: options.publishTargets } : {}),
   ttsChainFor: () => [],
   stockChain: () => [],
   stickerChain: () => [],

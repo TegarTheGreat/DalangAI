@@ -149,3 +149,96 @@ export const memoryContextLines = (memory: Memory): string[] => {
   }
   return lines;
 };
+
+// ---------------------------------------------------------------------------
+// Pertentangan antar preferensi (batas ADR-0029 dicabut sebagian)
+// ---------------------------------------------------------------------------
+
+export interface MemoryConflict {
+  a: MemoryEntry;
+  b: MemoryEntry;
+  reason: string;
+}
+
+const ABSOLUTE = /\b(selalu|setiap|semua|wajib)\b/;
+const FORBID = /\b(jangan(?: pernah)?|tidak pernah|hindari)\b/;
+const RATIOS = ["16:9", "9:16", "1:1"] as const;
+const CAPTION_STYLES = ["klasik", "tegas", "chip", "halus"] as const;
+
+const valuesOf = <T extends string>(text: string, family: readonly T[]): T[] =>
+  family.filter((value) => new RegExp(`(^|[^\\w:])${value}($|[^\\w:])`).test(text));
+
+/** Sisa kalimat setelah kata kunci keharusan/larangan dibuang, dirapikan. */
+const stripped = (text: string, pattern: RegExp): string =>
+  cleanText(text.replace(pattern, " "))
+    .replace(/^(untuk|pakai|memakai|gunakan|menggunakan)\s+/, "")
+    .trim();
+
+/**
+ * Dua preferensi yang tidak bisa berlaku bersamaan. Heuristiknya SENGAJA
+ * sempit — lebih baik diam daripada menuduh — dan hanya mengenali tiga
+ * bentuk yang pasti:
+ *  1. rasio mutlak yang berbeda: "selalu 9:16" vs "selalu 16:9";
+ *  2. gaya caption mutlak yang berbeda: "selalu caption tegas" vs "… halus";
+ *  3. keharusan vs larangan atas hal yang SAMA: "selalu pakai musik dramatis"
+ *     vs "jangan pernah pakai musik dramatis".
+ * Pertentangan yang lebih halus dari itu tetap tidak terdeteksi, dan itu
+ * disebut di Batas ADR-0029.
+ */
+export const memoryConflicts = (memory: Memory): MemoryConflict[] => {
+  const conflicts: MemoryConflict[] = [];
+  const entries = memory.entries;
+  for (let i = 0; i < entries.length; i++) {
+    for (let j = i + 1; j < entries.length; j++) {
+      const a = entries[i] as MemoryEntry;
+      const b = entries[j] as MemoryEntry;
+      const ta = normalize(a.text);
+      const tb = normalize(b.text);
+      const reason = conflictReason(ta, tb);
+      if (reason) conflicts.push({ a, b, reason });
+    }
+  }
+  return conflicts;
+};
+
+const conflictReason = (ta: string, tb: string): string | null => {
+  const absoluteA = ABSOLUTE.test(ta) && !FORBID.test(ta);
+  const absoluteB = ABSOLUTE.test(tb) && !FORBID.test(tb);
+  if (absoluteA && absoluteB) {
+    const ratioA = valuesOf(ta, RATIOS);
+    const ratioB = valuesOf(tb, RATIOS);
+    if (ratioA.length === 1 && ratioB.length === 1 && ratioA[0] !== ratioB[0]) {
+      return `rasio ${ratioA[0]} dan ${ratioB[0]} sama-sama dinyatakan mutlak`;
+    }
+    if (ta.includes("caption") && tb.includes("caption")) {
+      const styleA = valuesOf(ta, CAPTION_STYLES);
+      const styleB = valuesOf(tb, CAPTION_STYLES);
+      if (styleA.length === 1 && styleB.length === 1 && styleA[0] !== styleB[0]) {
+        return `gaya caption "${styleA[0]}" dan "${styleB[0]}" sama-sama dinyatakan mutlak`;
+      }
+    }
+  }
+  const forbidA = FORBID.test(ta);
+  const forbidB = FORBID.test(tb);
+  if (absoluteA && forbidB)
+    return sameSubject(stripped(ta, ABSOLUTE), stripped(tb, FORBID));
+  if (absoluteB && forbidA)
+    return sameSubject(stripped(tb, ABSOLUTE), stripped(ta, FORBID));
+  return null;
+};
+
+const sameSubject = (must: string, never: string): string | null =>
+  must.length >= 4 && must === never
+    ? `"${must}" diharuskan di satu preferensi dan dilarang di preferensi lain`
+    : null;
+
+/**
+ * Baris peringatan untuk blok konteks agent (dan CLI): agent diminta
+ * BERTANYA, bukan memilih sendiri — dua kalimat mutlak yang bertabrakan
+ * adalah keputusan orangnya.
+ */
+export const memoryConflictLines = (memory: Memory): string[] =>
+  memoryConflicts(memory).map(
+    (conflict) =>
+      `PERTENTANGAN: [${conflict.a.id}] "${conflict.a.text}" vs [${conflict.b.id}] "${conflict.b.text}" — ${conflict.reason}; tanyakan user mana yang berlaku, jangan memilih sendiri`,
+  );

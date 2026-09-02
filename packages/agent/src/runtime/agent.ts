@@ -1,4 +1,4 @@
-import { memoryContextLines } from "@dalang/core";
+import { memoryConflictLines, memoryContextLines } from "@dalang/core";
 import { generateText, type ModelMessage } from "ai";
 import type { ResolvedModel } from "../models/resolve";
 import { SYSTEM_PROMPT } from "../system-prompt";
@@ -77,7 +77,11 @@ export const runAgentTurn = async ({
   const externalNote = session.detectExternalEdit();
   // ADR-0029: preferensi lintas proyek ikut tiap giliran — di pesan user,
   // bukan di system prompt, supaya prompt-cache tetap utuh saat memori berubah.
-  const memoryLines = deps.memory ? memoryContextLines(deps.memory.read()) : [];
+  const memory = deps.memory?.read();
+  const memoryLines = memory ? memoryContextLines(memory) : [];
+  // Dua preferensi mutlak yang bertabrakan bukan untuk dipilih agent sendiri:
+  // barisnya menyuruh bertanya.
+  const conflictLines = memory ? memoryConflictLines(memory) : [];
   const contextBlock = [
     "[KEADAAN PROYEK — disusun otomatis oleh sistem, bukan ditulis user]",
     ...(externalNote ? [`PERHATIAN: ${externalNote}`] : []),
@@ -87,6 +91,7 @@ export const runAgentTurn = async ({
           "",
           "[PREFERENSI USER LINTAS PROYEK — dari memori; berlaku untuk semua proyek kecuali user berkata lain di proyek ini]",
           ...memoryLines,
+          ...conflictLines,
         ]
       : []),
   ].join("\n");

@@ -523,7 +523,11 @@ Yang sudah berjalan:
     dan `dalang memori` — bisa ditambah dan dihapus kapan saja;
   - MILIK ORANGNYA: satu berkas `~/.dalang/memori.json` (atau `$DALANG_HOME`),
     bukan di dalam plan dan bukan per folder; disuntikkan tiap giliran sebagai
-    blok `[PREFERENSI USER LINTAS PROYEK]`, dan instruksi proyek selalu menang.
+    blok `[PREFERENSI USER LINTAS PROYEK]`, dan instruksi proyek selalu menang;
+  - BERTENTANGAN DITANDAI: dua preferensi mutlak yang tak bisa berlaku
+    bersama (rasio berbeda, gaya caption berbeda, keharusan vs larangan atas
+    hal yang sama) diperingatkan di lobi dan `dalang memori`, dan agent
+    diminta bertanya alih-alih memilih sendiri.
 - **Publikasi langsung ke YouTube (ADR-0030)** — dari riwayat render di Studio
   (tombol Unggah), `dalang publish`, atau tool agent `publishVideo`: unggahan
   resumable per potongan 8 MiB lewat YouTube Data API v3, dengan tiga pengaman
@@ -534,7 +538,7 @@ Yang sudah berjalan:
   (Dalang tidak menjalankan alur OAuth); tanpa token, ketiga permukaan
   berkata apa adanya. Jalurnya diuji terhadap HTTP palsu yang mengikuti
   dokumentasi Google, belum terhadap YouTube sungguhan.
-- **Kualitas terjaga otomatis**: 1048 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1050 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -550,7 +554,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1048 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1050 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

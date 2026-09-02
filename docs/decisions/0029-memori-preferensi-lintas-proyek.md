@@ -84,9 +84,16 @@ dan dihapus orangnya.
 - **Satu memori per rumah Dalang**, bukan per orang di mesin bersama: dua
   orang yang berbagi akun OS berbagi memori. `DALANG_HOME` memisahkannya.
 - **Tidak ada sinkronisasi antar mesin.** Berkasnya boleh disalin.
-- **Konflik antar preferensi tidak dideteksi** ("selalu 9:16" dan "selalu
-  16:9" bisa hidup bersama); agent membacanya sebagai daftar dan instruksi
-  proyek yang menang.
+- ~~**Konflik antar preferensi tidak dideteksi** ("selalu 9:16" dan "selalu
+  16:9" bisa hidup bersama).~~ *DICABUT SEBAGIAN:* `memoryConflicts` (murni,
+  di core) mengenali tiga bentuk yang pasti — rasio mutlak yang berbeda, gaya
+  caption mutlak yang berbeda, dan keharusan vs larangan atas hal yang sama
+  ("selalu pakai musik dramatis" vs "jangan pernah pakai musik dramatis") —
+  lalu lobi Studio menampilkannya sebagai peringatan, `dalang memori`
+  mencetaknya, dan blok konteks agent membawanya sebagai baris PERTENTANGAN
+  yang menyuruh BERTANYA, bukan memilih sendiri. Heuristiknya sengaja sempit:
+  pertentangan yang lebih halus (parafrasa, sinonim) tetap tidak terdeteksi,
+  dan instruksi proyek tetap yang menang.
 
 ## Konsekuensi
 

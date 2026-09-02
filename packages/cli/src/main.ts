@@ -11,6 +11,7 @@ import {
   formatDirectorNotes,
   MEMORY_KIND_LABEL,
   MEMORY_KINDS,
+  memoryConflictLines,
   memoryContextLines,
   PUBLISH_PRIVACIES,
   PUBLISH_PRIVACY_LABEL,
@@ -719,6 +720,11 @@ program
         return;
       }
       for (const line of memoryContextLines(memory)) console.log(`  ${line}`);
+      const conflicts = memoryConflictLines(memory);
+      if (conflicts.length > 0) {
+        console.log("");
+        for (const line of conflicts) console.log(`  ${line}`);
+      }
       return;
     }
     if (aksi === "tambah") {
