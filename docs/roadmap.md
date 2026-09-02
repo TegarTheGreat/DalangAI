@@ -313,9 +313,17 @@ arah interop sekaligus.
 
 ### Fase 10 — Skala dan kolaborasi
 
+**§10.1 sudah dikerjakan** (ADR-0029): agent punya memori preferensi lintas
+proyek — kalimat pendek milik user ("selalu pakai caption tegas untuk klip")
+dalam satu berkas di rumah Dalang, disuntikkan tiap giliran, disimpan agent
+HANYA bila user menyatakannya eksplisit sebagai kebiasaan tetap, dan selalu
+terlihat serta bisa dihapus di lobi Studio dan `dalang memori`. Batasnya di
+"Batas" ADR-0029: tidak belajar diam-diam, satu memori per rumah Dalang, tanpa
+sinkronisasi antar mesin.
+
 | # | Item |
 | --- | --- |
-| 10.1 | Memori preferensi lintas proyek |
+| 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
 | 10.2 | Marketplace preset/template |
 | 10.3 | Publikasi langsung (YouTube/TikTok/IG) |
 | 10.4 | Multi-user pada satu proyek |

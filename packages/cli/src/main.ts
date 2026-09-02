@@ -1,10 +1,16 @@
 import { mkdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { defaultMemoryPath, fileMemoryStore } from "@dalang/agent";
 import {
+  addMemoryEntry,
   computeTimeline,
   countWords,
   critiquePlan,
   formatDirectorNotes,
+  MEMORY_KIND_LABEL,
+  MEMORY_KINDS,
+  memoryContextLines,
+  removeMemoryEntry,
   resolveSceneDurationSec,
   type ScenePlan,
 } from "@dalang/core";
@@ -548,6 +554,58 @@ program
     } finally {
       db.close();
     }
+  });
+
+program
+  .command("memori")
+  .argument("[aksi]", "daftar | tambah | hapus", "daftar")
+  .argument("[teks...]", "teks preferensi (tambah) atau id (hapus)")
+  .option("--jenis <jenis>", `jenis preferensi: ${MEMORY_KINDS.join(" | ")}`, "catatan")
+  .description(
+    "Memori preferensi agent lintas proyek (ADR-0029) — satu berkas di rumah Dalang, dibaca dalang chat dan Studio",
+  )
+  .action((aksi: string, teks: string[], options: { jenis: string }) => {
+    const store = fileMemoryStore(defaultMemoryPath());
+    const memory = store.read();
+    if (aksi === "daftar") {
+      console.log(`  berkas: ${store.path}`);
+      if (memory.entries.length === 0) {
+        console.log(
+          '  Belum ada preferensi. Tambah: dalang memori tambah --jenis gaya "Selalu pakai caption tegas"',
+        );
+        return;
+      }
+      for (const line of memoryContextLines(memory)) console.log(`  ${line}`);
+      return;
+    }
+    if (aksi === "tambah") {
+      const jenis = MEMORY_KINDS.find((kind) => kind === options.jenis);
+      if (!jenis)
+        throw new Error(`--jenis harus salah satu dari: ${MEMORY_KINDS.join(", ")}`);
+      const result = addMemoryEntry(memory, {
+        kind: jenis,
+        text: teks.join(" "),
+        source: "user",
+      });
+      if (!result.ok) throw new Error(result.reason);
+      if (!result.duplicate) store.write(result.memory);
+      console.log(
+        result.duplicate
+          ? `  sudah ada: [${result.entry.id}] ${result.entry.text}`
+          : `  disimpan: [${result.entry.id}] ${result.entry.text} (${MEMORY_KIND_LABEL[jenis]})`,
+      );
+      return;
+    }
+    if (aksi === "hapus") {
+      const id = teks[0];
+      if (!id) throw new Error("Sebutkan id preferensi: dalang memori hapus <id>");
+      const { memory: next, removed } = removeMemoryEntry(memory, id);
+      if (!removed) throw new Error(`Tidak ada preferensi ber-id ${id}`);
+      store.write(next);
+      console.log(`  dihapus: ${removed.text}`);
+      return;
+    }
+    throw new Error(`Aksi tidak dikenal: ${aksi} (daftar | tambah | hapus)`);
   });
 
 program

@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) + Fase 10.1: memori preferensi lintas proyek (ADR-0029) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -507,7 +507,17 @@ Yang sudah berjalan:
     `proxy-progress`, punya tombol batal, dan editor tetap bisa dipakai —
     patch, undo, dan render tidak menunggu; permintaan selagi berjalan antre.
     CLI `dalang proxy`/`generate` mencetak persen per berkas.
-- **Kualitas terjaga otomatis**: 1015 unit test (kontrak lock/pin/undo, timing
+- **Memori preferensi lintas proyek (ADR-0029)** — agent mengingat kebiasaan
+  kamu di semua proyek, dengan tiga sifat yang disengaja:
+  - EKSPLISIT: `rememberPreference` hanya untuk yang kamu nyatakan sebagai
+    kebiasaan tetap ("selalu", "jangan pernah"); satu pilihan untuk satu video
+    bukan preferensi, dan data pribadi tidak pernah disimpan;
+  - TERLIHAT: semua yang diingat ada di lobi Studio (bagian Preferensi agent)
+    dan `dalang memori` — bisa ditambah dan dihapus kapan saja;
+  - MILIK ORANGNYA: satu berkas `~/.dalang/memori.json` (atau `$DALANG_HOME`),
+    bukan di dalam plan dan bukan per folder; disuntikkan tiap giliran sebagai
+    blok `[PREFERENSI USER LINTAS PROYEK]`, dan instruksi proyek selalu menang.
+- **Kualitas terjaga otomatis**: 1027 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -523,7 +533,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1015 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1027 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

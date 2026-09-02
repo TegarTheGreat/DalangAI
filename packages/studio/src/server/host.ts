@@ -1,5 +1,12 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { defaultMemoryPath, fileMemoryStore, type MemoryStore } from "@dalang/agent";
+import {
+  addMemoryEntry,
+  MAX_MEMORY_TEXT,
+  MEMORY_KINDS,
+  removeMemoryEntry,
+} from "@dalang/core";
 import { fromFcpxml, fromOtio } from "@dalang/interop";
 import { templatesPublicDir } from "@dalang/templates/paths";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -32,6 +39,11 @@ import {
  * berarti dua render, dua pipeline, dan dua anggaran yang saling menutupi.
  */
 
+const memoryBody = z.object({
+  jenis: z.enum(MEMORY_KINDS),
+  teks: z.string().min(3).max(MAX_MEMORY_TEXT),
+});
+
 const newProjectBody = z.object({
   title: z.string().min(1).max(120),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]),
@@ -62,16 +74,24 @@ const safeId = (root: string, id: string): string => {
   return id;
 };
 
-export interface StudioHostOptions extends Omit<CreateStudioOptions, "planPath"> {
+export interface StudioHostOptions
+  extends Omit<CreateStudioOptions, "planPath" | "memory"> {
   /** Folder induk berisi folder-folder proyek. */
   workspaceRoot: string;
   /** Proyek yang langsung dibuka saat start; kosong = mulai di lobi. */
   planPath?: string;
+  /**
+   * Berkas memori preferensi (ADR-0029); bawaan `$DALANG_HOME/memori.json`.
+   * Tes memberi path sementara supaya tidak menyentuh rumah pengguna.
+   */
+  memoryPath?: string;
 }
 
 export class StudioHost {
   readonly app = new Hono();
   readonly workspaceRoot: string;
+  /** Memori preferensi lintas proyek — satu untuk seluruh lobi (ADR-0029). */
+  readonly memory: MemoryStore;
   private studio: Studio | null = null;
   private readonly options: StudioHostOptions;
   private pinnedId: string | null = null;
@@ -79,6 +99,7 @@ export class StudioHost {
   constructor(options: StudioHostOptions) {
     this.options = options;
     this.workspaceRoot = resolve(options.workspaceRoot);
+    this.memory = fileMemoryStore(options.memoryPath ?? defaultMemoryPath());
     if (options.planPath) {
       this.openPlan(options.planPath);
       this.pinnedId = projectIdOf(options.planPath);
@@ -102,8 +123,13 @@ export class StudioHost {
 
   private openPlan(planPath: string): void {
     this.closeProject();
-    const { workspaceRoot: _drop, planPath: _drop2, ...rest } = this.options;
-    this.studio = createStudioApp({ ...rest, planPath });
+    const {
+      workspaceRoot: _drop,
+      planPath: _drop2,
+      memoryPath: _drop3,
+      ...rest
+    } = this.options;
+    this.studio = createStudioApp({ ...rest, planPath, memory: this.memory });
   }
 
   /**
@@ -162,6 +188,50 @@ export class StudioHost {
     const { app } = this;
 
     app.get("/api/workspace", (c) => c.json(this.payload()));
+
+    // -- memori preferensi lintas proyek (ADR-0029) --------------------------
+    // Milik lobi, bukan proyek: satu berkas untuk semua proyek, terlihat dan
+    // bisa dihapus di sini — agent tidak boleh punya ingatan yang tersembunyi.
+    app.get("/api/workspace/memory", (c) =>
+      c.json({ ok: true, memory: this.memory.read() }),
+    );
+
+    app.post("/api/workspace/memory", async (c) => {
+      const body = memoryBody.safeParse(await c.req.json().catch(() => null));
+      if (!body.success) {
+        return c.json(
+          {
+            error:
+              "Body tidak valid: butuh jenis (gaya|suara|format|larangan|catatan) dan teks 3-240 karakter",
+          },
+          400,
+        );
+      }
+      const result = addMemoryEntry(this.memory.read(), {
+        kind: body.data.jenis,
+        text: body.data.teks,
+        source: "user",
+        projectId: this.studio?.store.session.projectId ?? null,
+      });
+      if (!result.ok) return c.json({ error: result.reason }, 400);
+      if (!result.duplicate) this.memory.write(result.memory);
+      return c.json({
+        ok: true,
+        entry: result.entry,
+        duplicate: result.duplicate,
+        memory: result.memory,
+      });
+    });
+
+    app.delete("/api/workspace/memory/:id", (c) => {
+      const { memory, removed } = removeMemoryEntry(
+        this.memory.read(),
+        c.req.param("id"),
+      );
+      if (!removed) return c.json({ error: "Preferensi tidak ditemukan" }, 404);
+      this.memory.write(memory);
+      return c.json({ ok: true, removed, memory });
+    });
 
     app.post("/api/workspace/create", async (c) => {
       const body = newProjectBody.safeParse(await c.req.json().catch(() => null));

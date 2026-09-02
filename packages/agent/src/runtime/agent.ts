@@ -1,3 +1,4 @@
+import { memoryContextLines } from "@dalang/core";
 import { generateText, type ModelMessage } from "ai";
 import type { ResolvedModel } from "../models/resolve";
 import { SYSTEM_PROMPT } from "../system-prompt";
@@ -74,10 +75,20 @@ export const runAgentTurn = async ({
   guards.beginTurn();
 
   const externalNote = session.detectExternalEdit();
+  // ADR-0029: preferensi lintas proyek ikut tiap giliran — di pesan user,
+  // bukan di system prompt, supaya prompt-cache tetap utuh saat memori berubah.
+  const memoryLines = deps.memory ? memoryContextLines(deps.memory.read()) : [];
   const contextBlock = [
     "[KEADAAN PROYEK — disusun otomatis oleh sistem, bukan ditulis user]",
     ...(externalNote ? [`PERHATIAN: ${externalNote}`] : []),
     session.summary(),
+    ...(memoryLines.length > 0
+      ? [
+          "",
+          "[PREFERENSI USER LINTAS PROYEK — dari memori; berlaku untuk semua proyek kecuali user berkata lain di proyek ini]",
+          ...memoryLines,
+        ]
+      : []),
   ].join("\n");
 
   const userMessage = buildUserMessage(contextBlock, userText, images);

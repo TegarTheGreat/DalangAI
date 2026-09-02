@@ -5,6 +5,8 @@ import {
   type AgentDeps,
   AgentEventLog,
   type ApprovalFn,
+  defaultMemoryPath,
+  fileMemoryStore,
   Guardrails,
   loadModelRegistry,
   ProjectSession,
@@ -176,6 +178,8 @@ export const registerChatCommand = (program: Command): void => {
           saveMedia: (media) =>
             saveMediaToProject({ planPath: session.paths.planPath, ...media }),
           volumeModel,
+          // ADR-0029: memori preferensi milik orangnya — satu berkas di rumah Dalang.
+          memory: fileMemoryStore(defaultMemoryPath()),
           onToolActivity: (line) => console.log(line),
         };
 

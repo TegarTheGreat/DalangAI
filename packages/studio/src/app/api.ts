@@ -1,4 +1,11 @@
-import type { PatchOpInput, Transcript, TranscriptSpan } from "@dalang/core";
+import type {
+  Memory,
+  MemoryEntry,
+  MemoryKind,
+  PatchOpInput,
+  Transcript,
+  TranscriptSpan,
+} from "@dalang/core";
 import type {
   AddGraphicResponse,
   AddSfxResponse,
@@ -114,6 +121,20 @@ export const api = {
   // -- lobi (workspace) ------------------------------------------------------
 
   getWorkspace: () => request<WorkspacePayload>("/api/workspace"),
+  // -- memori preferensi lintas proyek (ADR-0029) ---------------------------
+  getMemory: () => request<{ ok: true; memory: Memory }>("/api/workspace/memory"),
+  addMemory: (jenis: MemoryKind, teks: string) =>
+    request<{ ok: true; entry: MemoryEntry; duplicate: boolean; memory: Memory }>(
+      "/api/workspace/memory",
+      { method: "POST", body: JSON.stringify({ jenis, teks }) },
+    ),
+  removeMemory: (id: string) =>
+    request<{ ok: true; memory: Memory }>(
+      `/api/workspace/memory/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+      },
+    ),
 
   openProject: (id: string) =>
     request<{ ok: true; workspace: WorkspacePayload }>("/api/workspace/open", {

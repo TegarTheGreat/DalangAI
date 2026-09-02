@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  defaultMemoryPath,
   loadModelRegistry,
   pickDefaultModels,
   type ResolvedModel,
@@ -91,6 +92,8 @@ export const registerStudioCommand = (program: Command): void => {
 
         const studio = await startStudioServer({
           workspaceRoot,
+          // ADR-0029: memori preferensi milik orangnya — satu berkas di rumah Dalang.
+          memoryPath: defaultMemoryPath(),
           ...(planPath ? { planPath } : {}),
           port: options.port,
           deps: {

@@ -3,6 +3,7 @@ import {
   type ApprovalFn,
   type GuardrailConfig,
   Guardrails,
+  type MemoryStore,
   ProjectSession,
 } from "@dalang/agent";
 import { templatesPublicDir } from "@dalang/templates/paths";
@@ -34,6 +35,8 @@ export interface CreateStudioOptions {
   guardrails?: Partial<GuardrailConfig>;
   /** Timeout jawaban approval dari UI (default 10 menit → tolak). */
   approvalTimeoutMs?: number;
+  /** Memori preferensi lintas proyek (ADR-0029); kosong = agent tanpa memori. */
+  memory?: MemoryStore;
   /** Folder hasil `vite build` app — disajikan StudioHost, bukan app ini. */
   appDistDir?: string;
 }
@@ -75,6 +78,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
     saveMedia: (media) => options.deps.saveMedia(session.paths.planPath, media),
     ...(options.deps.transcoder ? { transcoder: options.deps.transcoder } : {}),
     ...(options.deps.volumeModel ? { volumeModel: options.deps.volumeModel } : {}),
+    ...(options.memory ? { memory: options.memory } : {}),
     onToolActivity: (line) => bridge?.onActivity(line),
   };
 

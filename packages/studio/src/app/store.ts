@@ -1,4 +1,4 @@
-import type { PatchOpInput } from "@dalang/core";
+import type { Memory, MemoryKind, PatchOpInput } from "@dalang/core";
 import type {
   ChatTurnResultLite,
   ExportSettingsLite,
@@ -94,6 +94,8 @@ export interface StudioState {
    */
   view: "lobby" | "editor";
   workspace: WorkspacePayload | null;
+  /** Memori preferensi lintas proyek (ADR-0029); null = belum dimuat. */
+  memory: Memory | null;
   /** Id proyek yang sedang dibuka/dibuat — kartu terkait tampil menunggu. */
   switching: string | null;
   project: ProjectStatePayload | null;
@@ -122,6 +124,7 @@ const emptyState: StudioState = {
   fatal: null,
   view: "lobby",
   workspace: null,
+  memory: null,
   switching: null,
   project: null,
   selectedSceneId: null,
@@ -179,6 +182,7 @@ export class StudioClient {
     try {
       const workspace = await api.getWorkspace();
       this.set({ workspace });
+      void this.loadMemory();
       if (workspace.open) await this.enterEditor();
       else this.set({ view: "lobby" });
     } catch (error) {
@@ -233,6 +237,40 @@ export class StudioClient {
       switching: null,
       ...(workspace ? { workspace } : {}),
     });
+  }
+
+  /** Memori preferensi lintas proyek (ADR-0029): dibaca dari lobi. */
+  async loadMemory(): Promise<void> {
+    try {
+      const { memory } = await api.getMemory();
+      this.set({ memory });
+    } catch {
+      // Lobi tanpa memori (server lama) tetap berjalan; bagiannya kosong.
+    }
+  }
+
+  async addMemory(jenis: MemoryKind, teks: string): Promise<void> {
+    try {
+      const reply = await api.addMemory(jenis, teks);
+      this.set({ memory: reply.memory });
+      this.toast(
+        reply.duplicate
+          ? "Preferensi itu sudah ada"
+          : "Preferensi disimpan — berlaku di semua proyek",
+      );
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+
+  async removeMemory(id: string): Promise<void> {
+    try {
+      const { memory } = await api.removeMemory(id);
+      this.set({ memory });
+      this.toast("Preferensi dihapus");
+    } catch (error) {
+      this.failure(error);
+    }
   }
 
   async refreshWorkspace(): Promise<void> {

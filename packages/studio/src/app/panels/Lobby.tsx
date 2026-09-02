@@ -1,4 +1,12 @@
-import { ASPECT_RATIOS, type AspectRatio, allRecipes } from "@dalang/core";
+import {
+  ASPECT_RATIOS,
+  type AspectRatio,
+  allRecipes,
+  MAX_MEMORY_TEXT,
+  MEMORY_KIND_LABEL,
+  MEMORY_KINDS,
+  type MemoryKind,
+} from "@dalang/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WorkspaceProjectLite } from "../../shared/api-types";
 import { RadioCard, Segmented, useEscape } from "../components/controls";
@@ -561,6 +569,88 @@ const ImportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   );
 };
 
+/**
+ * Memori preferensi lintas proyek (ADR-0029) — di LOBI, bukan di editor,
+ * karena ia milik orangnya, bukan satu proyek. Semua yang agent ingat
+ * terlihat di sini dan bisa dihapus; agent tidak punya ingatan tersembunyi.
+ */
+const MemorySection: React.FC = () => {
+  const { memory } = useStudio();
+  const [kind, setKind] = useState<MemoryKind>("gaya");
+  const [text, setText] = useState("");
+  const entries = memory?.entries ?? [];
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const teks = text.trim();
+    if (teks.length < 3) return;
+    void studioClient.addMemory(kind, teks);
+    setText("");
+  };
+  return (
+    <section className="lobby-memory" aria-labelledby="memori-judul">
+      <div className="lobby-memory-head">
+        <h2 id="memori-judul">Preferensi agent</h2>
+        <p>
+          Berlaku di semua proyek: agent membacanya tiap giliran, dan hanya menyimpan yang
+          kamu nyatakan eksplisit sebagai kebiasaan tetap. Hapus kapan saja.
+        </p>
+      </div>
+      {entries.length === 0 ? (
+        <p className="group-hint">
+          Belum ada. Contoh: “Selalu pakai caption tegas untuk klip”, “Jangan pernah pakai
+          musik dramatis”.
+        </p>
+      ) : (
+        <ul className="memory-list">
+          {entries.map((entry) => (
+            <li key={entry.id} className="memory-item">
+              <span className={`memory-kind ${entry.kind}`}>
+                {MEMORY_KIND_LABEL[entry.kind]}
+              </span>
+              <span className="memory-text">{entry.text}</span>
+              <span className="memory-meta">
+                {entry.source === "agent" ? "dicatat agent" : "ditulis kamu"}
+              </span>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`Hapus preferensi: ${entry.text}`}
+                data-tip="Hapus"
+                onClick={() => void studioClient.removeMemory(entry.id)}
+              >
+                <IconX />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="memory-form" onSubmit={submit}>
+        <select
+          value={kind}
+          aria-label="Jenis preferensi"
+          onChange={(event) => setKind(event.target.value as MemoryKind)}
+        >
+          {MEMORY_KINDS.map((item) => (
+            <option key={item} value={item}>
+              {MEMORY_KIND_LABEL[item]}
+            </option>
+          ))}
+        </select>
+        <input
+          value={text}
+          maxLength={MAX_MEMORY_TEXT}
+          placeholder="Satu kalimat, mis. Selalu pakai rasio 9:16 untuk klip"
+          aria-label="Teks preferensi"
+          onChange={(event) => setText(event.target.value)}
+        />
+        <button type="submit" className="primary" disabled={text.trim().length < 3}>
+          Simpan
+        </button>
+      </form>
+    </section>
+  );
+};
+
 export const Lobby: React.FC = () => {
   const { workspace, switching } = useStudio();
   const [query, setQuery] = useState("");
@@ -704,8 +794,9 @@ export const Lobby: React.FC = () => {
         </div>
       )}
 
+      <MemorySection />
+
       <NewProjectDialog open={newOpen} onClose={() => setNewOpen(false)} />
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );

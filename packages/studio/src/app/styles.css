@@ -4620,3 +4620,90 @@ button.ghost.danger.confirm {
 .toast {
   pointer-events: none;
 }
+
+/*
+ * Preferensi agent di lobi (ADR-0029): daftar yang bisa dihapus dan satu
+ * baris formulir. Ia duduk di bawah kisi proyek, bukan di atasnya — proyek
+ * tetap yang pertama dilihat; memori adalah pengaturan.
+ */
+.lobby-memory {
+  margin: 34px 0 12px;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.lobby-memory-head h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.lobby-memory-head p {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  max-width: 68ch;
+}
+.memory-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.memory-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+}
+.memory-kind {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.memory-kind.larangan {
+  color: #f0a3a3;
+  border-color: rgba(240, 163, 163, 0.4);
+}
+.memory-text {
+  font-size: 13px;
+  min-width: 0;
+}
+.memory-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.memory-form {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.memory-form select,
+.memory-form input {
+  min-height: 34px;
+}
+@media (max-width: 720px) {
+  .memory-item {
+    grid-template-columns: 1fr auto;
+  }
+  .memory-kind,
+  .memory-meta {
+    grid-column: 1 / -1;
+  }
+  .memory-form {
+    grid-template-columns: 1fr;
+  }
+}

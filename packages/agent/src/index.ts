@@ -5,6 +5,7 @@ export * from "./models/snapshot";
 export * from "./runtime/agent";
 export * from "./runtime/agent-log";
 export * from "./runtime/guardrails";
+export * from "./runtime/memory-store";
 export * from "./runtime/session";
 export * from "./system-prompt";
 export * from "./tools";

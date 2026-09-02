@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  addMemoryEntry,
   critiquePlan,
   findFillerSpans,
   findPhraseSpans,
@@ -11,9 +12,12 @@ import {
   LAYER_ENTRANCES,
   LAYER_SHAPES,
   MAX_LAYERS,
+  MAX_MEMORY_TEXT,
+  MEMORY_KINDS,
   type ProxyMedia,
   patchOpSchema,
   recipeFor,
+  removeMemoryEntry,
   type ScenePlanInput,
   scenePlanSchema,
   setGraphicAsset,
@@ -47,6 +51,7 @@ import { generateText, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { ResolvedModel } from "./models/resolve";
 import type { Guardrails } from "./runtime/guardrails";
+import type { MemoryStore } from "./runtime/memory-store";
 import type { ProjectSession } from "./runtime/session";
 import {
   cropImage,
@@ -149,6 +154,12 @@ export interface AgentDeps {
    * proxy, dan analyzeImage pada video mengatakan kenapa ia tidak bisa.
    */
   transcoder?: () => MediaTranscoder;
+  /**
+   * Memori preferensi lintas proyek (ADR-0029). Boleh kosong: tool
+   * rememberPreference lalu mengatakan memori tidak tersedia, dan blok
+   * konteksnya tidak dicetak.
+   */
+  memory?: MemoryStore;
   onToolActivity?: (line: string) => void;
 }
 
@@ -244,6 +255,72 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             })),
             bersih: notes.length === 0,
           };
+        }),
+    }),
+
+    // ADR-0029: memori preferensi lintas proyek — hanya yang user nyatakan
+    // eksplisit sebagai kebiasaan tetap; terlihat dan bisa dihapus di lobi.
+    rememberPreference: tool({
+      description:
+        "Simpan PREFERENSI user yang berlaku LINTAS PROYEK — hanya yang user nyatakan EKSPLISIT sebagai kebiasaan tetap ('selalu', 'jangan pernah', 'setiap video saya'), bukan simpulanmu dari satu pilihan, dan bukan data pribadi. Setelah menyimpan, katakan dalam satu kalimat apa yang kamu ingat.",
+      inputSchema: z.object({
+        jenis: z
+          .enum(MEMORY_KINDS)
+          .describe(
+            "gaya (visual/tipografi) | suara (voice/musik) | format (struktur/durasi/rasio) | larangan (hal yang tidak boleh) | catatan",
+          ),
+        teks: z
+          .string()
+          .min(3)
+          .max(MAX_MEMORY_TEXT)
+          .describe(
+            "Satu kalimat dalam bahasa user, mis. 'Selalu pakai caption tegas untuk klip'",
+          ),
+      }),
+      execute: (input) =>
+        run("rememberPreference", input, async () => {
+          const store = deps.memory;
+          if (!store) {
+            return {
+              ok: false,
+              pesan: "Memori preferensi tidak tersedia di lingkungan ini",
+            };
+          }
+          const result = addMemoryEntry(store.read(), {
+            kind: input.jenis,
+            text: input.teks,
+            source: "agent",
+            projectId: session.projectId,
+          });
+          if (!result.ok) return { ok: false, pesan: result.reason };
+          if (!result.duplicate) store.write(result.memory);
+          return {
+            ok: true,
+            id: result.entry.id,
+            duplikat: result.duplicate,
+            jumlah: result.memory.entries.length,
+          };
+        }),
+    }),
+
+    forgetPreference: tool({
+      description:
+        "Hapus satu preferensi lintas proyek berdasarkan id-nya (lihat blok [PREFERENSI USER LINTAS PROYEK]). Pakai bila user bilang preferensinya berubah atau minta dilupakan.",
+      inputSchema: z.object({ id: z.string().min(1) }),
+      execute: (input) =>
+        run("forgetPreference", input, async () => {
+          const store = deps.memory;
+          if (!store) {
+            return {
+              ok: false,
+              pesan: "Memori preferensi tidak tersedia di lingkungan ini",
+            };
+          }
+          const { memory, removed } = removeMemoryEntry(store.read(), input.id);
+          if (!removed)
+            return { ok: false, pesan: `Tidak ada preferensi ber-id ${input.id}` };
+          store.write(memory);
+          return { ok: true, dihapus: removed.text, sisa: memory.entries.length };
         }),
     }),
 

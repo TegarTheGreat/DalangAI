@@ -6,6 +6,7 @@ export * from "./json-schema";
 export * from "./keyframes";
 export * from "./loudness";
 export * from "./media-ids";
+export * from "./memory";
 export * from "./patch";
 export * from "./patch-log";
 export * from "./prose";

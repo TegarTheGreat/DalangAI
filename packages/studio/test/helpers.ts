@@ -260,6 +260,8 @@ export const makeHost = (
 ): StudioHost =>
   new StudioHost({
     workspaceRoot,
+    // Memori preferensi (ADR-0029) di folder uji — jangan pernah rumah pengguna.
+    memoryPath: join(workspaceRoot, ".memori-uji.json"),
     ...(planPath ? { planPath } : {}),
     approvalTimeoutMs: 2000,
     deps: fakeDeps(overrides),

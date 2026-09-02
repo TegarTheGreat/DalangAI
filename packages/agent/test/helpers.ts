@@ -273,6 +273,8 @@ export const makeDeps = (
     ttsChainFor: overrides.ttsChainFor ?? (() => [fakeTts()]),
     stockChain: overrides.stockChain ?? (() => [fakeStock()]),
     stickerChain: overrides.stickerChain ?? (() => [fakeStock("giphy")]),
+    // ADR-0029: memori preferensi hanya bila tes menyuntikkannya.
+    ...(overrides.memory ? { memory: overrides.memory } : {}),
     renderVideo: overrides.renderVideo ?? render,
     videoMetadata:
       overrides.videoMetadata ??
