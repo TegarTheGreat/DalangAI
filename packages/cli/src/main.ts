@@ -353,7 +353,7 @@ program
           `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec(elapsed)}` +
           `${result.bundleFromCache ? " · bundle cache: hit" : ""}` +
           `${result.proxied ? ` · ${result.proxied} berkas dari proxy` : ""}` +
-          mixLine(result.mixLufs, plan.meta.loudnessTarget),
+          mixLine(result, plan.meta.loudnessTarget),
       );
     },
   );
@@ -362,14 +362,25 @@ program
  * Kenyaringan campuran akhir (ADR-0028) di samping sasarannya: angka yang
  * benar-benar akan didengar penonton, bukan janji normalisasi per klip.
  */
-const mixLine = (mixLufs: number | null | undefined, target: number | null): string => {
+const mixLine = (
+  result: { mixLufs?: number | null; mixGainDb?: number; mixNote?: string },
+  target: number | null,
+): string => {
+  const mixLufs = result.mixLufs;
   if (typeof mixLufs !== "number") return "";
   if (!target)
     return `\n  campuran akhir ${mixLufs.toFixed(1)} LUFS (normalisasi nonaktif)`;
   const selisih = mixLufs - target;
   const arah =
     Math.abs(selisih) < 1 ? "pas sasaran" : selisih > 0 ? "lebih keras" : "lebih pelan";
-  return `\n  campuran akhir ${mixLufs.toFixed(1)} LUFS · sasaran ${target} · ${arah} (${selisih >= 0 ? "+" : ""}${selisih.toFixed(1)} LU)`;
+  // Catatan koreksi (ADR-0028 §9) hanya bila ada yang perlu dijelaskan:
+  // berkasnya digeser, atau masih meleset dan alasannya tertulis.
+  const gain = result.mixGainDb ?? 0;
+  const catatan =
+    result.mixNote && (gain !== 0 || Math.abs(selisih) >= 1)
+      ? ` · ${result.mixNote}`
+      : "";
+  return `\n  campuran akhir ${mixLufs.toFixed(1)} LUFS · sasaran ${target} · ${arah} (${selisih >= 0 ? "+" : ""}${selisih.toFixed(1)} LU)${catatan}`;
 };
 
 const STATUS_ICON: Record<SceneStageResult["status"], string> = {
@@ -472,7 +483,7 @@ program
             `  ${result.width}×${result.height} · ${formatSec(result.durationSec)} · ` +
             `${(result.sizeBytes / 1024 / 1024).toFixed(1)} MB · render ${formatSec((Date.now() - startedAt) / 1000)}` +
             `${result.proxied ? ` · ${result.proxied} berkas dari proxy` : ""}` +
-            mixLine(result.mixLufs, summary.plan.meta.loudnessTarget),
+            mixLine(result, summary.plan.meta.loudnessTarget),
         );
       }
     },

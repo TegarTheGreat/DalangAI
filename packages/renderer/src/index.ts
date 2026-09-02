@@ -3,6 +3,7 @@ export * from "./browser";
 export * from "./bundle-cache";
 export * from "./ffmpeg";
 export * from "./fingerprint";
+export * from "./mix";
 export * from "./probe";
 export * from "./render";
 export * from "./save-media";

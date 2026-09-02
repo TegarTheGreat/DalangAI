@@ -142,10 +142,17 @@ export const PreviewPanel: React.FC = () => {
           typeof renderProgress.mixLufs === "number" ? (
             <span
               className="render-note"
-              title="Kenyaringan terintegrasi berkas hasil, diukur dari berkasnya sendiri (EBU R128)"
+              title={
+                renderProgress.mixNote
+                  ? `EBU R128, diukur dari berkasnya sendiri · ${renderProgress.mixNote}`
+                  : "Kenyaringan terintegrasi berkas hasil, diukur dari berkasnya sendiri (EBU R128)"
+              }
             >
               campuran akhir {renderProgress.mixLufs.toFixed(1)} LUFS
               {plan.meta.loudnessTarget ? ` · sasaran ${plan.meta.loudnessTarget}` : ""}
+              {renderProgress.mixGainDb
+                ? ` · dikoreksi ${renderProgress.mixGainDb > 0 ? "+" : ""}${renderProgress.mixGainDb.toFixed(1)} dB`
+                : ""}
               {renderProgress.proxied ? ` · ${renderProgress.proxied} dari proxy` : ""}
             </span>
           ) : null}

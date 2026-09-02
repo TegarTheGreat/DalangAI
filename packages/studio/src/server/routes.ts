@@ -586,6 +586,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
             file: result.outputLocation,
             sizeBytes: result.sizeBytes,
             mixLufs: result.mixLufs ?? null,
+            mixGainDb: result.mixGainDb ?? 0,
             proxied: result.proxied ?? 0,
           },
           0,
@@ -597,6 +598,8 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           label,
           url: `/.dalang/renders/${fileName}`,
           mixLufs: result.mixLufs ?? null,
+          ...(result.mixGainDb ? { mixGainDb: result.mixGainDb } : {}),
+          ...(result.mixNote ? { mixNote: result.mixNote } : {}),
           ...(result.proxied ? { proxied: result.proxied } : {}),
         });
       })

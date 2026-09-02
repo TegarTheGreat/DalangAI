@@ -275,7 +275,8 @@ render: teks ber-track mendarat di 0,2888 / 0,4295 / 0,5688 lebar bingkai
 (batas awalnya dicabut); yang tersisa: visual dasar scene belum bisa
 di-keyframe — selengkapnya di "Batas" ADR-0027.
 
-**§9.5 sudah dikerjakan** (ADR-0028): rekaman panjang dan berkas berat kini
+**§9.5 sudah dikerjakan** (ADR-0028; campuran akhir kini juga DIKOREKSI ke
+sasaran dengan penguatan rata — Keputusan 9): rekaman panjang dan berkas berat kini
 punya PROXY pratinjau — H.264 sisi pendek 540, laju bingkai dipangkas ke 30 —
 yang dibuat ffmpeg bawaan Remotion (tanpa biner baru), dikunci per berkas di
 `renderState`, dan dipakai HANYA oleh preview Studio dan render draf; render

@@ -246,6 +246,7 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
               durationSec: info.durationSec,
               fps: info.fps,
               codec: info.codec,
+              bitrate: info.bitrate,
             })
           : null,
       transcript: plan ? file in plan.renderState.transcripts : false,

@@ -277,6 +277,43 @@ const toWav = async (sourcePath: string, wavPath: string): Promise<AudioProbeRes
   return { ok: true };
 };
 
+/**
+ * Salin video apa adanya, geser audionya `gainDb`, tulis ke `outputPath`
+ * (ADR-0028 §9: koreksi campuran akhir). Video TIDAK dienkode ulang — hanya
+ * jalur audio yang lewat `volume`, jadi biayanya sedetik-dua untuk video
+ * berapa pun panjangnya, dan piksel hasil render tidak berubah sebit pun.
+ */
+export const applyGain = async (
+  sourcePath: string,
+  outputPath: string,
+  gainDb: number,
+  audio: { codec: "aac" | "pcm_s16le"; bitrate?: string },
+): Promise<AudioProbeResult> => {
+  const quickTime = /\.(mp4|m4v|mov)$/i.test(outputPath);
+  try {
+    await callFf("ffmpeg", [
+      ...QUIET,
+      "-i",
+      sourcePath,
+      "-map",
+      "0",
+      "-c:v",
+      "copy",
+      "-af",
+      `volume=${gainDb.toFixed(2)}dB`,
+      "-c:a",
+      audio.codec,
+      ...(audio.bitrate ? ["-b:a", audio.bitrate] : []),
+      ...(quickTime ? ["-movflags", "+faststart"] : []),
+      outputPath,
+    ]);
+    return { ok: true };
+  } catch (error) {
+    rmSync(outputPath, { force: true });
+    return { ok: false, reason: reasonOf(error) };
+  }
+};
+
 const decodeMonoPcm = async (
   sourcePath: string,
   sampleRate: number,

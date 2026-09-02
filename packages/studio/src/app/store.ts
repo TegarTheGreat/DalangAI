@@ -80,6 +80,9 @@ export interface RenderProgress {
   mixLufs?: number | null;
   /** Berkas video yang dirender dari proxy (ADR-0028). */
   proxied?: number;
+  /** Penguatan koreksi campuran akhir, dB (ADR-0028 §9). */
+  mixGainDb?: number;
+  mixNote?: string;
 }
 
 export interface StudioState {
@@ -561,13 +564,19 @@ export class StudioClient {
             ...(event.url ? { url: event.url } : {}),
             ...(event.error ? { error: event.error } : {}),
             ...(event.mixLufs !== undefined ? { mixLufs: event.mixLufs } : {}),
+            ...(event.mixGainDb ? { mixGainDb: event.mixGainDb } : {}),
+            ...(event.mixNote ? { mixNote: event.mixNote } : {}),
             ...(event.proxied ? { proxied: event.proxied } : {}),
           },
         });
         if (event.status === "done") {
           this.toast(
             typeof event.mixLufs === "number"
-              ? `Ekspor ${event.label} selesai · campuran akhir ${event.mixLufs.toFixed(1)} LUFS`
+              ? `Ekspor ${event.label} selesai · campuran akhir ${event.mixLufs.toFixed(1)} LUFS${
+                  event.mixGainDb
+                    ? ` (dikoreksi ${event.mixGainDb > 0 ? "+" : ""}${event.mixGainDb.toFixed(1)} dB)`
+                    : ""
+                }`
               : `Ekspor ${event.label} selesai`,
           );
           this.scheduleRefresh();

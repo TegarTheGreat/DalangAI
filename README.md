@@ -488,8 +488,11 @@ Yang sudah berjalan:
   - CLI: `dalang proxy`, `generate` menjalankan tahap proxy, `render --proxy`;
   - dua batas ADR-0026 dicabut oleh dekoder yang sama: AAC/MP4 kini terukur
     tanpa browser, dan **campuran akhir** setiap render diukur dari berkas
-    hasilnya (CLI mencetaknya di samping sasaran; Studio menampilkannya di
-    strip render).
+    hasilnya — lalu DIKOREKSI ke `meta.loudnessTarget` dengan penguatan rata
+    (toleransi ±1 LU, dipangkas di puncak -1 dBFS, video disalin tanpa enkode
+    ulang); CLI dan Studio menyebut angkanya beserta koreksinya;
+  - keputusan proxy juga melihat laju bit: di atas 25 Mbps diberi proxy walau
+    720p 30 fps.
 - **Kualitas terjaga otomatis**: 982 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI

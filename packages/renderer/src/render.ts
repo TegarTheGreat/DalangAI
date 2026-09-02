@@ -16,7 +16,7 @@ import {
 } from "@remotion/renderer";
 import { findBrowserExecutable } from "./browser";
 import { getBundle } from "./bundle-cache";
-import { measureMediaLoudness } from "./ffmpeg";
+import { finalizeMix } from "./mix";
 import { copyPlanAssets } from "./stage";
 import type { RenderTarget } from "./target";
 
@@ -278,6 +278,15 @@ export interface RenderVideoResult {
    * null = tidak terukur (target yang tidak mengukur, atau dekode gagal).
    */
   mixLufs?: number | null;
+  /**
+   * Kenyaringan campuran SEBELUM koreksi (ADR-0028 §9); sama dengan `mixLufs`
+   * bila berkasnya tidak disentuh.
+   */
+  mixLufsBefore?: number | null;
+  /** Penguatan yang diterapkan ke berkas hasil, dB; 0 = tidak dikoreksi. */
+  mixGainDb?: number;
+  /** Kalimat keadaan koreksi: kenapa dikoreksi, dibatasi puncak, atau dibiarkan. */
+  mixNote?: string;
   /** Berapa berkas video yang dirender dari proxy-nya (ADR-0028); 0 = semua asli. */
   proxied?: number;
 }
@@ -322,11 +331,18 @@ export const renderPlanToVideo = async (
         }),
     });
 
-    // Ukur campuran akhirnya dari berkas yang ditulis: normalisasi per klip
-    // (ADR-0026) menjanjikan sumber yang setara, bukan program yang tepat
-    // sasaran — angka ini yang menutup celah itu. Kegagalan mengukur tidak
-    // pernah menggagalkan render yang sudah jadi.
-    const mix = await measureMediaLoudness(options.outputLocation);
+    // Ukur campuran akhirnya dari berkas yang ditulis dan KOREKSI ke sasaran
+    // (ADR-0028 §9): normalisasi per klip (ADR-0026) menjanjikan sumber yang
+    // setara, bukan program yang tepat sasaran. Kegagalan mengukur atau
+    // mengoreksi tidak pernah menggagalkan render yang sudah jadi.
+    const mix = await finalizeMix(
+      options.outputLocation,
+      {
+        codec: enc.audioCodec,
+        ...(enc.audioBitrate ? { bitrate: enc.audioBitrate } : {}),
+      },
+      prepared.plan.meta.loudnessTarget,
+    );
 
     return {
       outputLocation: options.outputLocation,
@@ -337,7 +353,10 @@ export const renderPlanToVideo = async (
       height: Math.round(prepared.composition.height * enc.scale),
       bundleFromCache: prepared.bundleFromCache,
       settings,
-      mixLufs: mix?.lufs ?? null,
+      mixLufs: mix.lufs,
+      mixLufsBefore: mix.lufsBefore,
+      mixGainDb: mix.gainDb,
+      mixNote: mix.note,
       proxied: options.useProxies ? proxiedFiles(loadPlan(options.planPath)).size : 0,
     };
   } finally {

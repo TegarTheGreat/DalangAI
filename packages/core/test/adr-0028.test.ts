@@ -281,3 +281,39 @@ describe("substituteProxies — preview & render draf memakai proxy, tanpa menye
     expect(substituteProxies(base)).toBe(base);
   });
 });
+
+describe("proxyDecision — laju bit (batas ADR-0028 dicabut)", () => {
+  it("720p 30 fps yang laju bitnya 50 Mbps tetap perlu proxy, dan menyebut Mbps-nya", () => {
+    const heavy = proxyDecision({
+      width: 1280,
+      height: 720,
+      durationSec: 10,
+      codec: "h264",
+      fps: 30,
+      bitrate: 50_000_000,
+    });
+    expect(heavy.needed).toBe(true);
+    expect(heavy.reason).toBe("laju bit 50 Mbps");
+  });
+
+  it("di bawah 25 Mbps, atau laju bit tidak diketahui, tidak mengubah keputusan", () => {
+    expect(
+      proxyDecision({
+        width: 1280,
+        height: 720,
+        durationSec: 10,
+        codec: "h264",
+        bitrate: 12_000_000,
+      }).needed,
+    ).toBe(false);
+    expect(
+      proxyDecision({
+        width: 1280,
+        height: 720,
+        durationSec: 10,
+        codec: "h264",
+        bitrate: null,
+      }).needed,
+    ).toBe(false);
+  });
+});

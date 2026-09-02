@@ -369,3 +369,85 @@ export const integratedLoudness = (audio: PcmAudio): LoudnessResult => {
 /** WAV mentah -> hasil ukur. Pintasan yang dipakai stage dan tesnya. */
 export const measureWavLoudness = (bytes: Uint8Array): LoudnessResult =>
   integratedLoudness(decodeWav(bytes));
+
+// ---------------------------------------------------------------------------
+// Koreksi campuran akhir (ADR-0028 §9)
+// ---------------------------------------------------------------------------
+
+/** Toleransi EBU R128: di dalam ±1 LU dari sasaran tidak ada yang dikoreksi. */
+export const MIX_TOLERANCE_LU = 1;
+/** Langit-langit puncak sampel setelah koreksi, dBFS. */
+export const MIX_PEAK_CEILING_DBFS = -1;
+
+export interface MixCorrection {
+  /** Penguatan yang harus diterapkan, dB, dibulatkan 0,1; 0 = jangan sentuh. */
+  gainDb: number;
+  /** true bila kenaikan yang dibutuhkan dipangkas oleh langit-langit puncak. */
+  capped: boolean;
+  /** Kalimat untuk laporan: kenapa dikoreksi, dibatasi, atau dibiarkan. */
+  reason: string;
+}
+
+const round1 = (value: number): number => Math.round(value * 10) / 10;
+const signed = (value: number): string => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`;
+
+/**
+ * Berapa dB campuran akhir harus digeser supaya sampai ke sasaran.
+ *
+ * Penguatan RATA saja — bukan kompresi, bukan limiter: normalisasi per klip
+ * (ADR-0026) sudah menyetarakan sumber-sumbernya, jadi yang tersisa cuma
+ * selisih program terhadap sasaran, dan penguatan rata mempertahankan
+ * keseimbangan yang sengaja dipilih per klip. Kenaikan dipangkas supaya puncak
+ * sampel tidak melewati `MIX_PEAK_CEILING_DBFS`: menaikkan campuran sampai
+ * terpotong akan menukar satu cacat (terlalu pelan) dengan cacat yang lebih
+ * buruk (distorsi), dan yang dipangkas dilaporkan sebagai dipangkas, bukan
+ * disembunyikan. Penurunan tidak pernah dipangkas.
+ */
+export const mixCorrection = (
+  measured: { lufs: number | null; peak: number },
+  target: number | null,
+): MixCorrection => {
+  if (target === null || !Number.isFinite(target)) {
+    return { gainDb: 0, capped: false, reason: "normalisasi nonaktif" };
+  }
+  if (measured.lufs === null) {
+    return { gainDb: 0, capped: false, reason: "sunyi — tidak ada yang bisa dikoreksi" };
+  }
+  const wanted = target - measured.lufs;
+  if (Math.abs(wanted) < MIX_TOLERANCE_LU) {
+    return {
+      gainDb: 0,
+      capped: false,
+      reason: `sudah dalam toleransi ±${MIX_TOLERANCE_LU} LU`,
+    };
+  }
+  if (wanted < 0) {
+    return {
+      gainDb: round1(wanted),
+      capped: false,
+      reason: `diturunkan ${signed(round1(wanted))}`,
+    };
+  }
+  const peakDbfs = 20 * Math.log10(Math.max(measured.peak, 1e-9));
+  const headroom = Math.max(0, MIX_PEAK_CEILING_DBFS - peakDbfs);
+  if (wanted <= headroom) {
+    return {
+      gainDb: round1(wanted),
+      capped: false,
+      reason: `dinaikkan ${signed(round1(wanted))}`,
+    };
+  }
+  const gainDb = round1(headroom);
+  if (gainDb < 0.5) {
+    return {
+      gainDb: 0,
+      capped: true,
+      reason: `tidak dikoreksi: puncak sudah di ${peakDbfs.toFixed(1)} dBFS, tidak ada ruang untuk ${signed(round1(wanted))}`,
+    };
+  }
+  return {
+    gainDb,
+    capped: true,
+    reason: `dinaikkan ${signed(gainDb)}, dibatasi puncak (butuh ${signed(round1(wanted))})`,
+  };
+};

@@ -171,8 +171,9 @@ panelnya, dan `min-width: 900px` yang dipasang sengaja langsung ditolak.
 - **Sisipan lintas scene harus ditulis dua kali.** Konsekuensi langsung dari
   keputusan §1, dan harga yang dibayar untuk garis waktu yang tetap bisa disusun
   ulang per scene.
-- **Suara lapisan cuma satu angka gain.** Tanpa fade, tanpa ducking otomatis di
-  bawah narasi, tanpa normalisasi kenyaringan — semuanya §9.4.
+- ~~**Suara lapisan cuma satu angka gain.**~~ *DICABUT oleh ADR-0026:*
+  `visual.audio` lapisan punya amplop penuh (fade, ducking di bawah narasi,
+  normalisasi kenyaringan) yang sama dengan klip lain.
 - **Ekspor membawa KLIPNYA, bukan tampilannya.** Letak, ukuran, sudut membulat,
   bingkai, dan animasi masuk tidak ikut menyeberang: itu transform milik render,
   bukan properti klip di OTIO/FCPXML. Klipnya akan tampil layar penuh di editor

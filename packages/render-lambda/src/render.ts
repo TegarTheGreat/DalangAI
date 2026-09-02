@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
   DIMENSIONS,
@@ -11,6 +11,8 @@ import {
   assertSafeRelative,
   DEFAULT_EXPORT_SETTINGS,
   type ExportSettings,
+  encoderArgs,
+  finalizeMix,
   PROFILES,
   planAssetFiles,
   type RenderCostEstimate,
@@ -260,11 +262,27 @@ export const createLambdaRenderTarget = (
       });
       report?.({ stage: "downloading", progress: 1 });
 
+      // Koreksi campuran akhir (ADR-0028 §9) berjalan DI MESIN INI pada berkas
+      // yang sudah diunduh: Lambda merender, mesin lokal memaster.
+      const enc = encoderArgs(settings);
+      const mix = await finalizeMix(
+        request.outputLocation,
+        {
+          codec: enc.audioCodec,
+          ...(enc.audioBitrate ? { bitrate: enc.audioBitrate } : {}),
+        },
+        plan.meta.loudnessTarget,
+      );
+
       const { totalFrames, fps } = frameCountOf(plan);
       const { width, height } = dimensionsOf(plan);
       const result: LambdaRenderResult = {
         outputLocation: request.outputLocation,
-        sizeBytes,
+        sizeBytes: mix.gainDb === 0 ? sizeBytes : statSync(request.outputLocation).size,
+        mixLufs: mix.lufs,
+        mixLufsBefore: mix.lufsBefore,
+        mixGainDb: mix.gainDb,
+        mixNote: mix.note,
         durationSec: Number((totalFrames / fps).toFixed(2)),
         durationInFrames: totalFrames,
         width: Math.round(width * (settings.resolution / 1080)),

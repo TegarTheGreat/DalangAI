@@ -397,6 +397,10 @@ export type StudioEvent =
       mixLufs?: number | null;
       /** Berapa berkas video yang dirender dari proxy-nya (ADR-0028). */
       proxied?: number;
+      /** Penguatan koreksi campuran akhir yang diterapkan, dB (ADR-0028 §9). */
+      mixGainDb?: number;
+      /** Kalimat keadaan koreksi campuran akhir. */
+      mixNote?: string;
     };
 
 // ---------------------------------------------------------------------------

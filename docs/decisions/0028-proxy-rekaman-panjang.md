@@ -151,12 +151,54 @@ pengukur EBU R128 yang sama (`mixLufs`): angka yang benar-benar akan didengar
 penonton, bukan janji normalisasi per klip. Kegagalan mengukur tidak pernah
 menggagalkan render yang sudah jadi.
 
+### 9. Campuran akhir DIKOREKSI ke sasaran, dengan penguatan rata
+
+Mengukur saja ternyata setengah jalan: angka "-21,3 LUFS · sasaran -16" di
+samping berkas yang sudah jadi hanya memindahkan pekerjaan ke pengguna.
+`finalizeMix` (renderer) kini mengukur berkas hasil, menghitung penguatan lewat
+`mixCorrection` (pipeline, murni), menerapkannya dengan ffmpeg bawaan Remotion
+— video DISALIN apa adanya, hanya jalur audio yang lewat `volume` — lalu
+mengukur lagi. Empat pagar yang disengaja:
+
+- **Penguatan RATA, bukan kompresi atau limiter.** Normalisasi per klip
+  (ADR-0026) sudah menyetarakan sumbernya; yang tersisa hanya selisih program
+  terhadap sasaran, dan penguatan rata mempertahankan keseimbangan yang sengaja
+  dipilih per klip — itulah kekhawatiran yang membuat koreksi ini dulu ditunda.
+- **Toleransi ±1 LU (EBU R128).** Di dalamnya berkas tidak disentuh sama
+  sekali; enkode ulang tanpa manfaat hanya menambah satu generasi AAC.
+- **Langit-langit puncak -1 dBFS.** Kenaikan dipangkas supaya puncak sampel
+  tidak melewatinya; yang dipangkas DILAPORKAN ("dinaikkan +5,0 dB, dibatasi
+  puncak (butuh +7,0 dB)"), dan penurunan tidak pernah dipangkas.
+- **Format yang audionya tidak bisa dienkode ulang dilaporkan, bukan
+  dipaksa.** Build ramping Remotion punya enkoder aac dan pcm, tidak punya
+  opus: MP4/HEVC/MOV dikoreksi, WebM dilaporkan apa adanya beserta selisihnya.
+
+Render Lambda ikut: koreksinya berjalan di mesin lokal pada berkas yang sudah
+diunduh — Lambda merender, mesin lokal memaster. `meta.loudnessTarget: null`
+mematikannya bersama normalisasi per klip; tidak ada sakelar kedua.
+
+Di saat yang sama `proxyDecision` mendapat aturan kelima: laju bit di atas
+25 Mbps diberi proxy walau ringan menurut aturan lain, karena byte per detik —
+bukan jumlah piksel — yang membuat browser tersendat pada rekaman layar.
+
 ## Verifikasi
 
 - **Pengukur & keputusan (murni):** 13 tes core — keputusan proxy per aturan
   beserta alasannya, dimensi genap tanpa pembesaran, pemangkasan laju,
   `setProxy` ke semua pemakai berkas, `substituteProxies` yang tidak menyentuh
   trim/kenyaringan dan mengembalikan objek yang sama bila tidak ada proxy.
+- **Koreksi campuran akhir (Keputusan 9):** 6 tes murni `mixCorrection`
+  (toleransi, naik, turun tanpa pangkas, dipangkas puncak dengan laporan yang
+  menyebut kebutuhan, tanpa ruang) dan 5 tes `finalizeMix` di atas ffmpeg
+  SUNGGUHAN: nada -10 dBFS (-10,7 LUFS) ke sasaran -16 diturunkan -5,3 dB dan
+  berkasnya terukur ulang -16,0; amplitudo 0,5 (-6,7 LUFS, puncak -6 dBFS) ke
+  sasaran 0 dinaikkan +5,0 dB "dibatasi puncak (butuh +6,7)"; di dalam
+  toleransi berkas tidak disentuh (mtime sama); Opus dilaporkan; berkas bukan
+  media "tidak terukur" tanpa lemparan. Aturan laju bit: 2 tes core. Ujung ke
+  ujung lewat CLI pada proyek uji rekaman panjang: `dalang render --proxy`
+  melaporkan "campuran akhir -16,0 LUFS · sasaran -16 · pas sasaran ·
+  dinaikkan +17,1 dB dari -33,1 LUFS" — draf 54,9 detik yang sebelumnya 17 LU
+  terlalu pelan kini tepat sasaran, videonya disalin tanpa enkode ulang.
 - **Tahap pipeline (transkoder palsu):** 10 tes — kandidat per berkas video
   (lapisan yatim tidak ikut), cache dan `--force`, cache yang berkas proxy-nya
   hilang dibuat ulang, sumber yang berubah isi mendapat proxy baru dan yang
@@ -206,15 +248,16 @@ menggagalkan render yang sudah jadi.
 - **Strip bingkai, gelombang, dan proxy butuh transkoder.** Di mesin tanpa
   `@remotion/compositor-*` (tidak ada dalam pemasangan normal) rekaman tetap
   bisa dipasang; UI mengatakan apa yang tidak ia dapat.
-- **Keputusan proxy tidak melihat laju bit.** Rekaman 720p 30 fps 80 Mbps
-  ProRes-like berkodek h264 (jarang) akan dianggap ringan. Aturannya satu
-  baris di `proxyDecision` kalau itu terjadi.
+- ~~**Keputusan proxy tidak melihat laju bit.**~~ *DICABUT (Keputusan 9):*
+  di atas 25 Mbps diberi proxy, alasannya menyebut Mbps-nya.
 - **Proxy adalah AAC stereo 96 kbps.** Preview dan render draf mendengar
   itu, bukan audio aslinya; render final tidak.
-- **Campuran akhir DIUKUR, belum DIKOREKSI.** Angka di samping sasaran
-  memberi tahu selisihnya; menyesuaikannya otomatis (normalisasi program)
-  adalah keputusan tersendiri, karena ia mengubah keseimbangan yang sengaja
-  dipilih per klip.
+- ~~**Campuran akhir DIUKUR, belum DIKOREKSI.**~~ *DICABUT (Keputusan 9):*
+  dikoreksi dengan penguatan rata ke sasaran, toleransi ±1 LU, dipangkas oleh
+  langit-langit puncak -1 dBFS. Yang tersisa: WebM (Opus) hanya dilaporkan,
+  dan koreksi hanya menggeser, tidak pernah memampatkan — program yang
+  puncaknya sudah di langit-langit tetapi rata-ratanya jauh di bawah sasaran
+  dilaporkan "tidak ada ruang", bukan dilimit.
 - **Unggahan tidak bisa dilanjutkan** setelah putus; ia diulang dari awal.
   Dedup isi membuat pengulangan yang sudah sampai tidak menyalin dua kali,
   tapi byte-nya tetap dikirim ulang.

@@ -17,6 +17,13 @@ export const PROXY_MAX_FPS = 30;
 export const PROXY_MIN_DURATION_SEC = 60;
 /** Sisi pendek di atas ini (yakni 1080p ke atas) diberi proxy. */
 export const PROXY_MAX_DIRECT_SHORT_SIDE = 720;
+/**
+ * Laju bit di atas ini (bit/detik) diberi proxy walau ringan menurut aturan
+ * lain: rekaman layar 720p 30 fps pada 50 Mbps memaksa browser mendekode lebih
+ * banyak byte per detik daripada 1080p biasa, dan byte per detik itulah yang
+ * membuat preview tersendat — bukan jumlah pikselnya.
+ */
+export const PROXY_MAX_DIRECT_BITRATE = 25_000_000;
 
 /**
  * Kodek yang diputar langsung oleh Chromium tanpa kodek proprietary. HEVC,
@@ -34,6 +41,8 @@ export interface ProxySourceInfo {
   durationSec: number;
   fps?: number | null;
   codec?: string | null;
+  /** Laju bit keseluruhan, bit/detik; tidak diisi = tidak diketahui. */
+  bitrate?: number | null;
 }
 
 export interface ProxyDecision {
@@ -52,9 +61,10 @@ export const clockLabel = (sec: number): string => {
 };
 
 /**
- * Perlukah berkas ini proxy? Empat alasan, diperiksa dari yang paling
+ * Perlukah berkas ini proxy? Lima alasan, diperiksa dari yang paling
  * menentukan: kodek yang tidak diputar browser (tanpa proxy previewnya HITAM),
- * rekaman panjang, resolusi di atas 720p, laju bingkai di atas 30.
+ * rekaman panjang, resolusi di atas 720p, laju bingkai di atas 30, laju bit
+ * di atas 25 Mbps.
  */
 export const proxyDecision = (info: ProxySourceInfo): ProxyDecision => {
   const codec = info.codec?.toLowerCase() ?? null;
@@ -70,6 +80,12 @@ export const proxyDecision = (info: ProxySourceInfo): ProxyDecision => {
   }
   if (info.fps && info.fps > PROXY_MAX_FPS + 0.5) {
     return { needed: true, reason: `${Math.round(info.fps)} fps` };
+  }
+  if (info.bitrate && info.bitrate > PROXY_MAX_DIRECT_BITRATE) {
+    return {
+      needed: true,
+      reason: `laju bit ${Math.round(info.bitrate / 1_000_000)} Mbps`,
+    };
   }
   return {
     needed: false,
