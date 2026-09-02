@@ -1,5 +1,11 @@
-import { type ClipAudio, loudnessGain, type ScenePlan } from "@dalang/core";
-import type { FrameLayout } from "./layout";
+import {
+  type ClipAudio,
+  loudnessGain,
+  NARRATION_LEAD_IN_SEC,
+  type ScenePlan,
+  type WordTimestamp,
+} from "@dalang/core";
+import { FPS, type FrameLayout } from "./layout";
 
 /**
  * Amplop audio per klip (ADR-0026, roadmap §9.4).
@@ -33,20 +39,80 @@ export interface DuckWindow {
 }
 
 /**
- * Rentang frame GLOBAL tempat narasi berbunyi.
+ * Jeda bicara yang LEBIH PENDEK dari ini tetap diduck (ADR-0028 mencabut batas
+ * ADR-0026 "ducking mengikuti jendela scene").
+ *
+ * Musik yang naik di setiap tarikan napas lalu turun lagi pada kata berikutnya
+ * terdengar seperti pompa — cacat mixing yang paling mudah dikenali telinga
+ * awam. Jeda antar kalimat penutur Indonesia biasanya 0,4-0,9 detik; 1,2
+ * detik membiarkan jeda itu lewat dan hanya membuka musik pada jeda yang
+ * memang disengaja: pergantian gagasan, atau narasi yang selesai lebih awal
+ * daripada scene-nya.
+ */
+export const DUCK_HOLD_SEC = 1.2;
+
+export interface SpeechWindow {
+  startSec: number;
+  endSec: number;
+}
+
+/**
+ * Rentang bicara dari word timestamp (relatif awal berkas narasi): kata-kata
+ * yang celahnya lebih pendek dari `holdSec` digabung jadi satu rentang.
+ * Murni dan tidak peduli urutan masukannya.
+ */
+export const speechWindows = (
+  words: readonly WordTimestamp[],
+  holdSec: number = DUCK_HOLD_SEC,
+): SpeechWindow[] => {
+  const sorted = [...words].sort((a, b) => a.startSec - b.startSec);
+  const out: SpeechWindow[] = [];
+  for (const word of sorted) {
+    const last = out[out.length - 1];
+    if (last && word.startSec - last.endSec < holdSec) {
+      last.endSec = Math.max(last.endSec, word.endSec);
+    } else {
+      out.push({ startSec: word.startSec, endSec: Math.max(word.endSec, word.startSec) });
+    }
+  }
+  return out;
+};
+
+/**
+ * Rentang frame GLOBAL tempat narasi BERBUNYI.
  *
  * Syaratnya dua-duanya: naskahnya tidak kosong DAN berkas narasinya sudah ada
  * di renderState. Scene yang naskahnya sudah ditulis tapi suaranya belum
  * dibuat tidak boleh membuat musik dan B-roll mengecil — di video itu akan
  * terdengar sebagai lubang yang tidak ada sebabnya.
+ *
+ * Kalau berkas narasinya membawa word timestamp, jendelanya mengikuti
+ * RENTANG BICARA yang sebenarnya (digeser sebesar lead-in narasi, sama dengan
+ * caption), bukan seluruh jendela scene: narasi lima detik di scene sepuluh
+ * detik membiarkan musik naik kembali setelah kalimat terakhir. Tanpa word
+ * timestamp, seluruh scene diduck seperti sebelumnya — itu jawaban yang jujur
+ * untuk "tidak tahu kapan ia bicara".
  */
 export const duckWindows = (plan: ScenePlan, layout: FrameLayout): DuckWindow[] => {
   const windows: DuckWindow[] = [];
   plan.scenes.forEach((scene, index) => {
     if (scene.narration.trim() === "") return;
-    if (!plan.renderState.narrationAudio[scene.id]) return;
+    const narration = plan.renderState.narrationAudio[scene.id];
+    if (!narration) return;
     const from = layout.sceneStarts[index] ?? 0;
-    windows.push({ from, to: from + (layout.sceneFrames[index] ?? 0) });
+    const to = from + (layout.sceneFrames[index] ?? 0);
+    const words = narration.wordTimestamps ?? [];
+    if (words.length === 0) {
+      windows.push({ from, to });
+      return;
+    }
+    for (const span of speechWindows(words)) {
+      const start = from + Math.round((NARRATION_LEAD_IN_SEC + span.startSec) * FPS);
+      const end = from + Math.round((NARRATION_LEAD_IN_SEC + span.endSec) * FPS);
+      const clampedFrom = Math.min(to, Math.max(from, start));
+      const clampedTo = Math.min(to, Math.max(from, end));
+      if (clampedTo > clampedFrom) windows.push({ from: clampedFrom, to: clampedTo });
+    }
   });
   return windows;
 };

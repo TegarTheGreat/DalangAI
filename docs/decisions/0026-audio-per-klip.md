@@ -187,7 +187,10 @@ digital yang sudah dibuang gerbang mutlak; tesnya diperbaiki memakai materi
   belum dikoreksi otomatis.
 - **Ducking hanya mengikuti jendela scene bernarasi**, bukan deteksi bunyi
   narasi yang sebenarnya. Scene bernarasi dengan jeda panjang tetap menduck
-  sepanjang scene.
+  sepanjang scene. *DICABUT (bersama ADR-0028):* dengan word timestamp
+  narasi, jendela ducking mengikuti rentang bicara nyata (jeda di bawah
+  `DUCK_HOLD_SEC` 1,2 dtk tetap diduck supaya musik tidak memompa); tanpa
+  word timestamp, perilaku lama dipertahankan.
 - **Trek audio tidak bisa di-fade lewat kanvas** — hanya lewat panel.
 
 ## Konsekuensi

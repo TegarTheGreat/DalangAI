@@ -8,11 +8,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildClipVolume,
   DUCK_FACTOR,
+  DUCK_HOLD_SEC,
   DUCK_RAMP_FRAMES,
   duckAt,
   duckWindows,
   isSilent,
   narrationVolume,
+  speechWindows,
 } from "../src/audio-model";
 import { computeFrameLayout, FPS } from "../src/layout";
 
@@ -270,6 +272,97 @@ describe("duckWindows", () => {
   it("begitu berkasnya ada, scene itu ikut menduck", () => {
     const dengan = plan({ narasiTerpasang: true });
     expect(duckWindows(dengan, computeFrameLayout(dengan))).toHaveLength(2);
+  });
+
+  /**
+   * ADR-0028 mencabut batas ADR-0026: dengan word timestamp, ducking mengikuti
+   * RENTANG BICARA, bukan seluruh scene. Angkanya dihitung tangan: lead-in
+   * narasi 0,25 dtk (7,5 → 8 frame) sama dengan yang dipakai caption.
+   */
+  const planWithWords = (words: Array<[number, number]>) =>
+    parseScenePlan({
+      version: 1,
+      projectId: "uji-duck-kata",
+      meta: { title: "Uji Duck Kata" },
+      scenes: [
+        { id: "a", narration: "", visual: { type: "solid" }, duration: 4 },
+        {
+          id: "b",
+          narration: "Ada kata-katanya.",
+          visual: { type: "solid" },
+          duration: 6,
+        },
+      ],
+      renderState: {
+        narrationAudio: {
+          b: {
+            file: "audio/b.wav",
+            durationSec: 5,
+            wordTimestamps: words.map(([startSec, endSec], i) => ({
+              word: `k${i}`,
+              startSec,
+              endSec,
+            })),
+          },
+        },
+        resolvedAssets: {},
+      },
+    });
+
+  it("dengan word timestamp: jendela mengikuti rentang bicara, digeser lead-in", () => {
+    const p = planWithWords([
+      [0, 0.6],
+      [0.7, 1.5],
+      // celah 2 detik ≥ DUCK_HOLD_SEC: musik boleh naik di sini
+      [3.5, 4.2],
+      [4.3, 5.0],
+    ]);
+    const layout = computeFrameLayout(p);
+    const from = layout.sceneStarts[1] ?? 0;
+    expect(duckWindows(p, layout)).toEqual([
+      { from: from + Math.round(0.25 * FPS), to: from + Math.round(1.75 * FPS) },
+      { from: from + Math.round(3.75 * FPS), to: from + Math.round(5.25 * FPS) },
+    ]);
+  });
+
+  it("celah yang lebih pendek dari DUCK_HOLD_SEC digabung — musik tidak memompa antar kalimat", () => {
+    const p = planWithWords([
+      [0, 1],
+      [1.9, 3], // celah 0,9 dtk < 1,2 dtk
+    ]);
+    const layout = computeFrameLayout(p);
+    const windows = duckWindows(p, layout);
+    expect(windows).toHaveLength(1);
+    expect(windows[0]?.to).toBe((layout.sceneStarts[1] ?? 0) + Math.round(3.25 * FPS));
+  });
+
+  it("kata di luar jendela scene dipangkas, dan urutan masukan tidak penting", () => {
+    const p = planWithWords([
+      [4.0, 9.0], // melewati akhir scene 6 dtk
+      [0.2, 0.9],
+    ]);
+    const layout = computeFrameLayout(p);
+    const from = layout.sceneStarts[1] ?? 0;
+    const to = from + (layout.sceneFrames[1] ?? 0);
+    const windows = duckWindows(p, layout);
+    expect(windows[0]?.from).toBe(from + Math.round(0.45 * FPS));
+    expect(windows[1]?.to).toBe(to);
+    expect(windows.every((w) => w.from >= from && w.to <= to)).toBe(true);
+  });
+
+  it("speechWindows: menggabung menurut holdSec dan menjaga urutan waktu", () => {
+    const words = [
+      { word: "c", startSec: 5, endSec: 5.5 },
+      { word: "a", startSec: 0, endSec: 0.4 },
+      { word: "b", startSec: 0.9, endSec: 1.3 },
+    ];
+    expect(speechWindows(words, 1)).toEqual([
+      { startSec: 0, endSec: 1.3 },
+      { startSec: 5, endSec: 5.5 },
+    ]);
+    expect(speechWindows(words, 0.4)).toHaveLength(3);
+    expect(speechWindows([])).toEqual([]);
+    expect(DUCK_HOLD_SEC).toBeGreaterThan(0.9);
   });
 });
 

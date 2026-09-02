@@ -424,7 +424,9 @@ Yang sudah berjalan:
   suara aset visual, suara lapisan, dan trek audio tambahan:
   - `volume`, fade masuk/keluar, ducking di bawah narasi, dan normalisasi
     kenyaringan — satu implementasi, satu panel kendali, jadi tidak ada panel
-    yang diam-diam kehilangan sakelar ducking;
+    yang diam-diam kehilangan sakelar ducking; ducking mengikuti RENTANG
+    BICARA nyata dari word timestamp (jeda di bawah 1,2 dtk tetap diduck agar
+    musik tidak memompa), bukan seluruh jendela scene;
   - kenyaringan diukur dengan pengukur **EBU R128 / ITU-R BS.1770-4** yang
     ditulis sendiri — tanpa ffmpeg, tanpa biner tambahan — dan koefisien
     penapis K dihitung ulang per laju cuplik, bukan dipakai apa adanya dari
