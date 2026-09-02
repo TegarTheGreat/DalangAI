@@ -96,6 +96,21 @@ const main = async (): Promise<void> => {
       property: "opacity",
     } as unknown as { points: { at: number }[] },
   ];
+  // Dua teks di kelompok posisi yang sama pada sc-step-1: yang pendek akan
+  // diseret sampai tepi kirinya sejajar tepi kiri yang panjang (penempelan
+  // ke elemen lain, ADR-0024).
+  const step1 = seed.scenes.find((scene) => scene.id === "sc-step-1") as unknown as {
+    texts?: unknown[];
+  };
+  step1.texts = [
+    {
+      id: "tx-judul",
+      content: "Judul uji yang cukup panjang",
+      role: "headline",
+      position: "top",
+    },
+    { id: "tx-sub", content: "Sub", role: "kicker", position: "top" },
+  ];
   // Musik latar disuntikkan supaya bar musik (dan pegangan fade-nya) ada.
   (seed.audio as Record<string, unknown>).music = {
     assetId: "pustaka:tenang",
@@ -333,6 +348,60 @@ const main = async (): Promise<void> => {
         near(resized.h - moved.h, 20 / frame.h, tol) &&
         near(resized.x, moved.x, 1e-6),
       `dw = ${fmt(resized.w - moved.w)} (harap ${fmt(30 / frame.w)}), dh = ${fmt(resized.h - moved.h)} (harap ${fmt(20 / frame.h)})`,
+    );
+
+    console.log("\nPenempelan ke elemen lain di kanvas");
+    // Masih di sc-step-1: dua kotak teks. Yang sempit diseret sampai tepi
+    // kirinya sejajar tepi kiri yang lebar, DITAHAN, dan garis bantunya
+    // harus muncul di tepi itu — bukan di pusat.
+    let texts: Rect[] = [];
+    for (let tries = 0; tries < 40 && texts.length < 2; tries++) {
+      await sleep(150);
+      texts =
+        ((await page.evaluate(
+          '(() => Array.from(document.querySelectorAll(".canvas-box.text")).map((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }))()',
+        )) as Rect[]) ?? [];
+    }
+    if (texts.length < 2)
+      throw new Error(`kotak teks di kanvas: ${texts.length}, butuh 2`);
+    const [wide, narrow] = [...texts].sort((a, b) => b.w - a.w) as [Rect, Rect];
+    const host = await rect(".canvas-layer");
+    if (!host) throw new Error("lapisan kanvas tidak ada");
+    // Pusat sasaran: tepi kiri sejajar, meleset 3 px supaya penempelannya
+    // yang bekerja, bukan kebetulan.
+    const target = { x: wide.x + narrow.w / 2 + 3, y: center(narrow).y };
+    await mouse("mouseMoved", center(narrow).x, center(narrow).y, false);
+    await mouse("mousePressed", center(narrow).x, center(narrow).y, true);
+    for (let i = 1; i <= 8; i++) {
+      await mouse(
+        "mouseMoved",
+        center(narrow).x + ((target.x - center(narrow).x) * i) / 8,
+        center(narrow).y,
+        true,
+      );
+      await sleep(16);
+    }
+    await sleep(120);
+    const guides = (await page.evaluate(
+      '(() => Array.from(document.querySelectorAll(".canvas-guide.v")).map((el) => el.getBoundingClientRect().left))()',
+    )) as number[];
+    check(
+      "garis bantu vertikal muncul di TEPI kiri elemen lain saat sejajar",
+      guides.some((left) => Math.abs(left - wide.x) <= 2.5),
+      `garis di x = ${guides.map((g) => g.toFixed(1)).join(", ") || "-"}; tepi kiri elemen lebar x = ${wide.x.toFixed(1)}`,
+    );
+    await shot("gate-snap.png");
+    await mouse("mouseReleased", target.x, target.y, true);
+    await sleep(SETTLE_MS);
+    const subText = (
+      sceneOf(await plan(), "sc-step-1") as unknown as {
+        texts?: { id: string; offsetX: number }[];
+      }
+    ).texts?.find((text) => text.id === "tx-sub");
+    check(
+      "seretan yang menempel tetap menghasilkan patch teks",
+      typeof subText?.offsetX === "number" && subText.offsetX !== 0,
+      `offsetX tx-sub = ${subText?.offsetX}`,
     );
 
     console.log("\nPegangan fade musik di timeline");

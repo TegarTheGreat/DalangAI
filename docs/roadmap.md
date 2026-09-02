@@ -243,7 +243,8 @@ bisa dipakai agent mana pun.
 ukurannya langsung di atas preview, keluarannya patch op biasa. Skema teks
 bertambah `offsetX`/`offsetY`. Anotasi tutorial menyusul: preset menandainya di
 DOM dan kotak `target`-nya bisa diseret dan diubah ukurannya di kanvas — batas
-awal ADR-0024 dicabut.
+awal ADR-0024 dicabut. Elemen yang diseret kini menempel ke elemen lain (pusat,
+tepi, bersebelahan) dengan garis bantu di tepi yang disejajarkan.
 
 **§9.2 sudah dikerjakan** (ADR-0025): satu scene bisa punya dua lapisan video di
 atas visual dasarnya — B-roll, picture-in-picture, sisipan bukti. Lapisan

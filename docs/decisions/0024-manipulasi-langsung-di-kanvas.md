@@ -144,9 +144,18 @@ tengah transisi.
   tetap di panel Properti.
 - **Video tidak ikut bergerak selama seretan**, hanya kotaknya. Itu
   konsekuensi langsung dari keputusan mengirim satu patch saat dilepas.
-- **Belum ada pemilihan jamak** (menyeret beberapa elemen sekaligus) dan belum
-  ada penempelan ke elemen lain — garis bantunya baru tiga per sumbu (margin
-  aman kiri/kanan, tengah, dan padanan vertikalnya).
+- **Belum ada pemilihan jamak** (menyeret beberapa elemen sekaligus).
+  ~~Belum ada penempelan ke elemen lain~~ — *DICABUT:* selain tiga garis
+  margin aman per sumbu, elemen yang diseret kini menempel ke elemen lain di
+  scene — pusat ke pusat, tepi ke tepi (kiri/kanan, atas/bawah), dan
+  bersebelahan (tepi menempel tepi lawan) — dan garis bantu digambar di TEPI
+  yang disejajarkan, bukan di pusat (`elementGuides`, murni di core; panduan
+  dihitung sekali saat seretan dimulai). Anotasi tidak ikut menempel:
+  koordinatnya milik bingkai tangkapan layar. Gerbang interaksi menyeret
+  teks pendek sampai tepi kirinya sejajar tepi kiri teks panjang (meleset
+  3 px) dan menahannya: garis bantu muncul tepat di x tepi kiri elemen lebar
+  (553,1 px = 553,1 px), dan pelepasannya tetap menghasilkan patch
+  (`offsetX` -0,2118).
 - **Scene terkunci menolak seretan**, dan mengatakannya lewat label di kanvas
   — pagar yang sama dengan yang berlaku untuk agent.
 

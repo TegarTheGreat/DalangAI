@@ -415,6 +415,8 @@ Yang sudah berjalan:
   - anotasi tutorial (zoom, sorot, panah, blur) ikut: kotak `target`-nya
     diseret dan diubah ukurannya di atas tangkapan layar selama bingkai tidak
     sedang di-zoom — batas awal ADR-0024 dicabut.
+  - menempel ke elemen lain saat diseret: pusat ke pusat, tepi ke tepi,
+    bersebelahan — garis bantunya digambar di tepi yang disejajarkan.
 - **Lapisan video (ADR-0025)** — satu scene bisa punya dua sisipan video di atas
   visual dasarnya: B-roll yang menunjukkan apa yang sedang dikatakan,
   picture-in-picture, atau bukti visual:
@@ -505,7 +507,7 @@ Yang sudah berjalan:
     `proxy-progress`, punya tombol batal, dan editor tetap bisa dipakai —
     patch, undo, dan render tidak menunggu; permintaan selagi berjalan antre.
     CLI `dalang proxy`/`generate` mencetak persen per berkas.
-- **Kualitas terjaga otomatis**: 1011 unit test (kontrak lock/pin/undo, timing
+- **Kualitas terjaga otomatis**: 1015 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -521,7 +523,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1011 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1015 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 

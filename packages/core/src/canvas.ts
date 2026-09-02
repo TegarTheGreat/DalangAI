@@ -225,3 +225,96 @@ export const placeLayer = (
     offsetY: fmt(clamp(rect.y - base.y, -0.5, 0.5)),
   };
 };
+
+// ---------------------------------------------------------------------------
+// Penempelan ke ELEMEN LAIN (mencabut sebagian batas ADR-0024)
+// ---------------------------------------------------------------------------
+
+/** Kotak satu elemen di kanvas, fraksi bingkai, kiri-atas + ukuran. */
+export interface ElementRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Satu garis bantu: `at` adalah posisi PUSAT elemen yang diseret supaya
+ * menempel, `line` adalah posisi garis yang digambar. Keduanya berbeda untuk
+ * tepi: pusat harus berada setengah lebar dari tepi yang disejajarkan.
+ */
+export interface SnapGuide {
+  at: number;
+  line: number;
+}
+
+/** Garis margin/tengah sebagai panduan: pusat dan garisnya sama. */
+export const safeGuides = (safe: SafeInsets): { x: SnapGuide[]; y: SnapGuide[] } => ({
+  x: anchorBases(safe.x).map((line) => ({ at: line, line })),
+  y: anchorBases(safe.y).map((line) => ({ at: line, line })),
+});
+
+const axisGuides = (size: number, otherStart: number, otherSize: number): SnapGuide[] => {
+  const otherEnd = otherStart + otherSize;
+  const otherMid = otherStart + otherSize / 2;
+  const half = size / 2;
+  return [
+    // pusat ke pusat
+    { at: otherMid, line: otherMid },
+    // tepi awal sejajar tepi awal; tepi akhir sejajar tepi akhir
+    { at: otherStart + half, line: otherStart },
+    { at: otherEnd - half, line: otherEnd },
+    // bersebelahan: tepi awal menempel tepi akhir elemen lain, dan sebaliknya
+    { at: otherEnd + half, line: otherEnd },
+    { at: otherStart - half, line: otherStart },
+  ];
+};
+
+/**
+ * Garis bantu dari elemen-elemen LAIN untuk elemen `dragged` yang diseret:
+ * pusat-ke-pusat, tepi-ke-tepi (kiri/kanan, atas/bawah), dan bersebelahan.
+ * Semua dalam fraksi bingkai, jadi bebas dari ukuran jendela.
+ */
+export const elementGuides = (
+  dragged: ElementRect,
+  others: ElementRect[],
+): { x: SnapGuide[]; y: SnapGuide[] } => ({
+  x: others.flatMap((other) => axisGuides(dragged.w, other.x, other.w)),
+  y: others.flatMap((other) => axisGuides(dragged.h, other.y, other.h)),
+});
+
+/** Nilai pusat setelah menempel ke panduan terdekat di dalam `threshold`. */
+export const snapToGuides = (
+  value: number,
+  guides: SnapGuide[],
+  threshold: number,
+): number =>
+  snapToLines(
+    value,
+    guides.map((guide) => guide.at),
+    threshold,
+  );
+
+/** Posisi garis yang SEDANG menempel — untuk digambar, tanpa duplikat. */
+export const activeGuideLines = (
+  point: FramePoint,
+  guides: { x: SnapGuide[]; y: SnapGuide[] },
+  threshold: number,
+): SnapLines => {
+  const dedupe = (lines: number[]) =>
+    [...new Set(lines.map((line) => Math.round(line * 10_000) / 10_000))].sort(
+      (a, b) => a - b,
+    );
+  return {
+    x: dedupe(
+      guides.x
+        .filter((guide) => Math.abs(point.x - guide.at) < threshold)
+        .map((g) => g.line),
+    ),
+    y: dedupe(
+      guides.y
+        .filter((guide) => Math.abs(point.y - guide.at) < threshold)
+        .map((g) => g.line),
+    ),
+  };
+};

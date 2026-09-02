@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeGuideLines,
   activeSnapLines,
   anchorBases,
+  elementGuides,
   placeGraphic,
   placeText,
+  safeGuides,
   snapLinesFor,
+  snapToGuides,
   snapToLines,
 } from "../src/canvas";
 
@@ -99,5 +103,45 @@ describe("garis bantu", () => {
     const aktif = activeSnapLines({ x: 0.5, y: 0.2 }, snapLinesFor(SAFE), 0.012);
     expect(aktif.x).toEqual([0.5]);
     expect(aktif.y).toEqual([]);
+  });
+});
+
+describe("penempelan ke elemen lain (ADR-0024, batas dicabut)", () => {
+  const dragged = { x: 0, y: 0, w: 0.2, h: 0.1 };
+  const other = { x: 0.3, y: 0.4, w: 0.4, h: 0.2 };
+
+  it("menawarkan pusat, tepi sejajar, dan bersebelahan — dalam koordinat PUSAT elemen yang diseret", () => {
+    const { x, y } = elementGuides(dragged, [other]);
+    // x: pusat 0,5; kiri sejajar kiri 0,3 → pusat 0,4; kanan sejajar kanan
+    // 0,7 → pusat 0,6; bersebelahan kanan 0,7 → pusat 0,8; kiri 0,3 → 0,2.
+    expect(x.map((g) => [Number(g.at.toFixed(3)), Number(g.line.toFixed(3))])).toEqual([
+      [0.5, 0.5],
+      [0.4, 0.3],
+      [0.6, 0.7],
+      [0.8, 0.7],
+      [0.2, 0.3],
+    ]);
+    expect(y.map((g) => Number(g.at.toFixed(3)))).toEqual([0.5, 0.45, 0.55, 0.65, 0.35]);
+  });
+
+  it("menempel ke panduan terdekat di dalam ambang, dan garis yang digambar adalah TEPI-nya", () => {
+    const guides = elementGuides(dragged, [other]);
+    expect(snapToGuides(0.405, guides.x, 0.012)).toBeCloseTo(0.4, 6);
+    expect(snapToGuides(0.45, guides.x, 0.012)).toBe(0.45);
+    const active = activeGuideLines({ x: 0.4, y: 0.9 }, guides, 0.012);
+    expect(active.x).toEqual([0.3]);
+    expect(active.y).toEqual([]);
+  });
+
+  it("panduan margin aman tetap ada, pusat dan garisnya sama", () => {
+    const safe = safeGuides({ x: 0.06, y: 0.08 });
+    expect(safe.x.map((g) => g.at)).toEqual([0.06, 0.5, 0.94]);
+    expect(safe.x.every((g) => g.at === g.line)).toBe(true);
+  });
+
+  it("garis kembar dari dua elemen yang sejajar digambar sekali", () => {
+    const twins = elementGuides(dragged, [other, { ...other, y: 0.7 }]);
+    const active = activeGuideLines({ x: 0.5, y: 0 }, twins, 0.012);
+    expect(active.x).toEqual([0.5]);
   });
 });

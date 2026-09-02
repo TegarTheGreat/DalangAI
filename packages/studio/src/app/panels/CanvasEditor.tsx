@@ -1,5 +1,6 @@
 import {
-  activeSnapLines,
+  activeGuideLines,
+  elementGuides,
   type FramePoint,
   placeGraphic,
   placeLayer,
@@ -7,8 +8,9 @@ import {
   type SafeInsets,
   type Scene,
   type ScenePlan,
-  snapLinesFor,
-  snapToLines,
+  type SnapGuide,
+  safeGuides,
+  snapToGuides,
 } from "@dalang/core";
 import {
   activeSceneIndex,
@@ -61,6 +63,12 @@ interface DragState {
   origin: FramePoint;
   pointer: { x: number; y: number };
   startSizeFrac: number;
+  /**
+   * Garis bantu untuk seretan INI: margin aman + tepi/pusat elemen lain di
+   * scene (batas ADR-0024 "belum ada penempelan ke elemen lain" dicabut).
+   * Dihitung sekali saat mulai — elemen lain tidak bergerak selama seretan.
+   */
+  guides: { x: SnapGuide[]; y: SnapGuide[] };
 }
 
 /** Ukuran kotak pemutar + bingkai screenshot (anotasi), piksel CSS. */
@@ -245,11 +253,10 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
         // berarti apa-apa baginya, jadi tanpa penempelan.
         setGhost({ x: drag.origin.x + dx, y: drag.origin.y + dy });
       } else if (drag.mode === "move") {
-        const lines = snapLinesFor(safe);
         const raw = { x: drag.origin.x + dx, y: drag.origin.y + dy };
         setGhost({
-          x: snapToLines(raw.x, lines.x, SNAP),
-          y: snapToLines(raw.y, lines.y, SNAP),
+          x: snapToGuides(raw.x, drag.guides.x, SNAP),
+          y: snapToGuides(raw.y, drag.guides.y, SNAP),
         });
       } else {
         // Ubah ukuran memakai diagonal: satu angka, tidak pernah menghasilkan
@@ -284,8 +291,8 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
   if (!scene || playing) return null;
   const locked = scene.locked;
   const lines =
-    ghost && drag?.handle.kind !== "annotation"
-      ? activeSnapLines(ghost, snapLinesFor(safe), SNAP)
+    ghost && drag && drag.handle.kind !== "annotation" && drag.mode === "move"
+      ? activeGuideLines(ghost, drag.guides, SNAP)
       : { x: [], y: [] };
 
   const start = (handle: Handle, mode: DragState["mode"], event: React.PointerEvent) => {
@@ -304,12 +311,32 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     const startSize =
       item && "size" in item ? item.size : item && "height" in item ? item.height : null;
     setSelected(handle.id);
+    // Panduan: margin aman, lalu pusat/tepi elemen LAIN (anotasi tidak
+    // menempel — koordinatnya milik bingkai screenshot, bukan frame video).
+    const toFraction = (rect: Handle["rect"]) => ({
+      x: rect.x / box.width,
+      y: rect.y / box.height,
+      w: rect.w / box.width,
+      h: rect.h / box.height,
+    });
+    const others = handles
+      .filter((other) => other !== handle && other.id !== handle.id)
+      .map((other) => toFraction(other.rect));
+    const fromSafe = safeGuides(safe);
+    const fromElements =
+      handle.kind === "annotation"
+        ? { x: [], y: [] }
+        : elementGuides(toFraction(handle.rect), others);
     setDrag({
       handle,
       mode,
       origin: centerOf(handle.rect, box),
       pointer: { x: event.clientX, y: event.clientY },
       startSizeFrac: startSize ?? handle.rect.h / box.height,
+      guides: {
+        x: [...fromSafe.x, ...fromElements.x],
+        y: [...fromSafe.y, ...fromElements.y],
+      },
     });
   };
 
