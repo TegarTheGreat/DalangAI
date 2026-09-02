@@ -2,7 +2,7 @@
   "name": "dalang",
   "private": true,
   "version": "0.1.0",
-  "description": "Dalang AI — platform video editor berpilot agent (agent-piloted video editor)",
+  "description": "Dalang AI \u2014 platform video editor berpilot agent (agent-piloted video editor)",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=20"
@@ -14,7 +14,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "schema:gen": "tsx packages/core/scripts/generate-schema.ts",
-    "studio:remotion": "pnpm --filter @dalang/templates studio"
+    "studio:remotion": "pnpm --filter @dalang/templates studio",
+    "env:gen": "tsx packages/providers/scripts/generate-env-example.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.11",

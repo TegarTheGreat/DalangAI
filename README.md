@@ -9,7 +9,7 @@ Dokumen produk lengkap: [docs/PRD.md](docs/PRD.md) ·
 Keputusan teknis: [docs/decisions/](docs/decisions/) ·
 Arah selanjutnya: [docs/roadmap.md](docs/roadmap.md)
 
-## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) + Fase 10.1: memori preferensi lintas proyek (ADR-0029) + Fase 10.3: publikasi langsung ke YouTube (ADR-0030) + Keamanan: Studio hanya menerima perintah dari dirinya sendiri (ADR-0031) · Fase 3, 2, 1, 0 selesai
+## Status: Fase 4 (Mode Tutorial) selesai + Pengayaan editor 2 (ADR-0013) + Ekspor kaya & kaidah sutradara (ADR-0014) + Kehandalan gerak (ADR-0015) + Tipografi (ADR-0016) + Agent berkerajinan (ADR-0017) + Pustaka media (ADR-0018) + Render cloud (ADR-0019) + Lobi & gerbang tata letak (ADR-0020) + Fase 6: transkrip sebagai fondasi (ADR-0021) + Fase 7: agent melihat hasilnya (ADR-0022) + Fase 8: keluar dan masuk (ADR-0023) + Fase 9.1: manipulasi langsung di kanvas (ADR-0024) + Fase 9.2: lapisan video (ADR-0025) + Fase 9.4: audio per klip (ADR-0026) + Fase 9.3: keyframe properti (ADR-0027) + Fase 9.5: proxy & rekaman panjang (ADR-0028) + Fase 10.1: memori preferensi lintas proyek (ADR-0029) + Fase 10.3: publikasi langsung ke YouTube (ADR-0030) + Keamanan: Studio hanya menerima perintah dari dirinya sendiri (ADR-0031) + Konfigurasi yang bisa ditemukan (ADR-0032) · Fase 3, 2, 1, 0 selesai
 
 ![Lobi Dalang Studio — daftar proyek dengan sampul, rasio, durasi, dan tombol proyek baru](docs/media/studio-lobi.jpg)
 
@@ -548,7 +548,15 @@ Yang sudah berjalan:
   wajib berasal dari Studio sendiri, dan header `Host` ikut diperiksa supaya
   DNS rebinding tidak lolos. Pemanggil tanpa `Origin` (CLI, skrip) tetap bisa
   bekerja, karena peramban tidak bisa menghilangkan header itu.
-- **Kualitas terjaga otomatis**: 1060 unit test (kontrak lock/pin/undo, timing
+- **Konfigurasi yang bisa ditemukan tanpa membaca kode (ADR-0032)** — satu
+  katalog memuat ke-33 setelan beserta kemampuan yang dibukanya dan langkah
+  mendapatkannya, dikelompokkan dengan bahasa tujuan ("Ubah rekaman jadi teks
+  berwaktu", bukan "ASR"). `.env.example` dibangkitkan darinya, dan satu tes
+  memindai seluruh kode sumber lalu menolak variabel lingkungan yang dibaca
+  program tetapi tidak dijelaskan ke siapa pun. Audit menemukan sembilan
+  variabel seperti itu, yang diam-diam mengunci transkripsi, stiker, dan efek
+  suara.
+- **Kualitas terjaga otomatis**: 1068 unit test (kontrak lock/pin/undo, timing
   caption, snapshot timeline demo, cache/resume/fallback pipeline, protokol
   provider via fixture, keamanan staging path), Biome lint+format, dan CI
   GitHub Actions dengan **render smoke-test** nyata (prekursor R-8), gerbang
@@ -564,7 +572,7 @@ Yang sudah berjalan:
 ```bash
 pnpm install
 
-pnpm test                 # 1060 unit test (10 paket) — tanpa browser & jaringan
+pnpm test                 # 1068 unit test (10 paket) — tanpa browser & jaringan
 pnpm typecheck            # semua paket
 pnpm lint                 # Biome
 
