@@ -4808,3 +4808,8 @@ button.ghost.danger.confirm {
 .kf-diamond.near {
   z-index: 4;
 }
+
+/* Seretan berlian ditangani bar lapisan (capture di bar), termasuk sentuhan */
+.layer-bar {
+  touch-action: none;
+}

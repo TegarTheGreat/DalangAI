@@ -291,7 +291,7 @@ export const TimelineStrip: React.FC = () => {
   const [kfDrag, setKfDrag] = useState<{
     sceneId: string;
     layerId: string;
-    property: string;
+    property: AnimatableProperty;
     fromAt: number;
     at: number;
     /** Keyframe track lain yang sedang ditempeli (garis bantu di bar). */
@@ -305,7 +305,7 @@ export const TimelineStrip: React.FC = () => {
    */
   const [kfNear, setKfNear] = useState<{
     layerId: string;
-    property: string;
+    property: AnimatableProperty;
     at: number;
   } | null>(null);
   /**
@@ -631,38 +631,125 @@ export const TimelineStrip: React.FC = () => {
                     const asset = plan.renderState.layerAssets[layer.id];
                     const x = box.x + layer.startFrac * box.w;
                     const w = Math.max(6, (layer.endFrac - layer.startFrac) * box.w);
+                    const laneCount = layer.tracks.length;
+                    const barFraction = (clientX: number, barRect: DOMRect): number =>
+                      Math.round(
+                        Math.min(
+                          1,
+                          Math.max(0, (clientX - barRect.left) / barRect.width),
+                        ) * 1000,
+                      ) / 1000;
+                    /**
+                     * Berlian TERDEKAT ke pointer (jarak ke pusatnya; lajur ikut
+                     * dihitung). Tangkapan diputuskan DI SINI saat menekan — bukan
+                     * oleh urutan gambar atau z-index hover: berlian dua track yang
+                     * berdekatan harus tertangkap dari pusatnya sendiri, dan hover
+                     * yang belum sempat ter-render tidak boleh mengubah hasilnya
+                     * (gerbang interaksi di CI menangkap persis kasus itu).
+                     */
+                    const nearestDiamond = (
+                      clientX: number,
+                      clientY: number,
+                      barRect: DOMRect,
+                    ): { property: AnimatableProperty; at: number; d: number } | null => {
+                      let best: {
+                        property: AnimatableProperty;
+                        at: number;
+                        d: number;
+                      } | null = null;
+                      for (const [trackIndex, track] of layer.tracks.entries()) {
+                        for (const point of track.points) {
+                          const cx = barRect.left + point.at * barRect.width;
+                          const cy =
+                            barRect.top +
+                            barRect.height / 2 +
+                            laneOffsetPx(trackIndex, laneCount);
+                          const d = Math.hypot(clientX - cx, clientY - cy);
+                          if (!best || d < best.d) {
+                            best = { property: track.property, at: point.at, d };
+                          }
+                        }
+                      }
+                      return best;
+                    };
+                    const commitKeyframe = (
+                      property: AnimatableProperty,
+                      fromAt: number,
+                      next: number,
+                    ): boolean => {
+                      if (Math.abs(next - fromAt) < 0.005) return false;
+                      const tracks = moveKeyframe(layer.tracks, property, fromAt, next);
+                      if (tracks === layer.tracks) return false;
+                      void studioClient.applyPatch(
+                        [
+                          {
+                            op: "updateScene",
+                            id: scene.id,
+                            patch: {
+                              layers: scene.layers.map((item) =>
+                                item.id === layer.id ? { ...item, tracks } : item,
+                              ),
+                            },
+                          },
+                        ],
+                        `Keyframe ${property} lapisan ${layer.id} ke ${Math.round(next * 100)}%`,
+                      );
+                      return true;
+                    };
                     return (
                       <div
                         key={layer.id}
                         className={asset ? "layer-bar" : "layer-bar kosong"}
                         style={{ left: x, width: w }}
-                        onPointerMove={(event) => {
-                          if (kfDrag) return;
+                        onPointerDown={(event) => {
+                          if (busy || scene.locked) return;
                           const barRect = event.currentTarget.getBoundingClientRect();
                           if (barRect.width <= 0) return;
-                          let best: { property: string; at: number; d: number } | null =
-                            null;
-                          for (const [trackIndex, track] of layer.tracks.entries()) {
-                            for (const point of track.points) {
-                              const cx = barRect.left + point.at * barRect.width;
-                              const cy =
-                                barRect.top +
-                                barRect.height / 2 +
-                                laneOffsetPx(trackIndex, layer.tracks.length);
-                              const d = Math.hypot(
-                                event.clientX - cx,
-                                event.clientY - cy,
-                              );
-                              if (!best || d < best.d) {
-                                best = { property: track.property, at: point.at, d };
-                              }
-                            }
+                          const hit = nearestDiamond(
+                            event.clientX,
+                            event.clientY,
+                            barRect,
+                          );
+                          // Jauh dari berlian mana pun: biarkan tombol bar bekerja.
+                          if (!hit || hit.d > 12) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          setKfDrag({
+                            sceneId: scene.id,
+                            layerId: layer.id,
+                            property: hit.property,
+                            fromAt: hit.at,
+                            at: hit.at,
+                            snappedTo: null,
+                          });
+                        }}
+                        onPointerMove={(event) => {
+                          const barRect = event.currentTarget.getBoundingClientRect();
+                          if (barRect.width <= 0) return;
+                          if (kfDrag?.layerId === layer.id) {
+                            // Menempel ke keyframe track LAIN pada lapisan ini
+                            // (batas ADR-0027 dicabut); papan ketik tidak
+                            // menempel — langkahnya sudah eksplisit.
+                            const snap = snapKeyframeTime(
+                              layer.tracks,
+                              kfDrag.property,
+                              kfDrag.fromAt,
+                              barFraction(event.clientX, barRect),
+                            );
+                            setKfDrag((current) =>
+                              current
+                                ? { ...current, at: snap.at, snappedTo: snap.snappedTo }
+                                : current,
+                            );
+                            return;
                           }
-                          const nearest = best as {
-                            property: string;
-                            at: number;
-                            d: number;
-                          } | null;
+                          if (kfDrag) return;
+                          const nearest = nearestDiamond(
+                            event.clientX,
+                            event.clientY,
+                            barRect,
+                          );
                           const next =
                             nearest && nearest.d <= 14
                               ? {
@@ -677,6 +764,23 @@ export const TimelineStrip: React.FC = () => {
                             current?.at === next?.at
                               ? current
                               : next,
+                          );
+                        }}
+                        onPointerUp={(event) => {
+                          if (kfDrag?.layerId !== layer.id) return;
+                          const barRect = event.currentTarget.getBoundingClientRect();
+                          const { property, fromAt } = kfDrag;
+                          setKfDrag(null);
+                          if (barRect.width <= 0) return;
+                          commitKeyframe(
+                            property,
+                            fromAt,
+                            snapKeyframeTime(
+                              layer.tracks,
+                              property,
+                              fromAt,
+                              barFraction(event.clientX, barRect),
+                            ).at,
                           );
                         }}
                         onPointerLeave={() =>
@@ -700,8 +804,9 @@ export const TimelineStrip: React.FC = () => {
                         {/* Berlian keyframe (ADR-0027): waktu adalah tempat
                             keyframe hidup, jadi ia harus terlihat di garis
                             waktu — dan bisa DISERET di sana (batas ADR-0027
-                            dicabut): posisi sementara di state, patch saat
-                            dilepas lewat moveKeyframe milik core.
+                            dicabut): pointer ditangani BAR-nya (berlian terdekat
+                            ke titik tekan yang diambil), posisi sementara di
+                            state, patch saat dilepas lewat moveKeyframe milik core.
 
                             Berlian adalah SAUDARA tombol bar, bukan anaknya:
                             HTML melarang unsur interaktif di dalam <button>,
@@ -729,41 +834,9 @@ export const TimelineStrip: React.FC = () => {
                             // bertumpuk persis.
                             const lane = laneOffsetPx(trackIndex, layer.tracks.length);
                             const at = dragging ? (kfDrag?.at ?? point.at) : point.at;
-                            const atFrom = (clientX: number, element: HTMLElement) => {
-                              const bar = element.parentElement?.getBoundingClientRect();
-                              if (!bar || bar.width <= 0) return point.at;
-                              const fraction = (clientX - bar.left) / bar.width;
-                              return (
-                                Math.round(Math.min(1, Math.max(0, fraction)) * 1000) /
-                                1000
-                              );
-                            };
                             const kfKey = `${scene.id}/${layer.id}/${track.property}`;
-                            const commit = (next: number): boolean => {
-                              if (Math.abs(next - point.at) < 0.005) return false;
-                              const tracks = moveKeyframe(
-                                layer.tracks,
-                                track.property,
-                                point.at,
-                                next,
-                              );
-                              if (tracks === layer.tracks) return false;
-                              void studioClient.applyPatch(
-                                [
-                                  {
-                                    op: "updateScene",
-                                    id: scene.id,
-                                    patch: {
-                                      layers: scene.layers.map((item) =>
-                                        item.id === layer.id ? { ...item, tracks } : item,
-                                      ),
-                                    },
-                                  },
-                                ],
-                                `Keyframe ${track.property} lapisan ${layer.id} ke ${Math.round(next * 100)}%`,
-                              );
-                              return true;
-                            };
+                            const commit = (next: number): boolean =>
+                              commitKeyframe(track.property, point.at, next);
                             const percent = Math.round(at * 100);
                             return (
                               <span
@@ -783,54 +856,6 @@ export const TimelineStrip: React.FC = () => {
                                 aria-valuenow={percent}
                                 aria-valuetext={`${percent}% durasi scene`}
                                 title={`${track.property} @ ${percent}% — seret, atau panah kiri/kanan (Shift: 5%)`}
-                                onPointerDown={(event) => {
-                                  if (busy || scene.locked) return;
-                                  event.stopPropagation();
-                                  event.preventDefault();
-                                  event.currentTarget.setPointerCapture(event.pointerId);
-                                  setKfDrag({
-                                    sceneId: scene.id,
-                                    layerId: layer.id,
-                                    property: track.property,
-                                    fromAt: point.at,
-                                    at: point.at,
-                                    snappedTo: null,
-                                  });
-                                }}
-                                onPointerMove={(event) => {
-                                  if (!dragging) return;
-                                  // Menempel ke keyframe track LAIN pada
-                                  // lapisan ini (batas ADR-0027 dicabut);
-                                  // papan ketik tidak menempel — langkahnya
-                                  // sudah eksplisit.
-                                  const snap = snapKeyframeTime(
-                                    layer.tracks,
-                                    track.property,
-                                    point.at,
-                                    atFrom(event.clientX, event.currentTarget),
-                                  );
-                                  setKfDrag((current) =>
-                                    current
-                                      ? {
-                                          ...current,
-                                          at: snap.at,
-                                          snappedTo: snap.snappedTo,
-                                        }
-                                      : current,
-                                  );
-                                }}
-                                onPointerUp={(event) => {
-                                  if (!dragging) return;
-                                  setKfDrag(null);
-                                  commit(
-                                    snapKeyframeTime(
-                                      layer.tracks,
-                                      track.property,
-                                      point.at,
-                                      atFrom(event.clientX, event.currentTarget),
-                                    ).at,
-                                  );
-                                }}
                                 onKeyDown={(event) => {
                                   if (busy || scene.locked) return;
                                   const step = event.shiftKey ? 0.05 : 0.01;
