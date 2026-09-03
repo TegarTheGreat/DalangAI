@@ -9,8 +9,13 @@ import type { TtsProvider, TtsRequest } from "@dalang/pipeline";
  *
  * Implements the public Edge websocket protocol (as used by the browser and
  * the edge-tts ecosystem). All protocol pieces are pure functions with unit
- * tests; the socket itself is injectable. NOTE: live behavior could not be
- * verified in the sandboxed dev environment (egress blocked) — see ADR-0007.
+ * tests; the socket itself is injectable.
+ *
+ * NOTE: live behavior is still unverified. Diukur, bukan ditaksir: proxy
+ * egress lingkungan pengembangan menolak CONNECT ke speech.platform.bing.com
+ * dengan 403 — sebelum TLS, jauh sebelum WebSocket. Menambahkan dispatcher
+ * proxy di sini TIDAK membukanya (sudah dicoba); lihat catatan terukur di
+ * ADR-0007.
  */
 
 export const EDGE_TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
