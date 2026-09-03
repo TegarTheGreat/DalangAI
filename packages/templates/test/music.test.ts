@@ -5,7 +5,7 @@ import { buildMusicVolume, resolveMusicFile } from "../src/music";
 
 const planWithMusic = (opts?: { ducking?: boolean }) =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "uji-musik",
     meta: { title: "Uji Musik" },
     audio: {
@@ -16,20 +16,30 @@ const planWithMusic = (opts?: { ducking?: boolean }) =>
       },
     },
     scenes: [
-      { id: "sc-1", narration: "", visual: { type: "solid" }, duration: 4 },
+      {
+        id: "sc-1",
+        narration: "",
+        clips: [{ id: "sc-1-k1", type: "solid" }],
+        duration: 4,
+      },
       {
         id: "sc-2",
         narration: "Ada narasi di sini.",
-        visual: { type: "solid" },
+        clips: [{ id: "sc-2-k1", type: "solid" }],
         duration: 6,
       },
-      { id: "sc-3", narration: "", visual: { type: "solid" }, duration: 4 },
+      {
+        id: "sc-3",
+        narration: "",
+        clips: [{ id: "sc-3-k1", type: "solid" }],
+        duration: 4,
+      },
     ],
     renderState: {
       narrationAudio: {
         "sc-2": { file: "audio/sc-2.wav", durationSec: 6 },
       },
-      resolvedAssets: {},
+      clipAssets: {},
     },
   });
 

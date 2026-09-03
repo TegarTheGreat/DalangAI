@@ -10,17 +10,27 @@ import type {
 } from "../src/ports";
 
 export const planWithAssets = (): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "proyek-lambda",
   meta: { title: "Uji Lambda", aspectRatio: "16:9", stylePreset: "documentary-01" },
   audio: { voice: { provider: "silence", voiceId: "x", speed: 1 } },
   scenes: [
-    { id: "sc-001", narration: "Satu.", visual: { type: "image" }, duration: 5 },
-    { id: "sc-002", narration: "Dua.", visual: { type: "image" }, duration: 5 },
+    {
+      id: "sc-001",
+      narration: "Satu.",
+      clips: [{ id: "sc-001-k1", type: "image" }],
+      duration: 5,
+    },
+    {
+      id: "sc-002",
+      narration: "Dua.",
+      clips: [{ id: "sc-002-k1", type: "image" }],
+      duration: 5,
+    },
   ],
   renderState: {
     narrationAudio: {},
-    resolvedAssets: {
+    clipAssets: {
       "sc-001": { file: "assets/a.png", kind: "image", source: "local" },
       "sc-002": { file: "assets/b.png", kind: "image", source: "local" },
     },

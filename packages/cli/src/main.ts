@@ -15,9 +15,11 @@ import {
   memoryContextLines,
   PUBLISH_PRIVACIES,
   PUBLISH_PRIVACY_LABEL,
+  primaryClip,
   removeMemoryEntry,
   resolveSceneDurationSec,
   type ScenePlan,
+  sceneAsset,
 } from "@dalang/core";
 import {
   atomicWriteFile,
@@ -138,7 +140,7 @@ const printPlanSummary = (plan: ScenePlan): void => {
     return {
       "#": index + 1,
       id: scene.id,
-      tipe: scene.visual.type,
+      tipe: primaryClip(scene).type,
       kata: countWords(scene.narration),
       durasi: formatSec(resolveSceneDurationSec(scene, plan)),
       suara: audio
@@ -149,8 +151,9 @@ const printPlanSummary = (plan: ScenePlan): void => {
           ? "—"
           : "",
       aset:
-        plan.renderState.resolvedAssets[scene.id]?.file ??
-        (scene.visual.type === "template-anim" || scene.visual.type === "solid"
+        sceneAsset(plan, scene)?.file ??
+        (primaryClip(scene).type === "template-anim" ||
+        primaryClip(scene).type === "solid"
           ? "(template)"
           : "(belum di-resolve)"),
       lock: scene.locked ? "terkunci" : "",
@@ -208,10 +211,12 @@ const publishProgressPrinter = () => {
 program
   .command("validate")
   .argument("<proyek>", "folder proyek atau path plan.json")
-  .description("Validasi scene-plan terhadap skema v0 dan tampilkan ringkasan")
+  .description("Validasi scene-plan terhadap skema terbaru dan tampilkan ringkasan")
   .action((planPath: string) => {
     const plan = loadPlan(planPathOf(planPath));
-    console.log("Scene-plan valid (skema v0).");
+    // Menyebut versinya, bukan "v0": plan versi lama DIMIGRASIKAN saat
+    // dibaca (ADR-0033), jadi angka yang berguna adalah versi hasilnya.
+    console.log(`Scene-plan valid (skema v${plan.version}).`);
     printPlanSummary(plan);
     // Kritik sutradara (ADR-0014): heuristik anti-"generic", murni saran.
     const notes = critiquePlan(plan);

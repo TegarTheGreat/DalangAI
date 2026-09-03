@@ -17,11 +17,12 @@ import { pipeline } from "node:stream/promises";
 import {
   clockLabel,
   type ProxyMedia,
+  primaryClip,
   proxyDecision,
   type ResolvedAsset,
   type ScenePlan,
+  setClipAsset,
   setLayerAsset,
-  setResolvedAsset,
 } from "@dalang/core";
 import {
   contentHash,
@@ -208,9 +209,21 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
   };
 
   const usersOf = (plan: ScenePlan, file: string) => {
-    const sceneIds = Object.entries(plan.renderState.resolvedAssets)
-      .filter(([, asset]) => asset.file === file)
-      .map(([sceneId]) => sceneId);
+    // `clipAssets` dikunci id KLIP (ADR-0033), tapi field ini menjanjikan id
+    // SCENE dan itulah yang muncul di panel Sumber. Memakai kunci lumbung apa
+    // adanya akan menampilkan "sc-batu-k1" pada orang yang mencari "sc-batu".
+    const owners = new Map<string, string>();
+    for (const scene of plan.scenes) {
+      for (const clip of scene.clips) owners.set(clip.id, scene.id);
+    }
+    const sceneIds = [
+      ...new Set(
+        Object.entries(plan.renderState.clipAssets)
+          .filter(([, asset]) => asset.file === file)
+          .map(([clipId]) => owners.get(clipId))
+          .filter((id): id is string => id !== undefined),
+      ),
+    ];
     const layerIds = Object.entries(plan.renderState.layerAssets)
       .filter(([, asset]) => asset.file === file)
       .map(([layerId]) => layerId);
@@ -218,7 +231,7 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
   };
 
   const proxyOf = (plan: ScenePlan, file: string): ProxyMedia | null => {
-    for (const store of [plan.renderState.resolvedAssets, plan.renderState.layerAssets]) {
+    for (const store of [plan.renderState.clipAssets, plan.renderState.layerAssets]) {
       for (const asset of Object.values(store)) {
         if (asset.file === file && asset.proxy) return asset.proxy;
       }
@@ -547,7 +560,7 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
         };
         session.plan = layerId
           ? setLayerAsset(current, layerId, asset)
-          : setResolvedAsset(current, scene.id, asset);
+          : setClipAsset(current, primaryClip(scene).id, asset);
         // Urutan op PENTING: patch `layers` menulis seluruh larik lapisan dari
         // snapshot scene SEBELUM pendaftaran, jadi ia harus lebih dulu — kalau
         // di belakang, ia menimpa assetId/pin yang baru saja dipasang.
@@ -577,8 +590,8 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
         });
         if (
           !layerId &&
-          scene.visual.type !== "image" &&
-          scene.visual.type !== "screenshot"
+          primaryClip(scene).type !== "image" &&
+          primaryClip(scene).type !== "screenshot"
         ) {
           ops.push({
             op: "updateScene",

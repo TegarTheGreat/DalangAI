@@ -99,7 +99,7 @@ describe("skema lapisan", () => {
         scenes: [
           {
             id: "a",
-            visual: { type: "solid" },
+            clips: [{ id: "a-k1", type: "solid" }],
             duration: 5,
             layers: [{ id: "sama", visual: { type: "stock" } }],
           },
@@ -171,7 +171,7 @@ describe("patch op lapisan", () => {
     expect(result.plan.scenes[0]?.layers[0]?.visual.assetId).toBe("pexels:99");
     expect(result.plan.scenes[0]?.layers[0]?.visual.pinned).toBe(true);
     // Visual dasar tidak tersentuh.
-    expect(result.plan.scenes[0]?.visual.assetId).toBeNull();
+    expect(result.plan.scenes[0]?.clips[0]?.assetId).toBeNull();
 
     const back = applyPatch(result.plan, result.applied.inverse, { origin: "user" });
     expect(back.plan.scenes[0]?.layers[0]?.visual.assetId).toBeNull();

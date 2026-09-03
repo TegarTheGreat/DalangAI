@@ -1,4 +1,10 @@
-import { NARRATION_LEAD_IN_SEC, type Scene, type ScenePlan } from "@dalang/core";
+import {
+  NARRATION_LEAD_IN_SEC,
+  primaryClip,
+  type Scene,
+  type ScenePlan,
+  sceneAsset,
+} from "@dalang/core";
 import { Audio } from "@remotion/media";
 import { TransitionSeries } from "@remotion/transitions";
 import { type ReactNode, useMemo } from "react";
@@ -111,8 +117,8 @@ const SceneRouter: React.FC<{
   // berbunyi seperti di preset lain — keduanya punya pemutarnya sendiri.
 
   let content: ReactNode;
-  if (scene.visual.type === "template-anim") {
-    const variant = scene.visual.variant ?? "title";
+  if (primaryClip(scene).type === "template-anim") {
+    const variant = primaryClip(scene).variant ?? "title";
     content =
       variant === "outro" ? (
         <OutroScene plan={plan} scene={scene} metrics={metrics} theme={theme} />
@@ -124,11 +130,7 @@ const SceneRouter: React.FC<{
       <StepScene
         scene={scene}
         plan={plan}
-        asset={
-          scene.visual.type === "solid"
-            ? undefined
-            : plan.renderState.resolvedAssets[scene.id]
-        }
+        asset={primaryClip(scene).type === "solid" ? undefined : sceneAsset(plan, scene)}
         metrics={metrics}
         theme={theme}
         durationInFrames={durationInFrames}

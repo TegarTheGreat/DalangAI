@@ -9,7 +9,7 @@ import {
   phrasesFound,
   proseStatsOf,
 } from "./prose";
-import type { Scene, ScenePlan } from "./scene-plan";
+import { primaryClip, type Scene, type ScenePlan, sceneAsset } from "./scene-plan";
 
 /**
  * Kritik sutradara otomatis (ADR-0014): heuristik deterministik atas
@@ -57,9 +57,9 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   }
 
   // 2. Gerak kamera monoton pada scene beraset.
-  const assetScenes = scenes.filter((s) => ASSET_TYPES.has(s.visual.type));
+  const assetScenes = scenes.filter((s) => ASSET_TYPES.has(primaryClip(s).type));
   if (assetScenes.length >= 3) {
-    const motions = new Set(assetScenes.map((s) => s.visual.motion));
+    const motions = new Set(assetScenes.map((s) => primaryClip(s).motion));
     if (motions.size === 1) {
       notes.push({
         code: "gerak-monoton",
@@ -87,7 +87,7 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   }
 
   // 4. Hook 3 detik pertama.
-  const firstBody = scenes.find((s) => s.visual.type !== "template-anim");
+  const firstBody = scenes.find((s) => primaryClip(s).type !== "template-anim");
   if (firstBody && wordCount(firstBody.narration) > 14 && firstBody.texts.length === 0) {
     notes.push({
       code: "hook-lemah",
@@ -124,7 +124,7 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
 
   // 7. Scene solid polos beruntun tanpa varian seni.
   const plainSolid = scenes.filter(
-    (s) => s.visual.type === "solid" && (s.visual.variant ?? null) === null,
+    (s) => primaryClip(s).type === "solid" && (primaryClip(s).variant ?? null) === null,
   );
   if (plainSolid.length >= 2) {
     notes.push({
@@ -151,7 +151,7 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   // 9. Tutup dengan outro (kecuali format yang memang tidak memakainya).
   const recipe = recipeFor(plan.meta.format);
   const last = scenes[scenes.length - 1];
-  if (recipe.needsOutro && last && last.visual.type !== "template-anim") {
+  if (recipe.needsOutro && last && primaryClip(last).type !== "template-anim") {
     notes.push({
       code: "outro-hilang",
       level: "saran",
@@ -242,11 +242,7 @@ const critiqueAudio = (plan: ScenePlan): DirectorNote[] => {
   };
 
   for (const scene of plan.scenes) {
-    check(
-      scene.visual.audio,
-      plan.renderState.resolvedAssets[scene.id]?.lufs,
-      `aset ${scene.id}`,
-    );
+    check(primaryClip(scene).audio, sceneAsset(plan, scene)?.lufs, `aset ${scene.id}`);
     for (const layer of scene.layers) {
       check(
         layer.visual.audio,
@@ -296,11 +292,18 @@ const critiqueAssetRights = (plan: ScenePlan): DirectorNote[] => {
 
   // KETIGA lumbung diperiksa, bukan hanya aset scene. Stiker dari GIPHY/Tenor
   // masuk lewat `graphicAssets` (ADR-0018) — justru jalur yang paling sering
-  // dipakai — jadi memeriksa `resolvedAssets` saja membuat kritik ini diam
+  // dipakai — jadi memeriksa `clipAssets` saja membuat kritik ini diam
   // persis pada kasus yang paling perlu ditegur.
   const flagged: Array<{ sceneId: string | undefined; source: string }> = [];
-  for (const [sceneId, asset] of Object.entries(plan.renderState.resolvedAssets)) {
-    if (needsReview(asset.license)) flagged.push({ sceneId, source: asset.source });
+  // `clipAssets` dikunci id KLIP (ADR-0033), tapi yang ditegur tetap SCENE:
+  // itu satuan yang dipegang orang saat memperbaikinya, dan sebuah id klip
+  // tidak bisa dicari di panel mana pun.
+  for (const [clipId, asset] of Object.entries(plan.renderState.clipAssets)) {
+    if (!needsReview(asset.license)) continue;
+    const owner = plan.scenes.find((scene) =>
+      scene.clips.some((clip) => clip.id === clipId),
+    );
+    flagged.push({ sceneId: owner?.id, source: asset.source });
   }
   for (const [graphicId, asset] of Object.entries(plan.renderState.graphicAssets)) {
     if (!needsReview(asset.license)) continue;
@@ -492,7 +495,7 @@ const critiqueFormat = (plan: ScenePlan, recipe: FormatRecipe): DirectorNote[] =
     });
   }
 
-  if (recipe.needsTitle && scenes[0] && scenes[0].visual.type !== "template-anim") {
+  if (recipe.needsTitle && scenes[0] && primaryClip(scenes[0]).type !== "template-anim") {
     notes.push({
       code: "format-tanpa-pembuka",
       level: "saran",
@@ -551,7 +554,11 @@ const critiqueFormat = (plan: ScenePlan, recipe: FormatRecipe): DirectorNote[] =
   }
 
   // Klip: tidak boleh dibuka basa-basi kartu judul.
-  if (recipe.format === "klip" && scenes[0]?.visual.type === "template-anim") {
+  if (
+    recipe.format === "klip" &&
+    scenes[0] !== undefined &&
+    primaryClip(scenes[0]).type === "template-anim"
+  ) {
     notes.push({
       code: "format-klip-basa-basi",
       level: "perhatian",

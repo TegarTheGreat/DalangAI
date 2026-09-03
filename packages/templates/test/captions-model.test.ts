@@ -3,7 +3,7 @@ import {
   parseScenePlan,
   type Scene,
   type ScenePlan,
-  setResolvedAsset,
+  setClipAsset,
   setTranscript,
 } from "@dalang/core";
 import { describe, expect, it } from "vitest";
@@ -16,7 +16,7 @@ const planWith = (overrides: {
   wordTimestamps?: Array<{ word: string; startSec: number; endSec: number }>;
 }): ScenePlan =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "p",
     meta: { title: "T" },
     scenes: [
@@ -26,7 +26,7 @@ const planWith = (overrides: {
           overrides.narration ??
           "Dua juta balok batu andesit disusun tanpa semen sedikit pun",
         caption: { enabled: overrides.captionEnabled ?? true },
-        visual: { type: "solid" },
+        clips: [{ id: "sc-001-k1", type: "solid" }],
         duration: 7,
       },
     ],
@@ -39,7 +39,7 @@ const planWith = (overrides: {
               wordTimestamps: overrides.wordTimestamps,
             },
           },
-          resolvedAssets: {},
+          clipAssets: {},
         }
       : undefined,
   });
@@ -119,7 +119,7 @@ describe("caption dari transkrip rekaman (ADR-0021)", () => {
     } = {},
   ): ScenePlan => {
     let plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
@@ -132,15 +132,18 @@ describe("caption dari transkrip rekaman (ADR-0021)", () => {
             size: "m",
             position: "bottom",
           },
-          visual: {
-            type: "stock",
-            trimStartSec: overrides.trimStartSec ?? 0,
-            speed: overrides.speed ?? 1,
-          },
+          clips: [
+            {
+              id: "sc-1-k1",
+              type: "stock",
+              trimStartSec: overrides.trimStartSec ?? 0,
+              speed: overrides.speed ?? 1,
+            },
+          ],
         },
       ],
     });
-    plan = setResolvedAsset(plan, "sc-1", {
+    plan = setClipAsset(plan, "sc-1-k1", {
       file: "media/talk.mp4",
       kind: "video",
       source: "local",
@@ -205,10 +208,10 @@ describe("caption dari transkrip rekaman (ADR-0021)", () => {
 
   it("scene tanpa narasi DAN tanpa transkrip menghasilkan nol halaman", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
-      scenes: [{ id: "sc-1", narration: "", visual: { type: "solid" } }],
+      scenes: [{ id: "sc-1", narration: "", clips: [{ id: "sc-1-k1", type: "solid" }] }],
     });
     expect(
       buildCaptionPages({

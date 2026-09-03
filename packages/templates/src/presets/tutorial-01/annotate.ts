@@ -1,4 +1,4 @@
-import type { Annotation, ScenePlan } from "@dalang/core";
+import { type Annotation, primaryClip, type ScenePlan } from "@dalang/core";
 
 /**
  * Matematika anotasi murni (PRD §9) — tanpa React, diuji unit. Anotasi
@@ -169,7 +169,9 @@ export interface StepInfo {
  * dihitung — pembuka/penutup tidak diberi nomor.
  */
 export const stepNumbers = (plan: ScenePlan): Map<string, StepInfo> => {
-  const bodyScenes = plan.scenes.filter((scene) => scene.visual.type !== "template-anim");
+  const bodyScenes = plan.scenes.filter(
+    (scene) => primaryClip(scene).type !== "template-anim",
+  );
   const map = new Map<string, StepInfo>();
   bodyScenes.forEach((scene, index) => {
     map.set(scene.id, { step: index + 1, total: bodyScenes.length });

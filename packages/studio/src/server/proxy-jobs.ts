@@ -53,7 +53,7 @@ export interface ProxyStartOutcome {
 }
 
 const proxyFileOf = (plan: ScenePlan, file: string): string | null => {
-  for (const store of [plan.renderState.resolvedAssets, plan.renderState.layerAssets]) {
+  for (const store of [plan.renderState.clipAssets, plan.renderState.layerAssets]) {
     for (const asset of Object.values(store)) {
       if (asset.file === file) return asset.proxy?.file ?? null;
     }

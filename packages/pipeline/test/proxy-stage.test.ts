@@ -12,8 +12,8 @@ import { join } from "node:path";
 import {
   parseScenePlan,
   type ScenePlan,
+  setClipAsset,
   setLayerAsset,
-  setResolvedAsset,
 } from "@dalang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { PipelineDb } from "../src/db";
@@ -108,14 +108,16 @@ const fakeTranscoder = (
 
 const planWithVideos = (): ScenePlan => {
   let plan = parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "uji-proxy",
     meta: { title: "Uji" },
     scenes: [
       {
         id: "a",
         narration: "Satu.",
-        visual: { type: "image", assetId: "assets/podcast.mp4", trimStartSec: 30 },
+        clips: [
+          { id: "a-k1", type: "image", assetId: "assets/podcast.mp4", trimStartSec: 30 },
+        ],
         layers: [
           {
             id: "lap",
@@ -129,20 +131,20 @@ const planWithVideos = (): ScenePlan => {
       {
         id: "b",
         narration: "Dua.",
-        visual: { type: "image", assetId: "assets/broll.mp4" },
+        clips: [{ id: "b-k1", type: "image", assetId: "assets/broll.mp4" }],
       },
       {
         id: "c",
         narration: "Tiga.",
-        visual: { type: "image", assetId: "assets/foto.png" },
+        clips: [{ id: "c-k1", type: "image", assetId: "assets/foto.png" }],
       },
     ],
   });
   const video = (file: string) => ({ file, kind: "video" as const, source: "local" });
-  plan = setResolvedAsset(plan, "a", video("assets/podcast.mp4"));
+  plan = setClipAsset(plan, "a-k1", video("assets/podcast.mp4"));
   plan = setLayerAsset(plan, "lap", video("assets/podcast.mp4"));
-  plan = setResolvedAsset(plan, "b", video("assets/broll.mp4"));
-  plan = setResolvedAsset(plan, "c", {
+  plan = setClipAsset(plan, "b-k1", video("assets/broll.mp4"));
+  plan = setClipAsset(plan, "c-k1", {
     file: "assets/foto.png",
     kind: "image",
     source: "local",
@@ -194,16 +196,16 @@ describe("runProxyStage", () => {
     expect(transcoder.proxies[0]).toMatchObject({ width: 960, height: 540, fps: 30 });
     expect(transcoder.proxies[0]?.outputPath).toContain(paths.proxiesDir);
 
-    const proxy = plan.renderState.resolvedAssets.a?.proxy;
+    const proxy = plan.renderState.clipAssets["a-k1"]?.proxy;
     expect(proxy?.file.startsWith(".dalang/proxies/")).toBe(true);
     expect(proxy?.file.endsWith("-540p.mp4")).toBe(true);
     expect(existsSync(join(paths.planDir, proxy?.file ?? ""))).toBe(true);
     // Lapisan yang memakai berkas yang sama ikut mendapat proxy-nya.
     expect(plan.renderState.layerAssets.lap?.proxy?.file).toBe(proxy?.file);
     // Fakta sumber tercatat untuk KEDUA berkas — juga yang tidak di-proxy.
-    expect(plan.renderState.resolvedAssets.a?.codec).toBe("hevc");
-    expect(plan.renderState.resolvedAssets.b?.codec).toBe("h264");
-    expect(plan.renderState.resolvedAssets.b?.proxy).toBeUndefined();
+    expect(plan.renderState.clipAssets["a-k1"]?.codec).toBe("hevc");
+    expect(plan.renderState.clipAssets["b-k1"]?.codec).toBe("h264");
+    expect(plan.renderState.clipAssets["b-k1"]?.proxy).toBeUndefined();
   });
 
   it("jalan kedua sepenuhnya dari cache; --force membuat ulang", async () => {
@@ -225,8 +227,8 @@ describe("runProxyStage", () => {
     });
     expect(second.results.every((r) => r.status === "cached")).toBe(true);
     expect(transcoder.proxies).toHaveLength(2); // dua berkas, sekali masing-masing
-    expect(second.plan.renderState.resolvedAssets.a?.proxy).toEqual(
-      first.plan.renderState.resolvedAssets.a?.proxy,
+    expect(second.plan.renderState.clipAssets["a-k1"]?.proxy).toEqual(
+      first.plan.renderState.clipAssets["a-k1"]?.proxy,
     );
 
     const forced = await runProxyStage({
@@ -251,7 +253,7 @@ describe("runProxyStage", () => {
       transcoder,
       log: silentLog,
     });
-    const proxyFile = first.plan.renderState.resolvedAssets.a?.proxy?.file ?? "";
+    const proxyFile = first.plan.renderState.clipAssets["a-k1"]?.proxy?.file ?? "";
     rmSync(join(paths.planDir, proxyFile));
 
     const again = await runProxyStage({
@@ -277,7 +279,7 @@ describe("runProxyStage", () => {
       transcoder,
       log: silentLog,
     });
-    const oldProxy = first.plan.renderState.resolvedAssets.a?.proxy?.file ?? "";
+    const oldProxy = first.plan.renderState.clipAssets["a-k1"]?.proxy?.file ?? "";
 
     // Ganti isi (ukuran berubah) → hash berbeda → proxy baru.
     writeFileSync(
@@ -291,7 +293,7 @@ describe("runProxyStage", () => {
       transcoder,
       log: silentLog,
     });
-    const newProxy = second.plan.renderState.resolvedAssets.a?.proxy?.file ?? "";
+    const newProxy = second.plan.renderState.clipAssets["a-k1"]?.proxy?.file ?? "";
     expect(newProxy).not.toBe(oldProxy);
     expect(existsSync(join(paths.planDir, newProxy))).toBe(true);
     expect(existsSync(join(paths.planDir, oldProxy))).toBe(false);
@@ -308,7 +310,7 @@ describe("runProxyStage", () => {
       transcoder,
       log: silentLog,
     });
-    const oldProxy = first.plan.renderState.resolvedAssets.a?.proxy?.file ?? "";
+    const oldProxy = first.plan.renderState.clipAssets["a-k1"]?.proxy?.file ?? "";
     expect(oldProxy).not.toBe("");
 
     info = LIGHT;
@@ -320,7 +322,7 @@ describe("runProxyStage", () => {
       transcoder,
       log: silentLog,
     });
-    expect(second.plan.renderState.resolvedAssets.a?.proxy).toBeUndefined();
+    expect(second.plan.renderState.clipAssets["a-k1"]?.proxy).toBeUndefined();
     expect(second.plan.renderState.layerAssets.lap?.proxy).toBeUndefined();
     expect(existsSync(join(paths.planDir, oldProxy))).toBe(false);
   });
@@ -337,7 +339,7 @@ describe("runProxyStage", () => {
     });
     expect(results.map((r) => r.status)).toEqual(["error", "error"]);
     expect(results[0]?.detail).toContain("libx264 menolak dimensi");
-    expect(plan.renderState.resolvedAssets.a?.proxy).toBeUndefined();
+    expect(plan.renderState.clipAssets["a-k1"]?.proxy).toBeUndefined();
     expect(db.getRun("uji-proxy", "assets/podcast.mp4", "proxy")?.status).toBe("error");
   });
 
@@ -493,8 +495,8 @@ describe("runProxyStage — kemajuan, kait per berkas, pembatalan (ADR-0028 §10
       ["assets/broll.mp4", "skipped"],
     ]);
     expect(results[1]?.detail).toContain("dibatalkan");
-    expect(plan.renderState.resolvedAssets.a?.proxy).toBeDefined();
-    expect(plan.renderState.resolvedAssets.b?.proxy).toBeUndefined();
+    expect(plan.renderState.clipAssets["a-k1"]?.proxy).toBeDefined();
+    expect(plan.renderState.clipAssets["b-k1"]?.proxy).toBeUndefined();
   });
 
   it("pembatalan di tengah ffmpeg: dicatat dibatalkan, tanpa proxy setengah jadi, dan jalan berikutnya membuatnya lagi", async () => {

@@ -5,8 +5,10 @@ import {
   critiquePlan,
   type PatchOp,
   type PatchOpInput,
+  primaryClip,
   resolveSceneDurationSec,
   type ScenePlan,
+  sceneAsset,
 } from "@dalang/core";
 import { buildEditTimeline, otioToJson, toFcpxml } from "@dalang/interop";
 import { atomicWriteFile } from "@dalang/pipeline";
@@ -93,8 +95,9 @@ export const summarizePlan = (workspace: Workspace, planPath: string): PlanSumma
       durasiDetik: Number(resolveSceneDurationSec(scene, plan).toFixed(2)),
       terkunci: scene.locked,
       naskah: scene.narration,
-      visual: scene.visual.query ?? scene.visual.variant ?? scene.visual.type,
-      asetSiap: plan.renderState.resolvedAssets[scene.id] !== undefined,
+      visual:
+        primaryClip(scene).query ?? primaryClip(scene).variant ?? primaryClip(scene).type,
+      asetSiap: sceneAsset(plan, scene) !== undefined,
       suaraSiap: plan.renderState.narrationAudio[scene.id] !== undefined,
       // Lapisan (ADR-0025) ikut ke ringkasan: agent pemanggil yang tidak
       // melihatnya akan mengira scene ini punya satu gambar, lalu menyarankan

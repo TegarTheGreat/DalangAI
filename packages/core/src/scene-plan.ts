@@ -15,7 +15,7 @@ import { z } from "zod";
  * break layout (PRD §5.1 rules).
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
 export const aspectRatioSchema = z.enum(ASPECT_RATIOS);
@@ -524,6 +524,46 @@ export const layerVisualSchema = visualSchema.omit({ variant: true }).extend({
 });
 export type LayerVisual = z.infer<typeof layerVisualSchema>;
 
+// ---------------------------------------------------------------------------
+// Klip (ADR-0033)
+// ---------------------------------------------------------------------------
+
+/**
+ * Batas jumlah klip per scene. Bukan angka teknis: satu scene adalah satu
+ * GAGASAN, dan gagasan yang butuh lebih dari dua lusin potongan sudah menjadi
+ * dua gagasan.
+ */
+export const MAX_CLIPS = 24;
+
+/**
+ * Satu potongan gambar berurutan di dalam scene (ADR-0033).
+ *
+ * `Clip` memakai bentuk `Visual` yang SUDAH ADA apa adanya — assetId, motion,
+ * filter, speed, trimStartSec, flipH, focusX/Y, audio, pinned — ditambah
+ * identitas dan waktu. Pola yang sama dengan lapisan video: satu bentuk, jadi
+ * setiap kemampuan visual berikutnya ikut berlaku untuk klip tanpa diputuskan
+ * dua kali.
+ *
+ * `clips[0]` ADALAH `visual` yang lama. Tidak ada `scene.visual` lagi.
+ */
+export const clipSchema = visualSchema.extend({
+  id: z.string().min(1),
+  /**
+   * Panjang klip di linimasa, detik. DIABAIKAN saat scene hanya punya satu
+   * klip — di situ klip mengisi seluruh scene dan durasi datang dari
+   * `scene.duration` seperti sebelumnya.
+   */
+  durationSec: finitePositive.optional(),
+  /**
+   * Transisi KELUAR ke klip berikutnya; tidak ada = potong keras, dan itu
+   * bawaannya. Semantiknya sama dengan `scene.transition`, yang tetap
+   * mengurus perpindahan ke scene berikutnya. Transisi pada klip TERAKHIR
+   * diabaikan: batas itu milik scene.
+   */
+  transition: transitionSchema.optional(),
+});
+export type Clip = z.infer<typeof clipSchema>;
+
 /** Batas jumlah lapisan per scene. */
 export const MAX_LAYERS = 2;
 
@@ -563,7 +603,11 @@ export const sceneSchema = z.strictObject({
   /** Hard contract: agents are rejected at the code level when touching a locked scene. */
   locked: z.boolean().default(false),
   narration: z.string().default(""),
-  visual: visualSchema,
+  /**
+   * Potongan gambar scene, berurutan (ADR-0033). Minimal satu; `clips[0]`
+   * adalah visual dasar yang dulu bernama `scene.visual`.
+   */
+  clips: z.array(clipSchema).min(1).max(MAX_CLIPS),
   // Gotcha zod: `.default(obj)` memakai objek APA ADANYA — default field di
   // dalamnya TIDAK diterapkan, jadi objek ini harus ditulis lengkap (ADR-0013).
   caption: captionSchema.default({
@@ -878,7 +922,13 @@ export type Transcript = z.infer<typeof transcriptSchema>;
 
 export const renderStateSchema = z.strictObject({
   narrationAudio: z.record(z.string(), narrationAudioSchema).default({}),
-  resolvedAssets: z.record(z.string(), resolvedAssetSchema).default({}),
+  /**
+   * Berkas nyata untuk visual dasar, dikunci ID KLIP (ADR-0033) — bukan id
+   * scene. Alasannya sama persis dengan `layerAssets`: satu scene boleh punya
+   * beberapa klip, dan klip kedua akan menimpa berkas klip pertama kalau
+   * kuncinya scene.
+   */
+  clipAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /** Berkas nyata untuk grafis tempelan, dikunci id grafis (ADR-0018). */
   graphicAssets: z.record(z.string(), resolvedAssetSchema).default({}),
   /**
@@ -919,7 +969,7 @@ export const scenePlanSchema = z
     scenes: z.array(sceneSchema).min(1),
     renderState: renderStateSchema.default({
       narrationAudio: {},
-      resolvedAssets: {},
+      clipAssets: {},
       graphicAssets: {},
       layerAssets: {},
       sfxAssets: {},
@@ -957,10 +1007,11 @@ export const scenePlanSchema = z
      * yang persis sama sejak ADR-0018.
      */
     const perScene: {
-      field: "layers" | "graphics";
+      field: "clips" | "layers" | "graphics";
       label: string;
       items: (scene: Scene) => { id: string }[];
     }[] = [
+      { field: "clips", label: "klip", items: (scene) => scene.clips },
       { field: "layers", label: "lapisan", items: (scene) => scene.layers },
       { field: "graphics", label: "grafis", items: (scene) => scene.graphics },
     ];
@@ -979,6 +1030,37 @@ export const scenePlanSchema = z
         });
       });
     }
+
+    /**
+     * Begitu ada dua klip, waktu datang dari POTONGANNYA (ADR-0033 §2):
+     * durasi scene adalah jumlah `durationSec` klipnya, jadi angka tetap di
+     * `scene.duration` akan bertentangan dengan jumlah itu. Menskala klip agar
+     * muat ke durasi yang ditetapkan tangan adalah keajaiban yang tidak bisa
+     * ditebak siapa pun, jadi kombinasinya ditolak, bukan didamaikan.
+     */
+    plan.scenes.forEach((scene, index) => {
+      if (scene.clips.length < 2) return;
+      if (scene.duration !== "auto") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["scenes", index, "duration"],
+          message:
+            `Scene "${scene.id}" punya ${scene.clips.length} klip, jadi durasinya ` +
+            `datang dari jumlah klip — "duration" wajib "auto".`,
+        });
+      }
+      scene.clips.forEach((clip, clipIndex) => {
+        if (clip.durationSec === undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["scenes", index, "clips", clipIndex, "durationSec"],
+            message:
+              `Klip "${clip.id}" tidak punya durationSec — wajib saat scene ` +
+              `memuat lebih dari satu klip.`,
+          });
+        }
+      });
+    });
 
     const perPlan: { field: "sfx" | "tracks"; label: string; items: { id: string }[] }[] =
       [
@@ -1003,25 +1085,172 @@ export const scenePlanSchema = z
 export type ScenePlan = z.infer<typeof scenePlanSchema>;
 export type ScenePlanInput = z.input<typeof scenePlanSchema>;
 
+// ---------------------------------------------------------------------------
+// Migrasi versi skema (ADR-0003 kebijakan, ADR-0033 pemakaian pertama)
+// ---------------------------------------------------------------------------
+
+/**
+ * Id klip yang lahir dari migrasi v1 -> v2, DETERMINISTIK.
+ *
+ * Dihitung, bukan diundi: migrasi yang dijalankan dua kali harus menghasilkan
+ * id yang sama, kalau tidak `clipAssets` kehilangan jejak berkasnya pada
+ * jalan kedua. Alasan yang sama membuat kunci cache pipeline berupa hash isi.
+ */
+export const migratedClipId = (sceneId: string): string => `${sceneId}-k1`;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * v1 -> v2 (ADR-0033 §7):
+ *
+ *   scene.visual                  -> scene.clips = [{ ...visual, id }]
+ *   renderState.resolvedAssets[s] -> renderState.clipAssets[id]
+ *
+ * MURNI dan satu arah: tidak menulis berkas, tidak menyentuh masukannya. Plan
+ * yang bermigrasi baru tersimpan saat plan itu memang disimpan, lewat jalur
+ * tulis yang biasa. Bentuk yang tidak dikenali dibiarkan apa adanya — yang
+ * memutuskan sah atau tidak tetap skema, bukan migrasi.
+ */
+export const migrateV1ToV2 = (input: unknown): unknown => {
+  if (!isRecord(input)) return input;
+  const next: Record<string, unknown> = { ...input, version: 2 };
+
+  const scenes = input.scenes;
+  if (Array.isArray(scenes)) {
+    next.scenes = scenes.map((scene) => {
+      if (!isRecord(scene) || !("visual" in scene)) return scene;
+      const { visual, ...rest } = scene;
+      const id = typeof scene.id === "string" ? scene.id : "";
+      return {
+        ...rest,
+        clips: [{ ...(isRecord(visual) ? visual : {}), id: migratedClipId(id) }],
+      };
+    });
+  }
+
+  const renderState = input.renderState;
+  if (isRecord(renderState) && "resolvedAssets" in renderState) {
+    const { resolvedAssets, ...restState } = renderState;
+    const clipAssets: Record<string, unknown> = {};
+    if (isRecord(resolvedAssets)) {
+      for (const [sceneId, asset] of Object.entries(resolvedAssets)) {
+        clipAssets[migratedClipId(sceneId)] = asset;
+      }
+    }
+    next.renderState = { ...restState, clipAssets };
+  }
+
+  return next;
+};
+
+/** Rantai migrasi, dari versi terlama ke versi sekarang. */
+const MIGRATIONS: Record<number, (input: unknown) => unknown> = {
+  1: migrateV1ToV2,
+};
+
+/**
+ * Naikkan plan versi lama ke `SCHEMA_VERSION`, satu langkah per versi.
+ *
+ * Plan tanpa `version` dibiarkan lewat: yang berhak menolaknya adalah skema,
+ * dengan pesan yang menyebut field yang hilang — bukan migrasi, dengan pesan
+ * tentang versi yang tidak pernah ditulis siapa pun.
+ */
+export const migrateScenePlan = (input: unknown): unknown => {
+  if (!isRecord(input) || typeof input.version !== "number") return input;
+  let current: unknown = input;
+  let version = input.version;
+  while (version < SCHEMA_VERSION) {
+    const step = MIGRATIONS[version];
+    if (!step) {
+      throw new Error(
+        `Versi scene-plan ${version} tidak punya jalur migrasi ke ${SCHEMA_VERSION} (lihat ADR-0003).`,
+      );
+    }
+    current = step(current);
+    version =
+      isRecord(current) && typeof current.version === "number"
+        ? current.version
+        : version + 1;
+  }
+  return current;
+};
+
 /** Parse and validate; throws with a readable message on invalid input. */
 export const parseScenePlan = (input: unknown): ScenePlan => {
   if (typeof input === "object" && input !== null && "version" in input) {
     const version = (input as { version: unknown }).version;
-    if (version !== SCHEMA_VERSION) {
+    if (typeof version === "number" && version > SCHEMA_VERSION) {
       throw new Error(
-        `Versi scene-plan ${JSON.stringify(version)} tidak didukung — versi yang didukung: ${SCHEMA_VERSION}. ` +
-          `Bump versi skema membutuhkan fungsi migrasi (lihat ADR-0003).`,
+        `Versi scene-plan ${JSON.stringify(version)} lebih baru daripada yang didukung (${SCHEMA_VERSION}) — ` +
+          `perbarui Dalang, karena migrasi hanya berjalan maju.`,
+      );
+    }
+    if (typeof version !== "number") {
+      throw new Error(
+        `Versi scene-plan ${JSON.stringify(version)} tidak didukung — versi yang didukung: ${SCHEMA_VERSION}.`,
       );
     }
   }
-  const result = scenePlanSchema.safeParse(input);
+  const result = scenePlanSchema.safeParse(migrateScenePlan(input));
   if (!result.success) {
     throw new Error(`Scene-plan tidak valid:\n${z.prettifyError(result.error)}`);
   }
   return result.data;
 };
 
-export const safeParseScenePlan = (input: unknown) => scenePlanSchema.safeParse(input);
+/**
+ * Sama seperti `parseScenePlan`, tapi mengembalikan hasil alih-alih melempar.
+ * IKUT memigrasikan: dua jalur parse yang berbeda pendapat soal versi adalah
+ * cara termudah membuat Studio menerima plan yang ditolak CLI.
+ */
+export const safeParseScenePlan = (input: unknown) =>
+  scenePlanSchema.safeParse(migrateScenePlan(input));
+
+// ---------------------------------------------------------------------------
+// Akses klip (ADR-0033)
+// ---------------------------------------------------------------------------
+
+/**
+ * Klip pertama scene — visual dasar yang dulu bernama `scene.visual`.
+ *
+ * Skema menjamin `clips` tidak pernah kosong (`.min(1)`), jadi ini tidak
+ * pernah undefined untuk plan yang sudah lolos parse. Fungsi ini ada supaya
+ * ratusan pemanggil membaca "klip pertama" dengan satu nama, bukan menulis
+ * `scene.clips[0]!` masing-masing dan tersebar saat klip jamak tiba.
+ */
+export const primaryClip = (scene: Scene): Clip => scene.clips[0] as Clip;
+
+/** Berkas nyata satu klip, atau undefined kalau asetnya belum di-resolve. */
+export const clipAsset = (plan: ScenePlan, clipId: string): ResolvedAsset | undefined =>
+  plan.renderState.clipAssets[clipId];
+
+/** Berkas nyata visual dasar sebuah scene — jalur terpendek yang paling sering dipakai. */
+export const sceneAsset = (plan: ScenePlan, scene: Scene): ResolvedAsset | undefined =>
+  plan.renderState.clipAssets[primaryClip(scene).id];
+
+/**
+ * Id klip dasar sebuah scene, dicari lewat id SCENE.
+ *
+ * Ada karena permukaan yang menerima perintah dari luar — tool agent, rute
+ * Studio, server MCP — bicara dalam id SCENE, sementara `clipAssets` dikunci
+ * id KLIP (ADR-0033). Terjemahan itu ditulis SATU kali di sini; ditulis tiga
+ * kali berarti tiga kesempatan untuk memilih klip yang berbeda, dan yang
+ * pertama menyimpang tidak akan terlihat sebagai galat — hanya sebagai berkas
+ * yang tiba-tiba hilang dari satu scene.
+ *
+ * Melempar, bukan mengembalikan undefined: menulis berkas di bawah kunci yang
+ * salah jauh lebih mahal daripada gagal terang-terangan.
+ */
+export const primaryClipId = (plan: ScenePlan, sceneId: string): string => {
+  const scene = plan.scenes.find((candidate) => candidate.id === sceneId);
+  if (!scene) throw new Error(`Scene "${sceneId}" tidak ditemukan`);
+  return primaryClip(scene).id;
+};
+
+/** Semua klip di seluruh plan, dengan scene pemiliknya. */
+export const allClips = (plan: ScenePlan): { scene: Scene; clip: Clip }[] =>
+  plan.scenes.flatMap((scene) => scene.clips.map((clip) => ({ scene, clip })));
 
 export const getScene = (plan: ScenePlan, id: string): Scene | undefined =>
   plan.scenes.find((scene) => scene.id === id);

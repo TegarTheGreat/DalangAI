@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
   addMemoryEntry,
+  clipAsset,
   critiquePlan,
   defaultPublishMetadata,
   findFillerSpans,
@@ -22,12 +23,15 @@ import {
   PUBLISH_TITLE_MAX,
   type PublishMetadata,
   patchOpSchema,
+  primaryClip,
+  primaryClipId,
   recipeFor,
   removeMemoryEntry,
   type ScenePlanInput,
+  sceneAsset,
   scenePlanSchema,
+  setClipAsset,
   setGraphicAsset,
-  setResolvedAsset,
   setSfxAsset,
   speechSpans,
   type Transcript,
@@ -373,7 +377,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           const info = transcoder
             ? await transcoder.probe(join(session.paths.planDir, input.file))
             : null;
-          session.plan = setResolvedAsset(plan, input.sceneId, {
+          session.plan = setClipAsset(plan, primaryClipId(plan, input.sceneId), {
             file: input.file,
             kind: "video",
             source: "local",
@@ -417,7 +421,10 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             session.persist();
             const row = outcome.results[0];
             catatanProxy = row ? `${row.status}: ${row.detail}` : "tidak diproses";
-            proxy = outcome.plan.renderState.resolvedAssets[input.sceneId]?.proxy;
+            proxy = clipAsset(
+              outcome.plan,
+              primaryClipId(outcome.plan, input.sceneId),
+            )?.proxy;
           }
 
           return {
@@ -489,12 +496,9 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           // dari aset — bukan dari jumlah scene.
           const totalSec = [...recordings.keys()].reduce((sum, file) => {
             const owner = plan.scenes.find(
-              (scene) => plan.renderState.resolvedAssets[scene.id]?.file === file,
+              (scene) => sceneAsset(plan, scene)?.file === file,
             );
-            return (
-              sum +
-              (owner ? (plan.renderState.resolvedAssets[owner.id]?.durationSec ?? 0) : 0)
-            );
+            return sum + (owner ? (sceneAsset(plan, owner)?.durationSec ?? 0) : 0);
           }, 0);
           const berbayar = providers[0]?.offline !== true;
           if (berbayar && totalSec > 0) {
@@ -579,7 +583,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           );
           return {
             ok: true,
-            file: plan.renderState.resolvedAssets[input.sceneId]?.file,
+            file: clipAsset(plan, primaryClipId(plan, input.sceneId))?.file,
             bahasa: transcript.language,
             durasiDetik: Number(transcript.durationSec.toFixed(1)),
             dariNarasi: transcript.fromNarration === true,
@@ -684,7 +688,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             };
           }
 
-          const asset = plan.renderState.resolvedAssets[input.sceneId];
+          const asset = clipAsset(plan, primaryClipId(plan, input.sceneId));
           const sourceDuration = asset?.durationSec;
           if (sourceDuration !== undefined && input.dariDetik >= sourceDuration) {
             return {
@@ -698,7 +702,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             sourceDuration === undefined
               ? input.sampaiDetik
               : Math.min(input.sampaiDetik, sourceDuration);
-          const speed = scene.visual.speed > 0 ? scene.visual.speed : 1;
+          const speed = primaryClip(scene).speed > 0 ? primaryClip(scene).speed : 1;
           const durationSec = Number(((end - input.dariDetik) / speed).toFixed(3));
 
           const transcript = transcriptForScene(plan, input.sceneId) as
@@ -1951,7 +1955,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
       execute: (input) =>
         run("analyzeImage", input, async () => {
           const plan = requirePlan();
-          const asset = plan.renderState.resolvedAssets[input.sceneId];
+          const asset = clipAsset(plan, primaryClipId(plan, input.sceneId));
           if (!asset) {
             throw new Error(`Scene ${input.sceneId} belum punya aset ter-resolve`);
           }
@@ -1983,7 +1987,8 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             // DI DALAM potongan — bukan dari awal rekaman satu jam.
             const transcoder = transcoderForFrame;
             const scene = plan.scenes.find((candidate) => candidate.id === input.sceneId);
-            const atSec = (scene?.visual.trimStartSec ?? 0) + (input.detikKe ?? 0);
+            const atSec =
+              (scene ? primaryClip(scene).trimStartSec : 0) + (input.detikKe ?? 0);
             const scratch = mkdtempSync(join(tmpdir(), "dalang-frame-"));
             try {
               const framePath = join(scratch, "frame.jpg");
@@ -2049,7 +2054,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
       execute: (input) =>
         run("locateUiElement", input, async () => {
           const plan = requirePlan();
-          const asset = plan.renderState.resolvedAssets[input.sceneId];
+          const asset = clipAsset(plan, primaryClipId(plan, input.sceneId));
           if (!asset) {
             throw new Error(
               `Scene ${input.sceneId} belum punya aset ter-resolve — jalankan stage assets dulu (aset lokal butuh visual.assetId path file)`,

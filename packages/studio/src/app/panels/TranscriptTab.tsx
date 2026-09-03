@@ -1,4 +1,11 @@
-import type { Scene, ScenePlan, Transcript, TranscriptSpan } from "@dalang/core";
+import {
+  primaryClip,
+  type Scene,
+  type ScenePlan,
+  sceneAsset,
+  type Transcript,
+  type TranscriptSpan,
+} from "@dalang/core";
 import { computeFrameLayout, FPS } from "@dalang/templates/layout";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api";
@@ -42,8 +49,8 @@ export const TranscriptTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
   scene,
 }) => {
   const { project } = useStudio();
-  const file = plan.renderState.resolvedAssets[scene.id]?.file;
-  const kind = plan.renderState.resolvedAssets[scene.id]?.kind;
+  const file = sceneAsset(plan, scene)?.file;
+  const kind = sceneAsset(plan, scene)?.kind;
   const summary = project?.transcripts.find((item) => item.file === file);
 
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -94,8 +101,8 @@ export const TranscriptTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
     );
   }
 
-  const trimStart = scene.visual.trimStartSec;
-  const speed = scene.visual.speed > 0 ? scene.visual.speed : 1;
+  const trimStart = primaryClip(scene).trimStartSec;
+  const speed = primaryClip(scene).speed > 0 ? primaryClip(scene).speed : 1;
   const sceneSec =
     computeFrameLayout(plan).sceneFrames[
       plan.scenes.findIndex((item) => item.id === scene.id)

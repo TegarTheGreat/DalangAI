@@ -18,7 +18,7 @@ export const makeTempProject = (
 };
 
 export const basicPlan = (overrides: Partial<ScenePlanInput> = {}): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "proj-pipeline-test",
   meta: { title: "Uji Pipeline" },
   audio: { voice: { provider: "silence", voiceId: "v-test", speed: 1 } },
@@ -26,12 +26,12 @@ export const basicPlan = (overrides: Partial<ScenePlanInput> = {}): ScenePlanInp
     {
       id: "sc-001",
       narration: "Kalimat pertama untuk diuji.",
-      visual: { type: "stock", query: "candi jawa" },
+      clips: [{ id: "sc-001-k1", type: "stock", query: "candi jawa" }],
     },
     {
       id: "sc-002",
       narration: "Kalimat kedua sedikit lebih panjang lagi.",
-      visual: { type: "solid" },
+      clips: [{ id: "sc-002-k1", type: "solid" }],
     },
   ],
   ...overrides,

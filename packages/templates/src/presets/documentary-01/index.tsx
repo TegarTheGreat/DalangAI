@@ -1,8 +1,10 @@
 import {
   NARRATION_LEAD_IN_SEC,
+  primaryClip,
   type ResolvedAsset,
   type Scene,
   type ScenePlan,
+  sceneAsset,
 } from "@dalang/core";
 import { Audio } from "@remotion/media";
 import { TransitionSeries } from "@remotion/transitions";
@@ -62,9 +64,9 @@ const SceneRouter: React.FC<{
   const narrationAudio = plan.renderState.narrationAudio[scene.id];
   // Suara aset visual dasar: amplop yang sama dengan lapisan dan trek.
   const assetVolume = buildClipVolume({
-    audio: scene.visual.audio,
-    lufs: plan.renderState.resolvedAssets[scene.id]?.lufs,
-    channels: plan.renderState.resolvedAssets[scene.id]?.channels,
+    audio: primaryClip(scene).audio,
+    lufs: sceneAsset(plan, scene)?.lufs,
+    channels: sceneAsset(plan, scene)?.channels,
     targetLufs: plan.meta.loudnessTarget,
     startFrame: sceneStartFrame,
     frames: props.durationInFrames,
@@ -73,8 +75,8 @@ const SceneRouter: React.FC<{
   });
 
   let content: ReactNode;
-  if (scene.visual.type === "template-anim") {
-    const variant = scene.visual.variant ?? "title";
+  if (primaryClip(scene).type === "template-anim") {
+    const variant = primaryClip(scene).variant ?? "title";
     content = variant === "outro" ? <OutroScene {...props} /> : <TitleScene {...props} />;
   } else {
     content = <BodyScene {...props} volume={assetVolume} />;
@@ -175,9 +177,7 @@ export const DocumentaryPreset: React.FC<{
           asset={
             // Tipe solid selalu latar prosedural, meski sisa aset resolved
             // masih tercatat di renderState (kontrak Backdrop).
-            scene.visual.type === "solid"
-              ? undefined
-              : plan.renderState.resolvedAssets[scene.id]
+            primaryClip(scene).type === "solid" ? undefined : sceneAsset(plan, scene)
           }
           metrics={metrics}
           theme={theme}

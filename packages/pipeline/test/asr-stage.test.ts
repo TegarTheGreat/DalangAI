@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseScenePlan, setNarrationAudio, setResolvedAsset } from "@dalang/core";
+import { parseScenePlan, setClipAsset, setNarrationAudio } from "@dalang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   type AsrProvider,
@@ -59,8 +59,8 @@ const projectWithRecording = (bytes = "rekaman-a") => {
   writeFileSync(join(project.dir, "media", "wawancara.mp4"), bytes);
 
   let plan = parseScenePlan(basicPlan());
-  for (const sceneId of ["sc-001", "sc-002"]) {
-    plan = setResolvedAsset(plan, sceneId, {
+  for (const clipId of ["sc-001-k1", "sc-002-k1"]) {
+    plan = setClipAsset(plan, clipId, {
       file: "media/wawancara.mp4",
       kind: "video",
       source: "local",
@@ -79,7 +79,7 @@ describe("recordingsInPlan", () => {
 
   it("melewatkan aset gambar", () => {
     let plan = parseScenePlan(basicPlan());
-    plan = setResolvedAsset(plan, "sc-001", {
+    plan = setClipAsset(plan, "sc-001-k1", {
       file: "assets/foto.jpg",
       kind: "image",
       source: "pexels",
@@ -206,7 +206,7 @@ describe("runAsrStage", () => {
     cleanups.push(project.cleanup);
     const paths = projectPaths(project.planPath);
     let plan = parseScenePlan(basicPlan());
-    plan = setResolvedAsset(plan, "sc-001", {
+    plan = setClipAsset(plan, "sc-001-k1", {
       file: "media/hilang.mp4",
       kind: "video",
       source: "local",

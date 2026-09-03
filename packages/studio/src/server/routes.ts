@@ -9,8 +9,11 @@ import {
 import {
   PatchError,
   patchOpSchema,
+  primaryClip,
+  primaryClipId,
   resolveSceneDurationSec,
-  setResolvedAsset,
+  sceneAsset,
+  setClipAsset,
   speechSpans,
 } from "@dalang/core";
 import { buildEditTimeline, otioToJson, toFcpxml } from "@dalang/interop";
@@ -722,7 +725,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         const dims = imageDims(bytes);
         const current = store.freshPlan();
         if (!current) throw new Error("Plan hilang di tengah upload");
-        session.plan = setResolvedAsset(current, body.data.sceneId, {
+        session.plan = setClipAsset(current, primaryClipId(current, body.data.sceneId), {
           file: relPath,
           kind: "image",
           source: "local",
@@ -737,7 +740,10 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
             pinned: true,
           },
         ];
-        if (scene.visual.type !== "image" && scene.visual.type !== "screenshot") {
+        if (
+          primaryClip(scene).type !== "image" &&
+          primaryClip(scene).type !== "screenshot"
+        ) {
           ops.push({
             op: "updateScene",
             id: body.data.sceneId,
@@ -782,14 +788,17 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
 
     const newId = `${scene.id.slice(0, 16)}-p${Date.now().toString(36).slice(-4)}`;
+    // Klip scene baru mendapat idnya sendiri: id klip wajib unik SE-PLAN
+    // (ADR-0033), jadi menyalin id klip lama akan menolak plan hasil belahan.
+    const newClipId = `${newId}-k1`;
     try {
       const startedAt = Date.now();
       const result = await store.runExclusive("pick", async () => {
         const current = store.freshPlan();
         if (!current) throw new Error("Plan hilang di tengah split");
-        const asset = current.renderState.resolvedAssets[scene.id];
+        const asset = sceneAsset(current, scene);
         if (asset) {
-          session.plan = setResolvedAsset(current, newId, asset);
+          session.plan = setClipAsset(current, newClipId, asset);
         }
         const { summary } = session.applyUserPatch([
           { op: "updateScene", id: scene.id, patch: { duration: d1 } },
@@ -800,7 +809,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
               id: newId,
               narration: "",
               duration: d2,
-              visual: { ...scene.visual },
+              clips: [{ ...primaryClip(scene), id: newClipId }],
               caption: { ...scene.caption },
               transition: { ...scene.transition },
               texts: [],

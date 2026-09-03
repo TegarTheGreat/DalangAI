@@ -21,7 +21,7 @@ import type { AgentDeps } from "../src/tools";
 // ---------------------------------------------------------------------------
 
 export const basicPlan = (overrides: Partial<ScenePlanInput> = {}): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "proj-agent-test",
   meta: { title: "Uji Agent" },
   audio: { voice: { provider: "silence", voiceId: "v", speed: 1 } },
@@ -29,12 +29,12 @@ export const basicPlan = (overrides: Partial<ScenePlanInput> = {}): ScenePlanInp
     {
       id: "sc-001",
       narration: "Kalimat pertama untuk agent.",
-      visual: { type: "stock", query: "candi jawa" },
+      clips: [{ id: "sc-001-k1", type: "stock", query: "candi jawa" }],
     },
     {
       id: "sc-002",
       narration: "Kalimat kedua yang sedikit lebih panjang.",
-      visual: { type: "solid" },
+      clips: [{ id: "sc-002-k1", type: "solid" }],
     },
   ],
   ...overrides,

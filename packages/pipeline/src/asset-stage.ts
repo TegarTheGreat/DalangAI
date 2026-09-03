@@ -5,10 +5,12 @@ import {
   assignLayerAsset,
   assignResolvedAsset,
   DIMENSIONS,
+  primaryClip,
   type ResolvedAsset,
   resolvedAssetSchema,
   type Scene,
   type ScenePlan,
+  sceneAsset,
   type VideoLayer,
 } from "@dalang/core";
 import type { PipelineDb } from "./db";
@@ -162,11 +164,11 @@ export const runAssetStage = async ({
   //    provider. Sumber "local", lisensi milik user.
   const localScenes = plan.scenes.filter(
     (scene) =>
-      (scene.visual.type === "screenshot" || scene.visual.type === "image") &&
+      (primaryClip(scene).type === "screenshot" || primaryClip(scene).type === "image") &&
       (!targetIds || targetIds.has(scene.id)),
   );
   for (const scene of localScenes) {
-    const relPath = scene.visual.assetId;
+    const relPath = primaryClip(scene).assetId;
     if (!relPath) {
       results.push({
         sceneId: scene.id,
@@ -176,7 +178,7 @@ export const runAssetStage = async ({
       });
       continue;
     }
-    if (current.renderState.resolvedAssets[scene.id]?.file === relPath) {
+    if (sceneAsset(current, scene)?.file === relPath) {
       results.push({ sceneId: scene.id, status: "cached", detail: "sudah ter-resolve" });
       continue;
     }
@@ -227,12 +229,13 @@ export const runAssetStage = async ({
   }
 
   const stockScenes = plan.scenes.filter(
-    (scene) => scene.visual.type === "stock" && (!targetIds || targetIds.has(scene.id)),
+    (scene) =>
+      primaryClip(scene).type === "stock" && (!targetIds || targetIds.has(scene.id)),
   );
   const orientation = orientationForAspect(plan.meta.aspectRatio);
 
   for (const scene of stockScenes) {
-    if (scene.visual.pinned) {
+    if (primaryClip(scene).pinned) {
       results.push({
         sceneId: scene.id,
         status: "skipped",
@@ -249,7 +252,7 @@ export const runAssetStage = async ({
       continue;
     }
 
-    const query = scene.visual.query?.trim() || deriveQuery(scene.narration);
+    const query = primaryClip(scene).query?.trim() || deriveQuery(scene.narration);
     if (query === "") {
       results.push({
         sceneId: scene.id,
@@ -258,7 +261,7 @@ export const runAssetStage = async ({
       });
       continue;
     }
-    const derived = !scene.visual.query?.trim();
+    const derived = !primaryClip(scene).query?.trim();
 
     const inputHash = contentHash({
       kind: "stock-resolve",

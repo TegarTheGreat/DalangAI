@@ -40,9 +40,9 @@ const projectWithRecording = () => {
   writeFileSync(join(project.dir, "media", "wawancara.wav"), "rekaman");
 
   const plan = JSON.parse(readFileSync(project.planPath, "utf8")) as {
-    renderState: { resolvedAssets: Record<string, unknown> };
+    renderState: { clipAssets: Record<string, unknown> };
   };
-  plan.renderState.resolvedAssets["sc-batu"] = {
+  plan.renderState.clipAssets["sc-batu-k1"] = {
     file: "media/wawancara.wav",
     kind: "audio",
     source: "local",

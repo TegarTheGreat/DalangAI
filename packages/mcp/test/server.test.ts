@@ -25,20 +25,24 @@ import type { ToolContext } from "../src/tools";
  */
 
 const planInput = (): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "uji-mcp",
   meta: { title: "Proyek MCP", aspectRatio: "16:9", language: "id" },
   audio: {},
   scenes: [
-    { id: "sc-satu", narration: "Kalimat pertama.", visual: { type: "image" } },
+    {
+      id: "sc-satu",
+      narration: "Kalimat pertama.",
+      clips: [{ id: "sc-satu-k1", type: "image" }],
+    },
     {
       id: "sc-dua",
       narration: "Kalimat kedua.",
-      visual: { type: "image" },
+      clips: [{ id: "sc-dua-k1", type: "image" }],
       locked: true,
     },
   ],
-  renderState: { narrationAudio: {}, resolvedAssets: {} },
+  renderState: { narrationAudio: {}, clipAssets: {} },
 });
 
 const makeWorkspace = () => {

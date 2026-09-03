@@ -1,4 +1,9 @@
-import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
+import {
+  primaryClip,
+  type ResolvedAsset,
+  type Scene,
+  type ScenePlan,
+} from "@dalang/core";
 import { AbsoluteFill } from "remotion";
 import type { AspectMetrics } from "../../layout";
 import { Backdrop } from "./Backdrop";
@@ -30,10 +35,10 @@ export const BodyScene: React.FC<{
 }) => {
   const unresolved =
     !asset &&
-    (scene.visual.type === "stock" ||
-      scene.visual.type === "image" ||
-      scene.visual.type === "generated" ||
-      scene.visual.type === "screenshot");
+    (primaryClip(scene).type === "stock" ||
+      primaryClip(scene).type === "image" ||
+      primaryClip(scene).type === "generated" ||
+      primaryClip(scene).type === "screenshot");
 
   return (
     <AbsoluteFill>
@@ -66,7 +71,7 @@ export const BodyScene: React.FC<{
             borderRadius: 6,
           }}
         >
-          aset belum di-resolve · {scene.visual.query ?? scene.visual.type}
+          aset belum di-resolve · {primaryClip(scene).query ?? primaryClip(scene).type}
         </div>
       ) : null}
     </AbsoluteFill>

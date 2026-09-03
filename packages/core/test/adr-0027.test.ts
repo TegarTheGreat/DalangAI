@@ -181,7 +181,7 @@ describe("track sebagai data plan biasa", () => {
         {
           id: "a",
           narration: "Satu.",
-          visual: { type: "solid" },
+          clips: [{ id: "a-k1", type: "solid" }],
           duration: 5,
           graphics: [{ id: "g1", ref: "iconify:mdi:home" }],
         },

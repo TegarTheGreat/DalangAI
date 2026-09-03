@@ -100,7 +100,7 @@ describe("ingestVideo + proxy (ADR-0028)", () => {
     expect(existsSync(join(dir, proxy.file))).toBe(true);
     expect(String(out.catatanProxy)).toContain("hevc");
     // Tersimpan di plan (renderState), bukan hanya di jawaban tool.
-    const asset = session.plan?.renderState.resolvedAssets["sc-001"];
+    const asset = session.plan?.renderState.clipAssets["sc-001-k1"];
     expect(asset?.proxy?.file).toBe(proxy.file);
     expect(asset?.codec).toBe("hevc");
     expect(asset?.proxy?.fps).toBe(30);
@@ -118,7 +118,7 @@ describe("ingestVideo + proxy (ADR-0028)", () => {
     expect(out.proxy).toBeNull();
     expect(out.kodek).toBeNull();
     expect(String(out.catatanProxy)).toContain("tidak ada transkoder");
-    expect(session.plan?.renderState.resolvedAssets["sc-001"]?.file).toBe(
+    expect(session.plan?.renderState.clipAssets["sc-001-k1"]?.file).toBe(
       "assets/podcast.mp4",
     );
   });

@@ -3,8 +3,8 @@ import {
   parseScenePlan,
   rebaseRenderState,
   type ScenePlanInput,
+  setClipAsset,
   setNarrationAudio,
-  setResolvedAsset,
 } from "../src";
 
 /**
@@ -13,19 +13,19 @@ import {
  * DELTA renderState milik tahap — bukan seluruh snapshot-nya.
  */
 const input = (): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "uji-rebase",
   meta: { title: "Judul awal", aspectRatio: "16:9", language: "id" },
   audio: {},
   scenes: [
-    { id: "sc-1", narration: "Satu.", visual: { type: "image" } },
-    { id: "sc-2", narration: "Dua.", visual: { type: "image" } },
-    { id: "sc-3", narration: "Tiga.", visual: { type: "image" } },
+    { id: "sc-1", narration: "Satu.", clips: [{ id: "sc-1-k1", type: "image" }] },
+    { id: "sc-2", narration: "Dua.", clips: [{ id: "sc-2-k1", type: "image" }] },
+    { id: "sc-3", narration: "Tiga.", clips: [{ id: "sc-3-k1", type: "image" }] },
   ],
   renderState: {
     narrationAudio: {},
-    resolvedAssets: {
-      "sc-2": { file: "assets/lama.png", kind: "image", source: "local" },
+    clipAssets: {
+      "sc-2-k1": { file: "assets/lama.png", kind: "image", source: "local" },
     },
   },
 });
@@ -47,22 +47,22 @@ describe("rebaseRenderState", () => {
       wordTimestamps: [],
     });
     after = structuredClone(after);
-    delete after.renderState.resolvedAssets["sc-2"];
+    delete after.renderState.clipAssets["sc-2-k1"];
     // Sementara itu pihak lain: judul berubah, aset sc-3 dipasang, sc-2 diganti.
     let base = structuredClone(before);
     base.meta.title = "Diubah dari luar";
-    base = setResolvedAsset(base, "sc-3", asset("assets/dari-mcp.png"));
-    base = setResolvedAsset(base, "sc-2", asset("assets/diganti-dari-luar.png"));
+    base = setClipAsset(base, "sc-3-k1", asset("assets/dari-mcp.png"));
+    base = setClipAsset(base, "sc-2-k1", asset("assets/diganti-dari-luar.png"));
 
     const merged = rebaseRenderState(base, before, after);
     expect(merged.meta.title).toBe("Diubah dari luar");
     expect(merged.renderState.narrationAudio["sc-1"]?.file).toBe(".dalang/tts/sc-1.wav");
-    expect(merged.renderState.resolvedAssets["sc-3"]?.file).toBe("assets/dari-mcp.png");
+    expect(merged.renderState.clipAssets["sc-3-k1"]?.file).toBe("assets/dari-mcp.png");
     // Tahap menghapus sc-2 dari snapshot-nya: penghapusan itu ikut, walau
     // pihak lain sempat menggantinya — tahap memang memutuskannya.
-    expect(merged.renderState.resolvedAssets["sc-2"]).toBeUndefined();
+    expect(merged.renderState.clipAssets["sc-2-k1"]).toBeUndefined();
     // Tidak menyentuh masukan.
-    expect(base.renderState.resolvedAssets["sc-2"]?.file).toBe(
+    expect(base.renderState.clipAssets["sc-2-k1"]?.file).toBe(
       "assets/diganti-dari-luar.png",
     );
   });
@@ -75,9 +75,9 @@ describe("rebaseRenderState", () => {
       fallbackQuality: false,
       wordTimestamps: [],
     });
-    const base = setResolvedAsset(before, "sc-2", asset("assets/baru-dari-luar.png"));
+    const base = setClipAsset(before, "sc-2-k1", asset("assets/baru-dari-luar.png"));
     const merged = rebaseRenderState(base, before, after);
-    expect(merged.renderState.resolvedAssets["sc-2"]?.file).toBe(
+    expect(merged.renderState.clipAssets["sc-2-k1"]?.file).toBe(
       "assets/baru-dari-luar.png",
     );
     expect(merged.renderState.narrationAudio["sc-3"]?.durationSec).toBe(1);

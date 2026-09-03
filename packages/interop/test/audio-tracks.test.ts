@@ -172,7 +172,7 @@ describe("ekspor trek audio", () => {
   it("klip bersuara juga diakui kehilangan amplopnya", () => {
     const plan = makePlan((input) => {
       const scene = input.scenes.find((item) => item.id === "sc-batu");
-      if (scene) scene.visual = { ...scene.visual, audio: { volume: 0.5 } };
+      if (scene) scene.clips = [{ ...scene.clips[0]!, audio: { volume: 0.5 } }];
     });
     const project = tempProject(plan);
     const timeline = buildEditTimeline(plan, { planPath: project.planPath });

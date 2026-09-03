@@ -14,14 +14,14 @@ afterEach(() => rmSync(workDir, { recursive: true, force: true }));
 
 const planWithAsset = (file: string): ScenePlan =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "p",
     meta: { title: "T" },
-    scenes: [{ id: "sc-001", visual: { type: "stock" } }],
+    scenes: [{ id: "sc-001", clips: [{ id: "sc-001-k1", type: "stock" }] }],
     renderState: {
       narrationAudio: {},
-      resolvedAssets: {
-        "sc-001": { file, kind: "image", source: "local" },
+      clipAssets: {
+        "sc-001-k1": { file, kind: "image", source: "local" },
       },
     },
   });
@@ -101,13 +101,13 @@ describe("stageTemplatesPublic", () => {
 describe("copyPlanAssets: grafis & efek suara (ADR-0018)", () => {
   const planWithMedia = (): ScenePlan =>
     parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
         {
           id: "sc-001",
-          visual: { type: "solid" },
+          clips: [{ id: "sc-001-k1", type: "solid" }],
           graphics: [{ id: "hidup", ref: "iconify:mdi:home" }],
         },
       ],
@@ -117,7 +117,7 @@ describe("copyPlanAssets: grafis & efek suara (ADR-0018)", () => {
       },
       renderState: {
         narrationAudio: {},
-        resolvedAssets: {},
+        clipAssets: {},
         graphicAssets: {
           hidup: { file: "assets/icons/hidup.svg", kind: "image", source: "iconify" },
           yatim: { file: "assets/icons/yatim.svg", kind: "image", source: "iconify" },
@@ -184,13 +184,13 @@ describe("copyPlanAssets: grafis & efek suara (ADR-0018)", () => {
 describe("copyPlanAssets: lapisan video (ADR-0025)", () => {
   const planWithLayers = (): ScenePlan =>
     parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
         {
           id: "sc-001",
-          visual: { type: "solid" },
+          clips: [{ id: "sc-001-k1", type: "solid" }],
           layers: [{ id: "lap-hidup", visual: { type: "stock", query: "x" } }],
         },
       ],

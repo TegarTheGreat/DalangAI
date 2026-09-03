@@ -18,14 +18,14 @@ const palette = {
 
 const sceneWithCaptionStyle = (style: string) =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "p",
     meta: { title: "T" },
     scenes: [
       {
         id: "a",
         narration: "x",
-        visual: { type: "solid" },
+        clips: [{ id: "a-k1", type: "solid" }],
         duration: 3,
         caption: { style },
       },

@@ -156,15 +156,22 @@ describe("buildClipVolume", () => {
 describe("narrationVolume", () => {
   const plan = (narasi?: { lufs?: number; channels?: number }) =>
     parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "uji-narasi",
       meta: { title: "Uji", loudnessTarget: -16 },
-      scenes: [{ id: "a", narration: "Halo.", visual: { type: "solid" }, duration: 5 }],
+      scenes: [
+        {
+          id: "a",
+          narration: "Halo.",
+          clips: [{ id: "a-k1", type: "solid" }],
+          duration: 5,
+        },
+      ],
       renderState: {
         narrationAudio: {
           a: { file: "audio/a.wav", durationSec: 4, ...narasi },
         },
-        resolvedAssets: {},
+        clipAssets: {},
       },
     });
 
@@ -235,13 +242,23 @@ describe("duckAt", () => {
 describe("duckWindows", () => {
   const plan = (over: { narasiTerpasang?: boolean } = {}) =>
     parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "uji-duck",
       meta: { title: "Uji Duck" },
       scenes: [
-        { id: "a", narration: "", visual: { type: "solid" }, duration: 4 },
-        { id: "b", narration: "Ada suaranya.", visual: { type: "solid" }, duration: 6 },
-        { id: "c", narration: "Naskahnya saja.", visual: { type: "solid" }, duration: 4 },
+        { id: "a", narration: "", clips: [{ id: "a-k1", type: "solid" }], duration: 4 },
+        {
+          id: "b",
+          narration: "Ada suaranya.",
+          clips: [{ id: "b-k1", type: "solid" }],
+          duration: 6,
+        },
+        {
+          id: "c",
+          narration: "Naskahnya saja.",
+          clips: [{ id: "c-k1", type: "solid" }],
+          duration: 4,
+        },
       ],
       renderState: {
         narrationAudio: over.narasiTerpasang
@@ -250,7 +267,7 @@ describe("duckWindows", () => {
               c: { file: "audio/c.wav", durationSec: 4 },
             }
           : { b: { file: "audio/b.wav", durationSec: 6 } },
-        resolvedAssets: {},
+        clipAssets: {},
       },
     });
 
@@ -281,15 +298,15 @@ describe("duckWindows", () => {
    */
   const planWithWords = (words: Array<[number, number]>) =>
     parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "uji-duck-kata",
       meta: { title: "Uji Duck Kata" },
       scenes: [
-        { id: "a", narration: "", visual: { type: "solid" }, duration: 4 },
+        { id: "a", narration: "", clips: [{ id: "a-k1", type: "solid" }], duration: 4 },
         {
           id: "b",
           narration: "Ada kata-katanya.",
-          visual: { type: "solid" },
+          clips: [{ id: "b-k1", type: "solid" }],
           duration: 6,
         },
       ],
@@ -305,7 +322,7 @@ describe("duckWindows", () => {
             })),
           },
         },
-        resolvedAssets: {},
+        clipAssets: {},
       },
     });
 

@@ -3,10 +3,11 @@ import {
   assignLayerAsset,
   assignResolvedAsset,
   getScene,
+  primaryClip,
   type ResolvedAsset,
   type ScenePlan,
+  setClipAsset,
   setLayerAsset,
-  setResolvedAsset,
 } from "@dalang/core";
 import type { PipelineDb } from "./db";
 import { atomicWriteFile } from "./fs-utils";
@@ -83,7 +84,7 @@ export const materializeCandidate = async ({
     const next =
       layerId === undefined
         ? allowPinned
-          ? setResolvedAsset(plan, sceneId, asset)
+          ? setClipAsset(plan, primaryClip(scene).id, asset)
           : assignResolvedAsset(plan, sceneId, candidate.assetId, asset)
         : allowPinned
           ? setLayerAsset(plan, layerId, asset)

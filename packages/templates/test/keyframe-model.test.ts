@@ -359,14 +359,14 @@ describe("gaya terpakai mengikuti track", () => {
 describe("track sebagai data plan", () => {
   it("plan dengan track lolos parse dan nilainya utuh", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "uji-0027",
       meta: { title: "Uji Keyframe" },
       scenes: [
         {
           id: "a",
           narration: "Satu.",
-          visual: { type: "solid" },
+          clips: [{ id: "a-k1", type: "solid" }],
           duration: 5,
           graphics: [
             {

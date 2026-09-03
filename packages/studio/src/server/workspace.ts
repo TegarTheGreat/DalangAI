@@ -174,7 +174,7 @@ export interface NewProjectInput {
  * menyembunyikan bahwa semuanya sudah siap dipakai.
  */
 export const newProjectPlan = (input: NewProjectInput): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: slugify(input.title),
   meta: {
     title: input.title,
@@ -188,11 +188,11 @@ export const newProjectPlan = (input: NewProjectInput): ScenePlanInput => ({
     {
       id: "sc-judul",
       narration: "",
-      visual: { type: "template-anim", variant: "title" },
+      clips: [{ id: "sc-judul-k1", type: "template-anim", variant: "title" }],
       duration: 4,
     },
   ],
-  renderState: { narrationAudio: {}, resolvedAssets: {} },
+  renderState: { narrationAudio: {}, clipAssets: {} },
 });
 
 export const createProject = (root: string, input: NewProjectInput): WorkspaceProject => {

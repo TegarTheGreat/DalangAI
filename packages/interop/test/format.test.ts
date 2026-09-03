@@ -145,13 +145,15 @@ describe("penulis FCPXML", () => {
       // Dua scene memakai rekaman yang sama dengan titik masuk berbeda —
       // inti kemampuan mengklip; aset ganda akan membuat FCP mengimpor
       // berkasnya dua kali.
-      input.renderState!.resolvedAssets!["sc-peta"] = {
+      input.renderState!.clipAssets!["sc-peta-k1"] = {
         file: "media/candi.mp4",
         kind: "video",
         source: "pexels",
         durationSec: 30,
       };
-      input.scenes[2]!.visual = { type: "stock", assetId: null, trimStartSec: 12 };
+      input.scenes[2]!.clips = [
+        { id: "sc-peta-k1", type: "stock", assetId: null, trimStartSec: 12 },
+      ];
     });
     const project = tempProject(plan);
     const xml = toFcpxml(buildEditTimeline(plan, { planPath: project.planPath }));
@@ -183,7 +185,7 @@ describe("impor OTIO", () => {
     // Hanya scene yang punya berkas yang bisa kembali sebagai scene; yang
     // tanpa aset jadi gap di berkas dan tidak punya apa pun untuk dipulihkan.
     expect(back.plan.scenes).toHaveLength(2);
-    expect(back.plan.scenes[0]?.visual?.trimStartSec).toBe(4);
+    expect(back.plan.scenes[0]?.clips[0]?.trimStartSec).toBe(4);
     const durations = back.plan.scenes.map((scene) => scene.duration);
     expect(durations.every((duration) => typeof duration === "number")).toBe(true);
     expect(plan.scenes).toHaveLength(3);
@@ -199,7 +201,7 @@ describe("impor OTIO", () => {
     const { timeline } = timelineFor();
     const back = fromOtio(toOtio(timeline), { projectDir: "/folder/lain" });
     expect(back.notes.map((note) => note.code)).toContain("impor-aset-luar");
-    expect(back.plan.scenes.every((scene) => scene.visual?.assetId == null)).toBe(true);
+    expect(back.plan.scenes.every((scene) => scene.clips[0]?.assetId == null)).toBe(true);
   });
 
   it("selalu mengatakan bahwa hasilnya kerangka, bukan plan utuh", () => {

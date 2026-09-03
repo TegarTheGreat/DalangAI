@@ -36,7 +36,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseScenePlan } from "@dalang/core";
+import { parseScenePlan, sceneAsset } from "@dalang/core";
 import { computeFrameLayout } from "@dalang/templates/layout";
 import {
   describeAttempt,
@@ -70,10 +70,7 @@ const framesWithAssets = (planPath: string): number[] => {
     scene.layers.some((layer) => plan.renderState.layerAssets[layer.id] !== undefined);
   return plan.scenes
     .map((scene, index) => ({ scene, index }))
-    .filter(
-      ({ scene }) =>
-        plan.renderState.resolvedAssets[scene.id] !== undefined || punyaLapisan(scene),
-    )
+    .filter(({ scene }) => sceneAsset(plan, scene) !== undefined || punyaLapisan(scene))
     .sort((a, b) => Number(punyaLapisan(b.scene)) - Number(punyaLapisan(a.scene)))
     .slice(0, 3)
     .map(({ index }) =>

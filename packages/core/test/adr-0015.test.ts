@@ -11,7 +11,7 @@ const plan = (visual: Record<string, unknown>) =>
 
 describe("ADR-0015: motion baru, blur, speed, flipH, fokus", () => {
   it("default kompatibel: plan lama mendapat nilai netral", () => {
-    const v = plan({ type: "stock", query: "a" }).scenes[0]?.visual;
+    const v = plan({ type: "stock", query: "a" }).scenes[0]?.clips[0];
     expect(v).toMatchObject({ speed: 1, flipH: false, focusX: 0.5, focusY: 0.5 });
   });
 
@@ -25,7 +25,7 @@ describe("ADR-0015: motion baru, blur, speed, flipH, fokus", () => {
       flipH: true,
       focusX: 0.2,
       focusY: 0.8,
-    }).scenes[0]?.visual;
+    }).scenes[0]?.clips[0];
     expect(v?.motion).toBe("drift");
     expect(v?.filter?.blur).toBe(8);
     expect(v?.speed).toBe(2);
@@ -50,7 +50,7 @@ describe("ADR-0015: motion baru, blur, speed, flipH, fokus", () => {
       ],
       { origin: "user" },
     );
-    expect(after.scenes[0]?.visual).toMatchObject({
+    expect(after.scenes[0]?.clips[0]).toMatchObject({
       motion: "pan-up",
       speed: 0.5,
       flipH: true,

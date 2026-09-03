@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type ScenePlan, setLoudness } from "@dalang/core";
+import { primaryClip, type ScenePlan, sceneAsset, setLoudness } from "@dalang/core";
 import type { PipelineDb } from "./db";
 import { contentHash } from "./hash";
 import { measureWavLoudness } from "./loudness";
@@ -55,8 +55,8 @@ export const audibleFiles = (plan: ScenePlan): Job[] => {
     add(audio.file, `narasi ${sceneId}`);
   }
   for (const scene of plan.scenes) {
-    if (scene.visual.audio.volume > 0) {
-      add(plan.renderState.resolvedAssets[scene.id]?.file, `suara aset ${scene.id}`);
+    if (primaryClip(scene).audio.volume > 0) {
+      add(sceneAsset(plan, scene)?.file, `suara aset ${scene.id}`);
     }
     for (const layer of scene.layers) {
       if (layer.visual.audio.volume > 0) {

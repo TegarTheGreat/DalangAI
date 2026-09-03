@@ -3,6 +3,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   type ScenePlan,
+  sceneAsset,
   setTranscript,
   type Transcript,
   transcriptSchema,
@@ -70,7 +71,7 @@ export const recordingsInPlan = (
   const byFile = new Map<string, string[]>();
   for (const scene of plan.scenes) {
     if (wanted && !wanted.has(scene.id)) continue;
-    const asset = plan.renderState.resolvedAssets[scene.id];
+    const asset = sceneAsset(plan, scene);
     if (!asset || (asset.kind !== "video" && asset.kind !== "audio")) continue;
     byFile.set(asset.file, [...(byFile.get(asset.file) ?? []), scene.id]);
   }

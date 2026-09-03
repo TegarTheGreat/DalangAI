@@ -2,6 +2,7 @@ import {
   estimateWordTimestamps,
   NARRATION_LEAD_IN_SEC,
   narrationWindowSec,
+  primaryClip,
   type Scene,
   type ScenePlan,
   transcriptForScene,
@@ -93,8 +94,8 @@ const captionWords = (
   const transcript = transcriptForScene(plan, scene.id);
   if (!transcript) return { words: [], offsetMs: 0 };
 
-  const speed = scene.visual.speed;
-  const fromSec = scene.visual.trimStartSec;
+  const speed = primaryClip(scene).speed;
+  const fromSec = primaryClip(scene).trimStartSec;
   // Rentang rekaman yang benar-benar terpakai: durasi scene DIKALI kecepatan,
   // karena scene 5 detik pada 2x memakan 10 detik rekaman.
   const toSec = fromSec + (sceneDurationFrames / fps) * (speed > 0 ? speed : 1);

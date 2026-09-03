@@ -1,4 +1,11 @@
-import type { ScenePlan, Transcript, TranscriptWord, WordTimestamp } from "./scene-plan";
+import {
+  getScene,
+  type ScenePlan,
+  sceneAsset,
+  type Transcript,
+  type TranscriptWord,
+  type WordTimestamp,
+} from "./scene-plan";
 
 /**
  * Fungsi murni di atas transkrip (ADR-0021).
@@ -17,7 +24,8 @@ export const transcriptForScene = (
   plan: ScenePlan,
   sceneId: string,
 ): Transcript | undefined => {
-  const file = plan.renderState.resolvedAssets[sceneId]?.file;
+  const scene = getScene(plan, sceneId);
+  const file = scene ? sceneAsset(plan, scene)?.file : undefined;
   return file ? plan.renderState.transcripts[file] : undefined;
 };
 

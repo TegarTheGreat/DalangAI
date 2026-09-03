@@ -15,10 +15,10 @@ const basePlan = () =>
     },
     audio: {},
     scenes: [
-      { id: "a", narration: "Satu.", visual: { type: "solid" } },
-      { id: "b", narration: "Dua.", visual: { type: "solid" } },
+      { id: "a", narration: "Satu.", clips: [{ id: "a-k1", type: "solid" }] },
+      { id: "b", narration: "Dua.", clips: [{ id: "b-k1", type: "solid" }] },
     ],
-    renderState: { narrationAudio: {}, resolvedAssets: {} },
+    renderState: { narrationAudio: {}, clipAssets: {} },
   });
 
 describe("ADR-0011: default mundur-kompatibel", () => {
@@ -29,7 +29,7 @@ describe("ADR-0011: default mundur-kompatibel", () => {
       durationFrames: 15, // ADR-0013 menambah field ini dengan default kompatibel
     });
     expect(plan.scenes[0]?.texts).toEqual([]);
-    expect(plan.scenes[0]?.visual.filter).toBeUndefined();
+    expect(plan.scenes[0]?.clips[0]?.filter).toBeUndefined();
   });
 });
 
@@ -47,7 +47,7 @@ describe("ADR-0011: patch ops", () => {
       ],
       { origin: "user" },
     );
-    const filter = withFilter.scenes[0]?.visual.filter;
+    const filter = withFilter.scenes[0]?.clips[0]?.filter;
     expect(filter?.preset).toBe("warm");
     expect(filter?.saturation).toBe(1.3);
     expect(filter?.brightness).toBe(1);
@@ -56,14 +56,14 @@ describe("ADR-0011: patch ops", () => {
       origin: "user",
       enforce: false,
     });
-    expect(reverted.scenes[0]?.visual.filter).toBeUndefined();
+    expect(reverted.scenes[0]?.clips[0]?.filter).toBeUndefined();
 
     const { plan: cleared } = applyPatch(
       withFilter,
       [{ op: "updateScene", id: "a", patch: { visual: { filter: null } } }],
       { origin: "user" },
     );
-    expect(cleared.scenes[0]?.visual.filter).toBeUndefined();
+    expect(cleared.scenes[0]?.clips[0]?.filter).toBeUndefined();
   });
 
   it("transition dan texts bisa diubah + inverse mengembalikan nilai lama", () => {

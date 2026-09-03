@@ -138,7 +138,9 @@ const waitFor = async <T>(
   }
 };
 const proxyOfScene = (project: ProjectStatePayload, sceneId: string) =>
-  project.plan?.renderState.resolvedAssets[sceneId]?.proxy ?? null;
+  // Dikunci id KLIP (ADR-0033); uji ini bicara dalam id scene seperti
+  // penggunanya, jadi terjemahannya di sini.
+  project.plan?.renderState.clipAssets[`${sceneId}-k1`]?.proxy ?? null;
 
 describe("GET /api/sources", () => {
   it("mendaftar rekaman di folder proyek dengan fakta, pemakai, dan keputusan proxy", async () => {
@@ -270,10 +272,10 @@ describe("POST /api/sources/register", () => {
 
     const project = await getProject(studio);
     const scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
-    expect(scene?.visual.assetId).toBe("assets/podcast.mp4");
-    expect(scene?.visual.pinned).toBe(true);
-    expect(scene?.visual.trimStartSec).toBe(90);
-    const asset = project.plan?.renderState.resolvedAssets["sc-batu"];
+    expect(scene?.clips[0]?.assetId).toBe("assets/podcast.mp4");
+    expect(scene?.clips[0]?.pinned).toBe(true);
+    expect(scene?.clips[0]?.trimStartSec).toBe(90);
+    const asset = project.plan?.renderState.clipAssets["sc-batu-k1"];
     expect(asset?.kind).toBe("video");
     expect(asset?.codec).toBe("hevc");
     expect(asset?.proxy?.file.startsWith(".dalang/proxies/")).toBe(true);
@@ -290,7 +292,7 @@ describe("POST /api/sources/register", () => {
     // Urungkan mengembalikan visual scene; proxy (data turunan) boleh tinggal.
     await call(studio, "/api/undo", { method: "POST" });
     const undone = await getProject(studio);
-    expect(undone.plan?.scenes.find((s) => s.id === "sc-batu")?.visual.pinned).toBe(
+    expect(undone.plan?.scenes.find((s) => s.id === "sc-batu")?.clips[0]?.pinned).toBe(
       false,
     );
   });
@@ -382,7 +384,7 @@ describe("POST /api/sources/register", () => {
     expect(body.proxy).toBeNull();
     expect(body.proxyNote).toContain("tidak ada transkoder");
     const project = await getProject(studio);
-    expect(project.plan?.renderState.resolvedAssets["sc-batu"]?.durationSec).toBe(600);
+    expect(project.plan?.renderState.clipAssets["sc-batu-k1"]?.durationSec).toBe(600);
   });
 });
 

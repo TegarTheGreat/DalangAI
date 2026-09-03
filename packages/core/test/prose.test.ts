@@ -244,14 +244,14 @@ describe("hak pakai aset (ADR-0018)", () => {
         {
           id: "s0",
           narration: "Batu itu disusun tanpa semen sama sekali.",
-          visual: { type: "image" },
+          clips: [{ id: "s0-k1", type: "image" }],
           duration: 6,
         },
       ],
       renderState: {
         narrationAudio: {},
-        resolvedAssets: {
-          s0: { file: "assets/a.mp4", kind: "video", source, license },
+        clipAssets: {
+          "s0-k1": { file: "assets/a.mp4", kind: "video", source, license },
         },
       },
     });
@@ -278,19 +278,29 @@ describe("hak pakai aset (ADR-0018)", () => {
       projectId: "uji-aset-2",
       meta: { title: "Uji Aset" },
       scenes: [
-        { id: "a", narration: "Satu.", visual: { type: "image" }, duration: 4 },
-        { id: "b", narration: "Dua.", visual: { type: "image" }, duration: 4 },
+        {
+          id: "a",
+          narration: "Satu.",
+          clips: [{ id: "a-k1", type: "image" }],
+          duration: 4,
+        },
+        {
+          id: "b",
+          narration: "Dua.",
+          clips: [{ id: "b-k1", type: "image" }],
+          duration: 4,
+        },
       ],
       renderState: {
         narrationAudio: {},
-        resolvedAssets: {
-          a: {
+        clipAssets: {
+          "a-k1": {
             file: "x.mp4",
             kind: "video",
             source: "tenor",
             license: "Tenor — PERIKSA HAK PAKAI",
           },
-          b: {
+          "b-k1": {
             file: "y.mp4",
             kind: "video",
             source: "giphy",
@@ -306,7 +316,7 @@ describe("hak pakai aset (ADR-0018)", () => {
 
   /**
    * Regresi. Stiker GIPHY/Tenor masuk lewat `graphicAssets`, bukan
-   * `resolvedAssets` — justru jalur yang paling sering dipakai. Pemeriksaan
+   * `clipAssets` — justru jalur yang paling sering dipakai. Pemeriksaan
    * yang hanya membaca aset scene karenanya diam persis pada kasus yang paling
    * perlu ditegur, dan diamnya terlihat seperti "aman".
    */
@@ -319,14 +329,14 @@ describe("hak pakai aset (ADR-0018)", () => {
         {
           id: "s0",
           narration: "Satu kalimat saja.",
-          visual: { type: "solid" },
+          clips: [{ id: "s0-k1", type: "solid" }],
           duration: 5,
           graphics: [{ id: "g1", ref: "giphy:abc" }],
         },
       ],
       renderState: {
         narrationAudio: {},
-        resolvedAssets: {},
+        clipAssets: {},
         graphicAssets: {
           g1: {
             file: "assets/stickers/g1.webp",
@@ -360,11 +370,16 @@ describe("hak pakai aset (ADR-0018)", () => {
       projectId: "uji-yatim",
       meta: { title: "Uji Yatim" },
       scenes: [
-        { id: "s0", narration: "Satu kalimat.", visual: { type: "solid" }, duration: 5 },
+        {
+          id: "s0",
+          narration: "Satu kalimat.",
+          clips: [{ id: "s0-k1", type: "solid" }],
+          duration: 5,
+        },
       ],
       renderState: {
         narrationAudio: {},
-        resolvedAssets: {},
+        clipAssets: {},
         graphicAssets: {
           "g-terhapus": {
             file: "assets/stickers/g1.webp",
@@ -385,7 +400,12 @@ describe("hak pakai aset (ADR-0018)", () => {
       projectId: "uji-sfx",
       meta: { title: "Uji SFX" },
       scenes: [
-        { id: "s0", narration: "Satu kalimat.", visual: { type: "solid" }, duration: 5 },
+        {
+          id: "s0",
+          narration: "Satu kalimat.",
+          clips: [{ id: "s0-k1", type: "solid" }],
+          duration: 5,
+        },
       ],
       audio: {
         voice: { provider: "silence", voiceId: "x", speed: 1 },
@@ -393,7 +413,7 @@ describe("hak pakai aset (ADR-0018)", () => {
       },
       renderState: {
         narrationAudio: {},
-        resolvedAssets: {},
+        clipAssets: {},
         graphicAssets: {},
         sfxAssets: {
           "cue-1": {

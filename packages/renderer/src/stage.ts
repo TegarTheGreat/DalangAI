@@ -51,7 +51,7 @@ export const planAssetFiles = (plan: ScenePlan): string[] => {
       .map(([, asset]) => asset.file);
 
   const files = [
-    ...Object.values(plan.renderState.resolvedAssets).map((asset) => asset.file),
+    ...Object.values(plan.renderState.clipAssets).map((asset) => asset.file),
     ...Object.values(plan.renderState.narrationAudio).map((audio) => audio.file),
     // ADR-0018: grafis tempelan dan efek suara punya lumbung berkas sendiri.
     // Melupakan keduanya di sini berarti render gagal memuat berkasnya — dan

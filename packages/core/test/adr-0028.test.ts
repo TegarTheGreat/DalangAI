@@ -11,9 +11,9 @@ import {
   proxyFps,
   resolvedAssetSchema,
   type ScenePlan,
+  setClipAsset,
   setLayerAsset,
   setProxy,
-  setResolvedAsset,
   substituteProxies,
 } from "../src";
 
@@ -35,7 +35,9 @@ const plan = (): ScenePlan =>
       {
         id: "a",
         narration: "Satu.",
-        visual: { type: "image", assetId: "assets/podcast.mp4", trimStartSec: 120 },
+        clips: [
+          { id: "a-k1", type: "image", assetId: "assets/podcast.mp4", trimStartSec: 120 },
+        ],
         duration: 8,
         layers: [
           {
@@ -50,7 +52,7 @@ const plan = (): ScenePlan =>
       {
         id: "b",
         narration: "Dua.",
-        visual: { type: "image", assetId: "assets/broll.mp4" },
+        clips: [{ id: "b-k1", type: "image", assetId: "assets/broll.mp4" }],
         duration: 5,
       },
     ],
@@ -194,9 +196,9 @@ describe("skema: proxy pada resolvedAsset", () => {
 describe("setProxy — ditulis ke semua pemakai berkas, lumbung video saja", () => {
   const withAssets = (): ScenePlan => {
     let next = plan();
-    next = setResolvedAsset(next, "a", video("assets/podcast.mp4"));
+    next = setClipAsset(next, "a-k1", video("assets/podcast.mp4"));
     next = setLayerAsset(next, "lap-a", video("assets/podcast.mp4"));
-    next = setResolvedAsset(next, "b", video("assets/broll.mp4"));
+    next = setClipAsset(next, "b-k1", video("assets/broll.mp4"));
     return next;
   };
 
@@ -207,14 +209,14 @@ describe("setProxy — ditulis ke semua pemakai berkas, lumbung video saja", () 
       { file: ".dalang/proxies/p-540p.mp4", width: 960, height: 540 },
       { codec: "hevc", fps: 29.97 },
     );
-    expect(next.renderState.resolvedAssets.a?.proxy?.file).toBe(
+    expect(next.renderState.clipAssets["a-k1"]?.proxy?.file).toBe(
       ".dalang/proxies/p-540p.mp4",
     );
     expect(next.renderState.layerAssets["lap-a"]?.proxy?.width).toBe(960);
-    expect(next.renderState.resolvedAssets.a?.codec).toBe("hevc");
-    expect(next.renderState.resolvedAssets.a?.fps).toBe(29.97);
+    expect(next.renderState.clipAssets["a-k1"]?.codec).toBe("hevc");
+    expect(next.renderState.clipAssets["a-k1"]?.fps).toBe(29.97);
     // Berkas lain tidak tersentuh.
-    expect(next.renderState.resolvedAssets.b?.proxy).toBeUndefined();
+    expect(next.renderState.clipAssets["b-k1"]?.proxy).toBeUndefined();
     expect(proxiedFiles(next).size).toBe(1);
   });
 
@@ -225,16 +227,16 @@ describe("setProxy — ditulis ke semua pemakai berkas, lumbung video saja", () 
       height: 540,
     });
     const cleared = setProxy(first, "assets/podcast.mp4", null, { codec: "h264" });
-    expect(cleared.renderState.resolvedAssets.a?.proxy).toBeUndefined();
+    expect(cleared.renderState.clipAssets["a-k1"]?.proxy).toBeUndefined();
     expect(cleared.renderState.layerAssets["lap-a"]?.proxy).toBeUndefined();
-    expect(cleared.renderState.resolvedAssets.a?.codec).toBe("h264");
+    expect(cleared.renderState.clipAssets["a-k1"]?.codec).toBe("h264");
     expect(proxiedFiles(cleared).size).toBe(0);
   });
 
   it("tidak mengubah plan aslinya dan menolak proxy yang tidak sah", () => {
     const base = withAssets();
     setProxy(base, "assets/podcast.mp4", { file: "x", width: 2, height: 2 });
-    expect(base.renderState.resolvedAssets.a?.proxy).toBeUndefined();
+    expect(base.renderState.clipAssets["a-k1"]?.proxy).toBeUndefined();
     expect(() =>
       setProxy(base, "assets/podcast.mp4", { file: "x", width: -1, height: 2 }),
     ).toThrow();
@@ -244,9 +246,9 @@ describe("setProxy — ditulis ke semua pemakai berkas, lumbung video saja", () 
 describe("substituteProxies — preview & render draf memakai proxy, tanpa menyentuh yang kreatif", () => {
   it("menukar file+dimensi, mempertahankan trim/kenyaringan, dan mengembalikan plan yang sah", () => {
     let base = plan();
-    base = setResolvedAsset(base, "a", video("assets/podcast.mp4"));
+    base = setClipAsset(base, "a-k1", video("assets/podcast.mp4"));
     base = setLayerAsset(base, "lap-a", video("assets/podcast.mp4"));
-    base = setResolvedAsset(base, "b", video("assets/broll.mp4"));
+    base = setClipAsset(base, "b-k1", video("assets/broll.mp4"));
     base = setProxy(
       base,
       "assets/podcast.mp4",
@@ -256,7 +258,7 @@ describe("substituteProxies — preview & render draf memakai proxy, tanpa menye
 
     const swapped = substituteProxies(base);
     expect(swapped).not.toBe(base);
-    const a = swapped.renderState.resolvedAssets.a;
+    const a = swapped.renderState.clipAssets["a-k1"];
     expect(a?.file).toBe(".dalang/proxies/p-540p.mp4");
     expect(a?.width).toBe(960);
     expect(a?.height).toBe(540);
@@ -267,17 +269,17 @@ describe("substituteProxies — preview & render draf memakai proxy, tanpa menye
     expect(swapped.renderState.layerAssets["lap-a"]?.file).toBe(
       ".dalang/proxies/p-540p.mp4",
     );
-    expect(swapped.renderState.resolvedAssets.b?.file).toBe("assets/broll.mp4");
+    expect(swapped.renderState.clipAssets["b-k1"]?.file).toBe("assets/broll.mp4");
     // Keputusan kreatif tidak tersentuh: trim, durasi, id.
-    expect(swapped.scenes[0]?.visual.trimStartSec).toBe(120);
-    expect(swapped.scenes[0]?.visual.assetId).toBe("assets/podcast.mp4");
+    expect(swapped.scenes[0]?.clips[0]?.trimStartSec).toBe(120);
+    expect(swapped.scenes[0]?.clips[0]?.assetId).toBe("assets/podcast.mp4");
     // Plan aslinya utuh, dan hasilnya lolos skema.
-    expect(base.renderState.resolvedAssets.a?.file).toBe("assets/podcast.mp4");
+    expect(base.renderState.clipAssets["a-k1"]?.file).toBe("assets/podcast.mp4");
     expect(() => parseScenePlan(swapped)).not.toThrow();
   });
 
   it("mengembalikan objek yang SAMA bila tidak ada proxy — pemoize tidak merender ulang", () => {
-    const base = setResolvedAsset(plan(), "a", video("assets/podcast.mp4"));
+    const base = setClipAsset(plan(), "a-k1", video("assets/podcast.mp4"));
     expect(substituteProxies(base)).toBe(base);
   });
 });

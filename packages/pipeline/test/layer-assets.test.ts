@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 const planWith = (layers: unknown[]): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "proj-lapisan",
   meta: { title: "Uji Lapisan" },
   audio: {},
@@ -35,7 +35,7 @@ const planWith = (layers: unknown[]): ScenePlanInput => ({
     {
       id: "sc-001",
       narration: "Kalimat pertama.",
-      visual: { type: "solid" },
+      clips: [{ id: "sc-001-k1", type: "solid" }],
       layers,
     } as never,
   ],

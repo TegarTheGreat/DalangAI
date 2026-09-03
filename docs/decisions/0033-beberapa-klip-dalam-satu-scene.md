@@ -1,6 +1,6 @@
 # ADR-0033 — Beberapa klip dalam satu scene
 
-**Status:** diusulkan · **Tanggal:** 2 September 2026 · **Fase:** 9 (§9.6, baru)
+**Status:** diterima (fase 1 diterapkan) · **Tanggal:** 2 September 2026 · **Fase:** 9 (§9.6, baru)
 
 ## Konteks
 
@@ -172,15 +172,64 @@ Tiga sifat yang dijaga:
   plan. Plan yang bermigrasi tanpa perubahan isi tidak mensintesis ulang suara
   atau mengunduh ulang aset apa pun.
 
+## Penerapan: fase 1 (3 September 2026)
+
+Yang SUDAH ada di kode:
+
+- `scene.clips[]` menggantikan `scene.visual` di seluruh repo — 8 paket,
+  sekitar 330 titik sentuh. `clipSchema` memakai bentuk `Visual` apa adanya
+  plus `id`, `durationSec?`, dan `transition?`.
+- `renderState.clipAssets` dikunci id KLIP menggantikan `resolvedAssets` yang
+  dikunci id scene.
+- `SCHEMA_VERSION = 2`, `migrateV1ToV2`, dan `migrateScenePlan` — rantai
+  migrasi pertama repo ini. `parseScenePlan` DAN `safeParseScenePlan`
+  keduanya memigrasikan; dua jalur parse yang berbeda pendapat soal versi
+  adalah cara termudah membuat Studio menerima plan yang ditolak CLI.
+- Artefak JSON Schema ikut berganti nama jadi `scene-plan.v2.schema.json`, dan
+  kedua plan contoh di repo dimigrasikan LEWAT fungsi migrasinya sendiri.
+- Helper `primaryClip`, `primaryClipId`, `clipAsset`, `sceneAsset`, `allClips`
+  di core. `primaryClipId` ada khusus untuk seam yang paling berbahaya:
+  permukaan luar (tool agent, rute Studio, server MCP) bicara dalam id SCENE
+  sementara lumbungnya dikunci id KLIP, dan keduanya bertipe `string` — jadi
+  TypeScript tidak bisa menangkap tertukarnya.
+- Gerbang paritas byte (`pnpm --filter @dalang/renderer migrasi-paritas`) di CI
+  untuk kedua plan contoh.
+
+Empat cacat yang ditemukan gerbang dan test selama penerapan, semuanya kelas
+yang sama — kunci scene dipakai di tempat yang menuntut kunci klip:
+
+| Ditemukan oleh | Cacat |
+| --- | --- |
+| uji kritik | temuan hak pakai aset menyebut id KLIP kepada orang yang mencari id SCENE |
+| uji sumber Studio | panel Sumber menampilkan `sc-batu-k1` di kolom yang menjanjikan id scene |
+| uji audio | `setLoudness` menulis ke kunci yang tidak dibaca siapa pun, jadi kritik "belum diukur" tidak pernah diam |
+| pembacaan diff | `splitScene` menyalin id klip induk ke scene baru — id klip wajib unik se-plan, jadi plan hasil belahan ditolak skema |
+
+Yang BELUM: keempat op klip (`splitClip`, `trimClip`, `removeClip`,
+`reorderClips`), pengeditan klip di timeline Studio, dan pemetaan interop satu
+ke satu. Sampai op-nya ada, tidak ada jalur yang bisa MEMBUAT klip kedua;
+skema sudah menerimanya dan aturan waktunya (§2) sudah berlaku, tapi renderer
+belum menyusun lebih dari satu klip per scene.
+
+**Satu penyimpangan dari ADR ini, dinyatakan:** field payload
+`updateScene.patch.visual` BELUM berganti nama jadi `clip`. Ia sekarang
+menyasar `clips[0]`. Alasannya: mengganti nama di wire menyentuh Studio,
+agent, dan MCP tanpa satu pun kemampuan baru untuk ditunjukkan, dan
+penyuntingan per-klip yang membuat nama itu berarti baru datang di fase 2.
+Bentuk DATA-nya tunggal seperti yang diputuskan ADR ini — yang ditunda hanya
+nama field di satu payload patch.
+
 ## Rencana verifikasi
 
 Belum diterapkan; ini yang akan membuktikannya, ditulis lebih dulu supaya
 tidak dikarang belakangan agar cocok dengan hasil.
 
-1. **Paritas render byte per byte.** Plan demo versi 1 dirender jadi still,
-   lalu dimigrasikan ke versi 2 dan dirender lagi. Keduanya WAJIB identik byte
-   per byte. Ini gerbang terkuat yang tersedia untuk migrasi, dan polanya sudah
-   dipakai gerbang paritas aset (ADR-0019).
+1. **Paritas render byte per byte.** SUDAH — `migrasi-paritas` di CI, tiga
+   frame per plan contoh, identik byte per byte. Di luar itu, sekali secara
+   manual saat penerapan: tiga still 1080p dari plan demo ditangkap SEBELUM
+   core disentuh, lalu dibandingkan dengan hasil setelah skema naik. Ketiga
+   sha256-nya sama persis, jadi perpindahan ini benar-benar tidak menggeser
+   satu piksel pun — bukan cuma konsisten dengan dirinya sendiri.
 2. **Ripple diuji sebagai aritmetika murni**, bukan lewat UI: memendekkan klip
    ketiga dari lima menggeser klip empat dan lima persis sebesar selisihnya, dan
    jumlah durasi scene ikut berubah persis sebesar itu juga.
@@ -189,7 +238,8 @@ tidak dikarang belakangan agar cocok dengan hasil.
 4. **Belah lalu gabung kembali** menghasilkan klip yang identik dengan aslinya,
    termasuk `trimStartSec` dan asetnya.
 5. **Migrasi dijalankan pada setiap plan contoh di repo**, dan hasilnya lolos
-   skema versi 2 tanpa satu pun field hilang.
+   skema versi 2 tanpa satu pun field hilang. SUDAH — keduanya dimigrasikan
+   lewat fungsinya sendiri lalu disimpan sebagai v2.
 6. **Gerbang interaksi** menyeret tepi klip di timeline dengan pointer sungguhan
    lewat CDP, lalu memeriksa PLAN DI SERVER — seretan yang cuma menggeser kotak
    di layar tanpa patch adalah cacat yang tidak ditangkap unit test mana pun.

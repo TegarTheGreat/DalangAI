@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { scenePlanJsonSchema } from "../src/index";
 
-const artifactUrl = new URL("../schema/scene-plan.v1.schema.json", import.meta.url);
+const artifactUrl = new URL("../schema/scene-plan.v2.schema.json", import.meta.url);
 
 describe("JSON Schema artifact", () => {
   it("committed artifact matches the zod source (run `pnpm schema:gen` if this fails)", () => {

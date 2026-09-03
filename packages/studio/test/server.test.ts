@@ -309,9 +309,9 @@ describe("stock search & pick (grid aset §8.2)", () => {
 
     let project = await getProject(studio);
     let scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
-    expect(scene?.visual.pinned).toBe(true);
-    expect(scene?.visual.assetId).toBe("fake:image:0");
-    expect(project.plan?.renderState.resolvedAssets["sc-batu"]?.license).toBe(
+    expect(scene?.clips[0]?.pinned).toBe(true);
+    expect(scene?.clips[0]?.assetId).toBe("fake:image:0");
+    expect(project.plan?.renderState.clipAssets["sc-batu-k1"]?.license).toBe(
       "Uji License",
     );
     expect(project.patchLog.recent.at(-1)?.origin).toBe("user");
@@ -324,7 +324,7 @@ describe("stock search & pick (grid aset §8.2)", () => {
     expect(repick.status).toBe(200);
     project = await getProject(studio);
     scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
-    expect(scene?.visual.assetId).toBe("fake:image:2");
+    expect(scene?.clips[0]?.assetId).toBe("fake:image:2");
   });
 
   /**
@@ -372,7 +372,7 @@ describe("stock search & pick (grid aset §8.2)", () => {
     expect(scene?.layers[0]?.visual.pinned).toBe(true);
     expect(project.plan?.renderState.layerAssets["lap-1"]?.license).toBe("Uji License");
     // Visual dasar tidak ikut berubah — pagar yang paling mudah jebol.
-    expect(scene?.visual.assetId).not.toBe("fake:image:0");
+    expect(scene?.clips[0]?.assetId).not.toBe("fake:image:0");
   });
 
   it("auto-resolve stage tetap melewati scene ter-pin", async () => {

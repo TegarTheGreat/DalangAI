@@ -17,10 +17,14 @@ const basePlan = () =>
       {
         id: "sc-1",
         narration: "Scene pertama.",
-        visual: { type: "solid" },
+        clips: [{ id: "sc-1-k1", type: "solid" }],
         texts: [{ id: "tx", content: "Angka kunci" }],
       },
-      { id: "sc-2", narration: "Scene kedua.", visual: { type: "solid" } },
+      {
+        id: "sc-2",
+        narration: "Scene kedua.",
+        clips: [{ id: "sc-2-k1", type: "solid" }],
+      },
     ],
   } as never);
 
@@ -44,7 +48,7 @@ describe("ADR-0013 — kompatibilitas mundur", () => {
         {
           id: "a",
           narration: "n",
-          visual: { type: "solid" },
+          clips: [{ id: "a-k1", type: "solid" }],
           transition: { type: "cross-fade", durationFrames: MAX_TRANSITION_FRAMES + 1 },
         },
       ],

@@ -116,6 +116,18 @@ jobs:
           # preset lain, dan cabang "scene tanpa aset" berperilaku berbeda.
           pnpm --filter @dalang/interop gate:interop examples/tutorial-studio/plan.json
 
+      # ADR-0033: skema naik ke v2 dan `parseScenePlan` memigrasikan plan v1.
+      # Unit test migrasi hanya membuktikan bentuknya cocok dengan yang
+      # DIHARAPKAN penulis testnya; satu field yang lupa ikut pindah tetap
+      # lolos skema dan baru terlihat sebagai gambar yang bergeser. Gerbang ini
+      # merender plan v1 (dimigrasikan saat dibaca) dan plan v2 yang sama, lalu
+      # menuntut hasilnya identik byte per byte.
+      - name: Gerbang paritas migrasi skema (v1 -> v2)
+        timeout-minutes: 8
+        run: |
+          pnpm --filter @dalang/renderer migrasi-paritas
+          pnpm --filter @dalang/renderer migrasi-paritas examples/tutorial-studio/plan.json
+
       - name: Asset URL parity gate
         timeout-minutes: 8
         run: |

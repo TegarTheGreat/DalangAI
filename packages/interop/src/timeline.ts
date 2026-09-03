@@ -3,8 +3,10 @@ import { pathToFileURL } from "node:url";
 import {
   DIMENSIONS,
   NARRATION_LEAD_IN_SEC,
+  primaryClip,
   type ResolvedAsset,
   type ScenePlan,
+  sceneAsset,
 } from "@dalang/core";
 import { computeFrameLayout, FPS } from "@dalang/templates/layout";
 import { resolveMusicFile } from "@dalang/templates/music";
@@ -211,7 +213,7 @@ export const buildEditTimeline = (
   plan.scenes.forEach((scene, index) => {
     const end = cuts[index] ?? layout.totalFrames;
     const durationFrames = Math.max(1, end - cursor);
-    const asset: ResolvedAsset | undefined = plan.renderState.resolvedAssets[scene.id];
+    const asset: ResolvedAsset | undefined = sceneAsset(plan, scene);
 
     if (!asset) {
       // Scene tanpa aset nyata (template-anim, atau belum diresolusi) tidak
@@ -234,7 +236,7 @@ export const buildEditTimeline = (
         url: fileUrlFor(planDir, asset.file),
         media: asset.kind,
         // Gambar diam tidak punya titik masuk; hanya video yang dipotong.
-        sourceStartSec: asset.kind === "video" ? scene.visual.trimStartSec : 0,
+        sourceStartSec: asset.kind === "video" ? primaryClip(scene).trimStartSec : 0,
         sourceDurationSec: asset.durationSec ?? null,
         markers,
       });
@@ -483,10 +485,10 @@ export const buildEditTimeline = (
       detail: `${sentence(bagian.join(" dan "))} tidak ikut — digambar preset Dalang saat render, bukan disimpan sebagai berkas.`,
     });
   }
-  const motion = countScenes(plan, (scene) => scene.visual.motion !== "none");
+  const motion = countScenes(plan, (scene) => primaryClip(scene).motion !== "none");
   const filtered = countScenes(
     plan,
-    (scene) => !!scene.visual.filter && scene.visual.filter.preset !== "none",
+    (scene) => (primaryClip(scene).filter?.preset ?? "none") !== "none",
   );
   if (motion + filtered > 0) {
     const bagian = [
@@ -527,7 +529,7 @@ export const buildEditTimeline = (
     });
   }
   const bersuara =
-    countScenes(plan, (scene) => scene.visual.audio.volume > 0) +
+    countScenes(plan, (scene) => primaryClip(scene).audio.volume > 0) +
     plan.scenes.reduce(
       (sum, scene) =>
         sum + scene.layers.filter((layer) => layer.visual.audio.volume > 0).length,
@@ -539,8 +541,8 @@ export const buildEditTimeline = (
       detail: `${bersuara} klip bersuara diekspor dengan audionya utuh, tapi volume, fade, ducking di bawah narasi, dan normalisasi kenyaringannya TIDAK ikut — semuanya otomatisasi milik render. Atur ulang levelnya di editor tujuan.`,
     });
   }
-  const speedy = countScenes(plan, (scene) => scene.visual.speed !== 1);
-  const flipped = countScenes(plan, (scene) => scene.visual.flipH);
+  const speedy = countScenes(plan, (scene) => primaryClip(scene).speed !== 1);
+  const flipped = countScenes(plan, (scene) => primaryClip(scene).flipH);
   if (speedy + flipped > 0) {
     const bagian = [
       speedy > 0 ? `kecepatan putar (${speedy} scene)` : null,

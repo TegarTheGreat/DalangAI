@@ -12,13 +12,13 @@ import {
 describe("computeFrameLayout", () => {
   it("overlaps transitions and quantizes to frames", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
-        { id: "a", duration: 3, visual: { type: "solid" } },
-        { id: "b", duration: 4, visual: { type: "solid" } },
-        { id: "c", duration: 5, visual: { type: "solid" } },
+        { id: "a", duration: 3, clips: [{ id: "a-k1", type: "solid" }] },
+        { id: "b", duration: 4, clips: [{ id: "b-k1", type: "solid" }] },
+        { id: "c", duration: 5, clips: [{ id: "c-k1", type: "solid" }] },
       ],
     });
     const layout = computeFrameLayout(plan);
@@ -33,12 +33,12 @@ describe("computeFrameLayout", () => {
 
   it("clamps pathological short scenes so transitions always fit", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
-        { id: "a", duration: 0.2, visual: { type: "solid" } },
-        { id: "b", duration: 0.2, visual: { type: "solid" } },
+        { id: "a", duration: 0.2, clips: [{ id: "a-k1", type: "solid" }] },
+        { id: "b", duration: 0.2, clips: [{ id: "b-k1", type: "solid" }] },
       ],
     });
     const layout = computeFrameLayout(plan);
@@ -66,12 +66,12 @@ describe("computeFrameLayout", () => {
 describe("activeSceneIndex", () => {
   it("switches at the transition midpoint", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
-        { id: "a", duration: 3, visual: { type: "solid" } },
-        { id: "b", duration: 3, visual: { type: "solid" } },
+        { id: "a", duration: 3, clips: [{ id: "a-k1", type: "solid" }] },
+        { id: "b", duration: 3, clips: [{ id: "b-k1", type: "solid" }] },
       ],
     });
     const layout = computeFrameLayout(plan);

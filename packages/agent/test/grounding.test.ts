@@ -79,7 +79,7 @@ describe("locateUiElement (alur grounding §9, model terskrip)", () => {
     plan.scenes[0] = {
       id: "sc-001",
       narration: "Klik tombol Ekspor.",
-      visual: { type: "screenshot", assetId: "assets/shot.png" },
+      clips: [{ id: "sc-001-k1", type: "screenshot", assetId: "assets/shot.png" }],
     };
     const project = tempProject(plan);
     mkdirSync(join(project.dir, "assets"), { recursive: true });
@@ -88,9 +88,9 @@ describe("locateUiElement (alur grounding §9, model terskrip)", () => {
       join(project.dir, "assets/shot.png"),
       await image.getBuffer("image/png"),
     );
-    // Materialkan resolvedAssets seperti hasil stage assets (ingest lokal).
+    // Materialkan clipAssets seperti hasil stage assets (ingest lokal).
     const withAsset = structuredClone(project.session.plan!);
-    withAsset.renderState.resolvedAssets["sc-001"] = {
+    withAsset.renderState.clipAssets["sc-001-k1"] = {
       file: "assets/shot.png",
       kind: "image",
       source: "local",

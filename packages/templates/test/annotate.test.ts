@@ -112,10 +112,10 @@ describe("arrowSide & stepNumbers", () => {
   it("nomor langkah melewati scene template-anim", () => {
     const plan = {
       scenes: [
-        { id: "t", visual: { type: "template-anim" } },
-        { id: "a", visual: { type: "screenshot" } },
-        { id: "b", visual: { type: "screenshot" } },
-        { id: "o", visual: { type: "template-anim" } },
+        { id: "t", clips: [{ id: "t-k1", type: "template-anim" }] },
+        { id: "a", clips: [{ id: "a-k1", type: "screenshot" }] },
+        { id: "b", clips: [{ id: "b-k1", type: "screenshot" }] },
+        { id: "o", clips: [{ id: "o-k1", type: "template-anim" }] },
       ],
     } as never;
     const steps = stepNumbers(plan);

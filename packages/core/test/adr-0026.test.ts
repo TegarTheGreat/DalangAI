@@ -34,8 +34,13 @@ const plan = (over: Record<string, unknown> = {}): ScenePlan =>
     projectId: "uji-0026",
     meta: { title: "Uji Audio" },
     scenes: [
-      { id: "a", narration: "Satu.", visual: { type: "solid" }, duration: 5 },
-      { id: "b", narration: "Dua.", visual: { type: "solid" }, duration: 5 },
+      {
+        id: "a",
+        narration: "Satu.",
+        clips: [{ id: "a-k1", type: "solid" }],
+        duration: 5,
+      },
+      { id: "b", narration: "Dua.", clips: [{ id: "b-k1", type: "solid" }], duration: 5 },
     ],
     ...over,
   });
@@ -178,14 +183,14 @@ describe("audioTrackSchema", () => {
           {
             id: "a",
             narration: "Satu.",
-            visual: { type: "solid" },
+            clips: [{ id: "a-k1", type: "solid" }],
             duration: 5,
             graphics: [{ id: "G", ref: "iconify:mdi:home" }],
           },
           {
             id: "b",
             narration: "Dua.",
-            visual: { type: "solid" },
+            clips: [{ id: "b-k1", type: "solid" }],
             duration: 5,
             graphics: [{ id: "G", ref: "iconify:mdi:star" }],
           },
@@ -212,7 +217,7 @@ describe("audioTrackSchema", () => {
           {
             id: "a",
             narration: "Satu.",
-            visual: { type: "solid" },
+            clips: [{ id: "a-k1", type: "solid" }],
             duration: 5,
             layers: [{ id: "L1", visual: { type: "stock" } }],
             graphics: [{ id: "G1", ref: "iconify:mdi:home" }],
@@ -239,14 +244,24 @@ describe("setLoudness", () => {
       projectId: "uji-ukur",
       meta: { title: "Uji" },
       scenes: [
-        { id: "a", narration: "Satu.", visual: { type: "stock" }, duration: 5 },
-        { id: "b", narration: "Dua.", visual: { type: "stock" }, duration: 5 },
+        {
+          id: "a",
+          narration: "Satu.",
+          clips: [{ id: "a-k1", type: "stock" }],
+          duration: 5,
+        },
+        {
+          id: "b",
+          narration: "Dua.",
+          clips: [{ id: "b-k1", type: "stock" }],
+          duration: 5,
+        },
       ],
       renderState: {
         narrationAudio: { a: { file: "audio/a.wav", durationSec: 3 } },
-        resolvedAssets: {
-          a: { file: "media/sama.mp4", kind: "video", source: "pexels" },
-          b: { file: "media/sama.mp4", kind: "video", source: "pexels" },
+        clipAssets: {
+          "a-k1": { file: "media/sama.mp4", kind: "video", source: "pexels" },
+          "b-k1": { file: "media/sama.mp4", kind: "video", source: "pexels" },
         },
       },
     });
@@ -259,8 +274,8 @@ describe("setLoudness", () => {
    */
   it("menulis hasil ukur ke SEMUA entri yang menunjuk berkas yang sama", () => {
     const diukur = setLoudness(berbagi(), "media/sama.mp4", -21.4);
-    expect(diukur.renderState.resolvedAssets.a?.lufs).toBe(-21.4);
-    expect(diukur.renderState.resolvedAssets.b?.lufs).toBe(-21.4);
+    expect(diukur.renderState.clipAssets["a-k1"]?.lufs).toBe(-21.4);
+    expect(diukur.renderState.clipAssets["b-k1"]?.lufs).toBe(-21.4);
   });
 
   it("berkas narasi ikut terukur", () => {
@@ -272,7 +287,7 @@ describe("setLoudness", () => {
     const asal = berbagi();
     const diukur = setLoudness(asal, "media/sama.mp4", -21.4);
     expect(diukur.renderState.narrationAudio.a?.lufs).toBeUndefined();
-    expect(asal.renderState.resolvedAssets.a?.lufs).toBeUndefined();
+    expect(asal.renderState.clipAssets["a-k1"]?.lufs).toBeUndefined();
   });
 });
 
@@ -331,7 +346,7 @@ describe("critiquePlan soal audio", () => {
         },
       ],
       renderState: {
-        resolvedAssets: { a: { file: "media/a.mp4", kind: "video", source: "pexels" } },
+        clipAssets: { "a-k1": { file: "media/a.mp4", kind: "video", source: "pexels" } },
       },
     });
 
@@ -354,9 +369,16 @@ describe("critiquePlan soal audio", () => {
    */
   it("tidak mengeluhkan klip yang memang bisu", () => {
     const bisu = plan({
-      scenes: [{ id: "a", narration: "Satu.", visual: { type: "stock" }, duration: 5 }],
+      scenes: [
+        {
+          id: "a",
+          narration: "Satu.",
+          clips: [{ id: "a-k1", type: "stock" }],
+          duration: 5,
+        },
+      ],
       renderState: {
-        resolvedAssets: { a: { file: "media/a.mp4", kind: "video", source: "pexels" } },
+        clipAssets: { "a-k1": { file: "media/a.mp4", kind: "video", source: "pexels" } },
       },
     });
     expect(critiquePlan(bisu).map((note) => note.code)).not.toContain(

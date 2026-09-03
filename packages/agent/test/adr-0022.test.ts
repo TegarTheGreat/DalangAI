@@ -235,7 +235,7 @@ describe("ADR-0022 · reviewRender", () => {
         scenes: Array.from({ length: 8 }, (_, i) => ({
           id: `sc-${i + 1}`,
           narration: "Kalimat narasi cukup panjang untuk mengisi durasi scene.",
-          visual: { type: "solid" as const },
+          clips: [{ id: `sc-${i + 1}-k1`, type: "solid" as const }],
         })),
       }),
     );

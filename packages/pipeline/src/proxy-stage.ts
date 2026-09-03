@@ -69,8 +69,15 @@ export const proxyCandidates = (plan: ScenePlan): ProxyJob[] => {
   const add = (file: string, label: string) => {
     if (!jobs.has(file)) jobs.set(file, label);
   };
-  for (const [sceneId, asset] of Object.entries(plan.renderState.resolvedAssets)) {
-    if (asset.kind === "video") add(asset.file, `scene ${sceneId}`);
+  // Labelnya menyebut SCENE, bukan id klip: yang dibaca orang di progres
+  // proxy adalah satuan yang mereka kenali di timeline (ADR-0033).
+  const sceneOfClip = new Map<string, string>();
+  for (const scene of plan.scenes) {
+    for (const clip of scene.clips) sceneOfClip.set(clip.id, scene.id);
+  }
+  for (const [clipId, asset] of Object.entries(plan.renderState.clipAssets)) {
+    if (asset.kind !== "video") continue;
+    add(asset.file, `scene ${sceneOfClip.get(clipId) ?? clipId}`);
   }
   const orphans = new Set(orphanMediaAssetIds(plan).layers);
   for (const [layerId, asset] of Object.entries(plan.renderState.layerAssets)) {

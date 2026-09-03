@@ -1,4 +1,4 @@
-import type { Scene, ScenePlan } from "@dalang/core";
+import { primaryClip, type Scene, type ScenePlan, sceneAsset } from "@dalang/core";
 import type { BusyState, StageRunLite } from "../../shared/api-types";
 
 /**
@@ -56,12 +56,15 @@ export const deriveSceneStatus = (
   }
 
   let asset: SceneBadge;
-  if (scene.visual.type === "template-anim" || scene.visual.type === "solid") {
+  if (
+    primaryClip(scene).type === "template-anim" ||
+    primaryClip(scene).type === "solid"
+  ) {
     asset = "n/a";
   } else {
-    const resolved = plan.renderState.resolvedAssets[scene.id];
+    const resolved = sceneAsset(plan, scene);
     const run = runFor(runs, scene.id, "assets");
-    if (scene.visual.pinned && resolved) {
+    if (primaryClip(scene).pinned && resolved) {
       asset = "pinned";
     } else if (resolved) {
       asset = run?.fallback ? "fallback" : "ok";

@@ -33,7 +33,7 @@ const makeProject = async () => {
 
 const planWith = (scenes: unknown[]) =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "uji-lokal",
     meta: { title: "Uji" },
     scenes,
@@ -46,7 +46,7 @@ describe("runAssetStage — ingest aset lokal", () => {
       {
         id: "sc-shot",
         narration: "Langkah satu.",
-        visual: { type: "screenshot", assetId: "assets/shot.png" },
+        clips: [{ id: "sc-shot-k1", type: "screenshot", assetId: "assets/shot.png" }],
       },
     ]);
     const { plan: next, results } = await runAssetStage({
@@ -58,7 +58,7 @@ describe("runAssetStage — ingest aset lokal", () => {
     expect(results).toEqual([
       expect.objectContaining({ sceneId: "sc-shot", status: "done" }),
     ]);
-    const asset = next.renderState.resolvedAssets["sc-shot"];
+    const asset = next.renderState.clipAssets["sc-shot-k1"];
     expect(asset).toMatchObject({
       file: "assets/shot.png",
       kind: "image",
@@ -74,16 +74,16 @@ describe("runAssetStage — ingest aset lokal", () => {
   it("assetId kosong / file hilang / path keluar proyek -> error jelas per scene", async () => {
     const { paths, db } = await makeProject();
     const plan = planWith([
-      { id: "sc-a", narration: "x", visual: { type: "screenshot" } },
+      { id: "sc-a", narration: "x", clips: [{ id: "sc-a-k1", type: "screenshot" }] },
       {
         id: "sc-b",
         narration: "x",
-        visual: { type: "image", assetId: "assets/tidak-ada.png" },
+        clips: [{ id: "sc-b-k1", type: "image", assetId: "assets/tidak-ada.png" }],
       },
       {
         id: "sc-c",
         narration: "x",
-        visual: { type: "screenshot", assetId: "../keluar.png" },
+        clips: [{ id: "sc-c-k1", type: "screenshot", assetId: "../keluar.png" }],
       },
     ]);
     const { results } = await runAssetStage({ paths, plan, providers: [], db });

@@ -117,7 +117,7 @@ export const proxyFps = (sourceFps: number | null | undefined): number | undefin
   return sourceFps > PROXY_MAX_FPS ? PROXY_MAX_FPS : undefined;
 };
 
-const VIDEO_STORES = ["resolvedAssets", "layerAssets"] as const;
+const VIDEO_STORES = ["clipAssets", "layerAssets"] as const;
 
 /**
  * Berkas video yang punya proxy di plan ini, sekali per berkas.

@@ -9,9 +9,11 @@ import {
   PatchLog,
   type PatchOpInput,
   parseScenePlan,
+  primaryClip,
   resolveSceneDurationSec,
   type ScenePlan,
   type ScenePlanInput,
+  sceneAsset,
 } from "@dalang/core";
 import {
   atomicWriteFile,
@@ -257,14 +259,14 @@ export class ProjectSession {
     const { totalSec } = computeTimeline(plan);
     const lines = plan.scenes.map((scene, index) => {
       const audio = plan.renderState.narrationAudio[scene.id];
-      const asset = plan.renderState.resolvedAssets[scene.id];
+      const asset = sceneAsset(plan, scene);
       const flags = [
         scene.locked ? "TERKUNCI" : null,
-        scene.visual.pinned ? "pinned" : null,
+        primaryClip(scene).pinned ? "pinned" : null,
         audio ? (audio.fallbackQuality ? "suara:fallback" : "suara:ok") : null,
         asset
           ? `aset:${asset.kind}`
-          : scene.visual.type === "stock"
+          : primaryClip(scene).type === "stock"
             ? "aset:belum"
             : null,
         // Lapisan (ADR-0025) ikut ke konteks: kalau tidak, agent tidak pernah
@@ -281,8 +283,8 @@ export class ProjectSession {
         .filter(Boolean)
         .join(", ");
       return (
-        `${index + 1}. ${scene.id} [${scene.visual.type}` +
-        `${scene.visual.variant ? `/${scene.visual.variant}` : ""}] ` +
+        `${index + 1}. ${scene.id} [${primaryClip(scene).type}` +
+        `${primaryClip(scene).variant ? `/${primaryClip(scene).variant}` : ""}] ` +
         `${countWords(scene.narration)} kata, ${resolveSceneDurationSec(scene, plan).toFixed(1)}s` +
         `${flags ? ` (${flags})` : ""} — "${scene.narration.slice(0, 70)}${scene.narration.length > 70 ? "…" : ""}"`
       );

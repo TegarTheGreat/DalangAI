@@ -1,6 +1,6 @@
 {
   "$schema": "../../packages/core/schema/scene-plan.schema.json",
-  "version": 1,
+  "version": 2,
   "projectId": "tutorial-dalang-studio",
   "meta": {
     "title": "Cara Membuat Video di Dalang Studio",
@@ -19,25 +19,24 @@
     {
       "id": "sc-title",
       "narration": "Dari satu brief menjadi video jadi — semua di satu studio.",
-      "visual": {
-        "type": "template-anim",
-        "variant": "title"
-      },
       "duration": 4.2,
       "caption": {
         "enabled": false
       },
       "transition": {
         "type": "cross-fade"
-      }
+      },
+      "clips": [
+        {
+          "type": "template-anim",
+          "variant": "title",
+          "id": "sc-title-k1"
+        }
+      ]
     },
     {
       "id": "sc-step-1",
       "narration": "Mulai dari kartu brief: isi topik, gaya, durasi, dan rasio, lalu klik Susun scene-plan.",
-      "visual": {
-        "type": "screenshot",
-        "assetId": "assets/step-1-brief.png"
-      },
       "transition": {
         "type": "slide-left"
       },
@@ -66,15 +65,18 @@
             "startSec": 3.4
           }
         }
+      ],
+      "clips": [
+        {
+          "type": "screenshot",
+          "assetId": "assets/step-1-brief.png",
+          "id": "sc-step-1-k1"
+        }
       ]
     },
     {
       "id": "sc-step-2",
       "narration": "Agent menyusun scene-plan; timeline, preview, dan properti langsung terisi — semuanya tetap bisa kamu edit.",
-      "visual": {
-        "type": "screenshot",
-        "assetId": "assets/step-2-editor.png"
-      },
       "transition": {
         "type": "slide-left"
       },
@@ -82,9 +84,9 @@
         {
           "type": "highlight",
           "target": {
-            "x": 0.0,
+            "x": 0,
             "y": 0.809,
-            "w": 1.0,
+            "w": 1,
             "h": 0.191
           },
           "timing": {
@@ -116,15 +118,18 @@
             "startSec": 0
           }
         }
+      ],
+      "clips": [
+        {
+          "type": "screenshot",
+          "assetId": "assets/step-2-editor.png",
+          "id": "sc-step-2-k1"
+        }
       ]
     },
     {
       "id": "sc-step-3",
       "narration": "Kalau sudah pas, klik Ekspor dan pilih profil: Draft untuk cek cepat, Final untuk rilis.",
-      "visual": {
-        "type": "screenshot",
-        "assetId": "assets/step-3-export.png"
-      },
       "transition": {
         "type": "cross-fade"
       },
@@ -179,7 +184,7 @@
           "anchor": "kanan-bawah",
           "width": 0.3,
           "height": 0.26,
-          "offsetX": 0.0,
+          "offsetX": 0,
           "offsetY": -0.1,
           "shape": "persegi",
           "radius": 0.06,
@@ -190,28 +195,48 @@
           "startFrac": 0.18,
           "endFrac": 0.82
         }
+      ],
+      "clips": [
+        {
+          "type": "screenshot",
+          "assetId": "assets/step-3-export.png",
+          "id": "sc-step-3-k1"
+        }
       ]
     },
     {
       "id": "sc-outro",
       "narration": "Satu brief, satu video. Selamat mencoba.",
-      "visual": {
-        "type": "template-anim",
-        "variant": "outro"
-      },
       "duration": 3.6,
       "caption": {
         "enabled": false
       },
       "transition": {
         "type": "none"
-      }
+      },
+      "clips": [
+        {
+          "type": "template-anim",
+          "variant": "outro",
+          "id": "sc-outro-k1"
+        }
+      ]
     }
   ],
   "renderState": {
     "narrationAudio": {},
-    "resolvedAssets": {
-      "sc-step-1": {
+    "layerAssets": {
+      "lap-brief": {
+        "file": "assets/step-1-brief.png",
+        "kind": "image",
+        "source": "local",
+        "license": "Tangkapan layar Dalang Studio (aset proyek sendiri)",
+        "width": 3200,
+        "height": 1800
+      }
+    },
+    "clipAssets": {
+      "sc-step-1-k1": {
         "file": "assets/step-1-brief.png",
         "kind": "image",
         "source": "local",
@@ -219,7 +244,7 @@
         "width": 3200,
         "height": 1800
       },
-      "sc-step-2": {
+      "sc-step-2-k1": {
         "file": "assets/step-2-editor.png",
         "kind": "image",
         "source": "local",
@@ -227,18 +252,8 @@
         "width": 3200,
         "height": 1800
       },
-      "sc-step-3": {
+      "sc-step-3-k1": {
         "file": "assets/step-3-export.png",
-        "kind": "image",
-        "source": "local",
-        "license": "Tangkapan layar Dalang Studio (aset proyek sendiri)",
-        "width": 3200,
-        "height": 1800
-      }
-    },
-    "layerAssets": {
-      "lap-brief": {
-        "file": "assets/step-1-brief.png",
         "kind": "image",
         "source": "local",
         "license": "Tangkapan layar Dalang Studio (aset proyek sendiri)",

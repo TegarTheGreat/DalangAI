@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   type ScenePlan,
-  setResolvedAsset,
+  setClipAsset,
   setTranscript,
   type Transcript,
 } from "@dalang/core";
@@ -58,7 +58,7 @@ const withRecording = (options: { transcript?: boolean } = {}) => {
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, "isi-rekaman-palsu");
 
-  let plan = setResolvedAsset(project.session.plan as ScenePlan, "sc-001", {
+  let plan = setClipAsset(project.session.plan as ScenePlan, "sc-001-k1", {
     file,
     kind: "video",
     source: "local",
@@ -212,13 +212,13 @@ describe("ADR-0021 · cutByWords", () => {
     });
     expect(result.ok).toBe(true);
     const scene = session.plan?.scenes.find((item) => item.id === "sc-001");
-    expect(scene?.visual.trimStartSec).toBe(20);
+    expect(scene?.clips[0]?.trimStartSec).toBe(20);
     expect(scene?.duration).toBeCloseTo(1.7, 3);
     expect(String(result.teksTerpakai)).toContain("harga emas naik");
 
     session.undo();
     expect(
-      session.plan?.scenes.find((item) => item.id === "sc-001")?.visual.trimStartSec,
+      session.plan?.scenes.find((item) => item.id === "sc-001")?.clips[0]?.trimStartSec,
     ).toBe(0);
   });
 

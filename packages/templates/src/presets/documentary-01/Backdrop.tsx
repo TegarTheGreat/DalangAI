@@ -1,4 +1,4 @@
-import type { ResolvedAsset, Scene } from "@dalang/core";
+import { primaryClip, type ResolvedAsset, type Scene } from "@dalang/core";
 import { Video } from "@remotion/media";
 import {
   AbsoluteFill,
@@ -42,9 +42,9 @@ const AssetLayer: React.FC<{
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    ...motionTransform(scene.visual, progress),
+    ...motionTransform(primaryClip(scene), progress),
     // ADR-0011: filter/opacity scene diterapkan di lapisan media.
-    ...filterToCss(scene.visual.filter),
+    ...filterToCss(primaryClip(scene).filter),
   };
 
   if (asset.kind === "video") {
@@ -54,12 +54,12 @@ const AssetLayer: React.FC<{
         // ADR-0025/0026: bawaan bisu, persis perilaku sebelum keduanya.
         // `muted` dipasang saat tidak berbunyi supaya Remotion tidak
         // menyiapkan jalur audio untuk trek yang memang diam.
-        muted={isSilent(scene.visual.audio)}
+        muted={isSilent(primaryClip(scene).audio)}
         {...(volume ? { volume } : {})}
-        playbackRate={scene.visual.speed}
+        playbackRate={primaryClip(scene).speed}
         // ADR-0017: titik masuk di rekaman sumber — satu video panjang bisa
         // dipakai berkali-kali dengan potongan berbeda per scene.
-        trimBefore={Math.round(scene.visual.trimStartSec * fps)}
+        trimBefore={Math.round(primaryClip(scene).trimStartSec * fps)}
         style={style}
       />
     );
@@ -72,8 +72,8 @@ const PROCEDURAL_VARIANTS = ["duotone", "rays", "topo", "grid"] as const;
 type ProceduralVariant = (typeof PROCEDURAL_VARIANTS)[number];
 
 const variantOf = (scene: Scene): ProceduralVariant =>
-  (PROCEDURAL_VARIANTS as readonly string[]).includes(scene.visual.variant ?? "")
-    ? (scene.visual.variant as ProceduralVariant)
+  (PROCEDURAL_VARIANTS as readonly string[]).includes(primaryClip(scene).variant ?? "")
+    ? (primaryClip(scene).variant as ProceduralVariant)
     : "duotone";
 
 /**
@@ -140,7 +140,7 @@ export const ProceduralBackdrop: React.FC<{
 
   return (
     <AbsoluteFill
-      style={{ backgroundColor: theme.bg, ...filterToCss(scene.visual.filter) }}
+      style={{ backgroundColor: theme.bg, ...filterToCss(primaryClip(scene).filter) }}
     >
       <AbsoluteFill
         style={{

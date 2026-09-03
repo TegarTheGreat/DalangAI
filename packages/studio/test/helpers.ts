@@ -11,7 +11,7 @@ import { createStudioApp, type Studio, StudioHost } from "../src/server/index";
 
 /** Plan kecil 3 scene: title (template-anim), body stock, body image lokal. */
 export const makePlan = (): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "proyek-uji",
   meta: {
     title: "Uji Studio",
@@ -24,21 +24,21 @@ export const makePlan = (): ScenePlanInput => ({
     {
       id: "sc-judul",
       narration: "",
-      visual: { type: "template-anim", variant: "title" },
+      clips: [{ id: "sc-judul-k1", type: "template-anim", variant: "title" }],
     },
     {
       id: "sc-batu",
       narration: "Candi batu berdiri sejak dua belas abad silam.",
-      visual: { type: "stock", query: "ancient stone temple" },
+      clips: [{ id: "sc-batu-k1", type: "stock", query: "ancient stone temple" }],
     },
     {
       id: "sc-peta",
       narration: "Letaknya di jantung Jawa bagian tengah.",
-      visual: { type: "image" },
+      clips: [{ id: "sc-peta-k1", type: "image" }],
       locked: false,
     },
   ],
-  renderState: { narrationAudio: {}, resolvedAssets: {} },
+  renderState: { narrationAudio: {}, clipAssets: {} },
 });
 
 export const makeTempProject = (): { dir: string; planPath: string } => {

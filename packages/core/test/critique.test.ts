@@ -11,26 +11,26 @@ const basePlan = () =>
       {
         id: "sc-title",
         narration: "Pembuka.",
-        visual: { type: "template-anim", variant: "title" },
+        clips: [{ id: "sc-title-k1", type: "template-anim", variant: "title" }],
         duration: 4,
       },
       {
         id: "sc-a",
         narration: "Narasi singkat.",
-        visual: { type: "stock", query: "temple", motion: "kenburns-in" },
+        clips: [{ id: "sc-a-k1", type: "stock", query: "temple", motion: "kenburns-in" }],
         duration: 6,
         transition: { type: "slide-up", durationFrames: 12 },
       },
       {
         id: "sc-b",
         narration: "Narasi lain.",
-        visual: { type: "stock", query: "stone", motion: "kenburns-out" },
+        clips: [{ id: "sc-b-k1", type: "stock", query: "stone", motion: "kenburns-out" }],
         duration: 6,
       },
       {
         id: "sc-outro",
         narration: "",
-        visual: { type: "template-anim", variant: "outro" },
+        clips: [{ id: "sc-outro-k1", type: "template-anim", variant: "outro" }],
         duration: 4,
       },
     ],
@@ -66,7 +66,8 @@ describe("critiquePlan", () => {
   it("gerak kamera seragam di >=3 scene beraset tertangkap", () => {
     const plan = basePlan();
     for (const s of plan.scenes) {
-      if (s.visual.type === "stock") s.visual.motion = "kenburns-in";
+      const clip = s.clips[0];
+      if (clip?.type === "stock") clip.motion = "kenburns-in";
     }
     plan.scenes.splice(3, 0, { ...sc(plan, 1), id: "sc-c" });
     expect(codes(plan)).toContain("gerak-monoton");
@@ -101,8 +102,10 @@ describe("critiquePlan", () => {
   it("judul >8 kata, solid polos beruntun, teks datar, outro hilang", () => {
     const plan = basePlan();
     plan.meta.title = "Judul yang panjang sekali sampai sembilan kata penuh ini";
-    sc(plan, 1).visual = { ...sc(plan, 1).visual, type: "solid", variant: undefined };
-    sc(plan, 2).visual = { ...sc(plan, 2).visual, type: "solid", variant: undefined };
+    for (const i of [1, 2]) {
+      const clip = sc(plan, i).clips[0]!;
+      sc(plan, i).clips = [{ ...clip, type: "solid", variant: undefined }];
+    }
     sc(plan, 1).texts = [
       { id: "t1", content: "Satu", role: "headline" },
       { id: "t2", content: "Dua", role: "subline" },

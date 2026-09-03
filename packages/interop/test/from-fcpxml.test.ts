@@ -61,8 +61,8 @@ describe("impor FCPXML", () => {
     const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
     expect(plan.scenes).toHaveLength(1);
     expect(plan.scenes[0]?.duration).toBe(5);
-    expect(plan.scenes[0]?.visual?.trimStartSec).toBe(4);
-    expect(plan.renderState?.resolvedAssets?.["sc-a"]).toMatchObject({
+    expect(plan.scenes[0]?.clips[0]?.trimStartSec).toBe(4);
+    expect(plan.renderState?.clipAssets?.["sc-a-k1"]).toMatchObject({
       file: "a.mp4",
       kind: "video",
       durationSec: 30,
@@ -76,7 +76,7 @@ describe("impor FCPXML", () => {
       "1.10",
     );
     const { plan, notes } = fromFcpxml(xml, { projectDir: "/proyek" });
-    expect(plan.renderState?.resolvedAssets?.["sc-b"]).toMatchObject({ file: "b.mov" });
+    expect(plan.renderState?.clipAssets?.["sc-b-k1"]).toMatchObject({ file: "b.mov" });
     // Versi di luar yang diuji disebutkan, bukan didiamkan.
     expect(notes.map((note) => note.code)).toContain("impor-versi-fcpxml");
   });
@@ -88,7 +88,7 @@ describe("impor FCPXML", () => {
     );
     const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
     expect(plan.scenes).toHaveLength(1);
-    expect(plan.renderState?.resolvedAssets?.["sc-c"]).toMatchObject({ file: "c.mp4" });
+    expect(plan.renderState?.clipAssets?.["sc-c-k1"]).toMatchObject({ file: "c.mp4" });
   });
 
   it("urutan dipulihkan dari offset, bukan dari urutan tag di hasil parse", () => {
@@ -206,7 +206,7 @@ describe("impor FCPXML", () => {
     // Plan uji punya 2 scene beraset di trek video; narasi dan efek suara
     // ikut sebagai klip audio di lane, jadi harus terlewat.
     expect(back.plan.scenes).toHaveLength(2);
-    expect(back.plan.scenes[0]?.visual?.trimStartSec).toBe(4);
+    expect(back.plan.scenes[0]?.clips[0]?.trimStartSec).toBe(4);
   });
 });
 

@@ -59,10 +59,10 @@ describe("runAssetStage", () => {
     expect(provider.searchCalls[0]).toEqual({ query: "candi jawa", kind: "video" });
 
     const scene = next.scenes.find((s) => s.id === "sc-001")!;
-    expect(scene.visual.assetId).toBe("pexels-palsu:video:42");
-    expect(scene.visual.pinned).toBe(false); // auto-resolve never pins
+    expect(scene.clips[0]?.assetId).toBe("pexels-palsu:video:42");
+    expect(scene.clips[0]?.pinned).toBe(false); // auto-resolve never pins
 
-    const asset = next.renderState.resolvedAssets["sc-001"]!;
+    const asset = next.renderState.clipAssets["sc-001-k1"]!;
     expect(asset.license).toBe("pexels-palsu License");
     expect(asset.kind).toBe("video");
     expect(existsSync(join(paths.planDir, asset.file))).toBe(true);
@@ -79,7 +79,7 @@ describe("runAssetStage", () => {
       log: silentLog,
     });
     expect(results.find((r) => r.sceneId === "sc-001")?.status).toBe("done");
-    expect(next.renderState.resolvedAssets["sc-001"]?.kind).toBe("image");
+    expect(next.renderState.clipAssets["sc-001-k1"]?.kind).toBe("image");
 
     const { paths: paths2, plan: plan2, db: db2 } = setup();
     const broken = fakeStock("utama", { failSearch: true });
@@ -104,13 +104,21 @@ describe("runAssetStage", () => {
         {
           id: "sc-pin",
           narration: "Aset pilihan user.",
-          visual: { type: "stock", query: "x", assetId: "manual:1", pinned: true },
+          clips: [
+            {
+              id: "sc-pin-k1",
+              type: "stock",
+              query: "x",
+              assetId: "manual:1",
+              pinned: true,
+            },
+          ],
         },
         {
           id: "sc-lock",
           locked: true,
           narration: "Scene terkunci.",
-          visual: { type: "stock", query: "y" },
+          clips: [{ id: "sc-lock-k1", type: "stock", query: "y" }],
         },
       ],
     });
@@ -124,7 +132,7 @@ describe("runAssetStage", () => {
     });
     expect(results.map((r) => r.status)).toEqual(["skipped", "skipped"]);
     expect(provider.searchCalls).toHaveLength(0);
-    expect(next.scenes[0]?.visual.assetId).toBe("manual:1");
+    expect(next.scenes[0]?.clips[0]?.assetId).toBe("manual:1");
   });
 
   it("second run hits the cache; changed query re-resolves", async () => {
@@ -148,7 +156,7 @@ describe("runAssetStage", () => {
     expect(provider.searchCalls).toHaveLength(1);
 
     const edited = structuredClone(second.plan);
-    edited.scenes[0]!.visual.query = "kueri baru";
+    edited.scenes[0]!.clips[0]!.query = "kueri baru";
     const third = await runAssetStage({
       paths,
       plan: edited,
@@ -166,7 +174,7 @@ describe("runAssetStage", () => {
         {
           id: "sc-001",
           narration: "Candi Borobudur berdiri megah di Jawa Tengah",
-          visual: { type: "stock" },
+          clips: [{ id: "sc-001-k1", type: "stock" }],
         },
       ],
     });

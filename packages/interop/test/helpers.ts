@@ -9,7 +9,7 @@ import { parseScenePlan, type ScenePlan, type ScenePlanInput } from "@dalang/cor
  * berbeda untuk masing-masing, dan plan yang seragam hanya menguji satu.
  */
 export const planInput = (): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "uji-interop",
   meta: {
     title: "Uji Interop",
@@ -35,14 +35,22 @@ export const planInput = (): ScenePlanInput => ({
       id: "sc-judul",
       narration: "",
       duration: 3,
-      visual: { type: "template-anim", variant: "title" },
+      clips: [{ id: "sc-judul-k1", type: "template-anim", variant: "title" }],
       transition: { type: "cross-fade", durationFrames: 15 },
     },
     {
       id: "sc-batu",
       narration: "Candi batu berdiri sejak dua belas abad silam.",
       duration: 6,
-      visual: { type: "stock", query: "temple", motion: "kenburns-in", trimStartSec: 4 },
+      clips: [
+        {
+          id: "sc-batu-k1",
+          type: "stock",
+          query: "temple",
+          motion: "kenburns-in",
+          trimStartSec: 4,
+        },
+      ],
       texts: [{ id: "t1", content: "Borobudur" }],
       transition: { type: "slide-left", durationFrames: 12 },
     },
@@ -50,7 +58,7 @@ export const planInput = (): ScenePlanInput => ({
       id: "sc-peta",
       narration: "Letaknya di jantung Jawa.",
       duration: 4,
-      visual: { type: "image" },
+      clips: [{ id: "sc-peta-k1", type: "image" }],
       transition: { type: "none", durationFrames: 15 },
     },
   ],
@@ -59,14 +67,14 @@ export const planInput = (): ScenePlanInput => ({
       "sc-batu": { file: "audio/sc-batu.wav", durationSec: 4.2 },
       "sc-peta": { file: "audio/sc-peta.wav", durationSec: 2.5 },
     },
-    resolvedAssets: {
-      "sc-batu": {
+    clipAssets: {
+      "sc-batu-k1": {
         file: "media/candi.mp4",
         kind: "video",
         source: "pexels",
         durationSec: 30,
       },
-      "sc-peta": { file: "media/peta.jpg", kind: "image", source: "pexels" },
+      "sc-peta-k1": { file: "media/peta.jpg", kind: "image", source: "pexels" },
     },
     sfxAssets: {
       "sfx-1": {

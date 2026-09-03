@@ -29,7 +29,7 @@ describe("duration resolution (deterministic)", () => {
         narrationAudio: {
           "sc-001": { file: "audio/sc-001.mp3", durationSec: 6 },
         },
-        resolvedAssets: {},
+        clipAssets: {},
       };
     });
     expect(resolveSceneDurationSec(plan.scenes[0]!, plan)).toBe(

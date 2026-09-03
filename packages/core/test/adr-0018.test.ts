@@ -26,8 +26,13 @@ const plan = (over: Record<string, unknown> = {}) =>
     projectId: "uji-0018",
     meta: { title: "Uji Grafis" },
     scenes: [
-      { id: "a", narration: "Satu.", visual: { type: "solid" }, duration: 5 },
-      { id: "b", narration: "Dua.", visual: { type: "solid" }, duration: 5 },
+      {
+        id: "a",
+        narration: "Satu.",
+        clips: [{ id: "a-k1", type: "solid" }],
+        duration: 5,
+      },
+      { id: "b", narration: "Dua.", clips: [{ id: "b-k1", type: "solid" }], duration: 5 },
     ],
     ...over,
   });
@@ -45,7 +50,7 @@ describe("grafis tempelan", () => {
         {
           id: "a",
           narration: "Satu.",
-          visual: { type: "solid" },
+          clips: [{ id: "a-k1", type: "solid" }],
           duration: 5,
           graphics: [graphic()],
         },
@@ -79,7 +84,7 @@ describe("grafis tempelan", () => {
           {
             id: "a",
             narration: "x",
-            visual: { type: "solid" },
+            clips: [{ id: "a-k1", type: "solid" }],
             duration: 5,
             graphics: [graphic({ anchor: "entah" as never })],
           },
@@ -96,7 +101,7 @@ describe("grafis tempelan", () => {
             {
               id: "a",
               narration: "x",
-              visual: { type: "solid" },
+              clips: [{ id: "a-k1", type: "solid" }],
               duration: 5,
               graphics: [graphic({ size })],
             },
@@ -114,7 +119,7 @@ describe("grafis tempelan", () => {
           {
             id: "a",
             narration: "x",
-            visual: { type: "solid" },
+            clips: [{ id: "a-k1", type: "solid" }],
             duration: 5,
             graphics: five,
           },
@@ -188,13 +193,13 @@ describe("cue efek suara", () => {
 });
 
 describe("lumbung berkas terpisah di renderState", () => {
-  it("grafis dan sfx punya petanya sendiri, tidak menumpang resolvedAssets", () => {
+  it("grafis dan sfx punya petanya sendiri, tidak menumpang clipAssets", () => {
     const p = plan();
     expect(p.renderState.graphicAssets).toEqual({});
     expect(p.renderState.sfxAssets).toEqual({});
-    // resolvedAssets tetap dikunci per SCENE; dua peta baru dikunci per
+    // clipAssets tetap dikunci per SCENE; dua peta baru dikunci per
     // grafis/cue, sehingga satu scene bisa punya banyak tempelan.
-    expect(p.renderState.resolvedAssets).toEqual({});
+    expect(p.renderState.clipAssets).toEqual({});
   });
 });
 
@@ -204,11 +209,11 @@ describe("id media unik se-plan", () => {
       scenes: [
         {
           id: "a",
-          visual: { type: "solid" },
+          clips: [{ id: "a-k1", type: "solid" }],
           duration: 5,
           graphics: [graphic({ id: "ikon-mdi-home" })],
         },
-        { id: "b", visual: { type: "solid" }, duration: 5 },
+        { id: "b", clips: [{ id: "b-k1", type: "solid" }], duration: 5 },
       ],
     });
     return setGraphicAsset(base, "ikon-mdi-home", {
@@ -268,11 +273,11 @@ describe("aset media yatim", () => {
       scenes: [
         {
           id: "a",
-          visual: { type: "solid" },
+          clips: [{ id: "a-k1", type: "solid" }],
           duration: 5,
           graphics: [graphic({ id: "hidup" })],
         },
-        { id: "b", visual: { type: "solid" }, duration: 5 },
+        { id: "b", clips: [{ id: "b-k1", type: "solid" }], duration: 5 },
       ],
       audio: {
         voice: { provider: "silence", voiceId: "x", speed: 1 },

@@ -177,21 +177,21 @@ describe("decodeWav", () => {
 describe("audibleFiles", () => {
   const plan = (over: Partial<ScenePlanInput> = {}) =>
     parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "uji-0026",
       meta: { title: "Uji Audio" },
       scenes: [
         {
           id: "a",
           narration: "Satu.",
-          visual: { type: "stock", audio: { volume: 0.4 } },
+          clips: [{ id: "a-k1", type: "stock", audio: { volume: 0.4 } }],
           duration: 5,
           layers: [{ id: "lap-1", visual: { type: "stock", audio: { volume: 0.3 } } }],
         },
       ],
       renderState: {
         narrationAudio: { a: { file: "audio/a.wav", durationSec: 3 } },
-        resolvedAssets: { a: { file: "media/a.mp4", kind: "video", source: "pexels" } },
+        clipAssets: { "a-k1": { file: "media/a.mp4", kind: "video", source: "pexels" } },
         layerAssets: {
           "lap-1": { file: "media/broll.mp4", kind: "video", source: "pexels" },
         },
@@ -208,7 +208,7 @@ describe("audibleFiles", () => {
 
   it("klip bisu TIDAK diukur — pekerjaan yang hasilnya tidak pernah dipakai", () => {
     const bisu = plan();
-    bisu.scenes[0]!.visual.audio.volume = 0;
+    bisu.scenes[0]!.clips[0]!.audio.volume = 0;
     bisu.scenes[0]!.layers[0]!.visual.audio.volume = 0;
     const files = audibleFiles(bisu).map((job) => job.file);
     expect(files).toEqual(["audio/a.wav"]);
@@ -217,7 +217,7 @@ describe("audibleFiles", () => {
   it("satu berkas yang dipakai dua tempat hanya muncul sekali", () => {
     const sama = plan();
     sama.renderState.layerAssets["lap-1"] = {
-      ...sama.renderState.resolvedAssets.a!,
+      ...sama.renderState.clipAssets["a-k1"]!,
     };
     expect(audibleFiles(sama).filter((job) => job.file === "media/a.mp4")).toHaveLength(
       1,

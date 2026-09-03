@@ -98,7 +98,7 @@ describe("koherensi Studio dengan penulis lain pada plan.json (ADR-0023)", () =>
 
     const project = (await callJson<ProjectStatePayload>(studio, "/api/project")).body;
     expect(project.plan?.meta.title).toBe("Diubah dari luar sebelum daftar");
-    expect(project.plan?.scenes.find((s) => s.id === "sc-batu")?.visual.assetId).toBe(
+    expect(project.plan?.scenes.find((s) => s.id === "sc-batu")?.clips[0]?.assetId).toBe(
       "assets/rekaman.mp4",
     );
     const written = JSON.parse(readFileSync(planPath, "utf8")) as ScenePlan;

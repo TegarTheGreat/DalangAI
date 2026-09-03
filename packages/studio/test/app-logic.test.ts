@@ -76,15 +76,15 @@ describe("deriveSceneStatus", () => {
       ...makePlan(),
       scenes: makePlan().scenes.map((scene) =>
         scene.id === "sc-batu"
-          ? { ...scene, visual: { ...scene.visual, pinned: true, assetId: "a" } }
+          ? { ...scene, clips: [{ ...scene.clips[0]!, pinned: true, assetId: "a" }] }
           : scene,
       ),
       renderState: {
         narrationAudio: {
           "sc-batu": { file: "x.wav", durationSec: 2, fallbackQuality: true },
         },
-        resolvedAssets: {
-          "sc-batu": {
+        clipAssets: {
+          "sc-batu-k1": {
             file: "a.jpg",
             kind: "image",
             source: "fake",

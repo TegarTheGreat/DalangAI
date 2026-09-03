@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
-    "asset-url-parity": "tsx scripts/asset-url-parity.mts"
+    "asset-url-parity": "tsx scripts/asset-url-parity.mts",
+    "migrasi-paritas": "tsx scripts/migrasi-paritas.mts"
   },
   "dependencies": {
     "@dalang/core": "workspace:*",

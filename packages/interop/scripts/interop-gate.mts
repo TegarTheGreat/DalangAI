@@ -22,7 +22,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseScenePlan } from "@dalang/core";
+import { parseScenePlan, sceneAsset } from "@dalang/core";
 import { activeSceneIndex, computeFrameLayout } from "@dalang/templates/layout";
 import { toFcpxml } from "../src/fcpxml";
 import { fromFcpxml, parseFcpTime } from "../src/from-fcpxml";
@@ -72,7 +72,7 @@ for (let frame = 0; frame < layout.totalFrames; frame++) {
 /** Rentang yang seharusnya, hanya untuk scene yang punya berkas aset. */
 const intended = plan.scenes
   .map((scene, index) => ({ scene, range: sceneRanges[index] as [number, number] }))
-  .filter(({ scene }) => plan.renderState.resolvedAssets[scene.id] !== undefined)
+  .filter(({ scene }) => sceneAsset(plan, scene) !== undefined)
   .map(({ range }) => range);
 const expectedFrames = layout.totalFrames;
 

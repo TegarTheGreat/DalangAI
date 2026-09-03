@@ -40,12 +40,16 @@ describe("tools §6.2", () => {
     const { session } = open(
       basicPlan({
         scenes: [
-          { id: "sc-001", narration: "Bebas.", visual: { type: "solid" } },
+          {
+            id: "sc-001",
+            narration: "Bebas.",
+            clips: [{ id: "sc-001-k1", type: "solid" }],
+          },
           {
             id: "sc-002",
             locked: true,
             narration: "Terkunci.",
-            visual: { type: "solid" },
+            clips: [{ id: "sc-002-k1", type: "solid" }],
           },
         ],
       }),
@@ -164,8 +168,10 @@ describe("tools §6.2", () => {
       index: 0,
     })) as Record<string, unknown>;
     expect(picked.ok).toBe(true);
-    expect(project.session.plan?.scenes[0]?.visual.assetId).toBe("stock-palsu:video:7");
-    expect(project.session.plan?.renderState.resolvedAssets["sc-001"]?.license).toBe(
+    expect(project.session.plan?.scenes[0]?.clips[0]?.assetId).toBe(
+      "stock-palsu:video:7",
+    );
+    expect(project.session.plan?.renderState.clipAssets["sc-001-k1"]?.license).toBe(
       "Uji License",
     );
 

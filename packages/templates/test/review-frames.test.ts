@@ -19,7 +19,7 @@ const graphic = (id: string, startFrac = 0, endFrac = 1) => ({
 
 const planOf = (scenes: ScenePlanInput["scenes"]) =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "p",
     meta: { title: "Uji" },
     scenes,
@@ -32,7 +32,7 @@ describe("busiestFrac", () => {
     const plan = planOf([
       {
         id: "sc-1",
-        visual: { type: "solid" },
+        clips: [{ id: "sc-1-k1", type: "solid" }],
         texts: [text("a", 0, 0.5), text("b", 0.4, 1)],
         graphics: [graphic("g", 0.45, 0.55)],
       },
@@ -43,14 +43,14 @@ describe("busiestFrac", () => {
   });
 
   it("scene tanpa overlay memakai tengah — gerak kamera sudah settle di sana", () => {
-    const plan = planOf([{ id: "sc-1", visual: { type: "solid" } }]);
+    const plan = planOf([{ id: "sc-1", clips: [{ id: "sc-1-k1", type: "solid" }] }]);
     expect(busiestFrac(plan.scenes[0]!)).toBe(0.5);
   });
 
   it("seri dimenangkan yang paling dekat ke tengah", () => {
     // Satu teks sepanjang scene: semua fraksi berskor sama, jadi 0,5 menang.
     const plan = planOf([
-      { id: "sc-1", visual: { type: "solid" }, texts: [text("a", 0, 1)] },
+      { id: "sc-1", clips: [{ id: "sc-1-k1", type: "solid" }], texts: [text("a", 0, 1)] },
     ]);
     expect(busiestFrac(plan.scenes[0]!)).toBe(0.5);
   });
@@ -59,7 +59,7 @@ describe("busiestFrac", () => {
     const plan = planOf([
       {
         id: "sc-1",
-        visual: { type: "solid" },
+        clips: [{ id: "sc-1-k1", type: "solid" }],
         texts: [text("a", 0.8, 1), text("b", 0.85, 1)],
       },
     ]);
@@ -70,13 +70,13 @@ describe("busiestFrac", () => {
 describe("reviewPriority", () => {
   it("scene pembuka selalu paling tinggi, apa pun isinya", () => {
     const plan = planOf([
-      { id: "sc-1", visual: { type: "solid" } },
+      { id: "sc-1", clips: [{ id: "sc-1-k1", type: "solid" }] },
       {
         id: "sc-2",
-        visual: { type: "solid" },
+        clips: [{ id: "sc-2-k1", type: "solid" }],
         texts: [text("a"), text("b"), text("c")],
       },
-      { id: "sc-3", visual: { type: "solid" } },
+      { id: "sc-3", clips: [{ id: "sc-3-k1", type: "solid" }] },
     ]);
     const pembuka = reviewPriority(plan.scenes[0]!, 0, 3);
     const ramai = reviewPriority(plan.scenes[1]!, 1, 3);
@@ -86,15 +86,15 @@ describe("reviewPriority", () => {
 
   it("scene tengah diperingkat oleh banyaknya elemen yang bisa bertabrakan", () => {
     const plan = planOf([
-      { id: "sc-1", visual: { type: "solid" } },
-      { id: "sc-2", visual: { type: "solid" }, texts: [text("a")] },
+      { id: "sc-1", clips: [{ id: "sc-1-k1", type: "solid" }] },
+      { id: "sc-2", clips: [{ id: "sc-2-k1", type: "solid" }], texts: [text("a")] },
       {
         id: "sc-3",
-        visual: { type: "solid" },
+        clips: [{ id: "sc-3-k1", type: "solid" }],
         texts: [text("a"), text("b")],
         graphics: [graphic("g")],
       },
-      { id: "sc-4", visual: { type: "solid" } },
+      { id: "sc-4", clips: [{ id: "sc-4-k1", type: "solid" }] },
     ]);
     expect(reviewPriority(plan.scenes[2]!, 2, 4).score).toBeGreaterThan(
       reviewPriority(plan.scenes[1]!, 1, 4).score,
@@ -103,7 +103,7 @@ describe("reviewPriority", () => {
   });
 
   it("scene tunggal dihitung sebagai pembuka, bukan penutup", () => {
-    const plan = planOf([{ id: "sc-1", visual: { type: "solid" } }]);
+    const plan = planOf([{ id: "sc-1", clips: [{ id: "sc-1-k1", type: "solid" }] }]);
     expect(reviewPriority(plan.scenes[0]!, 0, 1).reason).toMatch(/pembuka/);
   });
 });
@@ -114,7 +114,7 @@ describe("pickReviewFrames", () => {
       Array.from({ length: 10 }, (_, i) => ({
         id: `sc-${i + 1}`,
         narration: "Kalimat narasi untuk mengisi durasi scene ini.",
-        visual: { type: "solid" as const },
+        clips: [{ id: `sc-${i + 1}-k1`, type: "solid" as const }],
         ...(i === 4 ? { texts: [text("a"), text("b")] } : {}),
       })),
     );

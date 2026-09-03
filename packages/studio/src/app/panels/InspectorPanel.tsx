@@ -1,18 +1,15 @@
-import type {
-  Annotation,
-  PatchOpInput,
-  Scene,
-  ScenePlan,
-  TransitionType,
-  VisualFilter,
-} from "@dalang/core";
 import {
+  type Annotation,
   CAPTION_POSITIONS,
   CAPTION_STYLES,
   FILTER_PRESETS,
   MAX_TRANSITION_FRAMES,
   MIN_TRANSITION_FRAMES,
   MOTIONS,
+  type PatchOpInput,
+  primaryClip,
+  type Scene,
+  type ScenePlan,
   TEXT_ALIGNS,
   TEXT_ANIMS,
   TEXT_EMPHASES,
@@ -20,7 +17,9 @@ import {
   TEXT_ROLES,
   TEXT_SIZES,
   TRANSITION_TYPES,
+  type TransitionType,
   VISUAL_TYPES,
+  type VisualFilter,
   visualFilterSchema,
 } from "@dalang/core";
 import { useEffect, useRef, useState } from "react";
@@ -549,13 +548,13 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
   const { project } = useStudio();
   const busy = project?.busy.mutation !== null;
   const uploadRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState(scene.visual.query ?? "");
-  useEffect(() => setQuery(scene.visual.query ?? ""), [scene]);
+  const [query, setQuery] = useState(primaryClip(scene).query ?? "");
+  useEffect(() => setQuery(primaryClip(scene).query ?? ""), [scene]);
 
   const patch = (ops: PatchOpInput[], label?: string) =>
     void studioClient.applyPatch(ops, label);
   // Nilai efektif = filter tersimpan ATAU netral (untuk slider).
-  const filter: VisualFilter = scene.visual.filter ?? visualFilterSchema.parse({});
+  const filter: VisualFilter = primaryClip(scene).filter ?? visualFilterSchema.parse({});
 
   const commitFilter = (partial: Partial<VisualFilter>, label?: string) =>
     patch(
@@ -576,7 +575,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
         <label className="field">
           <span>Tipe visual</span>
           <select
-            value={scene.visual.type}
+            value={primaryClip(scene).type}
             onChange={(event) =>
               patch([
                 {
@@ -634,7 +633,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onBlur={() => {
-              if (query !== (scene.visual.query ?? "")) {
+              if (query !== (primaryClip(scene).query ?? "")) {
                 patch([
                   {
                     op: "updateScene",
@@ -656,7 +655,8 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
               void studioClient.searchAssets(
                 scene.id,
                 (
-                  scene.visual.query ?? scene.narration.split(/\s+/).slice(0, 8).join(" ")
+                  primaryClip(scene).query ??
+                  scene.narration.split(/\s+/).slice(0, 8).join(" ")
                 ).trim(),
                 "video",
               )
@@ -665,7 +665,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             <IconSearch />
             Cari aset
           </button>
-          {scene.visual.pinned ? (
+          {primaryClip(scene).pinned ? (
             <button
               type="button"
               className="ghost with-icon"
@@ -692,7 +692,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             <button
               key={motion}
               type="button"
-              className={scene.visual.motion === motion ? "chip active" : "chip"}
+              className={primaryClip(scene).motion === motion ? "chip active" : "chip"}
               disabled={busy}
               onClick={() =>
                 patch(
@@ -716,7 +716,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           max={1}
           step={0.05}
           neutral={0.5}
-          value={scene.visual.focusX}
+          value={primaryClip(scene).focusX}
           format={(v) => `${Math.round(v * 100)}%`}
           onCommit={(focusX) =>
             patch([{ op: "updateScene", id: scene.id, patch: { visual: { focusX } } }])
@@ -728,7 +728,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           max={1}
           step={0.05}
           neutral={0.5}
-          value={scene.visual.focusY}
+          value={primaryClip(scene).focusY}
           format={(v) => `${Math.round(v * 100)}%`}
           onCommit={(focusY) =>
             patch([{ op: "updateScene", id: scene.id, patch: { visual: { focusY } } }])
@@ -736,7 +736,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
         />
         <div className="switch-row">
           <Switch
-            checked={scene.visual.flipH}
+            checked={primaryClip(scene).flipH}
             disabled={busy}
             label="Cermin horizontal"
             onChange={(flipH) =>
@@ -747,14 +747,14 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             }
           />
         </div>
-        {project?.plan?.renderState.resolvedAssets[scene.id]?.kind === "video" ? (
+        {project?.plan?.renderState.clipAssets[scene.id]?.kind === "video" ? (
           <SliderRow
             label="Kecepatan"
             min={0.25}
             max={4}
             step={0.25}
             neutral={1}
-            value={scene.visual.speed}
+            value={primaryClip(scene).speed}
             format={(v) => `${v}x`}
             onCommit={(speed) =>
               patch(
@@ -766,7 +766,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
         ) : null}
       </section>
 
-      {scene.visual.type === "solid" || scene.visual.type === "stock" ? (
+      {primaryClip(scene).type === "solid" || primaryClip(scene).type === "stock" ? (
         <section className="prop-group">
           <h4>Seni prosedural</h4>
           <p className="group-hint">
@@ -777,8 +777,10 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             grow
             options={ART_VARIANTS}
             value={
-              (ART_VARIANTS as readonly string[]).includes(scene.visual.variant ?? "")
-                ? (scene.visual.variant as (typeof ART_VARIANTS)[number])
+              (ART_VARIANTS as readonly string[]).includes(
+                primaryClip(scene).variant ?? "",
+              )
+                ? (primaryClip(scene).variant as (typeof ART_VARIANTS)[number])
                 : "duotone"
             }
             disabled={busy}
@@ -796,7 +798,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
       <section className="prop-group">
         <div className="group-head">
           <h4>Filter</h4>
-          {scene.visual.filter ? (
+          {primaryClip(scene).filter ? (
             <button
               type="button"
               className="mini"

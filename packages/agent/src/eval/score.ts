@@ -1,4 +1,10 @@
-import { computeTimeline, critiquePlan, recipeFor, type ScenePlan } from "@dalang/core";
+import {
+  computeTimeline,
+  critiquePlan,
+  primaryClip,
+  recipeFor,
+  type ScenePlan,
+} from "@dalang/core";
 
 /**
  * Penilaian plan untuk suite eval agent (ADR-0022 §7.4).
@@ -132,7 +138,7 @@ export const scorePlan = (
   });
 
   const bodyNarrated = plan.scenes.filter(
-    (scene) => scene.visual.type !== "template-anim",
+    (scene) => primaryClip(scene).type !== "template-anim",
   );
   const empty = bodyNarrated.filter((scene) => scene.narration.trim() === "").length;
   checks.push({
@@ -147,8 +153,11 @@ export const scorePlan = (
     checks.push({
       name: "ada penutup",
       weight: 6,
-      passed: last?.visual.variant === "outro",
-      detail: last?.visual.variant === "outro" ? "outro ada" : "tidak ada scene outro",
+      passed: last !== undefined && primaryClip(last).variant === "outro",
+      detail:
+        last !== undefined && primaryClip(last).variant === "outro"
+          ? "outro ada"
+          : "tidak ada scene outro",
     });
   }
 

@@ -3,8 +3,10 @@ import {
   type ClipAudio,
   LOUDNESS_TARGETS,
   type PatchOpInput,
+  primaryClip,
   type Scene,
   type ScenePlan,
+  sceneAsset,
   uniqueTrackId,
 } from "@dalang/core";
 import { useState } from "react";
@@ -34,7 +36,7 @@ export const AudioTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
   scene,
 }) => {
   const target = plan.meta.loudnessTarget;
-  const asset = plan.renderState.resolvedAssets[scene.id];
+  const asset = sceneAsset(plan, scene);
 
   return (
     <>
@@ -42,7 +44,7 @@ export const AudioTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
         <h4>Klip ini — {scene.id}</h4>
         {asset?.kind === "video" ? (
           <ClipAudioControls
-            audio={scene.visual.audio}
+            audio={primaryClip(scene).audio}
             lufs={asset.lufs}
             channels={asset.channels}
             targetLufs={target}

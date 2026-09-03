@@ -58,13 +58,13 @@ describe("ingestVideo (ADR-0017)", () => {
     expect(out.ok).toBe(true);
     expect(out.durasiDetik).toBe(600);
     const plan = session.plan;
-    expect(plan?.renderState.resolvedAssets["sc-001"]).toMatchObject({
+    expect(plan?.renderState.clipAssets["sc-001-k1"]).toMatchObject({
       file: "assets/podcast.mp4",
       kind: "video",
       source: "local",
       durationSec: 600,
     });
-    expect(plan?.scenes[0]?.visual.pinned).toBe(true);
+    expect(plan?.scenes[0]?.clips[0]?.pinned).toBe(true);
   });
 
   it("file tak terbaca -> {ok:false} dengan pesan, plan tidak berubah", async () => {
@@ -114,9 +114,9 @@ describe("ingestVideo (ADR-0017)", () => {
       ],
     });
     const scenes = session.plan?.scenes ?? [];
-    expect(scenes[0]?.visual.trimStartSec).toBe(65);
-    expect(scenes[1]?.visual.trimStartSec).toBe(402.5);
-    expect(session.plan?.renderState.resolvedAssets["sc-002"]?.file).toBe(
+    expect(scenes[0]?.clips[0]?.trimStartSec).toBe(65);
+    expect(scenes[1]?.clips[0]?.trimStartSec).toBe(402.5);
+    expect(session.plan?.renderState.clipAssets["sc-002-k1"]?.file).toBe(
       "assets/podcast.mp4",
     );
   });

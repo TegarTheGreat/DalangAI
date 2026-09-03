@@ -106,7 +106,7 @@ describe("resep format (ADR-0017)", () => {
 describe("trimStartSec (klip dari video sumber)", () => {
   it("default 0; nilai negatif ditolak; patch + inverse utuh", () => {
     const p = plan("bebas", [scene("a")]);
-    expect(p.scenes[0]?.visual.trimStartSec).toBe(0);
+    expect(p.scenes[0]?.clips[0]?.trimStartSec).toBe(0);
     expect(() =>
       plan("bebas", [scene("b", { visual: { type: "stock", trimStartSec: -2 } })]),
     ).toThrow();
@@ -116,7 +116,7 @@ describe("trimStartSec (klip dari video sumber)", () => {
       [{ op: "updateScene", id: "a", patch: { visual: { trimStartSec: 42.5 } } }],
       { origin: "agent" },
     );
-    expect(after.scenes[0]?.visual.trimStartSec).toBe(42.5);
+    expect(after.scenes[0]?.clips[0]?.trimStartSec).toBe(42.5);
     const { plan: back } = applyPatch(after, applied.inverse, { origin: "agent" });
     expect(back).toEqual(p);
   });

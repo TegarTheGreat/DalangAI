@@ -96,7 +96,7 @@ export const clipsToPlan = (
   }
   const root = resolve(projectDir);
   const scenes: NonNullable<ScenePlanInput["scenes"]> = [];
-  const resolvedAssets: Record<string, unknown> = {};
+  const clipAssets: Record<string, unknown> = {};
   const luarProyek: string[] = [];
   const dipakai = new Set<string>();
 
@@ -124,24 +124,31 @@ export const clipsToPlan = (
 
     const kind = file ? mediaKindOf(file) : "image";
     const trimStartSec = Math.max(0, clip.sourceStartSec);
+    // Satu klip OTIO/FCPXML jadi satu scene berklip-satu (ADR-0033). Pemetaan
+    // satu-ke-satu ke `clips[]` — beberapa klip dalam satu scene — menunggu op
+    // klipnya ada; sampai itu, memecahnya jadi scene tetap yang paling jujur.
+    const clipId = `${id}-k1`;
     scenes.push({
       id,
       narration: "",
       duration: Number(clip.durationSec.toFixed(3)),
-      visual: file
-        ? {
-            type: kind === "video" ? "stock" : "image",
-            assetId: id,
-            pinned: true,
-            ...(kind === "video" && trimStartSec > 0
-              ? { trimStartSec: Number(trimStartSec.toFixed(3)) }
-              : {}),
-          }
-        : { type: "image", assetId: null },
+      clips: [
+        file
+          ? {
+              id: clipId,
+              type: kind === "video" ? "stock" : "image",
+              assetId: id,
+              pinned: true,
+              ...(kind === "video" && trimStartSec > 0
+                ? { trimStartSec: Number(trimStartSec.toFixed(3)) }
+                : {}),
+            }
+          : { id: clipId, type: "image", assetId: null },
+      ],
       caption: { enabled: false, style: "klasik", size: "m", position: "bottom" },
     });
     if (file) {
-      resolvedAssets[id] = {
+      clipAssets[clipId] = {
         file,
         kind,
         source,
@@ -283,7 +290,7 @@ export const clipsToPlan = (
 
   return {
     plan: {
-      version: 1,
+      version: 2,
       projectId: `impor-${Date.now().toString(36)}`,
       meta: {
         title,
@@ -295,7 +302,7 @@ export const clipsToPlan = (
       scenes,
       renderState: {
         narrationAudio: {},
-        resolvedAssets: resolvedAssets as never,
+        clipAssets: clipAssets as never,
         layerAssets: layerAssets as never,
       },
     },

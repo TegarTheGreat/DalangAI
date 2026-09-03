@@ -2,6 +2,7 @@ import {
   type NarrationAudio,
   narrationAudioSchema,
   type ProxyMedia,
+  primaryClip,
   proxyMediaSchema,
   type ResolvedAsset,
   resolvedAssetSchema,
@@ -29,13 +30,18 @@ export const setNarrationAudio = (
   return next;
 };
 
-export const setResolvedAsset = (
+/**
+ * Berkas nyata untuk satu KLIP (ADR-0033). Dikunci id klip, bukan id scene:
+ * satu scene boleh punya beberapa klip, dan klip kedua akan menimpa berkas
+ * klip pertama kalau kuncinya scene.
+ */
+export const setClipAsset = (
   plan: ScenePlan,
-  sceneId: string,
+  clipId: string,
   asset: ResolvedAsset,
 ): ScenePlan => {
   const next = structuredClone(plan);
-  next.renderState.resolvedAssets[sceneId] = resolvedAssetSchema.parse(asset);
+  next.renderState.clipAssets[clipId] = resolvedAssetSchema.parse(asset);
   return next;
 };
 
@@ -140,7 +146,7 @@ export const setLoudness = (
 ): ScenePlan => {
   const next = structuredClone(plan);
   for (const store of [
-    next.renderState.resolvedAssets,
+    next.renderState.clipAssets,
     next.renderState.layerAssets,
     next.renderState.sfxAssets,
     next.renderState.trackAssets,
@@ -185,7 +191,7 @@ export const setProxy = (
 ): ScenePlan => {
   const next = structuredClone(plan);
   const parsed = proxy ? proxyMediaSchema.parse(proxy) : null;
-  for (const store of [next.renderState.resolvedAssets, next.renderState.layerAssets]) {
+  for (const store of [next.renderState.clipAssets, next.renderState.layerAssets]) {
     for (const asset of Object.values(store)) {
       if (asset.file !== file) continue;
       if (parsed) asset.proxy = parsed;
@@ -259,13 +265,14 @@ export const assignResolvedAsset = (
   if (!scene) {
     throw new Error(`assignResolvedAsset: scene "${sceneId}" tidak ditemukan`);
   }
-  if (scene.visual.pinned) {
+  const clip = primaryClip(scene);
+  if (clip.pinned) {
     throw new Error(
       `assignResolvedAsset: aset scene "${sceneId}" ter-pin — auto-resolve tidak boleh menimpanya`,
     );
   }
-  scene.visual.assetId = assetId;
-  next.renderState.resolvedAssets[sceneId] = resolvedAssetSchema.parse(asset);
+  clip.assetId = assetId;
+  next.renderState.clipAssets[clip.id] = resolvedAssetSchema.parse(asset);
   return next;
 };
 
@@ -276,8 +283,11 @@ export const pruneRenderState = (plan: ScenePlan): ScenePlan => {
   for (const key of Object.keys(next.renderState.narrationAudio)) {
     if (!ids.has(key)) delete next.renderState.narrationAudio[key];
   }
-  for (const key of Object.keys(next.renderState.resolvedAssets)) {
-    if (!ids.has(key)) delete next.renderState.resolvedAssets[key];
+  const clipIds = new Set(
+    next.scenes.flatMap((scene) => scene.clips.map((clip) => clip.id)),
+  );
+  for (const key of Object.keys(next.renderState.clipAssets)) {
+    if (!clipIds.has(key)) delete next.renderState.clipAssets[key];
   }
   return next;
 };

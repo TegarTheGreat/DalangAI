@@ -13,11 +13,15 @@ describe("defaultPublishMetadata (ADR-0030)", () => {
     },
     audio: {},
     scenes: [
-      { id: "a", narration: "Abad kesembilan.", visual: { type: "image" } },
-      { id: "b", narration: "  ", visual: { type: "image" } },
-      { id: "c", narration: "Candi terbesar di dunia.", visual: { type: "image" } },
+      { id: "a", narration: "Abad kesembilan.", clips: [{ id: "a-k1", type: "image" }] },
+      { id: "b", narration: "  ", clips: [{ id: "b-k1", type: "image" }] },
+      {
+        id: "c",
+        narration: "Candi terbesar di dunia.",
+        clips: [{ id: "c-k1", type: "image" }],
+      },
     ],
-    renderState: { narrationAudio: {}, resolvedAssets: {} },
+    renderState: { narrationAudio: {}, clipAssets: {} },
   });
 
   it("judul dari proyek, deskripsi dari narasi yang dibacakan, tag dari format, dan PRIVAT sebagai bawaan", () => {

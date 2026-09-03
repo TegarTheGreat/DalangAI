@@ -13,6 +13,7 @@ import {
   metaSchema,
   motionSchema,
   musicSchema,
+  primaryClip,
   type Scene,
   type ScenePlan,
   scenePlanSchema,
@@ -340,11 +341,14 @@ const applyOne = (
         (scene as unknown as Record<string, unknown>)[key] = clone(value);
       }
       if (visual) {
-        inversePatch.visual = priorOf(
-          scene.visual as unknown as Record<string, unknown>,
-          visual,
-        );
-        mergeDefined(scene.visual as unknown as Record<string, unknown>, visual);
+        // ADR-0033: `patch.visual` menyasar KLIP DASAR (`clips[0]`). Nama
+        // field di wire sengaja belum berganti: penyuntingan per-klip datang
+        // bersama op klip di fase berikutnya, dan mengganti nama sekarang
+        // hanya memindahkan churn ke Studio, agent, dan MCP tanpa satu pun
+        // kemampuan baru untuk ditunjukkan.
+        const clip = primaryClip(scene) as unknown as Record<string, unknown>;
+        inversePatch.visual = priorOf(clip, visual);
+        mergeDefined(clip, visual);
       }
       if (caption) {
         inversePatch.caption = priorOf(
@@ -437,7 +441,7 @@ const applyOne = (
       // di dua tempat yang harus tetap seragam selamanya.
       const target =
         op.layerId == null
-          ? scene.visual
+          ? primaryClip(scene)
           : scene.layers.find((layer) => layer.id === op.layerId)?.visual;
       if (!target) {
         throw new PatchError(

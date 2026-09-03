@@ -215,18 +215,28 @@ describe("rujukan ikon", () => {
 
 const planWithSfx = (sfx: unknown[], assets: Record<string, unknown> = {}) =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "uji-sfx",
     meta: { title: "Uji SFX" },
     audio: { sfx },
     scenes: [
-      { id: "a", narration: "Satu.", visual: { type: "solid" }, duration: 4 },
-      { id: "b", narration: "Dua.", visual: { type: "solid" }, duration: 4 },
-      { id: "c", narration: "Tiga.", visual: { type: "solid" }, duration: 4 },
+      {
+        id: "a",
+        narration: "Satu.",
+        clips: [{ id: "a-k1", type: "solid" }],
+        duration: 4,
+      },
+      { id: "b", narration: "Dua.", clips: [{ id: "b-k1", type: "solid" }], duration: 4 },
+      {
+        id: "c",
+        narration: "Tiga.",
+        clips: [{ id: "c-k1", type: "solid" }],
+        duration: 4,
+      },
     ],
     renderState: {
       narrationAudio: {},
-      resolvedAssets: {},
+      clipAssets: {},
       graphicAssets: {},
       sfxAssets: assets,
     },

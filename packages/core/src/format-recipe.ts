@@ -1,4 +1,4 @@
-import type { ScenePlan } from "./scene-plan";
+import { primaryClip, type ScenePlan } from "./scene-plan";
 
 /**
  * ADR-0017: RESEP per format konten — kerangka yang bisa DIPERIKSA MESIN,
@@ -168,4 +168,4 @@ export const formatBriefLines = (): string[] =>
 
 /** Scene isi = bukan kartu template (title/outro). */
 export const isBodyScene = (scene: ScenePlan["scenes"][number]): boolean =>
-  scene.visual.type !== "template-anim";
+  primaryClip(scene).type !== "template-anim";

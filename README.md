@@ -120,7 +120,7 @@ Satu berkas adalah sumber kebenarannya, dan satu jenis operasi mengubahnya.
 
 **Scene-plan sebagai sumber kebenaran.** Skema zod v1 yang strict dan
 berversi, dengan artefak
-[JSON Schema](packages/core/schema/scene-plan.v1.schema.json) untuk
+[JSON Schema](packages/core/schema/scene-plan.v2.schema.json) untuk
 autocomplete editor yang selalu sinkron lewat unit test. Perubahan skema
 §5.1 hanya boleh lewat ADR.
 
@@ -531,8 +531,9 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 
 | Gerbang | Yang dijaganya |
 |---|---|
-| 1093 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
+| 1095 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
 | Render smoke test | Render sungguhan di CI, bukan mock |
+| Gerbang paritas migrasi | Plan v1 (dimigrasikan) dan plan v2 dirender, wajib identik byte per byte |
 | Gerbang tata letak | Geometri UI di 18 lebar layar (380-1920), editor dan lobi: kontrol yang saling menindih, tergunting, atau membuat halaman bisa digeser ke samping |
 | Gerbang interaksi | Seretan pointer dan papan ketik **sungguhan** lewat CDP, lalu plan **di server** yang diperiksa — seretan yang cuma menggeser kotak di layar tanpa patch adalah cacat yang tidak ditangkap unit test mana pun |
 | Gerbang paritas aset | Satu still dirender lewat dua jalur (bundel dan URL) dan wajib identik byte per byte |
@@ -579,11 +580,12 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   diperintahkan meminta transkrip, bukan menebak.
 - **Visual dasar scene belum bisa di-keyframe**, dan **screen recording**
   (deteksi klik, auto-zoom kursor) belum dibangun.
-- **Satu scene = satu klip dasar.** Memotong rekaman panjang berarti membuat
-  banyak scene, dan ripple lintas scene tidak bisa dinyatakan — jadi Dalang
-  menyusun rekaman, bukan menyuntingnya halus seperti NLE.
-  [ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) mengusulkan
-  perubahan skemanya, lengkap dengan jalur migrasi dan batasnya sendiri.
+- **Satu scene masih = satu klip yang tampil.** Skemanya sudah `scene.clips[]`
+  (ADR-0033 fase 1, skema v2), tapi keempat op klipnya — belah, trim beripple,
+  buang, susun ulang — belum ada, jadi belum ada jalur yang bisa MEMBUAT klip
+  kedua. Memotong rekaman panjang untuk sekarang tetap berarti membuat banyak
+  scene. [ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md)
+  menulis apa yang sudah ada dan apa yang belum.
 
 Batas per keputusan ditulis lengkap di bagian "Batas" masing-masing ADR.
 
@@ -678,7 +680,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0030](docs/decisions/0030-publikasi-langsung.md) | Publikasi langsung ke YouTube |
 | [0031](docs/decisions/0031-studio-hanya-menerima-perintah-dirinya-sendiri.md) | Studio hanya menerima perintah dari dirinya sendiri |
 | [0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md) | Konfigurasi yang bisa ditemukan tanpa membaca kode |
-| [0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) | Beberapa klip dalam satu scene (diusulkan) |
+| [0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) | Beberapa klip dalam satu scene; skema v2 + migrasi pertama |
 
 </details>
 

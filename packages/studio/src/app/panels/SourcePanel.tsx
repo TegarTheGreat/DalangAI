@@ -1,4 +1,10 @@
-import { clockLabel, type Scene, type ScenePlan } from "@dalang/core";
+import {
+  clockLabel,
+  primaryClip,
+  type Scene,
+  type ScenePlan,
+  sceneAsset,
+} from "@dalang/core";
 import { computeFrameLayout, FPS } from "@dalang/templates/layout";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SourceLite } from "../../shared/api-types";
@@ -343,10 +349,8 @@ export const SourceSection: React.FC<{
   const busy = project?.busy.mutation !== null;
   const proxyJob = project?.proxyJob ?? null;
   const layer = layerId ? scene.layers.find((item) => item.id === layerId) : undefined;
-  const visual = layer ? layer.visual : scene.visual;
-  const asset = layerId
-    ? plan.renderState.layerAssets[layerId]
-    : plan.renderState.resolvedAssets[scene.id];
+  const visual = layer ? layer.visual : primaryClip(scene);
+  const asset = layerId ? plan.renderState.layerAssets[layerId] : sceneAsset(plan, scene);
   const isVideo = asset?.kind === "video";
 
   const index = plan.scenes.findIndex((item) => item.id === scene.id);

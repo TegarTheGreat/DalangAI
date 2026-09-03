@@ -12,7 +12,7 @@ import { formatScoreLine, scorePlan } from "../src/eval/score";
  */
 const goodPlan = (overrides: Partial<ScenePlanInput["meta"]> = {}) =>
   parseScenePlan({
-    version: 1,
+    version: 2,
     projectId: "eval",
     meta: {
       title: "Sejarah Borobudur",
@@ -26,14 +26,21 @@ const goodPlan = (overrides: Partial<ScenePlanInput["meta"]> = {}) =>
       {
         id: "sc-judul",
         narration: "",
-        visual: { type: "template-anim", variant: "title" },
+        clips: [{ id: "sc-judul-k1", type: "template-anim", variant: "title" }],
         texts: [{ id: "t1", content: "Borobudur", size: "l", emphasis: "box" }],
       },
       {
         id: "sc-1",
         narration:
           "Borobudur berdiri sejak abad kesembilan. Wangsa Syailendra menyusunnya dari dua juta balok batu andesit tanpa satu pun perekat semen.",
-        visual: { type: "stock", query: "temple sunrise", motion: "kenburns-in" },
+        clips: [
+          {
+            id: "sc-1-k1",
+            type: "stock",
+            query: "temple sunrise",
+            motion: "kenburns-in",
+          },
+        ],
         transition: { type: "cross-fade", durationFrames: 12 },
         texts: [{ id: "t2", content: "Abad ke-9", size: "m", emphasis: "underline" }],
       },
@@ -41,45 +48,66 @@ const goodPlan = (overrides: Partial<ScenePlanInput["meta"]> = {}) =>
         id: "sc-2",
         narration:
           "Dindingnya bercerita. Lebih dari dua ribu panel relief mengurutkan kisah perjalanan menuju pencerahan, dibaca sambil berjalan searah jarum jam.",
-        visual: { type: "stock", query: "stone relief", motion: "pan-left" },
+        clips: [
+          { id: "sc-2-k1", type: "stock", query: "stone relief", motion: "pan-left" },
+        ],
         transition: { type: "cross-fade", durationFrames: 20 },
       },
       {
         id: "sc-3",
         narration:
           "Lalu Merapi meletus. Abu vulkanik menimbun candinya, hutan tropis menutup sisanya, dan namanya menghilang dari ingatan selama berabad-abad.",
-        visual: { type: "stock", query: "volcanic ash forest", motion: "drift" },
+        clips: [
+          { id: "sc-3-k1", type: "stock", query: "volcanic ash forest", motion: "drift" },
+        ],
         transition: { type: "cross-fade", durationFrames: 18 },
       },
       {
         id: "sc-4",
         narration:
           "Tahun delapan belas empat belas, Raffles mendengar kabar tentang bukit berukir dan mengirim tim untuk membersihkannya. Butuh empat puluh lima hari.",
-        visual: { type: "stock", query: "colonial expedition map", motion: "pan-right" },
+        clips: [
+          {
+            id: "sc-4-k1",
+            type: "stock",
+            query: "colonial expedition map",
+            motion: "pan-right",
+          },
+        ],
         transition: { type: "cross-fade", durationFrames: 10 },
       },
       {
         id: "sc-5",
         narration:
           "Pemugaran terbesarnya berjalan sepanjang tahun tujuh puluhan. UNESCO ikut turun tangan. Satu juta batu dibongkar, dibersihkan, lalu dipasang kembali.",
-        visual: {
-          type: "stock",
-          query: "restoration scaffolding",
-          motion: "kenburns-out",
-        },
+        clips: [
+          {
+            id: "sc-5-k1",
+            type: "stock",
+            query: "restoration scaffolding",
+            motion: "kenburns-out",
+          },
+        ],
         transition: { type: "cross-fade", durationFrames: 22 },
       },
       {
         id: "sc-6",
         narration:
           "Kini stupanya berdiri lagi menghadap matahari terbit di jantung Jawa, dan setiap pagi ribuan orang mendaki untuk melihatnya. Candinya bertahan.",
-        visual: { type: "stock", query: "stupa dawn aerial", motion: "kenburns-in" },
+        clips: [
+          {
+            id: "sc-6-k1",
+            type: "stock",
+            query: "stupa dawn aerial",
+            motion: "kenburns-in",
+          },
+        ],
         transition: { type: "cross-fade", durationFrames: 14 },
       },
       {
         id: "sc-outro",
         narration: "",
-        visual: { type: "template-anim", variant: "outro" },
+        clips: [{ id: "sc-outro-k1", type: "template-anim", variant: "outro" }],
       },
     ],
   });
@@ -141,12 +169,20 @@ describe("scorePlan · kepatuhan brief", () => {
 describe("scorePlan · struktur & kerajinan", () => {
   it("scene isi tanpa narasi menggagalkan pemeriksaannya", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "eval",
       meta: { title: "T", format: "edukasi" },
       scenes: [
-        { id: "sc-1", narration: "", visual: { type: "stock", query: "x" } },
-        { id: "sc-2", narration: "Ada narasi di sini.", visual: { type: "stock" } },
+        {
+          id: "sc-1",
+          narration: "",
+          clips: [{ id: "sc-1-k1", type: "stock", query: "x" }],
+        },
+        {
+          id: "sc-2",
+          narration: "Ada narasi di sini.",
+          clips: [{ id: "sc-2-k1", type: "stock" }],
+        },
       ],
     });
     const check = scorePlan(plan).checks.find((c) => c.name === "scene isi bernarasi");
@@ -157,7 +193,7 @@ describe("scorePlan · struktur & kerajinan", () => {
   it("catatan sutradara memotong poin kerajinan tapi tidak membuat skor negatif", () => {
     // Plan seburuk apa pun harus tetap menghasilkan angka yang bisa dibaca.
     const buruk = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "eval",
       meta: {
         title: "Judul yang sangat panjang sekali sampai melewati batas wajar",
@@ -168,12 +204,12 @@ describe("scorePlan · struktur & kerajinan", () => {
           id: "sc-1",
           narration:
             "Di era digital yang serba cepat ini, tak dapat dipungkiri bahwa pada dasarnya secara umum penting untuk dicatat bahwa hal ini cenderung menjadi sesuatu yang sangat penting bagi kita semua sebagai manusia modern.",
-          visual: { type: "stock", query: "x", motion: "none" },
+          clips: [{ id: "sc-1-k1", type: "stock", query: "x", motion: "none" }],
         },
         {
           id: "sc-2",
           narration: "Nah kayak gitu ya.",
-          visual: { type: "stock", motion: "none" },
+          clips: [{ id: "sc-2-k1", type: "stock", motion: "none" }],
         },
       ],
     });
