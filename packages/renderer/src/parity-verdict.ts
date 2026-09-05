@@ -9,12 +9,22 @@
  * menghasilkan hash identik), jadi selisihnya lahir dari kondisi runner, bukan
  * dari kode.
  *
- * Menurunkan gerbangnya ke perbandingan bertoleransi akan melemahkan justru
- * yang ingin dijaga. Yang membedakan derau dari cacat sungguhan bukan besar
- * selisihnya, melainkan KETERULANGANNYA: pemanggil `staticFile()` yang terlewat
+ * Saringan pertama adalah KETERULANGAN: pemanggil `staticFile()` yang terlewat
  * membuat aset hilang di SETIAP render, sedangkan derau rasterisasi tidak
  * bertahan pada percobaan kedua. Jadi gerbang ini merender ulang frame yang
- * bermasalah sekali lagi, dan hanya menyatakan gagal kalau selisihnya kembali.
+ * bermasalah sekali lagi, dan tidak menyatakan gagal kecuali selisihnya kembali.
+ *
+ * Saringan kedua, ditambahkan setelah ada ANGKANYA: BESAR selisihnya. Semula
+ * modul ini menolak toleransi apa pun dengan alasan keterulangan sudah cukup;
+ * pengukuran menunjukkan alasan itu tidak lengkap. Satu jalan CI mencatat dua
+ * render dari plan yang PERSIS sama berbeda 248 piksel (0,191% bidang) dengan
+ * selisih kanal terbesar 2/255 — berulang di dalam jalan itu, jadi lolos
+ * saringan keterulangan, padahal 2/255 tidak bisa dilihat mata dan mustahil
+ * menyembunyikan aset yang hilang (yang menggeser kanal puluhan sampai 255).
+ *
+ * Keduanya dipakai bersama, bukan menggantikan: gagal hanya kalau selisihnya
+ * BERULANG dan CUKUP BESAR untuk terlihat. Ambangnya satu tempat di
+ * `png-diff.ts` supaya kedua gerbang paritas memakai definisi yang sama.
  */
 
 /** Sidik satu berkas hasil render: hash isi + ukuran, keduanya untuk diagnosis. */
@@ -38,6 +48,29 @@ export type ParityVerdict =
   | "goyah"
   /** Selisihnya berulang — aset memang tidak sampai lewat salah satu jalur. */
   | "berbeda";
+
+/** Vonis akhir; "setara" hanya lahir setelah hitungan piksel ikut dibaca. */
+export type ParityFinalVerdict = ParityVerdict | "setara";
+
+/**
+ * Vonis hash disaring sekali lagi oleh besar selisihnya.
+ *
+ * Hanya "berbeda" yang bisa berubah: "identik" dan "goyah" sudah lulus, dan
+ * menurunkan keduanya lewat piksel tidak menjawab pertanyaan apa pun. Selisih
+ * yang berulang TAPI di bawah ambang lihat jadi "setara" — lulus, dengan
+ * angkanya tetap dicetak gerbang supaya toleransinya tidak pernah senyap.
+ *
+ * Kedua percobaan harus sama-sama di bawah ambang. Satu percobaan yang
+ * selisihnya besar sudah cukup jadi bukti aset benar-benar tidak sampai;
+ * "rata-ratanya kecil" bukan pembelaan untuk frame yang sekali waktu kosong.
+ */
+export const parityFinalVerdict = (
+  hashVerdict: ParityVerdict,
+  noise: { first: boolean; retry: boolean },
+): ParityFinalVerdict => {
+  if (hashVerdict !== "berbeda") return hashVerdict;
+  return noise.first && noise.retry ? "setara" : "berbeda";
+};
 
 export const parityVerdict = (
   first: ParityAttempt,

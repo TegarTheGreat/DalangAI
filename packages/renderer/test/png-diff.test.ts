@@ -1,6 +1,12 @@
 import { deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { decodePng, describeDiff, diffPng } from "../src/png-diff";
+import {
+  decodePng,
+  describeDiff,
+  diffPng,
+  NOISE_MAX_DELTA,
+  withinRasterNoise,
+} from "../src/png-diff";
 
 /**
  * Dekoder PNG kecil milik gerbang paritas.
@@ -183,6 +189,51 @@ describe("diffPng", () => {
     const tipis = diffPng(makePng(10, 10, kosong), makePng(10, 10, sepuhan));
     expect(tipis.percent).toBeLessThan(2);
     expect(tipis.maxDelta).toBe(2);
+  });
+
+  /**
+   * Ambang yang dipakai kedua gerbang paritas, diuji dari kedua sisinya.
+   *
+   * Yang dijaga di sini bukan angkanya, melainkan sifatnya: cacat yang dicari
+   * gerbang (gambar berganti) HARUS jatuh, dan pembulatan rasterisasi HARUS
+   * lolos. Test yang cuma menegaskan "2 == 2" akan tetap hijau saat ambangnya
+   * dinaikkan diam-diam sampai tidak menjaga apa pun.
+   */
+  it("ambang kebisingan meloloskan pembulatan, menjatuhkan gambar yang berganti", () => {
+    // 20x20 = 400 piksel, jadi 5 piksel = 1,25% — sebanding dengan 0,191%
+    // yang tercatat di CI, dan tetap di bawah ambang luas.
+    const dasar = solid(20, 20, [40, 60, 80, 255]);
+    const beda = (ubah: (pixel: number[]) => number[], jumlah: number) =>
+      diffPng(
+        makePng(20, 20, dasar),
+        makePng(
+          20,
+          20,
+          dasar.map((pixel, index) => (index < jumlah ? ubah(pixel) : pixel)),
+        ),
+      );
+
+    // Persis kasus CI: selisih 2/255 di sebagian kecil bidang.
+    expect(withinRasterNoise(beda(() => [42, 62, 82, 255], 5))).toBe(true);
+
+    // Satu tingkat di atas ambang sudah jatuh, walau bidangnya sama sempit.
+    expect(
+      withinRasterNoise(beda(() => [40 + NOISE_MAX_DELTA + 1, 60, 80, 255], 5)),
+    ).toBe(false);
+
+    // Selisih kecil TAPI menyentuh seluruh bidang (mis. filter yang hilang
+    // saat migrasi) tetap jatuh lewat ambang luas.
+    expect(withinRasterNoise(beda(() => [41, 61, 81, 255], 400))).toBe(false);
+
+    // Ukuran berbeda tidak pernah "setara", berapa pun selisih kanalnya.
+    expect(
+      withinRasterNoise(
+        diffPng(
+          makePng(2, 2, solid(2, 2, [0, 0, 0, 255])),
+          makePng(3, 3, solid(3, 3, [0, 0, 0, 255])),
+        ),
+      ),
+    ).toBe(false);
   });
 
   it("ukuran berbeda dikatakan apa adanya, bukan dibandingkan paksa", () => {

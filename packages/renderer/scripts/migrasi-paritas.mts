@@ -35,7 +35,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseScenePlan } from "@dalang/core";
-import { describeDiff, diffPng } from "../src/png-diff";
+import { describeDiff, diffPng, withinRasterNoise } from "../src/png-diff";
 import { renderPlanStills } from "../src/render";
 
 const sha256 = (file: string): string =>
@@ -218,20 +218,64 @@ const main = async () => {
       }
     };
 
+    /**
+     * Vonis "gambarnya sama", bukan "byte-nya sama".
+     *
+     * sha256 adalah saringan pertama karena murah dan tepat saat cocok. Saat
+     * TIDAK cocok ia diam soal seberapa jauh bedanya, dan justru itu yang
+     * menentukan: rasterisasi Chrome headless menggeser sepuhan tepi 1-2
+     * tingkat antar render berturut-turut dari plan yang PERSIS sama (terukur
+     * di CI, lihat komentar ambang di png-diff.ts). Gerbang yang menjatuhkan
+     * itu sebagai cacat migrasi menuduh tempat yang salah, dan gerbang yang
+     * menuduh salah cukup sering akan diabaikan orang — kerusakan yang jauh
+     * lebih mahal daripada frame yang lolos.
+     *
+     * Yang ditoleransi HANYA selisih di bawah ambang; setiap toleransi tetap
+     * DICETAK dengan angkanya, jadi tidak ada yang tersembunyi.
+     */
+    const setara = (a: string, b: string): { sama: boolean; catatan: string } => {
+      if (sha256(a) === sha256(b)) return { sama: true, catatan: "identik" };
+      try {
+        const diff = diffPng(readFileSync(a), readFileSync(b));
+        return { sama: withinRasterNoise(diff), catatan: describeDiff(diff) };
+      } catch (error) {
+        return {
+          sama: false,
+          catatan: `gagal dibandingkan piksel: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+    };
+
     let beda = 0;
     let goyah = 0;
+    let ditoleransi = 0;
     for (const [index, fileV1] of berkasV1.entries()) {
       const fileV2 = berkasV2[index] as string;
       const a = sha256(fileV1);
       const b = sha256(fileV2);
       const aUlang = sha256(ulangV1[index] as string);
       const bUlang = sha256(ulangV2[index] as string);
-      const stabil = a === aUlang && b === bUlang;
-      const cocok = a === b;
+      const kontrolV1 = setara(fileV1, ulangV1[index] as string);
+      const kontrolV2 = setara(fileV2, ulangV2[index] as string);
+      const antarVersi = setara(fileV1, fileV2);
+      const stabil = kontrolV1.sama && kontrolV2.sama;
+      const cocok = antarVersi.sama;
       const nomor = frames[index] as number;
+      for (const [label, hasil] of [
+        ["kontrol v1", kontrolV1],
+        ["kontrol v2", kontrolV2],
+        ["v1 vs v2", antarVersi],
+      ] as [string, { sama: boolean; catatan: string }][]) {
+        if (hasil.sama && hasil.catatan !== "identik") {
+          ditoleransi++;
+          console.log(
+            `  frame ${nomor}: ${label} beda byte tapi SETARA secara gambar — ${hasil.catatan}`,
+          );
+        }
+      }
       if (!stabil) {
         goyah++;
-        const sisi = a === aUlang ? "v2" : "v1";
+        const sisi = kontrolV1.sama ? "v2" : "v1";
         const pasangan: [string, string] =
           sisi === "v1"
             ? [fileV1, ulangV1[index] as string]
@@ -260,7 +304,10 @@ const main = async () => {
         );
         continue;
       }
-      console.log(`  frame ${nomor}: identik v1=${a.slice(0, 12)} v2=${b.slice(0, 12)}`);
+      console.log(
+        `  frame ${nomor}: ${antarVersi.catatan === "identik" ? "identik" : "setara"} ` +
+          `v1=${a.slice(0, 12)} v2=${b.slice(0, 12)}`,
+      );
     }
 
     if (goyah > 0) {
@@ -283,7 +330,11 @@ const main = async () => {
       return;
     }
     console.log(
-      `Paritas migrasi OK: ${berkasV1.length} frame identik byte per byte (${argPath}).`,
+      `Paritas migrasi OK: ${berkasV1.length} frame setara antara v1-termigrasi dan v2` +
+        (ditoleransi > 0
+          ? `, ${ditoleransi} perbandingan lolos lewat ambang kebisingan rasterisasi`
+          : " (identik byte per byte)") +
+        ` (${argPath}).`,
     );
   } finally {
     await rm(root, { recursive: true, force: true });

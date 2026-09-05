@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeAttempt,
   type ParityAttempt,
+  parityFinalVerdict,
   parityVerdict,
 } from "../src/parity-verdict";
 
@@ -46,5 +47,31 @@ describe("describeAttempt", () => {
     expect(text).toContain("40000 byte");
     expect(text).toContain("def");
     expect(text).toContain("900 byte");
+  });
+});
+
+/**
+ * Saringan kedua: BESAR selisihnya, dibaca setelah vonis hash.
+ *
+ * Yang dijaga: vonis yang sudah lulus tidak boleh berubah oleh piksel, dan
+ * "berbeda" hanya boleh diampuni kalau KEDUA percobaan di bawah ambang.
+ */
+describe("parityFinalVerdict", () => {
+  const halus = { first: true, retry: true };
+  const kasar = { first: false, retry: false };
+
+  it("vonis yang sudah lulus tidak diutak-atik hitungan piksel", () => {
+    expect(parityFinalVerdict("identik", kasar)).toBe("identik");
+    expect(parityFinalVerdict("goyah", kasar)).toBe("goyah");
+  });
+
+  it("selisih berulang yang di bawah ambang lihat jadi setara", () => {
+    expect(parityFinalVerdict("berbeda", halus)).toBe("setara");
+  });
+
+  it("satu percobaan yang selisihnya besar sudah cukup untuk tetap gagal", () => {
+    expect(parityFinalVerdict("berbeda", { first: true, retry: false })).toBe("berbeda");
+    expect(parityFinalVerdict("berbeda", { first: false, retry: true })).toBe("berbeda");
+    expect(parityFinalVerdict("berbeda", kasar)).toBe("berbeda");
   });
 });

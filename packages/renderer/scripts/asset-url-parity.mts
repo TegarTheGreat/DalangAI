@@ -58,9 +58,10 @@ import { computeFrameLayout } from "@dalang/templates/layout";
 import {
   describeAttempt,
   type ParityAttempt,
+  parityFinalVerdict,
   parityVerdict,
 } from "../src/parity-verdict";
-import { describeDiff, diffPng } from "../src/png-diff";
+import { describeDiff, diffPng, withinRasterNoise } from "../src/png-diff";
 import { renderPlanStills } from "../src/render";
 
 // Bawaannya relatif AKAR REPO, bukan cwd: skrip ini dipanggil lewat
@@ -211,17 +212,31 @@ const simpanBukti = (frame: number, tags: string[]): string[] => {
   return disimpan;
 };
 
-/** Satu baris hitungan piksel untuk satu percobaan. */
-const bedaPiksel = (frame: number, tag: string): string => {
+/**
+ * Hitungan piksel satu percobaan: kalimat diagnosisnya sekaligus vonis
+ * "masih di bawah ambang lihat?".
+ *
+ * Keduanya lahir dari SATU pembacaan berkas, bukan dua: dua pembacaan yang
+ * bisa menjawab beda adalah cara termudah mencetak angka yang tidak cocok
+ * dengan keputusannya sendiri. Berkas yang gagal dibaca dianggap TIDAK di
+ * bawah ambang — gerbang yang tidak bisa mengukur harus jatuh ke sisi yang
+ * memaksa orang melihat, bukan ke sisi yang meloloskan.
+ */
+const bedaPiksel = (
+  frame: number,
+  tag: string,
+): { teks: string; kebisingan: boolean } => {
   try {
-    return describeDiff(
-      diffPng(
-        readFileSync(join(outDir, `${tag}-lokal-${frame}.png`)),
-        readFileSync(join(outDir, `${tag}-url-${frame}.png`)),
-      ),
+    const diff = diffPng(
+      readFileSync(join(outDir, `${tag}-lokal-${frame}.png`)),
+      readFileSync(join(outDir, `${tag}-url-${frame}.png`)),
     );
+    return { teks: describeDiff(diff), kebisingan: withinRasterNoise(diff) };
   } catch (error) {
-    return `gagal dibandingkan piksel: ${error instanceof Error ? error.message : String(error)}`;
+    return {
+      teks: `gagal dibandingkan piksel: ${error instanceof Error ? error.message : String(error)}`,
+      kebisingan: false,
+    };
   }
 };
 
@@ -248,17 +263,33 @@ try {
   for (const frame of mismatched) {
     const attempt1 = first.get(frame) as ParityAttempt;
     const attempt2 = second.get(frame) as ParityAttempt;
-    const verdict = parityVerdict(attempt1, attempt2);
+    const piksel1 = bedaPiksel(frame, "p1");
+    const piksel2 = bedaPiksel(frame, "p2");
+    const verdict = parityFinalVerdict(parityVerdict(attempt1, attempt2), {
+      first: piksel1.kebisingan,
+      retry: piksel2.kebisingan,
+    });
+    if (verdict === "setara") {
+      // Lulus, tapi TIDAK senyap: angkanya dicetak supaya toleransi yang
+      // menua jadi terlalu longgar bisa dilihat orang, bukan ditemukan
+      // belakangan sebagai gerbang yang ternyata tidak menjaga apa pun.
+      console.warn(
+        `Frame ${frame}: kedua jalur beda byte tapi SETARA secara gambar (di bawah ambang kebisingan rasterisasi).\n` +
+          `    percobaan 1 : ${piksel1.teks}\n` +
+          `    percobaan 2 : ${piksel2.teks}`,
+      );
+      continue;
+    }
     if (verdict === "berbeda") {
       const bukti = simpanBukti(frame, ["p1", "p2"]);
       throw new Error(
         `Frame ${frame}: render lokal dan render lewat URL BERBEDA, dua kali berturut-turut.\n` +
           describeAttempt("percobaan 1", attempt1) +
           "\n" +
-          `    piksel      : ${bedaPiksel(frame, "p1")}\n` +
+          `    piksel      : ${piksel1.teks}\n` +
           describeAttempt("percobaan 2", attempt2) +
           "\n" +
-          `    piksel      : ${bedaPiksel(frame, "p2")}\n` +
+          `    piksel      : ${piksel2.teks}\n` +
           `  aset terlayani: ${[...new Set(servedPaths)].join(", ")}\n` +
           `  bukti gambar : ${bukti.join(", ") || "(gagal disimpan)"}\n` +
           "Aset yang benar-benar hilang menggagalkan render, bukan menggeser byte " +

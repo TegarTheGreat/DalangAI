@@ -209,6 +209,46 @@ export const diffPng = (aBytes: Uint8Array, bBytes: Uint8Array): PngDiff => {
  * yang membacanya biasanya cuma punya sepuluh detik sebelum memutuskan apakah
  * ini masalahnya atau bukan.
  */
+/**
+ * Batas "kebisingan rasterisasi" — di bawahnya dua PNG dianggap gambar yang
+ * SAMA meski byte-nya berbeda.
+ *
+ * Angkanya bukan tebakan; ia dibaca dari kegagalan CI yang sesungguhnya.
+ * Gerbang paritas migrasi menjatuhkan frame 12 dengan hitungan ini:
+ *
+ *   248 piksel berbeda (0,191% dari 270x480), selisih kanal terbesar 2/255,
+ *   terkurung di kotak 264x479 pada (0, 1)
+ *
+ * dan yang berbeda BUKAN v1 melawan v2, melainkan satu sisi melawan RENDER
+ * ULANGNYA SENDIRI — plan yang sama, dua kali, di runner yang sama. Selisih
+ * kanal 2/255 yang tersebar tipis ke hampir seluruh bidang adalah tanda
+ * pembulatan rasterisasi (sepuhan tepi sub-piksel di Chrome headless), bukan
+ * tanda ada yang berubah di gambarnya: 2/255 berada di bawah ambang lihat
+ * mata manusia pada layar mana pun.
+ *
+ * Kenapa ambang ini tetap menangkap cacat yang dicari gerbangnya: field yang
+ * tidak ikut migrasi mengganti GAMBAR — aset lain, teks hilang, tata letak
+ * bergeser. Semuanya menggeser kanal puluhan sampai 255, jauh di atas 2, dan
+ * pergeseran satu bingkai pada animasi pun memberi selisih besar di tepi yang
+ * bergerak. Tidak ada cacat migrasi yang bisa bersembunyi di bawah 2/255.
+ *
+ * Batas LUAS tetap dipasang berdampingan: pergeseran serba-sedikit yang
+ * menyentuh hampir seluruh bidang (mis. filter kecerahan yang hilang saat
+ * migrasi) akan lolos ambang kanal, tapi tidak lolos ambang luas. Yang
+ * terukur di CI 0,191%; 2% memberi kelonggaran nyata tanpa mendekati
+ * "seluruh gambarnya berubah".
+ */
+export const NOISE_MAX_DELTA = 2;
+export const NOISE_MAX_PERCENT = 2;
+
+/**
+ * Dua PNG setara secara GAMBAR? Ini vonis yang dipakai kedua gerbang paritas,
+ * satu definisi untuk keduanya: ambang yang disalin akan menyimpang, dan yang
+ * menyimpang duluan pasti yang jarang dibaca.
+ */
+export const withinRasterNoise = (diff: PngDiff): boolean =>
+  diff.sameSize && diff.maxDelta <= NOISE_MAX_DELTA && diff.percent <= NOISE_MAX_PERCENT;
+
 export const describeDiff = (diff: PngDiff): string => {
   if (!diff.sameSize) return "ukuran gambarnya berbeda";
   if (diff.differing === 0) return "tidak ada piksel yang berbeda";
