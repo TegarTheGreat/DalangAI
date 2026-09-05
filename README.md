@@ -229,7 +229,10 @@ berikutnya.
   semuanya sejauh yang sama dalam satu patch, jadi satu undo mengembalikan
   semuanya.
 - **Potongan di dalam satu scene** (maks 24): belah, geser tepi, buang, susun
-  ulang. Contoh siap-render ada di
+  ulang. Memilih potongan di panel Properti membawa preview ke potongan itu —
+  menyetel gerak kamera sambil menatap potongan yang salah adalah cara termudah
+  menghabiskan sepuluh menit untuk perubahan yang tidak pernah terlihat. Contoh
+  siap-render ada di
   [`examples/klip-borobudur`](examples/klip-borobudur/) — satu narasi, tiga
   potongan, satu potong keras dan satu larut; CI merendernya tiap kali. Menggeser tepi punya dua rasa — `ripple` memanjangkan atau memendekkan
   scene-nya, `roll` menukar durasi dengan potongan tetangga sehingga panjang
@@ -544,7 +547,7 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 
 | Gerbang | Yang dijaganya |
 |---|---|
-| 1165 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
+| 1168 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
 | Render smoke test | Render sungguhan di CI, bukan mock |
 | Gerbang paritas migrasi | Plan v1 (dimigrasikan) dan plan v2 dirender, wajib identik byte per byte — tiap sisi dirender dua kali sebagai kontrol, jadi render yang tidak deterministik tidak bisa terbaca sebagai cacat migrasi |
 | Gerbang tata letak | Geometri UI di 18 lebar layar (380-1920), editor dan lobi: kontrol yang saling menindih, tergunting, atau membuat halaman bisa digeser ke samping |

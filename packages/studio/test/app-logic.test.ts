@@ -1,6 +1,7 @@
 import { parseScenePlan } from "@dalang/core";
+import { clipFrameSpans } from "@dalang/templates/layout";
 import { describe, expect, it } from "vitest";
-import { planMeta, sceneThumbFrame } from "../src/app/model/plan-meta";
+import { clipMidFrame, planMeta, sceneThumbFrame } from "../src/app/model/plan-meta";
 import { deriveSceneStatus } from "../src/app/model/scene-status";
 import { SseParser } from "../src/app/sse";
 import type { BusyState, StageRunLite } from "../src/shared/api-types";
@@ -124,6 +125,59 @@ describe("planMeta", () => {
       expect(frame).toBeLessThan(
         (meta.sceneStarts[index] ?? 0) + (meta.sceneFrames[index] ?? 1),
       );
+    });
+  });
+
+  /**
+   * Lompatan preview saat potongan dipilih (ADR-0033).
+   *
+   * Yang diuji sifatnya, bukan angkanya: tiap potongan mendarat DI DALAM
+   * petaknya sendiri, dan petak itu dihitung fungsi renderer yang sama dengan
+   * yang dipakai ClipStrip. Angka tetap akan basi begitu durasi contoh diubah,
+   * sementara sifatnya tidak.
+   */
+  describe("clipMidFrame", () => {
+    const berklip = parseScenePlan({
+      ...makePlan(),
+      scenes: [
+        {
+          id: "sc-multi",
+          narration: "Satu kalimat, tiga potongan.",
+          clips: [
+            { id: "k1", type: "stock", durationSec: 4 },
+            { id: "k2", type: "stock", durationSec: 2 },
+            { id: "k3", type: "stock", durationSec: 6 },
+          ],
+        },
+      ],
+    });
+
+    it("mendarat di dalam petak potongannya masing-masing", () => {
+      const meta = planMeta(berklip);
+      const scene = berklip.scenes[0];
+      if (!scene) throw new Error("scene hilang");
+      const spans = clipFrameSpans(scene, meta.sceneFrames[0] ?? 1);
+      for (const span of spans) {
+        const frame = clipMidFrame(meta, berklip, "sc-multi", span.id);
+        expect(frame).not.toBeNull();
+        const start = (meta.sceneStarts[0] ?? 0) + span.startFrame;
+        expect(frame as number).toBeGreaterThanOrEqual(start);
+        expect(frame as number).toBeLessThan(start + span.frames);
+      }
+    });
+
+    it("potongan yang berbeda mendarat di bingkai yang berbeda", () => {
+      const meta = planMeta(berklip);
+      const frames = ["k1", "k2", "k3"].map((id) =>
+        clipMidFrame(meta, berklip, "sc-multi", id),
+      );
+      expect(new Set(frames).size).toBe(3);
+    });
+
+    it("scene atau klip yang tidak ada menjawab null, bukan bingkai nol", () => {
+      const meta = planMeta(berklip);
+      expect(clipMidFrame(meta, berklip, "sc-tidak-ada", "k1")).toBeNull();
+      expect(clipMidFrame(meta, berklip, "sc-multi", "klip-hantu")).toBeNull();
     });
   });
 });

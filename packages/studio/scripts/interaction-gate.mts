@@ -783,6 +783,31 @@ const main = async (): Promise<void> => {
     );
     await sleep(SETTLE_MS);
     const klipAwal = setelahBelah.clips[0]?.id ?? "";
+    const klipAkhir = setelahBelah.clips.at(-1)?.id ?? "";
+    const waktuTransport = async (): Promise<string> =>
+      String(
+        (await page.evaluate(
+          `(() => { const el = document.querySelector(".transport-time"); return el ? el.textContent : ""; })()`,
+        )) ?? "",
+      );
+    await page.evaluate(
+      `(() => { const el = document.querySelector('[data-testid="pilih-klip-${klipAwal}"]'); if (el) el.click(); return Boolean(el); })()`,
+    );
+    await sleep(SETTLE_MS);
+    // Memilih potongan membawa preview KE potongan itu (ADR-0033). Tanpa ini
+    // seluruh kendali di bawah daftar menyasar potongan yang tidak terlihat.
+    const waktuAwal = await waktuTransport();
+    await page.evaluate(
+      `(() => { const el = document.querySelector('[data-testid="pilih-klip-${klipAkhir}"]'); if (el) el.click(); return Boolean(el); })()`,
+    );
+    await sleep(SETTLE_MS);
+    const waktuAkhir = await waktuTransport();
+    check(
+      "memilih potongan lain memindahkan playhead ke potongan itu",
+      waktuAwal !== "" && waktuAkhir !== "" && waktuAwal !== waktuAkhir,
+      `${waktuAwal.trim()} → ${waktuAkhir.trim()}`,
+    );
+    // Kembali ke potongan pertama: kartu potongan di bawah ini miliknya.
     await page.evaluate(
       `(() => { const el = document.querySelector('[data-testid="pilih-klip-${klipAwal}"]'); if (el) el.click(); return Boolean(el); })()`,
     );

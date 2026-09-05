@@ -34,6 +34,8 @@ import {
   IconSearch,
   IconTrash,
 } from "../icons";
+import { clipMidFrame, planMeta } from "../model/plan-meta";
+import { playback } from "../playback";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
 import { AudioTab } from "./AudioTab";
@@ -570,7 +572,22 @@ const ClipList: React.FC<{ scene: Scene; selected: string; busy: boolean }> = ({
   selected,
   busy,
 }) => {
+  const { project } = useStudio();
+  const plan = project?.plan ?? null;
   if (scene.clips.length < 2) return null;
+  /**
+   * Memilih potongan MEMBAWA preview ke potongan itu.
+   *
+   * Tanpa ini, seluruh kendali di bawah daftar ini menyasar potongan yang
+   * tidak sedang terlihat — dan tidak ada satu pun tanda di layar yang
+   * mengatakannya.
+   */
+  const pilih = (clipId: string) => {
+    studioClient.selectClip(clipId);
+    if (!plan) return;
+    const frame = clipMidFrame(planMeta(plan), plan, scene.id, clipId);
+    if (frame !== null) playback.requestSeek(frame);
+  };
   const order = scene.clips.map((clip) => clip.id);
   const move = (id: string, arah: -1 | 1) => {
     const from = order.indexOf(id);
@@ -593,7 +610,7 @@ const ClipList: React.FC<{ scene: Scene; selected: string; busy: boolean }> = ({
               type="button"
               className="clip-pick"
               data-testid={`pilih-klip-${clip.id}`}
-              onClick={() => studioClient.selectClip(clip.id)}
+              onClick={() => pilih(clip.id)}
             >
               <span className="clip-no">{index + 1}</span>
               <span className="clip-name">{clip.query ?? clip.variant ?? clip.type}</span>

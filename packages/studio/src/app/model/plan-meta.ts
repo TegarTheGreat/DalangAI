@@ -1,5 +1,10 @@
 import { DIMENSIONS, type ScenePlan } from "@dalang/core";
-import { computeFrameLayout, FPS, sceneSettledFrame } from "@dalang/templates/layout";
+import {
+  clipFrameSpans,
+  computeFrameLayout,
+  FPS,
+  sceneSettledFrame,
+} from "@dalang/templates/layout";
 
 /**
  * Metadata Player diturunkan dari plan — logika yang SAMA dengan
@@ -45,4 +50,37 @@ export const sceneThumbFrame = (meta: PlanMeta, index: number): number => {
   const start = meta.sceneStarts[index] ?? 0;
   const frames = meta.sceneFrames[index] ?? 1;
   return start + Math.min(24, Math.max(0, Math.floor(frames / 2)));
+};
+
+/**
+ * Frame GLOBAL di TENGAH sebuah potongan (ADR-0033).
+ *
+ * Ke sinilah preview melompat saat potongan dipilih di panel Properti. Tengah,
+ * bukan awal: awal potongan pertama masih ditutupi transisi masuk scene, dan
+ * awal potongan lain jatuh tepat di titik larut kalau ada — dua tempat yang
+ * justru paling tidak mewakili isi potongannya. Menyetel gerak kamera sambil
+ * menatap potongan yang salah adalah cara termudah menghabiskan sepuluh menit
+ * untuk perubahan yang tidak pernah terlihat.
+ *
+ * Petaknya dihitung `clipFrameSpans` milik renderer, sama seperti yang dipakai
+ * ClipStrip saat merender — bukan pembagian rata sendiri, yang akan meleset
+ * begitu durasi potongannya tidak sama panjang.
+ */
+export const clipMidFrame = (
+  meta: PlanMeta,
+  plan: ScenePlan,
+  sceneId: string,
+  clipId: string,
+): number | null => {
+  const index = plan.scenes.findIndex((scene) => scene.id === sceneId);
+  const scene = plan.scenes[index];
+  if (!scene) return null;
+  const span = clipFrameSpans(scene, meta.sceneFrames[index] ?? 1).find(
+    (candidate) => candidate.id === clipId,
+  );
+  if (!span) return null;
+  return Math.min(
+    Math.max(meta.durationInFrames - 1, 0),
+    (meta.sceneStarts[index] ?? 0) + span.startFrame + Math.floor(span.frames / 2),
+  );
 };

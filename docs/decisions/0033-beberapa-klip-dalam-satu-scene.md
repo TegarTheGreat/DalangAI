@@ -233,9 +233,11 @@ berakhir sebelum scene-nya.
 **Studio.** Titik potong digambar di dalam kotak scene dan bisa diseret
 (`roll`, supaya kotak sesudahnya tidak melompat di bawah jari). Pisau di
 transport membelah KLIP; tombol kedua membelah SCENE. Panel Properti punya
-daftar potongan, dan seluruh kendali visualnya menyasar potongan terpilih. Di
-bawah daftar itu ada kartu potongan: bawaannya potong keras, dan larut dipasang
-per potongan kalau memang dibutuhkan.
+daftar potongan, dan seluruh kendali visualnya menyasar potongan terpilih —
+memilih potongan juga MEMBAWA preview ke tengah potongan itu, karena kendali
+yang menyasar sesuatu yang tidak terlihat adalah kendali yang disetel dengan
+mata tertutup. Di bawah daftar itu ada kartu potongan: bawaannya potong keras,
+dan larut dipasang per potongan kalau memang dibutuhkan.
 
 **Potongan antar klip (§6) punya jalan masuk.** `updateScene.patch.clip`
 menerima `transition`, dan `null` mengembalikannya ke potong keras. Sebelum ini
