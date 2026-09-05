@@ -603,6 +603,12 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   dan tidak ada sinkronisasi banyak sumber.
   [ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) menulis
   batasnya lengkap.
+- **Kartu judul dan outro tidak bisa jadi salah satu potongan.** Kartu itu
+  komposisi satu scene UTUH, bukan potongan gambar, jadi scene berklip banyak
+  yang memuatnya ditolak validasi — beserta saran memisahkannya jadi scene
+  tersendiri. Ini ditegakkan, bukan disarankan: sebelum aturannya ada, plan
+  seperti itu lolos, rendernya sukses, dan potongan sesudah kartunya hilang
+  tanpa satu pun pesan.
 - **Preset tutorial-01 menggambar potongannya, tapi anotasinya tetap milik
   scene.** Sorotan dan panah berjangkar pada satu screenshot; kalau potongan
   kedua menampilkan layar lain, anotasinya tidak ikut berpindah.
