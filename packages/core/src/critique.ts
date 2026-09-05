@@ -61,15 +61,22 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
     });
   }
 
-  // 2. Gerak kamera monoton pada scene beraset.
-  const assetScenes = scenes.filter((s) => ASSET_TYPES.has(primaryClip(s).type));
-  if (assetScenes.length >= 3) {
-    const motions = new Set(assetScenes.map((s) => primaryClip(s).motion));
+  // 2. Gerak kamera monoton pada POTONGAN beraset.
+  //
+  // Dihitung per klip (ADR-0033), bukan per scene: mata penonton melihat
+  // potongan, bukan scene. Wawancara satu scene berisi dua belas potongan yang
+  // semuanya kenburns-in terasa persis semonoton dua belas scene yang begitu —
+  // dan pemeriksaan per-scene menganggapnya satu.
+  const assetClips = scenes.flatMap((scene) =>
+    scene.clips.filter((clip) => ASSET_TYPES.has(clip.type)),
+  );
+  if (assetClips.length >= 3) {
+    const motions = new Set(assetClips.map((clip) => clip.motion));
     if (motions.size === 1) {
       notes.push({
         code: "gerak-monoton",
         level: "saran",
-        message: `Semua ${assetScenes.length} scene beraset memakai gerak kamera yang sama (${[...motions][0]}). Selang-seling kenburns-in/out dan pan agar mata tidak jenuh.`,
+        message: `Semua ${assetClips.length} potongan beraset memakai gerak kamera yang sama (${[...motions][0]}). Selang-seling kenburns-in/out dan pan agar mata tidak jenuh.`,
       });
     }
   }

@@ -1,4 +1,10 @@
-import { DIMENSIONS, type ScenePlan } from "@dalang/core";
+import {
+  type Clip,
+  DIMENSIONS,
+  primaryClip,
+  type Scene,
+  type ScenePlan,
+} from "@dalang/core";
 import {
   clipFrameSpans,
   computeFrameLayout,
@@ -84,3 +90,19 @@ export const clipMidFrame = (
     (meta.sceneStarts[index] ?? 0) + span.startFrame + Math.floor(span.frames / 2),
   );
 };
+
+/**
+ * Potongan yang sedang disunting di panel Properti (ADR-0033).
+ *
+ * Hidup di sini, bukan diulang di tiap tab: tab Visual dan tab Audio harus
+ * menyasar potongan yang SAMA, dan dua salinan aturan "pilihan, kalau tidak
+ * ada yang pertama" adalah dua tempat yang bisa menyimpang — persis kelas
+ * cacat yang membuat orang mengira setelannya tidak tersimpan, karena satu tab
+ * menyetel potongan lain daripada yang dilihatnya.
+ *
+ * Pilihan yang menunjuk klip yang sudah tidak ada (baru dibuang, atau scene-nya
+ * berganti) jatuh kembali ke potongan pertama, bukan menghasilkan undefined
+ * yang harus dijaga tiap pemanggil.
+ */
+export const selectedClip = (scene: Scene, selectedClipId: string | null): Clip =>
+  scene.clips.find((clip) => clip.id === selectedClipId) ?? primaryClip(scene);

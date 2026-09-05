@@ -1,4 +1,4 @@
-import { primaryClip, type Scene, type ScenePlan, sceneAsset } from "@dalang/core";
+import { clipAsset, type Scene, type ScenePlan } from "@dalang/core";
 import type { BusyState, StageRunLite } from "../../shared/api-types";
 
 /**
@@ -56,15 +56,24 @@ export const deriveSceneStatus = (
   }
 
   let asset: SceneBadge;
-  if (
-    primaryClip(scene).type === "template-anim" ||
-    primaryClip(scene).type === "solid"
-  ) {
+  /**
+   * Lencana aset dibaca dari SELURUH klip (ADR-0033).
+   *
+   * Membacanya dari klip pertama saja membuat scene berklip tiga yang dua
+   * potongannya belum punya berkas tampil "ok" di timeline — lencana yang
+   * mengatakan siap padahal video akan menampilkan latar prosedural di tengah
+   * scene. Yang butuh berkas adalah klip yang BUKAN template/solid; kalau
+   * semuanya template atau solid, memang tidak ada yang perlu di-resolve.
+   */
+  const butuhAset = scene.clips.filter(
+    (clip) => clip.type !== "template-anim" && clip.type !== "solid",
+  );
+  if (butuhAset.length === 0) {
     asset = "n/a";
   } else {
-    const resolved = sceneAsset(plan, scene);
+    const resolved = butuhAset.every((clip) => clipAsset(plan, clip.id) !== undefined);
     const run = runFor(runs, scene.id, "assets");
-    if (primaryClip(scene).pinned && resolved) {
+    if (butuhAset.every((clip) => clip.pinned) && resolved) {
       asset = "pinned";
     } else if (resolved) {
       asset = run?.fallback ? "fallback" : "ok";

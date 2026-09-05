@@ -7,7 +7,6 @@ import {
   MIN_TRANSITION_FRAMES,
   MOTIONS,
   type PatchOpInput,
-  primaryClip,
   type Scene,
   type ScenePlan,
   TEXT_ALIGNS,
@@ -34,7 +33,7 @@ import {
   IconSearch,
   IconTrash,
 } from "../icons";
-import { clipMidFrame, planMeta } from "../model/plan-meta";
+import { clipMidFrame, planMeta, selectedClip } from "../model/plan-meta";
 import { playback } from "../playback";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
@@ -772,9 +771,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
    * filternya di potongan pertama — dan sebelas sisanya diam-diam tak
    * tersentuh oleh kendali yang tampak berlaku untuk semuanya.
    */
-  const clip =
-    scene.clips.find((candidate) => candidate.id === selectedClipId) ??
-    primaryClip(scene);
+  const clip = selectedClip(scene, selectedClipId);
   const [query, setQuery] = useState(clip.query ?? "");
   useEffect(() => setQuery(clip.query ?? ""), [clip]);
 

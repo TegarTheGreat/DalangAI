@@ -1,18 +1,18 @@
 import {
   type AudioTrack,
   type ClipAudio,
+  clipAsset,
   LOUDNESS_TARGETS,
   type PatchOpInput,
-  primaryClip,
   type Scene,
   type ScenePlan,
-  sceneAsset,
   uniqueTrackId,
 } from "@dalang/core";
 import { useState } from "react";
 import { Segmented, Switch } from "../components/controls";
 import { IconTrash, IconWave } from "../icons";
-import { studioClient } from "../use-studio";
+import { selectedClip } from "../model/plan-meta";
+import { studioClient, useStudio } from "../use-studio";
 import { ClipAudioControls } from "./ClipAudioControls";
 import { SliderRow } from "./InspectorPanel";
 
@@ -36,30 +36,50 @@ export const AudioTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
   scene,
 }) => {
   const target = plan.meta.loudnessTarget;
-  const asset = sceneAsset(plan, scene);
+  /**
+   * Amplop suara milik POTONGAN TERPILIH, bukan selalu potongan pertama
+   * (ADR-0033).
+   *
+   * Tab Visual sudah menyasar potongan terpilih sejak fase 2; tab ini tidak,
+   * jadi memilih potongan ketiga lalu membuka tab Audio menyetel volume
+   * potongan PERTAMA — tanpa satu pun tanda di layar. Dua tab yang menyasar
+   * benda berbeda dari satu pilihan yang sama adalah cara termudah membuat
+   * orang mengira setelannya tidak tersimpan.
+   */
+  const { selectedClipId } = useStudio();
+  const clip = selectedClip(scene, selectedClipId);
+  const asset = clipAsset(plan, clip.id);
+  const label = scene.clips.length > 1 ? clip.id : scene.id;
 
   return (
     <>
       <section className="prop-group">
-        <h4>Klip ini — {scene.id}</h4>
+        <h4>Klip ini — {label}</h4>
         {asset?.kind === "video" ? (
           <ClipAudioControls
-            audio={primaryClip(scene).audio}
+            audio={clip.audio}
             lufs={asset.lufs}
             channels={asset.channels}
             targetLufs={target}
             onChange={(audio) =>
               void studioClient.applyPatch(
-                [{ op: "updateScene", id: scene.id, patch: { clip: { audio } } }],
-                `Suara aset ${scene.id}`,
+                [
+                  {
+                    op: "updateScene",
+                    id: scene.id,
+                    clipId: clip.id,
+                    patch: { clip: { audio } },
+                  },
+                ],
+                `Suara aset ${label}`,
               )
             }
           />
         ) : (
           <p className="group-hint">
-            Aset scene ini bukan video, jadi tidak punya suara bawaan. Suara alami hanya
-            ada pada aset video — untuk bunyi lain, pakai trek audio di bawah atau efek
-            suara di tab Scene.
+            Aset {scene.clips.length > 1 ? `potongan ${label}` : "scene ini"} bukan video,
+            jadi tidak punya suara bawaan. Suara alami hanya ada pada aset video — untuk
+            bunyi lain, pakai trek audio di bawah atau efek suara di tab Scene.
           </p>
         )}
       </section>

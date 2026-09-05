@@ -1,7 +1,12 @@
 import { parseScenePlan } from "@dalang/core";
 import { clipFrameSpans } from "@dalang/templates/layout";
 import { describe, expect, it } from "vitest";
-import { clipMidFrame, planMeta, sceneThumbFrame } from "../src/app/model/plan-meta";
+import {
+  clipMidFrame,
+  planMeta,
+  sceneThumbFrame,
+  selectedClip,
+} from "../src/app/model/plan-meta";
 import { deriveSceneStatus } from "../src/app/model/scene-status";
 import { SseParser } from "../src/app/sse";
 import type { BusyState, StageRunLite } from "../src/shared/api-types";
@@ -99,6 +104,86 @@ describe("deriveSceneStatus", () => {
     const status = deriveSceneStatus(withState, withState.scenes[1]!, [], idle);
     expect(status.voice).toBe("fallback");
     expect(status.asset).toBe("pinned");
+  });
+});
+
+describe("deriveSceneStatus untuk scene berklip banyak (ADR-0033)", () => {
+  const berklip = (clipAssets: Record<string, unknown>, pinned = false) =>
+    parseScenePlan({
+      ...makePlan(),
+      scenes: [
+        {
+          id: "sc-multi",
+          narration: "Satu kalimat, tiga potongan.",
+          clips: [
+            { id: "k1", type: "stock", durationSec: 3, pinned },
+            { id: "k2", type: "stock", durationSec: 3, pinned },
+            { id: "k3", type: "stock", durationSec: 3, pinned },
+          ],
+        },
+      ],
+      renderState: { narrationAudio: {}, clipAssets },
+    });
+  const aset = (file: string) => ({ file, kind: "image" as const, source: "local" });
+
+  /**
+   * Lencana yang mengatakan "ok" padahal dua potongan belum punya berkas
+   * adalah lencana yang menyuruh orang merender video yang akan menampilkan
+   * latar prosedural di tengah scene.
+   */
+  it("belum siap selama masih ada potongan tanpa berkas", () => {
+    const plan = berklip({ k1: aset("a.png") });
+    const scene = plan.scenes[0];
+    if (!scene) throw new Error("scene hilang");
+    expect(deriveSceneStatus(plan, scene, [], idle).asset).toBe("belum");
+  });
+
+  it("ok setelah SEMUA potongan punya berkas", () => {
+    const plan = berklip({ k1: aset("a.png"), k2: aset("b.png"), k3: aset("c.png") });
+    const scene = plan.scenes[0];
+    if (!scene) throw new Error("scene hilang");
+    expect(deriveSceneStatus(plan, scene, [], idle).asset).toBe("ok");
+  });
+
+  it("pinned hanya kalau seluruh potongan dipilih tangan", () => {
+    const semua = berklip(
+      { k1: aset("a.png"), k2: aset("b.png"), k3: aset("c.png") },
+      true,
+    );
+    const scene = semua.scenes[0];
+    if (!scene) throw new Error("scene hilang");
+    expect(deriveSceneStatus(semua, scene, [], idle).asset).toBe("pinned");
+  });
+});
+
+describe("selectedClip", () => {
+  const scene = parseScenePlan({
+    ...makePlan(),
+    scenes: [
+      {
+        id: "sc-multi",
+        narration: "Tiga potongan.",
+        clips: [
+          { id: "k1", type: "stock", durationSec: 3 },
+          { id: "k2", type: "stock", durationSec: 3 },
+        ],
+      },
+    ],
+  }).scenes[0];
+  if (!scene) throw new Error("scene hilang");
+
+  it("menjawab potongan yang dipilih", () => {
+    expect(selectedClip(scene, "k2").id).toBe("k2");
+  });
+
+  /**
+   * Pilihan yang menunjuk klip yang sudah tidak ada (baru dibuang, atau
+   * scene-nya berganti) jatuh ke potongan pertama — bukan undefined yang harus
+   * dijaga tiap pemanggil, dan bukan galat di tengah panel yang sedang dibuka.
+   */
+  it("jatuh ke potongan pertama saat pilihannya kosong atau sudah hilang", () => {
+    expect(selectedClip(scene, null).id).toBe("k1");
+    expect(selectedClip(scene, "klip-yang-sudah-dibuang").id).toBe("k1");
   });
 });
 

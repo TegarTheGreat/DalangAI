@@ -73,6 +73,42 @@ describe("critiquePlan", () => {
     expect(codes(plan)).toContain("gerak-monoton");
   });
 
+  /**
+   * Dihitung per POTONGAN, bukan per scene (ADR-0033).
+   *
+   * Mata penonton melihat potongan: satu scene berisi tiga potongan yang
+   * semuanya kenburns-in terasa persis semonoton tiga scene yang begitu, dan
+   * pemeriksaan per-scene menganggapnya satu.
+   */
+  it("gerak seragam antar KLIP di dalam satu scene ikut tertangkap", () => {
+    // Dibuat lewat parseScenePlan, bukan objek tangan: kritik membaca field
+    // yang diisi default skema (layers, texts, graphics), dan plan tangan yang
+    // kekurangan salah satunya gagal karena alasan yang bukan inti testnya.
+    const plan = parseScenePlan({
+      version: 2,
+      projectId: "uji-kritik-klip",
+      meta: { title: "Uji Kritik Klip" },
+      audio: {},
+      scenes: [
+        {
+          id: "sc-multi",
+          narration: "Satu kalimat, tiga potongan gambar berturut-turut.",
+          clips: [
+            { id: "k1", type: "stock", motion: "kenburns-in", durationSec: 3 },
+            { id: "k2", type: "stock", motion: "kenburns-in", durationSec: 3 },
+            { id: "k3", type: "stock", motion: "kenburns-in", durationSec: 3 },
+          ],
+        },
+      ],
+    });
+    expect(codes(plan)).toContain("gerak-monoton");
+
+    // Satu potongan yang berbeda sudah cukup memutus keluhannya.
+    const clips = plan.scenes[0]?.clips as { motion: string }[];
+    (clips[1] as { motion: string }).motion = "pan-left";
+    expect(codes(plan)).not.toContain("gerak-monoton");
+  });
+
   it("transisi seragam (tipe+tempo) tertangkap pada >=4 scene", () => {
     const plan = basePlan();
     for (const s of plan.scenes) {
