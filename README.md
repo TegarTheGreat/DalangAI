@@ -229,7 +229,9 @@ berikutnya.
   semuanya sejauh yang sama dalam satu patch, jadi satu undo mengembalikan
   semuanya.
 - **Potongan di dalam satu scene** (maks 24): belah, geser tepi, buang, susun
-  ulang. Menggeser tepi punya dua rasa — `ripple` memanjangkan atau memendekkan
+  ulang. Contoh siap-render ada di
+  [`examples/klip-borobudur`](examples/klip-borobudur/) — satu narasi, tiga
+  potongan, satu potong keras dan satu larut; CI merendernya tiap kali. Menggeser tepi punya dua rasa — `ripple` memanjangkan atau memendekkan
   scene-nya, `roll` menukar durasi dengan potongan tetangga sehingga panjang
   scene tidak berubah dan yang bergerak hanya titik potongnya. Aritmetikanya
   hidup di core dan mengekspor BATASNYA, jadi seretan pointer berhenti di tempat
@@ -622,6 +624,7 @@ packages/
 examples/
   borobudur-60s/   demo dokumenter + aset lokal berlisensi tercatat
   tutorial-studio/ demo tutorial dari tangkapan layar Dalang Studio sendiri
+  klip-borobudur/  demo klip: satu scene, tiga potongan gambar (ADR-0033)
 docs/
   PRD.md           dokumen produk (sumber kebenaran)
   decisions/       ADR

@@ -73,7 +73,9 @@ jobs:
         run: pnpm --filter @dalang/studio gate:interaksi
 
       - name: Validate demo scene-plan
-        run: pnpm dalang validate examples/borobudur-60s/plan.json
+        run: |
+          pnpm dalang validate examples/borobudur-60s/plan.json
+          pnpm dalang validate examples/klip-borobudur/plan.json
 
       # Real still render through the full stack (bundle → Chromium → PNG):
       # the template-regression safety net (R-8 precursor). Uses the runner's
@@ -96,6 +98,14 @@ jobs:
           test -s /tmp/smoke/tutorial-studio-f240.png
           test -s /tmp/smoke/tutorial-studio-f540.png
           test -s /tmp/smoke/tutorial-studio-f645.png
+          # ADR-0033: satu-satunya contoh berklip banyak. Tanpa langkah ini
+          # jalur ClipStrip — potong keras dan TransitionSeries DI DALAM satu
+          # scene — tidak pernah benar-benar dirender di CI. Detik 9,13 adalah
+          # titik potong klip 2 ke klip 3, yaitu tengah larutnya.
+          pnpm dalang still examples/klip-borobudur/plan.json -t 5 9.13 11 -s 0.25 -o /tmp/smoke
+          test -s /tmp/smoke/klip-borobudur-f150.png
+          test -s /tmp/smoke/klip-borobudur-f274.png
+          test -s /tmp/smoke/klip-borobudur-f330.png
 
       # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)
       # ATAU dari URL (render cloud). Gerbang ini merender kedua jalur dan
@@ -115,6 +125,9 @@ jobs:
           # Kedua contoh, bukan satu: tutorial-studio memakai anotasi dan
           # preset lain, dan cabang "scene tanpa aset" berperilaku berbeda.
           pnpm --filter @dalang/interop gate:interop examples/tutorial-studio/plan.json
+          # Contoh berklip banyak: di sini pemetaan satu-klip-per-KLIP diuji
+          # atas plan yang MEMANG berklip banyak, bukan varian bikinan gerbang.
+          pnpm --filter @dalang/interop gate:interop examples/klip-borobudur/plan.json
 
       # ADR-0033: skema naik ke v2 dan `parseScenePlan` memigrasikan plan v1.
       # Unit test migrasi hanya membuktikan bentuknya cocok dengan yang

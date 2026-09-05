@@ -326,7 +326,15 @@ tidak dikarang belakangan agar cocok dengan hasil.
    dengan dua mutasi: menggeser awal klip satu bingkai dan mematikan ekspor
    transisi di dalam scene, dua-duanya merah sekarang dan salah satunya hijau
    sebelum ini.
-9. **Kartu potongan mengirim patch, bukan cuma menyala.** SUDAH — gerbang
+9. **Contoh yang benar-benar berklip banyak, dirender CI.** SUDAH —
+   `examples/klip-borobudur`: satu narasi, tiga potongan, satu potong keras dan
+   satu larut. Sebelum ini kedua contoh repo berklip satu, jadi `ClipStrip`
+   tidak pernah dirender di CI sama sekali dan klaimnya bersandar pada satu
+   render manual. Contohnya ikut render smoke (termasuk bingkai tepat di tengah
+   larut antar klip) dan gerbang interop, tapi TIDAK ikut gerbang paritas
+   migrasi: v1 tidak punya bentuk untuk scene berklip banyak, jadi
+   menurunkannya mustahil.
+10. **Kartu potongan mengirim patch, bukan cuma menyala.** SUDAH — gerbang
    interaksi menekan kartunya lewat pointer CDP dan memeriksa PLAN DI SERVER:
    `transition` muncul sebagai cross-fade, lalu benar-benar HILANG (bukan jadi
    tipe `none`) setelah kartu potong keras ditekan.

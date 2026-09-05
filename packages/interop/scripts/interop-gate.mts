@@ -512,7 +512,11 @@ const jalankan = (plan: ScenePlan, label: string, slug: string): string[] => {
  * Mengembalikan kalimat alasan (bukan null) kalau tidak bisa: gerbang yang
  * melewati separuh dirinya dalam diam adalah gerbang yang tidak terbukti ada.
  */
-const variantMultiKlip = (plan: ScenePlan): ScenePlan | string => {
+const variantMultiKlip = (plan: ScenePlan): ScenePlan | string | null => {
+  // Plan yang MEMANG sudah berklip banyak tidak perlu varian: jalur satu klip
+  // per KLIP sudah dijalani oleh plan aslinya sendiri, dan membelahnya lagi
+  // hanya menguji hal yang sama dua kali.
+  if (plan.scenes.some((scene) => scene.clips.length > 1)) return null;
   const target = plan.scenes.find(
     (scene) =>
       scene.clips.length === 1 &&
@@ -562,6 +566,8 @@ const problems = jalankan(basePlan, "apa adanya", "asli");
 const varian = variantMultiKlip(basePlan);
 if (typeof varian === "string") {
   problems.push(varian);
+} else if (varian === null) {
+  console.log("  (plan ini memang sudah berklip banyak — varian tidak dibuat)");
 } else {
   problems.push(...jalankan(varian, "varian berklip tiga", "multiklip"));
 }
