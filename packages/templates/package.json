@@ -6,8 +6,12 @@
   "description": "Curated Remotion style presets — the visual language of Dalang videos",
   "exports": {
     ".": "./src/index.ts",
+    "./video": "./src/DalangVideo.tsx",
     "./paths": "./src/paths.ts",
-    "./layout": "./src/layout.ts"
+    "./layout": "./src/layout.ts",
+    "./review-frames": "./src/review-frames.ts",
+    "./fonts": "./src/fonts.ts",
+    "./music": "./src/music.ts"
   },
   "scripts": {
     "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",

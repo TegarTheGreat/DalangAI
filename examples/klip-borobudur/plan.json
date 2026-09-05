@@ -1,0 +1,160 @@
+{
+  "$schema": "../../packages/core/schema/scene-plan.v2.schema.json",
+  "version": 2,
+  "projectId": "demo-klip-borobudur",
+  "meta": {
+    "title": "Satu Kalimat, Banyak Potongan",
+    "aspectRatio": "9:16",
+    "language": "id",
+    "stylePreset": "documentary-01"
+  },
+  "audio": {
+    "music": {
+      "assetId": "pustaka:tenang",
+      "volume": 0.12,
+      "ducking": true
+    }
+  },
+  "scenes": [
+    {
+      "id": "sc-title",
+      "locked": false,
+      "narration": "Satu gagasan boleh dibawa beberapa potongan gambar.",
+      "caption": {
+        "enabled": false,
+        "style": "inherit"
+      },
+      "duration": 4,
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 20
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-title-k1",
+          "type": "template-anim",
+          "variant": "title",
+          "motion": "none",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "sc-batu",
+      "locked": false,
+      "narration": "Dua juta balok andesit disusun tanpa semen sedikit pun, saling mengunci seperti teka-teki raksasa yang tak pernah goyah.",
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
+      "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 15
+      },
+      "texts": [
+        {
+          "id": "sc-batu-hook",
+          "content": "Tanpa semen",
+          "role": "kicker",
+          "position": "top",
+          "align": "center",
+          "size": "l",
+          "emphasis": "box",
+          "anim": "rise",
+          "uppercase": true,
+          "tracking": 0.08,
+          "startFrac": 0,
+          "endFrac": 0.34
+        }
+      ],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-batu-k1",
+          "type": "stock",
+          "query": "andesite stone wall closeup",
+          "assetId": "local/bg-stone",
+          "motion": "pan-right",
+          "pinned": true,
+          "durationSec": 3.2
+        },
+        {
+          "id": "sc-batu-k2",
+          "type": "stock",
+          "query": "temple relief panel carving",
+          "assetId": "local/bg-relief",
+          "motion": "kenburns-in",
+          "pinned": true,
+          "durationSec": 2.6,
+          "transition": {
+            "type": "cross-fade",
+            "durationFrames": 18
+          }
+        },
+        {
+          "id": "sc-batu-k3",
+          "type": "stock",
+          "query": "stupa silhouette at dawn",
+          "assetId": "local/bg-stupa-dawn",
+          "motion": "kenburns-out",
+          "pinned": true,
+          "durationSec": 3.4
+        }
+      ]
+    },
+    {
+      "id": "sc-outro",
+      "locked": false,
+      "narration": "Satu narasi, satu caption, tiga potongan.",
+      "caption": {
+        "enabled": false,
+        "style": "inherit"
+      },
+      "duration": 4,
+      "transition": {
+        "type": "none",
+        "durationFrames": 15
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-outro-k1",
+          "type": "template-anim",
+          "variant": "outro",
+          "motion": "none",
+          "pinned": false
+        }
+      ]
+    }
+  ],
+  "renderState": {
+    "narrationAudio": {},
+    "clipAssets": {
+      "sc-batu-k1": {
+        "file": "assets/bg-stone.svg",
+        "kind": "image",
+        "source": "local",
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
+      },
+      "sc-batu-k2": {
+        "file": "assets/bg-relief.svg",
+        "kind": "image",
+        "source": "local",
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
+      },
+      "sc-batu-k3": {
+        "file": "assets/bg-stupa-dawn.svg",
+        "kind": "image",
+        "source": "local",
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
+      }
+    }
+  }
+}

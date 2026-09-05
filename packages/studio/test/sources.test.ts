@@ -1,0 +1,815 @@
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
+import type { MediaProbeInfo, MediaTranscoder } from "@dalang/pipeline";
+import { afterEach, describe, expect, it } from "vitest";
+import type {
+  PeaksResponse,
+  ProjectStatePayload,
+  ProxyJobLite,
+  RegisterSourceResponse,
+  SourcesResponse,
+} from "../src/shared/api-types";
+import { call, callJson, collectSse, makeStudio, makeTempProject } from "./helpers";
+
+/**
+ * Sumber rekaman & proxy di panel MANUAL (ADR-0028).
+ *
+ * Yang dijaga: rekaman bisa masuk proyek TANPA agent (unggah streaming ke
+ * disk, bukan data URL), pemasangannya jadi patch user yang bisa di-undo,
+ * proxy-nya tercatat di renderState dan tersaji lewat mount media, thumbnail
+ * dan gelombang di-cache di disk, dan mesin tanpa transkoder mengatakan apa
+ * yang tidak bisa ia lakukan — bukan pura-pura.
+ */
+
+const LONG: MediaProbeInfo = {
+  durationSec: 1800,
+  width: 1920,
+  height: 1080,
+  fps: 30,
+  codec: "hevc",
+  hasAudio: true,
+  audioCodec: "aac",
+  channels: 2,
+  sampleRate: 48000,
+  bitrate: 8_000_000,
+  sizeBytes: 1,
+};
+
+const JPEG_STUB = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+
+const fakeTranscoder = (proxyDelayMs = 0) => {
+  const calls = { probe: 0, proxy: 0, frames: [] as number[], pcm: 0 };
+  const transcoder: MediaTranscoder = {
+    id: "fake-ff",
+    probe: async (sourcePath) => {
+      calls.probe += 1;
+      return sourcePath.endsWith(".mp4") || sourcePath.endsWith(".mov") ? LONG : null;
+    },
+    makeProxy: async (request, hooks) => {
+      calls.proxy += 1;
+      if (proxyDelayMs > 0) {
+        // Transkoder "lambat" yang menghormati sinyal — untuk menguji latar & batal.
+        const cancelled = await new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => resolve(false), proxyDelayMs);
+          hooks?.signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              resolve(true);
+            },
+            { once: true },
+          );
+        });
+        if (cancelled) return { ok: false, reason: "dibatalkan" };
+      }
+      hooks?.onProgress?.(1);
+      mkdirSync(join(request.outputPath, ".."), { recursive: true });
+      writeFileSync(request.outputPath, "proxy-uji");
+      return {
+        ok: true,
+        width: request.width,
+        height: request.height,
+        durationSec: LONG.durationSec,
+        fps: request.fps ?? LONG.fps,
+      };
+    },
+    extractFrame: async (_source, atSec, outputPath) => {
+      calls.frames.push(atSec);
+      mkdirSync(join(outputPath, ".."), { recursive: true });
+      writeFileSync(outputPath, JPEG_STUB);
+      return { ok: true };
+    },
+    toWav: async () => ({ ok: true }),
+    decodeMonoPcm: async () => {
+      calls.pcm += 1;
+      const pcm = new Int16Array(2000);
+      for (let i = 0; i < pcm.length; i++) pcm[i] = i < 1000 ? 0 : 16384;
+      return pcm;
+    },
+  };
+  return { transcoder, calls };
+};
+
+const cleanups: Array<() => void> = [];
+const boot = (
+  options: { transcoder?: boolean; proxyDelayMs?: number } = { transcoder: true },
+) => {
+  const { dir, planPath } = makeTempProject();
+  mkdirSync(join(dir, "assets"), { recursive: true });
+  writeFileSync(join(dir, "assets/podcast.mp4"), "rekaman palsu satu");
+  writeFileSync(join(dir, "assets/catatan.txt"), "bukan media");
+  const fake = fakeTranscoder(options.proxyDelayMs ?? 0);
+  const studio = makeStudio(
+    planPath,
+    options.transcoder === false ? {} : { transcoder: () => fake.transcoder },
+  );
+  cleanups.push(() => {
+    studio.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  return { studio, dir, planPath, calls: fake.calls };
+};
+
+afterEach(() => {
+  while (cleanups.length > 0) cleanups.pop()?.();
+});
+
+const getProject = async (studio: ReturnType<typeof boot>["studio"]) =>
+  (await callJson<ProjectStatePayload>(studio, "/api/project")).body;
+
+/** Tunggu sesuatu yang dikerjakan DI LATAR muncul (proxy, pekerjaan selesai). */
+const waitFor = async <T>(
+  probe: () => Promise<T | null | undefined | false>,
+  timeoutMs = 4000,
+): Promise<T> => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await probe();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error("menunggu pekerjaan latar terlalu lama");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+};
+const proxyOfScene = (project: ProjectStatePayload, sceneId: string) =>
+  // Dikunci id KLIP (ADR-0033); uji ini bicara dalam id scene seperti
+  // penggunanya, jadi terjemahannya di sini.
+  project.plan?.renderState.clipAssets[`${sceneId}-k1`]?.proxy ?? null;
+
+describe("GET /api/sources", () => {
+  it("mendaftar rekaman di folder proyek dengan fakta, pemakai, dan keputusan proxy", async () => {
+    const { studio } = boot();
+    const { status, body } = await callJson<SourcesResponse>(studio, "/api/sources");
+    expect(status).toBe(200);
+    expect(body.transcoder).toBe(true);
+    expect(body.sources.map((s) => s.file)).toEqual(["assets/podcast.mp4"]);
+    const source = body.sources[0]!;
+    expect(source.kind).toBe("video");
+    expect(source.probe?.codec).toBe("hevc");
+    expect(source.usedBy).toEqual({ sceneIds: [], layerIds: [] });
+    expect(source.proxy).toBeNull();
+    expect(source.proxyDecision?.needed).toBe(true);
+    expect(source.proxyDecision?.reason).toContain("hevc");
+  });
+
+  it("tanpa transkoder daftar tetap ada, dan transcoder=false dikatakan", async () => {
+    const { studio } = boot({ transcoder: false });
+    const { body } = await callJson<SourcesResponse>(studio, "/api/sources");
+    expect(body.transcoder).toBe(false);
+    // probeVideo palsu lama masih memberi durasi/dimensi untuk .mp4.
+    expect(body.sources[0]?.probe?.durationSec).toBe(600);
+    expect(body.sources[0]?.probe?.codec).toBeNull();
+  });
+});
+
+/**
+ * Unggahan dikirim sebagai Request MENTAH: helper `call` menulis header
+ * content-type JSON untuk setiap body, dan yang diuji di sini justru body
+ * biner beserta header content-length-nya.
+ */
+const upload = (
+  studio: ReturnType<typeof boot>["studio"],
+  name: string,
+  body: Buffer,
+  headers: Record<string, string> = {},
+) =>
+  Promise.resolve(
+    studio.app.fetch(
+      new Request(
+        `http://studio.local/api/sources/upload?name=${encodeURIComponent(name)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream", ...headers },
+          body: new Uint8Array(body),
+        },
+      ),
+    ),
+  );
+
+describe("POST /api/sources/upload (streaming)", () => {
+  it("menulis body mentah ke assets/rekaman dengan nama ber-hash, lalu mendeskripsikannya", async () => {
+    const { studio, dir } = boot();
+    const bytes = Buffer.alloc(300_000, 7);
+    const response = await upload(studio, "Wawancara Pagi.MOV", bytes);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: true; file: string; existed: boolean };
+    expect(body.file).toMatch(/^assets\/rekaman\/wawancara-pagi-[0-9a-f]{10}\.mov$/);
+    expect(body.existed).toBe(false);
+    expect(readFileSync(join(dir, body.file)).equals(bytes)).toBe(true);
+    // Tidak ada berkas sementara yang tertinggal.
+    expect(existsSync(join(dir, "assets/rekaman"))).toBe(true);
+
+    // Unggahan yang sama persis tidak disalin dua kali.
+    const again = await upload(studio, "lain.mov", bytes);
+    const second = (await again.json()) as { file: string; existed: boolean };
+    expect(second.existed).toBe(true);
+    expect(second.file).toBe(body.file);
+  });
+
+  it("menolak ekstensi yang bukan media dan berkas kosong", async () => {
+    const { studio } = boot();
+    expect((await upload(studio, "virus.exe", Buffer.from("x"))).status).toBe(400);
+    expect((await upload(studio, "kosong.mp4", Buffer.alloc(0))).status).toBe(400);
+  });
+
+  it("menolak yang melampaui batas DALANG_MAX_UPLOAD_MB, sebelum maupun selama streaming", async () => {
+    const { studio, dir } = boot();
+    const before = process.env.DALANG_MAX_UPLOAD_MB;
+    process.env.DALANG_MAX_UPLOAD_MB = "0.0001"; // ~105 byte
+    try {
+      const declared = await upload(studio, "besar.mp4", Buffer.alloc(10), {
+        "content-length": "10000000",
+      });
+      expect(declared.status).toBe(413);
+      const streamed = await upload(studio, "besar.mp4", Buffer.alloc(5000));
+      expect(streamed.status).toBe(413);
+      // Berkas parsial dibersihkan: folder rekaman tidak menyimpan sisa .part.
+      const leftovers = existsSync(join(dir, "assets/rekaman"))
+        ? readdirSync(join(dir, "assets/rekaman")).filter((name) =>
+            name.endsWith(".part"),
+          )
+        : [];
+      expect(leftovers).toEqual([]);
+    } finally {
+      if (before === undefined) delete process.env.DALANG_MAX_UPLOAD_MB;
+      else process.env.DALANG_MAX_UPLOAD_MB = before;
+    }
+  });
+});
+
+describe("POST /api/sources/register", () => {
+  it("memasang rekaman ke scene sebagai patch user ter-pin, membuat proxy, dan bisa di-undo", async () => {
+    const { studio, dir, calls } = boot();
+    const { status, body } = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          file: "assets/podcast.mp4",
+          sceneId: "sc-batu",
+          trimStartSec: 90,
+        }),
+      },
+    );
+    expect(status).toBe(200);
+    expect(body.codec).toBe("hevc");
+    // Proxy dibuat DI LATAR (ADR-0028 §10): jawabannya segera dan mengatakannya;
+    // proxy-nya menyusul ke plan hidup tanpa mengunci editor.
+    expect(body.proxyNote).toContain("di latar");
+    const settled = await waitFor(async () =>
+      proxyOfScene(await getProject(studio), "sc-batu"),
+    );
+    expect(settled).toMatchObject({ width: 960, height: 540 });
+    expect(calls.proxy).toBe(1);
+    expect(existsSync(join(dir, settled.file))).toBe(true);
+
+    const project = await getProject(studio);
+    const scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
+    expect(scene?.clips[0]?.assetId).toBe("assets/podcast.mp4");
+    expect(scene?.clips[0]?.pinned).toBe(true);
+    expect(scene?.clips[0]?.trimStartSec).toBe(90);
+    const asset = project.plan?.renderState.clipAssets["sc-batu-k1"];
+    expect(asset?.kind).toBe("video");
+    expect(asset?.codec).toBe("hevc");
+    expect(asset?.proxy?.file.startsWith(".dalang/proxies/")).toBe(true);
+    expect(project.patchLog.recent.at(-1)?.origin).toBe("user");
+    expect(
+      project.stageRuns.some((run) => run.stage === "proxy" && run.status === "done"),
+    ).toBe(true);
+
+    // Daftar sumber kini menyebut pemakainya dan proxy-nya.
+    const sources = (await callJson<SourcesResponse>(studio, "/api/sources")).body;
+    expect(sources.sources[0]?.usedBy.sceneIds).toEqual(["sc-batu"]);
+    expect(sources.sources[0]?.proxy?.width).toBe(960);
+
+    // Urungkan mengembalikan visual scene; proxy (data turunan) boleh tinggal.
+    await call(studio, "/api/undo", { method: "POST" });
+    const undone = await getProject(studio);
+    expect(undone.plan?.scenes.find((s) => s.id === "sc-batu")?.clips[0]?.pinned).toBe(
+      false,
+    );
+  });
+
+  /**
+   * Menaruh rekaman ke POTONGAN tertentu (ADR-0033).
+   *
+   * Tanpa `clipId`, rekaman selalu mendarat di potongan pertama — dan yang
+   * menaruhnya baru sadar setelah melihat potongan yang salah berganti gambar.
+   */
+  it("memasang ke KLIP lewat clipId, bukan selalu ke potongan pertama", async () => {
+    const { studio } = boot();
+    // sc-batu jadi dua potongan dulu, lewat op yang sama dengan yang dipakai
+    // bilah belah di timeline.
+    await call(studio, "/api/patch", {
+      method: "POST",
+      body: JSON.stringify({
+        ops: [
+          {
+            op: "setClips",
+            sceneId: "sc-batu",
+            clips: [
+              { id: "sc-batu-k1", type: "stock", durationSec: 4 },
+              { id: "sc-batu-k2", type: "stock", durationSec: 3 },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const { status } = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          file: "assets/podcast.mp4",
+          sceneId: "sc-batu",
+          clipId: "sc-batu-k2",
+          trimStartSec: 30,
+        }),
+      },
+    );
+    expect(status).toBe(200);
+
+    const project = await getProject(studio);
+    const scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
+    expect(scene?.clips[1]?.assetId).toBe("assets/podcast.mp4");
+    expect(scene?.clips[1]?.pinned).toBe(true);
+    expect(scene?.clips[1]?.trimStartSec).toBe(30);
+    expect(project.plan?.renderState.clipAssets["sc-batu-k2"]?.kind).toBe("video");
+    // Potongan pertama tidak tersentuh sama sekali.
+    expect(scene?.clips[0]?.pinned).toBe(false);
+    expect(project.plan?.renderState.clipAssets["sc-batu-k1"]).toBeUndefined();
+  });
+
+  it("menolak clipId yang tidak ada di scene itu, dengan menyebut klipnya", async () => {
+    const { studio } = boot();
+    const { status, body } = await callJson<{ error: string }>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          file: "assets/podcast.mp4",
+          sceneId: "sc-batu",
+          clipId: "klip-hantu",
+        }),
+      },
+    );
+    expect(status).toBe(400);
+    expect(body.error).toContain("klip-hantu");
+  });
+
+  it("memasang ke LAPISAN lewat layerId, dengan titik masuk lapisan", async () => {
+    const { studio } = boot();
+    await call(studio, "/api/patch", {
+      method: "POST",
+      body: JSON.stringify({
+        ops: [
+          {
+            op: "updateScene",
+            id: "sc-batu",
+            patch: {
+              layers: [
+                {
+                  id: "lap-uji",
+                  visual: { type: "stock" },
+                  anchor: "kanan-bawah",
+                  width: 0.3,
+                  height: 0.3,
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+    const { status } = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          file: "assets/podcast.mp4",
+          sceneId: "sc-batu",
+          layerId: "lap-uji",
+          trimStartSec: 12.5,
+        }),
+      },
+    );
+    expect(status).toBe(200);
+    const project = await getProject(studio);
+    const layer = project.plan?.scenes.find((s) => s.id === "sc-batu")?.layers[0];
+    expect(layer?.visual.assetId).toBe("assets/podcast.mp4");
+    expect(layer?.visual.pinned).toBe(true);
+    expect(layer?.visual.trimStartSec).toBe(12.5);
+    const proxy = await waitFor(
+      async () =>
+        (await getProject(studio)).plan?.renderState.layerAssets["lap-uji"]?.proxy,
+    );
+    expect(proxy.width).toBe(960);
+  });
+
+  it("menolak path keluar folder, berkas hilang, bukan-video, scene terkunci", async () => {
+    const { studio } = boot();
+    const post = (body: unknown) =>
+      callJson<{ error: string }>(studio, "/api/sources/register", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    expect((await post({ file: "../rahasia.mp4", sceneId: "sc-batu" })).status).toBe(400);
+    expect(
+      (await post({ file: "assets/tidak-ada.mp4", sceneId: "sc-batu" })).status,
+    ).toBe(404);
+    expect((await post({ file: "assets/catatan.txt", sceneId: "sc-batu" })).status).toBe(
+      400,
+    );
+    await call(studio, "/api/patch", {
+      method: "POST",
+      body: JSON.stringify({ ops: [{ op: "lockScene", id: "sc-batu", locked: true }] }),
+    });
+    const locked = await post({ file: "assets/podcast.mp4", sceneId: "sc-batu" });
+    expect(locked.status).toBe(400);
+    expect(locked.body.error).toContain("terkunci");
+  });
+
+  it("tanpa transkoder tetap memasang, tanpa proxy, dan mengatakannya", async () => {
+    const { studio } = boot({ transcoder: false });
+    const { body } = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({ file: "assets/podcast.mp4", sceneId: "sc-batu" }),
+      },
+    );
+    expect(body.ok).toBe(true);
+    expect(body.proxy).toBeNull();
+    expect(body.proxyNote).toContain("tidak ada transkoder");
+    const project = await getProject(studio);
+    expect(project.plan?.renderState.clipAssets["sc-batu-k1"]?.durationSec).toBe(600);
+  });
+});
+
+describe("thumbnail, gelombang, mount proxy", () => {
+  it("thumb: bingkai pada detik yang diminta, di-cache di .dalang/thumbs, dipangkas ke durasi", async () => {
+    const { studio, dir, calls } = boot();
+    const first = await call(
+      studio,
+      "/api/sources/thumb?file=assets/podcast.mp4&t=600&h=54",
+    );
+    expect(first.status).toBe(200);
+    expect(first.headers.get("content-type")).toBe("image/jpeg");
+    expect(Buffer.from(await first.arrayBuffer()).equals(JPEG_STUB)).toBe(true);
+    expect(calls.frames).toEqual([600]);
+    // Kedua kalinya dari cache: transkoder tidak dipanggil lagi.
+    await call(studio, "/api/sources/thumb?file=assets/podcast.mp4&t=600&h=54");
+    expect(calls.frames).toEqual([600]);
+    expect(existsSync(join(dir, ".dalang/thumbs"))).toBe(true);
+    // Di luar durasi dipangkas, bukan ditolak.
+    await call(studio, "/api/sources/thumb?file=assets/podcast.mp4&t=99999&h=54");
+    expect(calls.frames[1]).toBeLessThan(LONG.durationSec);
+    // Path keluar folder ditolak.
+    expect((await call(studio, "/api/sources/thumb?file=../x.mp4")).status).toBe(400);
+  });
+
+  it("peaks: puncak per keranjang dari PCM mono, di-cache, dan hasAudio jujur", async () => {
+    const { studio, calls } = boot();
+    const { status, body } = await callJson<PeaksResponse>(
+      studio,
+      "/api/sources/peaks?file=assets/podcast.mp4&buckets=20",
+    );
+    expect(status).toBe(200);
+    expect(body.peaks).toHaveLength(20);
+    // Separuh pertama sunyi, separuh kedua setengah skala.
+    expect(body.peaks.slice(0, 10).every((p) => p === 0)).toBe(true);
+    expect(body.peaks.slice(10).every((p) => p === 0.5)).toBe(true);
+    expect(body.hasAudio).toBe(true);
+    expect(body.durationSec).toBe(LONG.durationSec);
+    await callJson<PeaksResponse>(
+      studio,
+      "/api/sources/peaks?file=assets/podcast.mp4&buckets=20",
+    );
+    expect(calls.pcm).toBe(1);
+  });
+
+  it("tanpa transkoder: thumb dan peaks menjawab 501 dengan alasan", async () => {
+    const { studio } = boot({ transcoder: false });
+    expect(
+      (await call(studio, "/api/sources/thumb?file=assets/podcast.mp4&t=1")).status,
+    ).toBe(501);
+    expect(
+      (await call(studio, "/api/sources/peaks?file=assets/podcast.mp4")).status,
+    ).toBe(501);
+  });
+
+  it("proxy tersaji lewat /.dalang/proxies/*, tapi pipeline.db tetap tertutup", async () => {
+    const { studio } = boot();
+    const { body } = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({ file: "assets/podcast.mp4", sceneId: "sc-batu" }),
+      },
+    );
+    // Proxy-nya dibuat di latar: tunggu ia tiba di plan, baru minta berkasnya.
+    expect(body.proxy).toBeNull();
+    const proxy = await waitFor(async () =>
+      proxyOfScene(await getProject(studio), "sc-batu"),
+    );
+    const served = await call(studio, `/${proxy.file}`);
+    expect(served.status).toBe(200);
+    expect(await served.text()).toBe("proxy-uji");
+    expect((await call(studio, "/.dalang/pipeline.db")).status).toBe(404);
+    expect((await call(studio, "/.dalang/thumbs/apa-saja.jpg")).status).toBe(404);
+  });
+});
+
+describe("POST /api/pipeline/proxies — di latar (ADR-0028 §10)", () => {
+  it("202 segera; kemajuan lewat event proxy-progress; hasilnya di plan hidup", async () => {
+    const { studio, calls } = boot({ transcoder: true, proxyDelayMs: 40 });
+    await call(studio, "/api/sources/register", {
+      method: "POST",
+      body: JSON.stringify({ file: "assets/podcast.mp4", sceneId: "sc-batu" }),
+    });
+    await waitFor(async () => proxyOfScene(await getProject(studio), "sc-batu"));
+    expect(calls.proxy).toBe(1);
+
+    const events = call(studio, "/api/events").then((response) =>
+      collectSse(response, (list) =>
+        list.some(
+          (event) =>
+            event.event === "proxy-progress" &&
+            JSON.parse(event.data).job.running === false,
+        ),
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const { status, body } = await callJson<{
+      started: boolean;
+      queued: boolean;
+      job: ProxyJobLite;
+    }>(studio, "/api/pipeline/proxies", {
+      method: "POST",
+      body: JSON.stringify({ force: true }),
+    });
+    expect(status).toBe(202);
+    expect(body.started).toBe(true);
+    expect(body.queued).toBe(false);
+    expect(body.job).toMatchObject({ running: true, total: 1 });
+
+    const seen = (await events)
+      .filter((event) => event.event === "proxy-progress")
+      .map((event) => JSON.parse(event.data).job as ProxyJobLite);
+    expect(seen.some((job) => job.running && job.file === "assets/podcast.mp4")).toBe(
+      true,
+    );
+    expect(seen.at(-1)).toMatchObject({
+      running: false,
+      done: 1,
+      failed: 0,
+      cancelled: false,
+    });
+    expect(calls.proxy).toBe(2);
+
+    const project = await getProject(studio);
+    expect(project.proxyJob).toBeNull();
+    expect(proxyOfScene(project, "sc-batu")?.width).toBe(960);
+    expect(
+      project.stageRuns.some((run) => run.stage === "proxy" && run.status === "done"),
+    ).toBe(true);
+  });
+
+  it("tanpa berkas video yang perlu: 200 dan mengatakannya, bukan pekerjaan kosong", async () => {
+    const { studio } = boot();
+    const { status, body } = await callJson<{ started: boolean; reason?: string }>(
+      studio,
+      "/api/pipeline/proxies",
+      { method: "POST", body: JSON.stringify({}) },
+    );
+    expect(status).toBe(200);
+    expect(body.started).toBe(false);
+    expect(body.reason).toContain("tidak ada");
+  });
+
+  it("editor tetap menerima patch selagi proxy dibuat, dan pembuatannya bisa dibatalkan", async () => {
+    const { studio, calls } = boot({ transcoder: true, proxyDelayMs: 600 });
+    const events = call(studio, "/api/events").then((response) =>
+      collectSse(response, (list) =>
+        list.some(
+          (event) =>
+            event.event === "proxy-progress" &&
+            JSON.parse(event.data).job.running === false,
+        ),
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const registered = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({ file: "assets/podcast.mp4", sceneId: "sc-batu" }),
+      },
+    );
+    expect(registered.status).toBe(200);
+    expect(registered.body.proxy).toBeNull();
+    expect((await getProject(studio)).proxyJob?.running).toBe(true);
+
+    // Selagi ffmpeg (palsu) berjalan: patch user TIDAK ditolak 409.
+    const patched = await call(studio, "/api/patch", {
+      method: "POST",
+      body: JSON.stringify({
+        ops: [{ op: "setMeta", patch: { title: "Diedit selagi proxy dibuat" } }],
+      }),
+    });
+    expect(patched.status).toBe(200);
+
+    const cancel = await callJson<{ cancelled: boolean }>(
+      studio,
+      "/api/pipeline/proxies/cancel",
+      { method: "POST" },
+    );
+    expect(cancel.body.cancelled).toBe(true);
+    const seen = (await events)
+      .filter((event) => event.event === "proxy-progress")
+      .map((event) => JSON.parse(event.data).job as ProxyJobLite);
+    expect(seen.at(-1)).toMatchObject({ running: false, cancelled: true, done: 0 });
+    expect(calls.proxy).toBe(1);
+
+    const project = await getProject(studio);
+    expect(project.plan?.meta.title).toBe("Diedit selagi proxy dibuat");
+    expect(proxyOfScene(project, "sc-batu")).toBeNull();
+    expect(project.proxyJob).toBeNull();
+    // Membatalkan lagi tanpa pekerjaan: jujur, false.
+    const again = await callJson<{ cancelled: boolean }>(
+      studio,
+      "/api/pipeline/proxies/cancel",
+      { method: "POST" },
+    );
+    expect(again.body.cancelled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-0028 §11: unggahan per potongan yang bisa dilanjutkan
+// ---------------------------------------------------------------------------
+
+const chunkUpload = (
+  studio: ReturnType<typeof boot>["studio"],
+  name: string,
+  id: string,
+  offset: number,
+  total: number,
+  body: Buffer,
+) =>
+  Promise.resolve(
+    studio.app.fetch(
+      new Request(
+        `http://studio.local/api/sources/upload?name=${encodeURIComponent(name)}&id=${id}&offset=${offset}&total=${total}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: new Uint8Array(body),
+        },
+      ),
+    ),
+  );
+
+const uploadOffset = async (
+  studio: ReturnType<typeof boot>["studio"],
+  id: string,
+  size?: number,
+): Promise<number> =>
+  (
+    await callJson<{ offset: number }>(
+      studio,
+      `/api/sources/upload/status?id=${id}${size !== undefined ? `&size=${size}` : ""}`,
+    )
+  ).body.offset;
+
+describe("POST /api/sources/upload per potongan (bisa dilanjutkan)", () => {
+  it("status memberi offset; offset salah 409 dengan offset benar; selesai = berkas utuh dengan nama/hash yang sama seperti unggahan sekali jalan", async () => {
+    const { studio, dir } = boot();
+    const bytes = Buffer.alloc(300_000, 7);
+    const id = "a1b2c3d4e5f60718";
+    expect(await uploadOffset(studio, id)).toBe(0);
+
+    const first = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      0,
+      bytes.length,
+      bytes.subarray(0, 100_000),
+    );
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ ok: true, done: false, offset: 100_000 });
+
+    // "Putus": klien baru (tab lain, esok hari) bertanya sampai mana, lalu
+    // lanjut dari sana. Mengulang dari 0 ditolak dengan offset yang benar.
+    expect(await uploadOffset(studio, id, bytes.length)).toBe(100_000);
+    const wrong = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      0,
+      bytes.length,
+      bytes.subarray(0, 100_000),
+    );
+    expect(wrong.status).toBe(409);
+    expect(await wrong.json()).toMatchObject({ offset: 100_000 });
+
+    const second = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      100_000,
+      bytes.length,
+      bytes.subarray(100_000, 200_000),
+    );
+    expect(await second.json()).toMatchObject({ ok: true, done: false, offset: 200_000 });
+    const last = await chunkUpload(
+      studio,
+      "Rekaman Panjang.mov",
+      id,
+      200_000,
+      bytes.length,
+      bytes.subarray(200_000),
+    );
+    expect(last.status).toBe(200);
+    const done = (await last.json()) as {
+      done: boolean;
+      file: string;
+      existed: boolean;
+      source: { file: string; sizeBytes: number };
+    };
+    expect(done.done).toBe(true);
+    expect(done.existed).toBe(false);
+    expect(done.file).toMatch(/^assets\/rekaman\/rekaman-panjang-[0-9a-f]{10}\.mov$/);
+    expect(done.source.sizeBytes).toBe(bytes.length);
+    expect(readFileSync(join(dir, done.file)).equals(bytes)).toBe(true);
+    expect(
+      readdirSync(join(dir, "assets/rekaman")).filter((name) => name.endsWith(".part")),
+    ).toEqual([]);
+    expect(await uploadOffset(studio, id)).toBe(0);
+
+    // Hash-nya sama dengan jalur sekali jalan: isi yang sama tidak disalin dua kali.
+    const oneShot = (await (await upload(studio, "lain.mov", bytes)).json()) as {
+      file: string;
+      existed: boolean;
+    };
+    expect(oneShot).toMatchObject({ existed: true, file: done.file });
+  });
+
+  it("menolak total di atas batas sebelum satu byte pun, potongan yang melewati total, id bukan heksa; bagian yang lebih besar dari berkasnya dibuang", async () => {
+    const { studio, dir } = boot();
+    const id = "0123456789abcdef";
+    const before = process.env.DALANG_MAX_UPLOAD_MB;
+    process.env.DALANG_MAX_UPLOAD_MB = "0.0001"; // ~105 byte
+    try {
+      const declared = await chunkUpload(
+        studio,
+        "besar.mp4",
+        id,
+        0,
+        10_000_000,
+        Buffer.alloc(10),
+      );
+      expect(declared.status).toBe(413);
+    } finally {
+      if (before === undefined) delete process.env.DALANG_MAX_UPLOAD_MB;
+      else process.env.DALANG_MAX_UPLOAD_MB = before;
+    }
+    expect(
+      (await chunkUpload(studio, "x.mp4", "zz", 0, 10, Buffer.alloc(5))).status,
+    ).toBe(400);
+    expect((await chunkUpload(studio, "x.mp4", id, 5, 4, Buffer.alloc(1))).status).toBe(
+      400,
+    );
+    const over = await chunkUpload(studio, "x.mp4", id, 0, 10, Buffer.alloc(20));
+    expect(over.status).toBe(400);
+    expect(
+      readdirSync(join(dir, "assets/rekaman")).filter((name) => name.endsWith(".part")),
+    ).toEqual([]);
+    expect((await chunkUpload(studio, "x.mp4", id, 0, 10, Buffer.alloc(0))).status).toBe(
+      400,
+    );
+
+    // Bagian 50 byte tersisa, lalu berkas lain berukuran 30 byte memakai
+    // identitas yang sama: bagiannya dibuang, mulai dari nol — tidak pernah
+    // berkas yang tercampur.
+    await chunkUpload(studio, "y.mp4", id, 0, 100, Buffer.alloc(50));
+    expect(await uploadOffset(studio, id)).toBe(50);
+    expect(await uploadOffset(studio, id, 30)).toBe(0);
+    expect(await uploadOffset(studio, id)).toBe(0);
+  });
+});

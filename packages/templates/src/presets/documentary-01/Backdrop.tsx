@@ -1,13 +1,18 @@
-import type { ResolvedAsset, Scene } from "@dalang/core";
+import type { Clip, ResolvedAsset, Scene } from "@dalang/core";
 import { Video } from "@remotion/media";
 import {
   AbsoluteFill,
   Img,
   interpolate,
   random,
-  staticFile,
   useCurrentFrame,
+  useVideoConfig,
 } from "remotion";
+import { easeDolly, kf } from "../../anim";
+import { useAssetSrc } from "../../asset-src";
+import { isSilent } from "../../audio-model";
+import { filterToCss } from "../../filters";
+import { motionTransform } from "../../motion-model";
 import type { DocTheme } from "./theme";
 
 /**
@@ -16,78 +21,127 @@ import type { DocTheme } from "./theme";
  * scenes whose asset has not been resolved yet.
  */
 
-const motionStyle = (
-  motion: Scene["visual"]["motion"],
-  frame: number,
-  durationInFrames: number,
-): React.CSSProperties => {
+const AssetLayer: React.FC<{
+  asset: ResolvedAsset;
+  clip: Clip;
+  durationInFrames: number;
+  /** Amplop volume suara aset (ADR-0026); tanpa ini asetnya bisu. */
+  volume?: ((frame: number) => number) | undefined;
+}> = ({ asset, clip, durationInFrames, volume }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const assetSrc = useAssetSrc();
+  // Easing dolly (ADR-0014/0015): gerak kamera settle di awal/akhir; semua
+  // matematika transform hidup di motion-model (murni & diuji).
   const progress = interpolate(frame, [0, Math.max(durationInFrames, 1)], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
+    easing: easeDolly,
   });
-  switch (motion) {
-    case "kenburns-in":
-      return { scale: String(1.03 + progress * 0.1) };
-    case "kenburns-out":
-      return { scale: String(1.13 - progress * 0.1) };
-    case "pan-left":
-      return {
-        scale: "1.1",
-        translate: `${interpolate(progress, [0, 1], [2.2, -2.2])}% 0%`,
-      };
-    case "pan-right":
-      return {
-        scale: "1.1",
-        translate: `${interpolate(progress, [0, 1], [-2.2, 2.2])}% 0%`,
-      };
-    case "none":
-      return {};
-  }
-};
-
-const AssetLayer: React.FC<{
-  asset: ResolvedAsset;
-  scene: Scene;
-  durationInFrames: number;
-}> = ({ asset, scene, durationInFrames }) => {
-  const frame = useCurrentFrame();
   const style: React.CSSProperties = {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    ...motionStyle(scene.visual.motion, frame, durationInFrames),
+    ...motionTransform(clip, progress),
+    // ADR-0011: filter/opacity scene diterapkan di lapisan media.
+    ...filterToCss(clip.filter),
   };
 
   if (asset.kind === "video") {
-    return <Video src={staticFile(asset.file)} muted style={style} />;
+    return (
+      <Video
+        src={assetSrc(asset.file)}
+        // ADR-0025/0026: bawaan bisu, persis perilaku sebelum keduanya.
+        // `muted` dipasang saat tidak berbunyi supaya Remotion tidak
+        // menyiapkan jalur audio untuk trek yang memang diam.
+        muted={isSilent(clip.audio)}
+        {...(volume ? { volume } : {})}
+        playbackRate={clip.speed}
+        // ADR-0017: titik masuk di rekaman sumber — satu video panjang bisa
+        // dipakai berkali-kali dengan potongan berbeda per scene.
+        trimBefore={Math.round(clip.trimStartSec * fps)}
+        style={style}
+      />
+    );
   }
-  return <Img src={staticFile(asset.file)} style={style} />;
+  return <Img src={assetSrc(asset.file)} style={style} />;
+};
+
+/** Varian seni prosedural (ADR-0013) — dipilih lewat visual.variant. */
+const PROCEDURAL_VARIANTS = ["duotone", "rays", "topo", "grid"] as const;
+type ProceduralVariant = (typeof PROCEDURAL_VARIANTS)[number];
+
+const variantOf = (clip: Clip): ProceduralVariant =>
+  (PROCEDURAL_VARIANTS as readonly string[]).includes(clip.variant ?? "")
+    ? (clip.variant as ProceduralVariant)
+    : "duotone";
+
+/**
+ * Lapisan seni tambahan di atas dasar duotone, per varian — HIDUP (ADR-0015):
+ * rays berputar sangat pelan, kontur topo bernapas, grid drift diagonal.
+ * Semuanya fungsi frame deterministik (bukan CSS animation).
+ */
+const variantArt = (
+  variant: ProceduralVariant,
+  seedA: number,
+  seedB: number,
+  duotone: [string, string],
+  frame: number,
+): React.CSSProperties | null => {
+  switch (variant) {
+    case "rays":
+      return {
+        backgroundImage: `repeating-conic-gradient(from ${(seedA * 360 + frame * 0.055).toFixed(2)}deg at ${20 + seedB * 60}% ${18 + seedA * 20}%, rgba(245,240,230,0.045) 0deg 7deg, transparent 7deg 24deg)`,
+      };
+    case "topo": {
+      const breathe = Math.sin(frame * 0.021 + seedB * 6) * 2.4;
+      return {
+        backgroundImage: `repeating-radial-gradient(90% 70% at ${(25 + seedA * 50 + breathe).toFixed(2)}% ${(30 + seedB * 40).toFixed(2)}%, transparent 0 46px, rgba(245,240,230,0.05) 46px 48px)`,
+      };
+    }
+    case "grid":
+      return {
+        backgroundImage: [
+          `linear-gradient(rgba(245,240,230,0.045) 1.5px, transparent 1.5px)`,
+          `linear-gradient(90deg, rgba(245,240,230,0.045) 1.5px, transparent 1.5px)`,
+          `radial-gradient(120% 100% at 50% 40%, transparent 40%, ${duotone[0]}55 100%)`,
+        ].join(", "),
+        backgroundSize: "72px 72px, 72px 72px, 100% 100%",
+        backgroundPosition: `${(frame * 0.16).toFixed(2)}px ${(frame * 0.11).toFixed(2)}px, ${(frame * 0.16).toFixed(2)}px ${(frame * 0.11).toFixed(2)}px, 0 0`,
+      };
+    case "duotone":
+      return null;
+  }
 };
 
 /**
- * Deterministic duotone gradient art. Seeded by scene id, so the same plan
- * always renders the same frame (PRD §4: deterministic pipeline).
+ * Deterministic gradient art. Seeded by scene id, so the same plan always
+ * renders the same frame (PRD §4: deterministic pipeline). `visual.variant`
+ * memilih bahasa grafis: duotone (default) | rays | topo | grid (ADR-0013).
  */
 export const ProceduralBackdrop: React.FC<{
-  scene: Scene;
+  clip: Clip;
+  /** Benih seni prosedural — lihat `clipSeed`. */
+  seedKey: string;
   sceneIndex: number;
   theme: DocTheme;
   durationInFrames: number;
-}> = ({ scene, sceneIndex, theme, durationInFrames }) => {
+}> = ({ clip, seedKey, sceneIndex, theme, durationInFrames }) => {
   const frame = useCurrentFrame();
-  const duotone = theme.duotones[sceneIndex % theme.duotones.length] ?? [
+  const duotone = (theme.duotones[sceneIndex % theme.duotones.length] ?? [
     "#131A33",
     "#3A2A18",
-  ];
-  const seedA = random(`${scene.id}-a`);
-  const seedB = random(`${scene.id}-b`);
+  ]) as [string, string];
+  const seedA = random(`${seedKey}-a`);
+  const seedB = random(`${seedKey}-b`);
   const ax = 12 + seedA * 30;
   const ay = 8 + seedB * 24;
   const bx = 62 + seedB * 28;
   const by = 64 + seedA * 26;
+  const art = variantArt(variantOf(clip), seedA, seedB, duotone, frame);
 
   return (
-    <AbsoluteFill style={{ backgroundColor: theme.bg }}>
+    <AbsoluteFill style={{ backgroundColor: theme.bg, ...filterToCss(clip.filter) }}>
       <AbsoluteFill
         style={{
           scale: String(
@@ -107,43 +161,89 @@ export const ProceduralBackdrop: React.FC<{
             `radial-gradient(140% 120% at 50% 120%, rgba(0,0,0,0.55) 0%, transparent 55%)`,
           ].join(", "),
         }}
-      />
-      {/* Oversized ring for quiet structure */}
-      <div
+      >
+        {art ? <AbsoluteFill style={art} /> : null}
+      </AbsoluteFill>
+      {/* Cincin raksasa: draw-on pelan di awal scene lalu berputar sangat
+          lambat — struktur tenang yang HIDUP (ADR-0015). pathLength=1
+          menormalkan dash sehingga offset 1->0 = menggambar penuh. */}
+      <svg
+        role="presentation"
         style={{
           position: "absolute",
           width: "160%",
           aspectRatio: "1 / 1",
           left: `${-40 + seedB * 30}%`,
           top: `${18 + seedA * 22}%`,
-          borderRadius: "50%",
-          border: "2px solid rgba(245, 240, 230, 0.05)",
+          rotate: `${(seedB * 360 + frame * 0.03).toFixed(2)}deg`,
         }}
-      />
+        viewBox="0 0 100 100"
+      >
+        <circle
+          cx="50"
+          cy="50"
+          r="49"
+          fill="none"
+          stroke="rgba(245, 240, 230, 0.05)"
+          strokeWidth="0.14"
+          pathLength={1}
+          strokeDasharray="1"
+          strokeDashoffset={
+            1 -
+            kf(frame, [
+              [0, 0],
+              [80, 1],
+            ])
+          }
+        />
+      </svg>
     </AbsoluteFill>
   );
 };
 
+/**
+ * Benih seni prosedural sebuah klip.
+ *
+ * Klip PERTAMA memakai id SCENE, bukan id klipnya. Itu bukan kelalaian: janji
+ * "skema naik tanpa menggeser satu piksel pun" (ADR-0033 fase 1) dibuktikan
+ * terhadap benih yang lama, dan mengganti benihnya di sini akan menggeser
+ * setiap latar prosedural di setiap plan yang sudah ada — perubahan yang tidak
+ * diminta siapa pun. Klip berikutnya memakai benihnya sendiri supaya dua
+ * potongan prosedural berurutan tidak tampak sebagai satu gambar yang tidak
+ * pernah dipotong.
+ */
+export const clipSeed = (scene: Scene, index: number): string =>
+  index === 0 ? scene.id : `${scene.id}#${index}`;
+
 export const Backdrop: React.FC<{
-  scene: Scene;
+  clip: Clip;
+  seedKey: string;
   sceneIndex: number;
   asset: ResolvedAsset | undefined;
   theme: DocTheme;
   durationInFrames: number;
   /** Extra darkening for text-heavy scenes (title/outro). */
   dim?: number;
-}> = ({ scene, sceneIndex, asset, theme, durationInFrames, dim = 0 }) => {
+  /** Amplop volume suara aset (ADR-0026). */
+  volume?: ((frame: number) => number) | undefined;
+}> = ({ clip, seedKey, sceneIndex, asset, theme, durationInFrames, dim = 0, volume }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: theme.bg }}>
       {asset ? (
         <AbsoluteFill
           style={{ filter: "saturate(1.04) contrast(1.05) brightness(0.96)" }}
         >
-          <AssetLayer asset={asset} scene={scene} durationInFrames={durationInFrames} />
+          <AssetLayer
+            asset={asset}
+            clip={clip}
+            durationInFrames={durationInFrames}
+            volume={volume}
+          />
         </AbsoluteFill>
       ) : (
         <ProceduralBackdrop
-          scene={scene}
+          clip={clip}
+          seedKey={seedKey}
           sceneIndex={sceneIndex}
           theme={theme}
           durationInFrames={durationInFrames}

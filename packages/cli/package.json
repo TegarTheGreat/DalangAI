@@ -13,10 +13,15 @@
   "dependencies": {
     "@dalang/agent": "workspace:*",
     "@dalang/core": "workspace:*",
+    "@dalang/interop": "workspace:*",
+    "@dalang/mcp": "workspace:*",
     "@dalang/pipeline": "workspace:*",
     "@dalang/providers": "workspace:*",
+    "@dalang/render-lambda": "workspace:*",
     "@dalang/renderer": "workspace:*",
+    "@dalang/studio": "workspace:*",
     "@dalang/templates": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "commander": "15.0.0"
   },
   "devDependencies": {

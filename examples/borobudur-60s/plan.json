@@ -1,6 +1,6 @@
 {
-  "$schema": "../../packages/core/schema/scene-plan.v1.schema.json",
-  "version": 1,
+  "$schema": "../../packages/core/schema/scene-plan.v2.schema.json",
+  "version": 2,
   "projectId": "demo-borobudur-60s",
   "meta": {
     "title": "Sejarah Borobudur dalam 60 Detik",
@@ -9,155 +9,279 @@
     "language": "id",
     "stylePreset": "documentary-01"
   },
-  "audio": {},
+  "audio": {
+    "music": {
+      "assetId": "pustaka:tenang",
+      "volume": 0.14,
+      "ducking": true
+    }
+  },
   "scenes": [
     {
       "id": "sc-title",
       "locked": false,
       "narration": "Candi sejuta batu yang pernah hilang ditelan zaman.",
-      "visual": { "type": "template-anim", "variant": "title" },
-      "caption": { "enabled": false, "style": "inherit" },
+      "caption": {
+        "enabled": false,
+        "style": "inherit"
+      },
       "duration": 5,
-      "annotations": []
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 20
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "template-anim",
+          "assetId": null,
+          "motion": "none",
+          "pinned": false,
+          "variant": "title",
+          "id": "sc-title-k1"
+        }
+      ]
     },
     {
       "id": "sc-001",
       "locked": false,
       "narration": "Di jantung Pulau Jawa berdiri mahakarya abad kesembilan — Borobudur, candi Buddha terbesar yang pernah dibangun manusia.",
-      "visual": {
-        "type": "stock",
-        "query": "borobudur temple aerial sunrise silhouette",
-        "assetId": "local/bg-sunrise",
-        "motion": "kenburns-in",
-        "pinned": true
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
       },
       "duration": "auto",
-      "annotations": []
+      "transition": {
+        "type": "slide-up",
+        "durationFrames": 12
+      },
+      "texts": [
+        {
+          "id": "tx-hook",
+          "content": "Abad ke-9 · Jawa Tengah",
+          "role": "kicker",
+          "position": "top",
+          "align": "center",
+          "size": "m",
+          "emphasis": "box",
+          "startFrac": 0.04,
+          "endFrac": 0.7
+        }
+      ],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "stock",
+          "query": "borobudur temple aerial sunrise silhouette",
+          "assetId": "local/bg-sunrise",
+          "motion": "kenburns-in",
+          "pinned": true,
+          "id": "sc-001-k1"
+        }
+      ]
     },
     {
       "id": "sc-002",
       "locked": false,
       "narration": "Dua juta balok batu andesit disusun tanpa semen sedikit pun, saling mengunci seperti teka-teki raksasa.",
-      "visual": {
-        "type": "stock",
-        "query": "andesite stone wall carving closeup",
-        "assetId": "local/bg-stone",
-        "motion": "pan-right",
-        "pinned": true
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
       },
       "duration": "auto",
-      "annotations": []
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 15
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "stock",
+          "query": "andesite stone wall carving closeup",
+          "assetId": "local/bg-stone",
+          "motion": "pan-right",
+          "pinned": true,
+          "id": "sc-002-k1"
+        }
+      ]
     },
     {
       "id": "sc-003",
       "locked": false,
       "narration": "Sembilan tingkatnya melambangkan perjalanan menuju pencerahan — dihiasi 2.672 panel relief dan 504 arca Buddha.",
-      "visual": {
-        "type": "stock",
-        "query": "borobudur buddha statue niches relief",
-        "assetId": "local/bg-relief",
-        "motion": "kenburns-out",
-        "pinned": true
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
       },
       "duration": "auto",
-      "annotations": []
+      "transition": {
+        "type": "wipe-down",
+        "durationFrames": 18
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "stock",
+          "query": "borobudur buddha statue niches relief",
+          "assetId": "local/bg-relief",
+          "motion": "kenburns-out",
+          "pinned": true,
+          "id": "sc-003-k1"
+        }
+      ]
     },
     {
       "id": "sc-004",
       "locked": false,
       "narration": "Namun pada abad keempat belas, Borobudur ditinggalkan — perlahan terkubur abu Gunung Merapi dan ditelan rimba.",
-      "visual": {
-        "type": "stock",
-        "query": "volcano ash jungle mist dark",
-        "assetId": "local/bg-ash",
-        "motion": "pan-left",
-        "pinned": true
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
       },
       "duration": "auto",
-      "annotations": []
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 24
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "stock",
+          "query": "volcano ash jungle mist dark",
+          "assetId": "local/bg-ash",
+          "motion": "pan-left",
+          "pinned": true,
+          "id": "sc-004-k1"
+        }
+      ]
     },
     {
       "id": "sc-005",
       "locked": false,
       "narration": "Baru pada tahun 1814, laporan penduduk lokal menuntun ekspedisi menggali kembali sang raksasa yang tertidur.",
-      "visual": {
-        "type": "stock",
-        "query": "old expedition map java 19th century",
-        "assetId": "local/bg-rediscovery",
-        "motion": "kenburns-in",
-        "pinned": true
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
       },
       "duration": "auto",
-      "annotations": []
+      "transition": {
+        "type": "slide-up",
+        "durationFrames": 10
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "stock",
+          "query": "old expedition map java 19th century",
+          "assetId": "local/bg-rediscovery",
+          "motion": "kenburns-in",
+          "pinned": true,
+          "id": "sc-005-k1"
+        }
+      ]
     },
     {
       "id": "sc-006",
       "locked": false,
       "narration": "Kini jutaan orang mendaki stupanya setiap tahun, menyambut matahari terbit di warisan dunia yang bangkit dari abu.",
-      "visual": {
-        "type": "stock",
-        "query": "borobudur stupa sunrise clouds",
-        "assetId": "local/bg-stupa-dawn",
-        "motion": "kenburns-in",
-        "pinned": true
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
       },
       "duration": "auto",
-      "annotations": []
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 20
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "stock",
+          "query": "borobudur stupa sunrise clouds",
+          "assetId": "local/bg-stupa-dawn",
+          "motion": "kenburns-in",
+          "pinned": true,
+          "id": "sc-006-k1"
+        }
+      ]
     },
     {
       "id": "sc-outro",
       "locked": false,
       "narration": "Ikuti untuk sejarah Nusantara satu menit lainnya.",
-      "visual": { "type": "template-anim", "variant": "outro" },
-      "caption": { "enabled": false, "style": "inherit" },
+      "caption": {
+        "enabled": false,
+        "style": "inherit"
+      },
       "duration": 4.5,
-      "annotations": []
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 15
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "type": "template-anim",
+          "assetId": null,
+          "motion": "none",
+          "pinned": false,
+          "variant": "outro",
+          "id": "sc-outro-k1"
+        }
+      ]
     }
   ],
   "renderState": {
     "narrationAudio": {},
-    "resolvedAssets": {
-      "sc-001": {
+    "clipAssets": {
+      "sc-001-k1": {
         "file": "assets/bg-sunrise.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
-      "sc-002": {
+      "sc-002-k1": {
         "file": "assets/bg-stone.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
-      "sc-003": {
+      "sc-003-k1": {
         "file": "assets/bg-relief.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
-      "sc-004": {
+      "sc-004-k1": {
         "file": "assets/bg-ash.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
-      "sc-005": {
+      "sc-005-k1": {
         "file": "assets/bg-rediscovery.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       },
-      "sc-006": {
+      "sc-006-k1": {
         "file": "assets/bg-stupa-dawn.svg",
         "kind": "image",
         "source": "local",
-        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)",
-        "author": "Dalang AI"
+        "author": "Dalang AI",
+        "license": "Ilustrasi milik proyek (dibuat untuk demo Dalang AI)"
       }
     }
   }

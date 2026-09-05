@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="stoneWall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3A2F26"/>
+      <stop offset="0.5" stop-color="#2C241D"/>
+      <stop offset="1" stop-color="#1E1813"/>
+    </linearGradient>
+    <linearGradient id="niche" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#171310"/>
+      <stop offset="1" stop-color="#0F0C0A"/>
+    </linearGradient>
+    <linearGradient id="buddha" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6B5138"/>
+      <stop offset="1" stop-color="#4A3826"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#E4A64C" stop-opacity="0.26"/>
+      <stop offset="0.6" stop-color="#E4A64C" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#E4A64C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#stoneWall)"/>
+
+  <!-- horizontal cornices -->
+  <g fill="#181310" opacity="0.85">
+    <rect x="0" y="330" width="1080" height="26"/>
+    <rect x="0" y="920" width="1080" height="26"/>
+    <rect x="0" y="1510" width="1080" height="26"/>
+  </g>
+  <g fill="#4A3B2C" opacity="0.5">
+    <rect x="0" y="356" width="1080" height="8"/>
+    <rect x="0" y="946" width="1080" height="8"/>
+    <rect x="0" y="1536" width="1080" height="8"/>
+  </g>
+
+  <!-- rows of niches with seated figures -->
+  <g id="rowTemplate">
+    <!-- row 1 -->
+    <g transform="translate(0 420)">
+      <g transform="translate(90 0)">
+        <path d="M0 380 L0 120 Q0 20 95 20 Q190 20 190 120 L190 380 Z" fill="url(#niche)"/>
+        <g transform="translate(95 236)">
+          <ellipse cx="0" cy="96" rx="86" ry="30" fill="url(#buddha)"/>
+          <path d="M-64 96 Q-64 10 0 6 Q64 10 64 96 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-24" r="34" fill="url(#buddha)"/>
+          <path d="M0 -66 q12 10 0 22 q-12 -12 0 -22" fill="#6B5138"/>
+        </g>
+      </g>
+      <g transform="translate(445 0)">
+        <path d="M0 380 L0 120 Q0 20 95 20 Q190 20 190 120 L190 380 Z" fill="url(#niche)"/>
+        <g transform="translate(95 236)">
+          <ellipse cx="0" cy="96" rx="86" ry="30" fill="url(#buddha)"/>
+          <path d="M-64 96 Q-64 10 0 6 Q64 10 64 96 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-24" r="34" fill="url(#buddha)"/>
+          <path d="M0 -66 q12 10 0 22 q-12 -12 0 -22" fill="#6B5138"/>
+        </g>
+      </g>
+      <g transform="translate(800 0)">
+        <path d="M0 380 L0 120 Q0 20 95 20 Q190 20 190 120 L190 380 Z" fill="url(#niche)"/>
+        <g transform="translate(95 236)">
+          <ellipse cx="0" cy="96" rx="86" ry="30" fill="url(#buddha)"/>
+          <path d="M-64 96 Q-64 10 0 6 Q64 10 64 96 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-24" r="34" fill="url(#buddha)"/>
+          <path d="M0 -66 q12 10 0 22 q-12 -12 0 -22" fill="#6B5138"/>
+        </g>
+      </g>
+    </g>
+    <!-- row 2 (offset) -->
+    <g transform="translate(0 1010)">
+      <g transform="translate(268 0)">
+        <path d="M0 380 L0 120 Q0 20 95 20 Q190 20 190 120 L190 380 Z" fill="url(#niche)"/>
+        <g transform="translate(95 236)">
+          <ellipse cx="0" cy="96" rx="86" ry="30" fill="url(#buddha)"/>
+          <path d="M-64 96 Q-64 10 0 6 Q64 10 64 96 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-24" r="34" fill="url(#buddha)"/>
+          <path d="M0 -66 q12 10 0 22 q-12 -12 0 -22" fill="#6B5138"/>
+        </g>
+      </g>
+      <g transform="translate(622 0)">
+        <path d="M0 380 L0 120 Q0 20 95 20 Q190 20 190 120 L190 380 Z" fill="url(#niche)"/>
+        <g transform="translate(95 236)">
+          <ellipse cx="0" cy="96" rx="86" ry="30" fill="url(#buddha)"/>
+          <path d="M-64 96 Q-64 10 0 6 Q64 10 64 96 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-24" r="34" fill="url(#buddha)"/>
+          <path d="M0 -66 q12 10 0 22 q-12 -12 0 -22" fill="#6B5138"/>
+        </g>
+      </g>
+    </g>
+    <!-- row 3 -->
+    <g transform="translate(0 1600)">
+      <g transform="translate(90 0)">
+        <path d="M0 320 L0 120 Q0 20 95 20 Q190 20 190 120 L190 320 Z" fill="url(#niche)"/>
+        <g transform="translate(95 216)">
+          <ellipse cx="0" cy="88" rx="80" ry="26" fill="url(#buddha)"/>
+          <path d="M-58 88 Q-58 10 0 6 Q58 10 58 88 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-20" r="30" fill="url(#buddha)"/>
+        </g>
+      </g>
+      <g transform="translate(445 0)">
+        <path d="M0 320 L0 120 Q0 20 95 20 Q190 20 190 120 L190 320 Z" fill="url(#niche)"/>
+        <g transform="translate(95 216)">
+          <ellipse cx="0" cy="88" rx="80" ry="26" fill="url(#buddha)"/>
+          <path d="M-58 88 Q-58 10 0 6 Q58 10 58 88 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-20" r="30" fill="url(#buddha)"/>
+        </g>
+      </g>
+      <g transform="translate(800 0)">
+        <path d="M0 320 L0 120 Q0 20 95 20 Q190 20 190 120 L190 320 Z" fill="url(#niche)"/>
+        <g transform="translate(95 216)">
+          <ellipse cx="0" cy="88" rx="80" ry="26" fill="url(#buddha)"/>
+          <path d="M-58 88 Q-58 10 0 6 Q58 10 58 88 Z" fill="url(#buddha)"/>
+          <circle cx="0" cy="-20" r="30" fill="url(#buddha)"/>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <!-- carved frieze band top -->
+  <g transform="translate(0 120)" fill="none" stroke="#54422F" stroke-width="7" opacity="0.85">
+    <path d="M40 60 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0 q40 -60 80 0"/>
+    <path d="M40 130 h1000" stroke-width="5" opacity="0.6"/>
+  </g>
+
+  <!-- warm light -->
+  <rect width="1080" height="1920" fill="url(#glow)"/>
+</svg>

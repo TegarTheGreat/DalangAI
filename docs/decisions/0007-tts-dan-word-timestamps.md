@@ -59,5 +59,30 @@ tercatat sebagai kelanjutan R-3.
 - (−) **Jujur:** klaim kualitas ID belum berbasis pendengaran; Edge belum
   terverifikasi live dan protokolnya tak resmi (risiko dicatat di PRD §13 pola
   fallback). Keduanya diblokir oleh lingkungan, bukan oleh desain.
+
+### Catatan terukur: bentuk blokirnya (3 September 2026)
+
+Sebelumnya kalimat "diblokir lingkungan" belum pernah punya angka di
+belakangnya. Sekarang ada, supaya tidak ada yang perlu mengulang percobaannya:
+
+```
+curl https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1
+  -> curl: (56) CONNECT tunnel failed, response 403
+```
+
+Yang menolak adalah **proxy egress**, pada tahap CONNECT — sebelum TLS, jauh
+sebelum WebSocket. Karena itu dua dugaan yang wajar muncul lebih dulu bisa
+dicoret keduanya:
+
+- **Bukan** karena `WebSocket` bawaan Node mengabaikan `HTTPS_PROXY`. Diuji
+  juga lewat `ProxyAgent` undici sebagai `dispatcher`; hasilnya sama.
+- **Bukan** karena Microsoft menolak klien ini. Permintaannya tidak pernah
+  sampai ke Microsoft.
+
+Artinya tidak ada perubahan kode yang bisa membukanya dari sini, dan tidak
+ada gunanya menambah lapisan proxy di `edge.ts` untuk mencoba. Verifikasi live
+tetap menunggu lingkungan yang egress-nya terbuka; 8 unit test protokolnya
+(token GEC, URL koneksi, SSML, frame biner, WordBoundary → detik) tetap jadi
+satu-satunya jaminan yang ada, dan semuanya hijau.
 - (−) Durasi MP3 Edge diaproksimasi dari boundary terakhir (+0,4 dtk) sampai
   kalibrasi live; ElevenLabs eksak dari alignment.

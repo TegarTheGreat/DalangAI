@@ -1,7 +1,15 @@
 name: CI
 
 on:
+  # Hanya main: tanpa batasan ini SETIAP commit di branch ber-PR menjalankan CI
+  # DUA kali (push + pull_request), dan grup concurrency-nya berbeda
+  # (refs/heads/... vs refs/pull/N/merge) sehingga keduanya tidak saling
+  # membatalkan. Dua kali menjalankan Chromium per commit berarti dua kali
+  # peluang kena flake browser — dan itu sudah terjadi: satu run gagal
+  # "Timed out while trying to connect to the browser" sementara run kembarnya
+  # pada commit yang sama lulus.
   push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -36,17 +44,120 @@ jobs:
       - name: Unit tests (incl. JSON Schema up-to-date check)
         run: pnpm test
 
+      # ADR-0022: rangka eval (penilai + papan skor) dijalankan tanpa model
+      # sama sekali, atas plan contoh repo. Tidak mengukur mutu agent — mustahil
+      # tanpa memanggil model berbayar di CI — tapi menangkap dua regresi yang
+      # tidak ditangkap tes mana pun: penilai yang rusak diam-diam, dan plan
+      # contoh yang diedit sampai melanggar kaidahnya sendiri.
+      - name: Eval self-check (rangka penilai, tanpa model)
+        run: pnpm --filter @dalang/agent eval --self-check
+
+      - name: Build app studio (Vite)
+        run: pnpm --filter @dalang/studio build
+
+      # Geometri header/panel di 15 lebar layar nyata. Ini menangkap kelas bug
+      # yang TIDAK menggagalkan tes mana pun: kontrol yang saling menindih atau
+      # tergunting habis — DOM benar, komponen ter-render, semua hijau, tapi
+      # kotaknya bertumpuk. Memakai Chromium yang sama dengan render smoke test.
+      - name: Layout gate (studio UI)
+        timeout-minutes: 6
+        run: pnpm --filter @dalang/studio gate:layout
+
+      # Gerbang tata letak membuktikan kendali MUAT; yang ini membuktikan
+      # kendali BEKERJA saat disentuh: berlian keyframe dan kotak anotasi
+      # diseret dengan pointer/papan ketik sungguhan lewat CDP, lalu plan di
+      # server yang diperiksa — seretan yang tidak mengirim patch adalah cacat
+      # yang tidak ditangkap unit test mana pun.
+      - name: Interaction gate (studio UI)
+        timeout-minutes: 6
+        run: pnpm --filter @dalang/studio gate:interaksi
+
       - name: Validate demo scene-plan
-        run: pnpm dalang validate examples/borobudur-60s/plan.json
+        run: |
+          pnpm dalang validate examples/borobudur-60s/plan.json
+          pnpm dalang validate examples/klip-borobudur/plan.json
 
       # Real still render through the full stack (bundle → Chromium → PNG):
       # the template-regression safety net (R-8 precursor). Uses the runner's
       # preinstalled Chrome via the renderer's browser detection.
       - name: Render smoke test
+        # Langkah ini yang menyalakan Chromium. Kalau browsernya menggantung,
+        # prosesnya tetap hidup dan menahan job sampai batas 20 menit — pernah
+        # terjadi. Batas sendiri membuat kegagalan browser berbiaya menit, bukan
+        # seluruh anggaran job.
+        timeout-minutes: 8
         run: |
           pnpm dalang still examples/borobudur-60s/plan.json -t 8 29 -s 0.25 -o /tmp/smoke
           test -s /tmp/smoke/borobudur-60s-f240.png
           test -s /tmp/smoke/borobudur-60s-f870.png
+          # Fase 4: preset tutorial-01 (screenshot + anotasi zoom/highlight/arrow)
+          # Detik 18 sengaja ikut: di situ LAPISAN video (ADR-0025) sedang
+          # tampil, jadi jalur render sisipan benar-benar dijalankan — bukan
+          # hanya diuji sebagai angka.
+          pnpm dalang still examples/tutorial-studio/plan.json -t 8 18 21.5 -s 0.25 -o /tmp/smoke
+          test -s /tmp/smoke/tutorial-studio-f240.png
+          test -s /tmp/smoke/tutorial-studio-f540.png
+          test -s /tmp/smoke/tutorial-studio-f645.png
+          # ADR-0033: satu-satunya contoh berklip banyak. Tanpa langkah ini
+          # jalur ClipStrip — potong keras dan TransitionSeries DI DALAM satu
+          # scene — tidak pernah benar-benar dirender di CI. Detik 9,13 adalah
+          # titik potong klip 2 ke klip 3, yaitu tengah larutnya.
+          pnpm dalang still examples/klip-borobudur/plan.json -t 5 9.13 11 -s 0.25 -o /tmp/smoke
+          test -s /tmp/smoke/klip-borobudur-f150.png
+          test -s /tmp/smoke/klip-borobudur-f274.png
+          test -s /tmp/smoke/klip-borobudur-f330.png
+
+      # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)
+      # ATAU dari URL (render cloud). Gerbang ini merender kedua jalur dan
+      # menuntut hasilnya identik byte per byte. Satu pemanggil staticFile()
+      # yang terlewat tidak menggagalkan unit test mana pun — hanya ini.
+      # ADR-0023: klaim "berkas ekspor kami benar-benar bisa dibuka perkakas
+      # lain" tidak bisa dibuktikan tes unit — pembaca kita sendiri hanya
+      # membuktikan dua berkas kita saling setuju. Gerbang ini memakai
+      # IMPLEMENTASI RUJUKAN: pustaka OpenTimelineIO resmi membaca .otio kita,
+      # adapter fcpx_xml resmi membaca .fcpxml kita, lalu posisi tiap klip
+      # dibandingkan dengan `activeSceneIndex` milik renderer.
+      - name: Interop gate (pembaca rujukan OTIO/FCPXML)
+        timeout-minutes: 5
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check opentimelineio otio-fcpx-xml-adapter
+          pnpm --filter @dalang/interop gate:interop
+          # Kedua contoh, bukan satu: tutorial-studio memakai anotasi dan
+          # preset lain, dan cabang "scene tanpa aset" berperilaku berbeda.
+          pnpm --filter @dalang/interop gate:interop examples/tutorial-studio/plan.json
+          # Contoh berklip banyak: di sini pemetaan satu-klip-per-KLIP diuji
+          # atas plan yang MEMANG berklip banyak, bukan varian bikinan gerbang.
+          pnpm --filter @dalang/interop gate:interop examples/klip-borobudur/plan.json
+
+      # ADR-0033: skema naik ke v2 dan `parseScenePlan` memigrasikan plan v1.
+      # Unit test migrasi hanya membuktikan bentuknya cocok dengan yang
+      # DIHARAPKAN penulis testnya; satu field yang lupa ikut pindah tetap
+      # lolos skema dan baru terlihat sebagai gambar yang bergeser. Gerbang ini
+      # merender plan v1 (dimigrasikan saat dibaca) dan plan v2 yang sama, lalu
+      # menuntut hasilnya identik byte per byte.
+      - name: Gerbang paritas migrasi skema (v1 -> v2)
+        timeout-minutes: 8
+        run: |
+          pnpm --filter @dalang/renderer migrasi-paritas
+          pnpm --filter @dalang/renderer migrasi-paritas examples/tutorial-studio/plan.json
+
+      - name: Asset URL parity gate
+        timeout-minutes: 8
+        run: |
+          pnpm --filter @dalang/renderer asset-url-parity
+          pnpm --filter @dalang/renderer asset-url-parity examples/tutorial-studio/plan.json
+
+      # Kalau salah satu gerbang paritas merah, PNG yang berselisih ikut naik.
+      # Selisih byte tidak bisa dilihat; gambarnya bisa — dan tanpa langkah ini
+      # satu-satunya cara memeriksanya adalah menebak dari jauh.
+      - name: Upload bukti paritas (hanya bila merah)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bukti-paritas
+          path: artefak-paritas
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload smoke frames
         uses: actions/upload-artifact@v4

@@ -19,8 +19,9 @@ pnpm install
 | `pnpm test` | Unit test semua paket (tanpa browser, <5 dtk) |
 | `pnpm typecheck` | `tsc --noEmit` semua paket |
 | `pnpm lint` / `pnpm lint:fix` | Biome (lint + format + organize imports) |
-| `pnpm dalang validate\|generate\|still\|render …` | CLI (lihat README) |
-| `pnpm studio` | Remotion Studio dengan demo ter-stage |
+| `pnpm dalang studio\|chat\|validate\|generate\|still\|render …` | CLI (lihat README) |
+| `pnpm studio:remotion` | Remotion Studio dengan demo ter-stage (alat pengembang preset) |
+| `pnpm --filter @dalang/studio build\|dev` | Build / HMR app UI Dalang Studio |
 | `pnpm schema:gen` | Regenerasi artefak JSON Schema setelah mengubah skema |
 
 CI menjalankan lint → typecheck → test → validate → **render smoke** (2 frame
@@ -56,6 +57,9 @@ plan) juga gitignored.
   CSS `scale`/`translate`/`rotate`).
 - Determinisme adalah kontrak (PRD prinsip #4): tidak ada `Math.random`/waktu
   sistem di jalur render — pakai `random(seed)` Remotion atau konstanta.
+- **Tanpa emoji, di mana pun**: UI studio, output CLI, toast, dokumen,
+  commit. Status disampaikan lewat kata, tipografi, dan warna (chip ber-dot
+  di UI; `ok`/`fallback`/`GAGAL` di terminal).
 
 ## Mengubah skema scene-plan
 

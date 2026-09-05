@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStockChain, buildTtsChain } from "../src/index";
+import { buildAsrChain, buildStockChain, buildTtsChain } from "../src/index";
 
 describe("buildTtsChain", () => {
   it("silence primary works with zero config; free fallbacks appended", () => {
@@ -41,5 +41,46 @@ describe("buildStockChain", () => {
         env: { PEXELS_API_KEY: "a", PIXABAY_API_KEY: "b" },
       }).map((p) => p.id),
     ).toEqual(["pexels", "pixabay"]);
+  });
+});
+
+describe("buildAsrChain", () => {
+  it("rantai KOSONG saat tak ada whisper.cpp maupun kunci API — dan itu sah", () => {
+    // Bukan galat: mesin polos memang belum punya jalur ASR. Yang melapor
+    // adalah stage-nya, dengan pesan yang menyebut persis apa yang kurang.
+    expect(buildAsrChain({ env: {} })).toEqual([]);
+  });
+
+  it("whisper.cpp di depan API — rekaman mentah tidak dikirim keluar diam-diam", () => {
+    const chain = buildAsrChain({
+      env: {
+        WHISPER_CPP_BIN: "/bin/sh",
+        WHISPER_CPP_MODEL: "/bin/sh",
+        DEEPGRAM_API_KEY: "k",
+        ELEVENLABS_API_KEY: "e",
+      },
+    });
+    expect(chain.map((provider) => provider.id)).toEqual([
+      "whisper-cpp",
+      "deepgram",
+      "elevenlabs-scribe",
+    ]);
+    expect(chain[0]?.offline).toBe(true);
+  });
+
+  it("kunci ElevenLabs yang sudah ada untuk TTS langsung memberi jalur transkripsi", () => {
+    const chain = buildAsrChain({ env: { ELEVENLABS_API_KEY: "e" } });
+    expect(chain.map((provider) => provider.id)).toEqual(["elevenlabs-scribe"]);
+  });
+
+  it("whisper.cpp yang binari-nya ada tapi modelnya tidak, tidak masuk rantai", () => {
+    const chain = buildAsrChain({
+      env: {
+        WHISPER_CPP_BIN: "/bin/sh",
+        WHISPER_CPP_MODEL: "/tidak/ada",
+        DEEPGRAM_API_KEY: "k",
+      },
+    });
+    expect(chain.map((provider) => provider.id)).toEqual(["deepgram"]);
   });
 });

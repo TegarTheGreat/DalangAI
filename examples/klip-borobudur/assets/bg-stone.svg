@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="wallBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A4438"/>
+      <stop offset="0.5" stop-color="#3B372E"/>
+      <stop offset="1" stop-color="#2A2722"/>
+    </linearGradient>
+    <linearGradient id="blockLit" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#6E6450"/>
+      <stop offset="1" stop-color="#4C4536"/>
+    </linearGradient>
+    <linearGradient id="blockMid" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#5A523F"/>
+      <stop offset="1" stop-color="#3E382C"/>
+    </linearGradient>
+    <linearGradient id="blockDark" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#48412F"/>
+      <stop offset="1" stop-color="#332E23"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#wallBase)"/>
+
+  <!-- courses of interlocking blocks (staggered, hand-cut) -->
+  <g stroke="#1C1913" stroke-width="12" stroke-linejoin="round">
+    <g fill="url(#blockMid)">
+      <path d="M-40 60 h360 v240 h-360 Z"/>
+      <path d="M340 44 h400 v256 h-400 Z"/>
+      <path d="M760 60 h380 v240 h-380 Z"/>
+    </g>
+    <g fill="url(#blockDark)">
+      <path d="M-90 320 h400 v230 h-400 Z"/>
+      <path d="M330 320 h360 v226 h-360 Z"/>
+      <path d="M710 306 h430 v240 h-430 Z"/>
+    </g>
+    <g fill="url(#blockLit)">
+      <path d="M-50 570 h420 v250 h-420 Z"/>
+      <path d="M390 570 h330 v244 h-330 Z"/>
+      <path d="M740 556 h400 v260 h-400 Z"/>
+    </g>
+    <g fill="url(#blockMid)">
+      <path d="M-100 840 h400 v240 h-400 Z"/>
+      <path d="M320 840 h430 v234 h-430 Z"/>
+      <path d="M770 840 h370 v240 h-370 Z"/>
+    </g>
+    <g fill="url(#blockDark)">
+      <path d="M-40 1100 h380 v250 h-380 Z"/>
+      <path d="M360 1100 h400 v244 h-400 Z"/>
+      <path d="M780 1086 h360 v260 h-360 Z"/>
+    </g>
+    <g fill="url(#blockMid)">
+      <path d="M-80 1370 h420 v240 h-420 Z"/>
+      <path d="M360 1370 h370 v236 h-370 Z"/>
+      <path d="M750 1370 h390 v240 h-390 Z"/>
+    </g>
+    <g fill="url(#blockDark)">
+      <path d="M-40 1630 h390 v290 h-390 Z"/>
+      <path d="M370 1630 h390 v290 h-390 Z"/>
+      <path d="M780 1630 h360 v290 h-360 Z"/>
+    </g>
+  </g>
+
+  <!-- top bevels catching light -->
+  <g stroke="#8A7B5C" stroke-width="7" opacity="0.55" stroke-linecap="round">
+    <path d="M356 60 h368"/>
+    <path d="M776 76 h348"/>
+    <path d="M-24 586 h388"/>
+    <path d="M406 586 h298"/>
+    <path d="M756 572 h368"/>
+    <path d="M336 856 h398"/>
+    <path d="M-64 1386 h388"/>
+    <path d="M766 1386 h358"/>
+  </g>
+
+  <!-- big carved lotus medallion, the hero detail -->
+  <g transform="translate(540 700)">
+    <circle r="150" fill="none" stroke="#211D15" stroke-width="14"/>
+    <circle r="150" fill="none" stroke="#8A7B5C" stroke-width="5" opacity="0.6" transform="translate(0 -4)"/>
+    <g fill="none" stroke="#211D15" stroke-width="11" stroke-linecap="round">
+      <circle r="34"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(45)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(90)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(135)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(180)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(225)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(270)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(315)"/>
+    </g>
+    <g fill="none" stroke="#8A7B5C" stroke-width="4" opacity="0.5" stroke-linecap="round" transform="translate(0 -3)">
+      <circle r="34"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(90)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(180)"/>
+      <path d="M0 -46 q22 -40 0 -84 q-22 44 0 84" transform="rotate(270)"/>
+    </g>
+  </g>
+
+  <!-- secondary carvings -->
+  <g fill="none" stroke="#211D15" stroke-width="9" stroke-linecap="round" opacity="0.9">
+    <path d="M120 180 a52 52 0 1 1 52 52 a34 34 0 1 1 -34 -34 a16 16 0 1 0 16 16"/>
+    <path d="M880 1210 a52 52 0 1 1 52 52 a34 34 0 1 1 -34 -34 a16 16 0 1 0 16 16"/>
+    <path d="M150 1470 q50 -60 100 0 q50 -60 100 0" />
+    <path d="M700 420 q46 -56 92 0 q46 -56 92 0"/>
+  </g>
+
+  <!-- chisel marks -->
+  <g stroke="#26221A" stroke-width="6" opacity="0.85" stroke-linecap="round">
+    <path d="M430 130 l64 -14 M462 170 l72 -16 M60 700 l60 -12 M180 960 l64 -14 M840 700 l64 -14 M640 1210 l66 -14 M420 1740 l64 -12 M900 1500 l58 -12"/>
+  </g>
+  <g stroke="#8A7B5C" stroke-width="4" opacity="0.4" stroke-linecap="round">
+    <path d="M432 136 l64 -14 M62 706 l60 -12 M842 706 l64 -14 M642 1216 l66 -14"/>
+  </g>
+
+  <!-- moss tufts in the joints -->
+  <g fill="#4C5B3A">
+    <path d="M300 546 q20 44 60 40 q-10 34 -60 24 q-46 10 -56 -28 q36 4 56 -36 Z"/>
+    <path d="M950 1080 q22 46 64 42 q-10 36 -64 26 q-48 10 -58 -30 q38 4 58 -38 Z" opacity="0.9"/>
+    <path d="M120 1350 q18 40 54 36 q-8 30 -54 22 q-42 8 -50 -26 q32 4 50 -32 Z" opacity="0.85"/>
+    <path d="M700 300 q16 36 48 32 q-8 28 -48 20 q-38 8 -46 -24 q30 4 46 -28 Z" opacity="0.8"/>
+  </g>
+  <g fill="#5E7048" opacity="0.7">
+    <circle cx="330" cy="560" r="8"/><circle cx="360" cy="574" r="6"/>
+    <circle cx="980" cy="1096" r="8"/><circle cx="150" cy="1364" r="7"/>
+    <circle cx="726" cy="312" r="6"/>
+  </g>
+
+  <!-- god-ray from top right -->
+  <path d="M1140 -40 L560 -40 L-40 1980 L520 1980 Z" fill="#E4A64C" opacity="0.12"/>
+  <path d="M1140 -40 L780 -40 L240 1980 L620 1980 Z" fill="#F2C878" opacity="0.1"/>
+
+  <!-- dust motes in the beam -->
+  <g fill="#F2C878">
+    <circle cx="700" cy="420" r="5" opacity="0.6"/><circle cx="600" cy="640" r="4" opacity="0.5"/>
+    <circle cx="520" cy="880" r="5" opacity="0.5"/><circle cx="430" cy="1120" r="4" opacity="0.45"/>
+    <circle cx="360" cy="1360" r="5" opacity="0.4"/><circle cx="820" cy="260" r="4" opacity="0.55"/>
+    <circle cx="290" cy="1600" r="4" opacity="0.35"/>
+  </g>
+</svg>

@@ -86,6 +86,46 @@ describe("runAgentTurn (loop multi-step di bawah guardrails)", () => {
     expect(project.session.patchLog.summarize()).toContain("agent: mengubah");
   });
 
+  it("tool yang gagal TIDAK mematahkan giliran: error jadi ok:false, model melihatnya, loop lanjut", async () => {
+    const plan = basicPlan();
+    plan.scenes[0] = { ...plan.scenes[0]!, locked: true };
+    const project = open(plan);
+    const { deps } = makeDeps({});
+    const model = resolvedScripted([
+      toolCallStep("applyPatch", {
+        ops: [{ op: "updateScene", id: "sc-001", patch: { narration: "Coba ubah." } }],
+      }),
+      textStep("Scene itu terkunci oleh user — aku tidak menyentuhnya."),
+    ]);
+
+    const result = await runAgentTurn({
+      session: project.session,
+      deps,
+      model,
+      userText: "Ubah narasi scene 1.",
+    });
+
+    // Giliran selesai normal, tidak melempar; plan tetap utuh.
+    expect(result.stop).toBe("selesai");
+    expect(result.steps).toBe(2);
+    expect(result.text).toContain("terkunci");
+    expect(project.session.plan?.scenes[0]?.narration).toBe(
+      "Kalimat pertama untuk agent.",
+    );
+
+    // Pesan error tool benar-benar diumpankan balik ke model di langkah kedua.
+    const mock = model.model as MockLanguageModelV3;
+    const secondPrompt = JSON.stringify(mock.doGenerateCalls[1]!.prompt);
+    expect(secondPrompt).toContain("ok");
+    expect(secondPrompt).toContain("terkunci");
+
+    // Kegagalan tercatat di log event (audit §6.3), bukan ditelan diam-diam.
+    const failed = project.session.events
+      .recent()
+      .find((event) => event.name === "applyPatch");
+    expect(failed?.error).toContain("terkunci");
+  });
+
   it("step cap menghentikan loop yang tak berujung (PRD §6.3)", async () => {
     const project = open(basicPlan());
     const recorder = makeDeps({});

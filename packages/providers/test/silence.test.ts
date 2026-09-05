@@ -1,3 +1,4 @@
+import { SYLLABLES_PER_SECOND } from "@dalang/core";
 import { describe, expect, it } from "vitest";
 import { createSilenceTts, makeSilentWav } from "../src/index";
 
@@ -31,7 +32,10 @@ describe("silence provider", () => {
     });
     expect(provider.placeholderQuality).toBe(true);
     expect(result.format).toBe("wav");
-    expect(result.durationSec).toBeCloseTo(5 / 2.4, 3);
+    // ADR-0017: durasi placeholder mengikuti jumlah SUKU KATA (15 pada
+    // kalimat ini), bukan jumlah kata — jadi panjang audio bisu ikut
+    // mendekati panjang ucapan sungguhan.
+    expect(result.durationSec).toBeCloseTo(15 / SYLLABLES_PER_SECOND, 3);
     expect(result.wordTimestamps).toHaveLength(5);
     expect(result.wordTimestamps[0]?.startSec).toBe(0);
     expect(result.wordTimestamps.at(-1)?.endSec).toBeCloseTo(result.durationSec, 3);

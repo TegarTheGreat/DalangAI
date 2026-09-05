@@ -1,4 +1,4 @@
-import type { ScenePlan } from "@dalang/core";
+import { primaryClip, type ScenePlan } from "@dalang/core";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { AspectMetrics } from "../../layout";
 import { activeSceneIndex, type FrameLayout, TRANSITION_FRAMES } from "../../layout";
@@ -13,7 +13,8 @@ const isTemplateVariant = (plan: ScenePlan, index: number, variant: string): boo
   const scene = plan.scenes[index];
   if (!scene) return false;
   return (
-    scene.visual.type === "template-anim" && (scene.visual.variant ?? "title") === variant
+    primaryClip(scene).type === "template-anim" &&
+    (primaryClip(scene).variant ?? "title") === variant
   );
 };
 

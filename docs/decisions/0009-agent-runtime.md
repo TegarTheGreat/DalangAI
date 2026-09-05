@@ -30,11 +30,19 @@ tanpa metadata tetap jalan dengan biaya "tak diketahui" (null — tidak pernah
 dipalsukan nol). Kapabilitas dipakai menyaring: tool-calling wajib untuk
 orkestrator; image-input dicek sebelum analyzeImage.
 
-Default dua tingkat (§6.4): orkestrator `anthropic/claude-opus-5`, volume
-`anthropic/claude-haiku-4-5` — override via `--model`/`--model-volume`/env
-`DALANG_MODEL*`. Peta eksekusi terkurasi: anthropic/openai/google/
-openai-compatible (baseURL kustom = pintu provider lain) + `mock/echo` untuk
-smoke offline.
+Default dua tingkat (§6.4) — **direvisi 2026-08-29 (umpan balik owner:
+default ber-vendor = bias)**: tidak ada provider yang diistimewakan.
+`pickDefaultModels` memilih dari environment USER: `DALANG_MODEL` eksplisit
+menang; tepat satu API key terdeteksi → model provider itu dipilih dari DATA
+registry (orkestrator = tool-call berkonteks terbesar, volume = termurah,
+utamakan vision); lebih dari satu key → menolak memilih (user harus
+eksplisit); nol → chat nonaktif dengan instruksi. Peta kurasi per provider
+hanya titik mulai saat registry tak memuat provider itu. Snapshot bundled
+tetap berisi model Anthropic saja BUKAN sebagai preferensi, melainkan karena
+hanya harga itu yang bisa penulis verifikasi offline — provider lain terisi
+dari api.json saat terjangkau. Peta eksekusi terkurasi: anthropic/openai/
+google/openai-compatible (baseURL kustom = pintu provider lain) +
+`mock/echo` untuk smoke offline.
 
 ### 3. Tools §6.2 = pembungkus tipis lapisan yang sudah teruji
 

@@ -1,7 +1,12 @@
 import { cpSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseScenePlan, type ScenePlan } from "@dalang/core";
+import {
+  parseScenePlan,
+  proxiedFiles,
+  type ScenePlan,
+  substituteProxies,
+} from "@dalang/core";
 import { COMPOSITION_ID, FPS } from "@dalang/templates/layout";
 import {
   type LogLevel,
@@ -11,7 +16,9 @@ import {
 } from "@remotion/renderer";
 import { findBrowserExecutable } from "./browser";
 import { getBundle } from "./bundle-cache";
+import { finalizeMix } from "./mix";
 import { copyPlanAssets } from "./stage";
+import type { RenderTarget } from "./target";
 
 /**
  * Local RenderTarget (PRD §7.3). The interface stays small on purpose so a
@@ -37,6 +44,103 @@ interface ProfileConfig {
 export const PROFILES: Record<RenderProfile, ProfileConfig> = {
   draft: { scale: 0.5, crf: 28, x264Preset: "veryfast", jpegQuality: 80, debug: true },
   final: { scale: 1, crf: 17, x264Preset: "medium", jpegQuality: 90, debug: false },
+};
+
+// ---------------------------------------------------------------------------
+// Pengaturan ekspor (ADR-0014): format kontainer + resolusi + mutu enkode.
+// Profil lama tetap ada sebagai makro default; pengaturan eksplisit menimpa.
+// ---------------------------------------------------------------------------
+
+export const VIDEO_FORMATS = ["mp4", "hevc", "webm", "mov"] as const;
+export type VideoFormat = (typeof VIDEO_FORMATS)[number];
+
+/** Sisi pendek dalam piksel; komposisi dasar 1080. */
+export const VIDEO_RESOLUTIONS = [540, 720, 1080] as const;
+export type VideoResolution = (typeof VIDEO_RESOLUTIONS)[number];
+
+export const ENCODE_QUALITIES = ["cepat", "seimbang", "terbaik"] as const;
+export type EncodeQuality = (typeof ENCODE_QUALITIES)[number];
+
+export interface ExportSettings {
+  format: VideoFormat;
+  resolution: VideoResolution;
+  quality: EncodeQuality;
+}
+
+export const DEFAULT_EXPORT_SETTINGS: Record<RenderProfile, ExportSettings> = {
+  draft: { format: "mp4", resolution: 540, quality: "cepat" },
+  final: { format: "mp4", resolution: 1080, quality: "seimbang" },
+};
+
+export const resolveExportSettings = (
+  profile: RenderProfile,
+  overrides?: Partial<ExportSettings>,
+): ExportSettings => ({ ...DEFAULT_EXPORT_SETTINGS[profile], ...overrides });
+
+/** Ekstensi file untuk format (hevc tetap .mp4; mov = kontainer QuickTime). */
+export const extensionFor = (format: VideoFormat): string =>
+  format === "hevc" ? "mp4" : format;
+
+export interface EncoderArgs {
+  codec: "h264" | "h265" | "vp9" | "prores";
+  scale: number;
+  audioCodec: "aac" | "opus" | "pcm-16";
+  crf?: number;
+  x264Preset?: "veryfast" | "medium" | "slow";
+  proResProfile?: "proxy" | "standard" | "hq";
+  audioBitrate?: `${number}k`;
+  jpegQuality: number;
+}
+
+/**
+ * Peta (format, resolusi, mutu) → argumen encoder Remotion/FFmpeg.
+ * Skala CRF berbeda per codec (VP9 memakai rentang lebih tinggi); ProRes
+ * tidak ber-CRF — mutunya lewat profil. Audio: AAC utk MP4, Opus utk WebM,
+ * PCM 16-bit utk master ProRes.
+ */
+export const encoderArgs = (settings: ExportSettings): EncoderArgs => {
+  const scale = settings.resolution / 1080;
+  const q = settings.quality;
+  const jpegQuality = q === "cepat" ? 80 : q === "seimbang" ? 90 : 95;
+  switch (settings.format) {
+    case "mp4":
+      return {
+        codec: "h264",
+        scale,
+        audioCodec: "aac",
+        crf: q === "cepat" ? 23 : q === "seimbang" ? 18 : 15,
+        x264Preset: q === "cepat" ? "veryfast" : q === "seimbang" ? "medium" : "slow",
+        audioBitrate: q === "cepat" ? "128k" : "192k",
+        jpegQuality,
+      };
+    case "hevc":
+      // Skala CRF H.265 bergeser ~+5 dari H.264 utk mutu visual setara.
+      return {
+        codec: "h265",
+        scale,
+        audioCodec: "aac",
+        crf: q === "cepat" ? 28 : q === "seimbang" ? 23 : 20,
+        audioBitrate: q === "cepat" ? "128k" : "192k",
+        jpegQuality,
+      };
+    case "webm":
+      return {
+        codec: "vp9",
+        scale,
+        audioCodec: "opus",
+        crf: q === "cepat" ? 36 : q === "seimbang" ? 32 : 28,
+        audioBitrate: "128k",
+        jpegQuality,
+      };
+    case "mov":
+      return {
+        codec: "prores",
+        scale,
+        audioCodec: "pcm-16",
+        proResProfile: q === "cepat" ? "proxy" : q === "seimbang" ? "standard" : "hq",
+        jpegQuality,
+      };
+  }
 };
 
 export const loadPlan = (planPath: string): ScenePlan => {
@@ -73,6 +177,25 @@ export interface RenderBehaviorOptions {
   concurrency?: number | null;
   logLevel?: LogLevel;
   onProgress?: (event: ProgressEvent) => void;
+  /**
+   * URL dasar aset PLAN (ADR-0019). Diisi = aset TIDAK disalin ke public dir
+   * bundle, dan komposisi mengambilnya dari URL itu.
+   *
+   * Kombinasi itu disengaja, bukan penghematan: kalau asetnya tetap disalin,
+   * satu pemanggil `staticFile()` yang terlewat akan tetap menemukan berkasnya
+   * dan jalur URL-nya lolos tanpa pernah benar-benar diuji. Dengan tidak
+   * menyalin, kelalaian seperti itu langsung terlihat sebagai gambar hilang.
+   */
+  assetBaseUrl?: string | null;
+  /** Peta path aset -> URL penuh (mis. presigned). Mendahului assetBaseUrl. */
+  assetUrls?: Record<string, string> | null;
+  /**
+   * Pakai proxy pratinjau (ADR-0028) sebagai ganti berkas video aslinya.
+   * Untuk render DRAF: proxy 540p persis skala draf, dan mendekode 4K per
+   * bingkai adalah bagian paling lambat dari render draf. Render final tidak
+   * pernah memakainya — pemanggil yang memutuskan, bukan profil.
+   */
+  useProxies?: boolean;
 }
 
 interface PreparedRender {
@@ -91,7 +214,8 @@ const prepare = async (
   options: RenderBehaviorOptions,
 ): Promise<PreparedRender> => {
   const logLevel = options.logLevel ?? "warn";
-  const plan = loadPlan(planPath);
+  const loaded = loadPlan(planPath);
+  const plan = options.useProxies ? substituteProxies(loaded) : loaded;
   const browserExecutable = findBrowserExecutable();
 
   const bundleResult = await getBundle({
@@ -106,9 +230,19 @@ const prepare = async (
   if (bundleResult.ephemeral) {
     rmSync(bundleResult.bundleDir, { recursive: true, force: true });
   }
-  copyPlanAssets(planPath, plan, join(renderDir, "public"));
+  const assetBaseUrl = options.assetBaseUrl ?? null;
+  const assetUrls = options.assetUrls ?? null;
+  const remoteAssets = assetBaseUrl !== null || assetUrls !== null;
+  if (!remoteAssets) {
+    copyPlanAssets(planPath, plan, join(renderDir, "public"));
+  }
 
-  const inputProps = { plan, debug: PROFILES[profile].debug };
+  const inputProps = {
+    plan,
+    debug: PROFILES[profile].debug,
+    ...(assetBaseUrl === null ? {} : { assetBaseUrl }),
+    ...(assetUrls === null ? {} : { assetUrls }),
+  };
   const composition = await selectComposition({
     serveUrl: renderDir,
     id: COMPOSITION_ID,
@@ -136,6 +270,25 @@ export interface RenderVideoResult {
   width: number;
   height: number;
   bundleFromCache: boolean;
+  settings: ExportSettings;
+  /**
+   * Kenyaringan terintegrasi CAMPURAN AKHIR berkas ini, LUFS (ADR-0028).
+   * Diukur dari berkas yang benar-benar ditulis — bukan dihitung dari
+   * sumber-sumbernya — jadi ini angka yang akan didengar penonton.
+   * null = tidak terukur (target yang tidak mengukur, atau dekode gagal).
+   */
+  mixLufs?: number | null;
+  /**
+   * Kenyaringan campuran SEBELUM koreksi (ADR-0028 §9); sama dengan `mixLufs`
+   * bila berkasnya tidak disentuh.
+   */
+  mixLufsBefore?: number | null;
+  /** Penguatan yang diterapkan ke berkas hasil, dB; 0 = tidak dikoreksi. */
+  mixGainDb?: number;
+  /** Kalimat keadaan koreksi: kenapa dikoreksi, dibatasi puncak, atau dibiarkan. */
+  mixNote?: string;
+  /** Berapa berkas video yang dirender dari proxy-nya (ADR-0028); 0 = semua asli. */
+  proxied?: number;
 }
 
 export const renderPlanToVideo = async (
@@ -143,10 +296,13 @@ export const renderPlanToVideo = async (
     planPath: string;
     outputLocation: string;
     profile?: RenderProfile;
+    /** Menimpa default profil (ADR-0014): format, resolusi, mutu enkode. */
+    settings?: Partial<ExportSettings>;
   } & RenderBehaviorOptions,
 ): Promise<RenderVideoResult> => {
   const profile = options.profile ?? "draft";
-  const config = PROFILES[profile];
+  const settings = resolveExportSettings(profile, options.settings);
+  const enc = encoderArgs(settings);
   const logLevel = options.logLevel ?? "warn";
 
   const prepared = await prepare(options.planPath, profile, options);
@@ -154,15 +310,18 @@ export const renderPlanToVideo = async (
     await renderMedia({
       composition: prepared.composition,
       serveUrl: prepared.serveUrl,
-      codec: "h264",
+      codec: enc.codec,
+      audioCodec: enc.audioCodec,
       outputLocation: options.outputLocation,
       inputProps: prepared.inputProps,
       browserExecutable: prepared.browserExecutable,
-      crf: config.crf,
-      x264Preset: config.x264Preset,
-      scale: config.scale,
+      ...(enc.crf !== undefined ? { crf: enc.crf } : {}),
+      ...(enc.x264Preset ? { x264Preset: enc.x264Preset } : {}),
+      ...(enc.proResProfile ? { proResProfile: enc.proResProfile } : {}),
+      ...(enc.audioBitrate ? { audioBitrate: enc.audioBitrate } : {}),
+      scale: enc.scale,
       imageFormat: "jpeg",
-      jpegQuality: config.jpegQuality,
+      jpegQuality: enc.jpegQuality,
       concurrency: options.concurrency ?? null,
       logLevel,
       onProgress: ({ progress, stitchStage }) =>
@@ -172,14 +331,33 @@ export const renderPlanToVideo = async (
         }),
     });
 
+    // Ukur campuran akhirnya dari berkas yang ditulis dan KOREKSI ke sasaran
+    // (ADR-0028 §9): normalisasi per klip (ADR-0026) menjanjikan sumber yang
+    // setara, bukan program yang tepat sasaran. Kegagalan mengukur atau
+    // mengoreksi tidak pernah menggagalkan render yang sudah jadi.
+    const mix = await finalizeMix(
+      options.outputLocation,
+      {
+        codec: enc.audioCodec,
+        ...(enc.audioBitrate ? { bitrate: enc.audioBitrate } : {}),
+      },
+      prepared.plan.meta.loudnessTarget,
+    );
+
     return {
       outputLocation: options.outputLocation,
       durationInFrames: prepared.composition.durationInFrames,
       durationSec: prepared.composition.durationInFrames / FPS,
       sizeBytes: statSync(options.outputLocation).size,
-      width: Math.round(prepared.composition.width * config.scale),
-      height: Math.round(prepared.composition.height * config.scale),
+      width: Math.round(prepared.composition.width * enc.scale),
+      height: Math.round(prepared.composition.height * enc.scale),
       bundleFromCache: prepared.bundleFromCache,
+      settings,
+      mixLufs: mix.lufs,
+      mixLufsBefore: mix.lufsBefore,
+      mixGainDb: mix.gainDb,
+      mixNote: mix.note,
+      proxied: options.useProxies ? proxiedFiles(loadPlan(options.planPath)).size : 0,
     };
   } finally {
     prepared.cleanup();
@@ -243,3 +421,35 @@ export const renderPlanStills = async (
     prepared.cleanup();
   }
 };
+
+/**
+ * Target lokal sebagai implementasi `RenderTarget` (ADR-0019).
+ *
+ * Membungkus `renderPlanToVideo` apa adanya — perilakunya tidak berubah sedikit
+ * pun. Gunanya hanya satu: membuat "render di mesin ini" dan "render di cloud"
+ * bisa dipertukarkan oleh pemanggil yang sama.
+ */
+export const localRenderTarget = (
+  behavior: RenderBehaviorOptions = {},
+): RenderTarget => ({
+  id: "local",
+  label: "Mesin ini",
+  // Render lokal memakai listrik dan waktu, tapi tidak menagih apa pun. Nol
+  // adalah jawaban yang benar, bukan ketiadaan jawaban.
+  estimateCost: async () => ({ usd: 0, detail: "Render lokal tidak berbiaya API." }),
+  render: (request) =>
+    renderPlanToVideo({
+      planPath: request.planPath,
+      outputLocation: request.outputLocation,
+      profile: request.profile,
+      ...(request.settings ? { settings: request.settings } : {}),
+      ...(request.useProxies ? { useProxies: true } : {}),
+      ...behavior,
+      ...(request.onProgress
+        ? {
+            onProgress: (event) =>
+              request.onProgress?.({ stage: event.stage, progress: event.progress }),
+          }
+        : {}),
+    }),
+});

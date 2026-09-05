@@ -32,10 +32,10 @@ resmi kedua layanan, per Agustus 2026):
 
 | Kewajiban utk konten termonetisasi (YouTube/TikTok dsb.) | Pexels License | Pixabay Content License |
 |---|---|---|
-| Boleh dipakai komersial dalam karya turunan (video ini) | ✅ | ✅ |
+| Boleh dipakai komersial dalam karya turunan (video ini) | ya | ya |
 | Atribusi | Tidak wajib (dihargai) — kita simpan `author`+`sourceUrl` agar kredit bisa dibuat otomatis | Tidak wajib — sama |
-| Menjual/meredistribusi aset apa adanya (tanpa transformasi) | ❌ dilarang | ❌ dilarang |
-| Memakai orang/merek yang tampak utk endorse produk | ❌ butuh izin | ❌ butuh izin |
+| Menjual/meredistribusi aset apa adanya (tanpa transformasi) | dilarang | dilarang |
+| Memakai orang/merek yang tampak utk endorse produk | butuh izin | butuh izin |
 | Konten sensitif dgn orang yang dapat dikenali | Hati-hati (hak model tidak dijamin) | Hati-hati — sama |
 
 Implikasi produk: video hasil compose = karya turunan ⇒ aman dimonetisasi;

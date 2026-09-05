@@ -73,6 +73,17 @@ export const fetchJson = async <T>(
   return (await response.json()) as T;
 };
 
+/** Sama seperti fetchJson tapi untuk badan teks (mis. SVG dari Iconify). */
+export const fetchText = async (
+  url: string,
+  init: RequestInit,
+  label: string,
+  options?: HttpOptions,
+): Promise<string> => {
+  const response = await expectOk(await httpRequest(url, init, options), label);
+  return await response.text();
+};
+
 export const fetchBytes = async (
   url: string,
   init: RequestInit,

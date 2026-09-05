@@ -1,7 +1,12 @@
-import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
+import {
+  primaryClip,
+  type ResolvedAsset,
+  type Scene,
+  type ScenePlan,
+} from "@dalang/core";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import type { AspectMetrics } from "../../layout";
-import { Backdrop } from "./Backdrop";
+import { Backdrop, clipSeed } from "./Backdrop";
 import type { DocTheme } from "./theme";
 
 import { titleFontSize } from "./typography";
@@ -30,7 +35,10 @@ export const TitleScene: React.FC<{
   return (
     <AbsoluteFill>
       <Backdrop
-        scene={scene}
+        // Kartu judul/outro selalu berklip satu: ia bukan potongan rekaman,
+        // melainkan gambar yang teksnya berdiri di atasnya (ADR-0033).
+        clip={primaryClip(scene)}
+        seedKey={clipSeed(scene, 0)}
         sceneIndex={sceneIndex}
         asset={asset}
         theme={theme}

@@ -1,36 +1,44 @@
-import { existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   type AgentDeps,
   AgentEventLog,
   type ApprovalFn,
-  DEFAULT_ORCHESTRATOR_MODEL,
-  DEFAULT_VOLUME_MODEL,
+  defaultMemoryPath,
+  fileMemoryStore,
   Guardrails,
   loadModelRegistry,
   ProjectSession,
+  pickDefaultModels,
   type ResolvedModel,
   resolveModel,
   runAgentTurn,
 } from "@dalang/agent";
 import { PipelineDb, projectPaths, readPlanFile } from "@dalang/pipeline";
-import { buildStockChain, buildTtsChain } from "@dalang/providers";
-import { renderPlanToVideo } from "@dalang/renderer";
+import {
+  buildAsrChain,
+  buildGifChain,
+  buildIconProvider,
+  buildPublishTargets,
+  buildSfxChain,
+  buildStockChain,
+  buildTtsChain,
+} from "@dalang/providers";
+import {
+  detectSilence,
+  probeLocalVideo,
+  renderPlanStills,
+  renderPlanToVideo,
+  saveMediaToProject,
+} from "@dalang/renderer";
 import { type Command, InvalidArgumentError } from "commander";
+import { planPathOf } from "./project-path";
 
 /**
  * `dalang chat` — loop chat agent di CLI (Fase 2, PRD §11) dan
  * `dalang log` — garis waktu observability (stage runs + agent events).
  */
-
-const resolvePlanPath = (input: string): string => {
-  const abs = resolve(input);
-  if (existsSync(abs) && statSync(abs).isDirectory()) {
-    return join(abs, "plan.json");
-  }
-  return abs;
-};
 
 const parseUsd = (value: string): number => {
   const parsed = Number(value);
@@ -87,21 +95,27 @@ export const registerChatCommand = (program: Command): void => {
           budget?: number;
         },
       ) => {
-        const planPath = resolvePlanPath(proyek);
+        const planPath = planPathOf(proyek);
         const registry = await loadModelRegistry();
-        const orchestratorKey =
-          options.model ?? process.env.DALANG_MODEL ?? DEFAULT_ORCHESTRATOR_MODEL;
-        const volumeKey =
-          options.modelVolume ?? process.env.DALANG_MODEL_VOLUME ?? DEFAULT_VOLUME_MODEL;
+        // Netral vendor: environment user yang menentukan (API key terpasang /
+        // DALANG_MODEL) — bukan preferensi bawaan provider mana pun.
+        const defaults = pickDefaultModels(process.env, registry);
+        const orchestratorKey = options.model ?? defaults.orchestrator;
+        if (!orchestratorKey) {
+          throw new Error(defaults.reason);
+        }
+        const volumeKey = options.modelVolume ?? defaults.volume;
 
         const orchestrator = resolveModel(orchestratorKey, { registry });
         let volumeModel: ResolvedModel | undefined;
-        try {
-          volumeModel = resolveModel(volumeKey, { registry });
-        } catch (error) {
-          console.warn(
-            `  (model volume tidak tersedia: ${error instanceof Error ? error.message : error})`,
-          );
+        if (volumeKey) {
+          try {
+            volumeModel = resolveModel(volumeKey, { registry });
+          } catch (error) {
+            console.warn(
+              `  (model volume tidak tersedia: ${error instanceof Error ? error.message : error})`,
+            );
+          }
         }
         if (orchestrator.info && !orchestrator.info.toolCall) {
           throw new Error(
@@ -122,13 +136,13 @@ export const registerChatCommand = (program: Command): void => {
           }`;
           if (!rl) {
             if (options.yes) {
-              console.log(`  ⚠ ${detail} — disetujui otomatis (--yes)`);
+              console.log(`  [izin] ${detail} — disetujui otomatis (--yes)`);
               return true;
             }
-            console.log(`  ⚠ ${detail} — DITOLAK (mode --once tanpa --yes)`);
+            console.log(`  [izin] ${detail} — DITOLAK (mode --once tanpa --yes)`);
             return false;
           }
-          const answer = await rl.question(`  ⚠ ${detail}. Lanjutkan? (y/T) `);
+          const answer = await rl.question(`  [izin] ${detail}. Lanjutkan? (y/T) `);
           return answer.trim().toLowerCase().startsWith("y");
         };
 
@@ -144,8 +158,31 @@ export const registerChatCommand = (program: Command): void => {
           guards,
           ttsChainFor: (provider) => buildTtsChain({ provider }),
           stockChain: () => buildStockChain(),
+          stickerChain: () => buildGifChain({ stickers: true }),
           renderVideo: (renderOptions) => renderPlanToVideo(renderOptions),
+          videoMetadata: (file) => probeLocalVideo(session.paths.planPath, file),
+          detectSilence: (file) => detectSilence(session.paths.planPath, file),
+          asrChain: () => buildAsrChain(),
+          renderStills: async ({ planPath, frames, outDir, scale }) => {
+            mkdirSync(outDir, { recursive: true });
+            const files = frames.map((frame) => join(outDir, `review-${frame}.png`));
+            await renderPlanStills({
+              planPath,
+              frames,
+              outputLocationFor: (frame) => join(outDir, `review-${frame}.png`),
+              scale,
+            });
+            return files;
+          },
+          iconProvider: () => buildIconProvider(),
+          sfxChain: () => buildSfxChain(),
+          saveMedia: (media) =>
+            saveMediaToProject({ planPath: session.paths.planPath, ...media }),
           volumeModel,
+          // ADR-0029: memori preferensi milik orangnya — satu berkas di rumah Dalang.
+          memory: fileMemoryStore(defaultMemoryPath()),
+          // ADR-0030: tujuan publikasi — kosong tanpa token, dan tool-nya berkata begitu.
+          publishTargets: () => buildPublishTargets(),
           onToolActivity: (line) => console.log(line),
         };
 
@@ -190,16 +227,12 @@ export const registerChatCommand = (program: Command): void => {
             }
             if (line === "/undo") {
               const undone = session.undo();
-              console.log(
-                undone ? `↶ dibatalkan: ${undone}` : "Tidak ada yang bisa di-undo.",
-              );
+              console.log(undone ? `undo: ${undone}` : "Tidak ada yang bisa di-undo.");
               continue;
             }
             if (line === "/redo") {
               const redone = session.redo();
-              console.log(
-                redone ? `↷ diulang: ${redone}` : "Tidak ada yang bisa di-redo.",
-              );
+              console.log(redone ? `redo: ${redone}` : "Tidak ada yang bisa di-redo.");
               continue;
             }
             if (line === "/biaya") {
@@ -233,7 +266,7 @@ export const registerLogCommand = (program: Command): void => {
     .option("-n, --limit <n>", "jumlah entri", parsePositiveInt, 30)
     .description("Tampilkan garis waktu pipeline + agent (observability)")
     .action((proyek: string, options: { limit: number }) => {
-      const planPath = resolvePlanPath(proyek);
+      const planPath = planPathOf(proyek);
       const paths = projectPaths(planPath);
       const db = new PipelineDb(paths.dbPath);
       const events = new AgentEventLog(paths.dbPath);
@@ -249,7 +282,7 @@ export const registerLogCommand = (program: Command): void => {
                 stage: run.stage,
                 status: run.status,
                 provider: run.provider ?? "",
-                fallback: run.fallback ? "⚠" : "",
+                fallback: run.fallback ? "ya" : "",
                 biayaUsd: run.costUsd ?? "",
                 error: run.error ? run.error.slice(0, 40) : "",
               })),
