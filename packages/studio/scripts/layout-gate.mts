@@ -217,6 +217,38 @@ const INSPECTOR_CLIPPED = `(() => {
   return out.slice(0, 3);
 })()`;
 
+/**
+ * Tunggu animasi CSS SELESAI sebelum mengukur.
+ *
+ * Kenapa ada: `.inspector-panel` masuk dengan `drawer-in-right`, yang
+ * keyframe awalnya `translate: 14px 0` selama 180 ms. Mengukur di dalam
+ * jendela itu memberi kotak yang bergeser ke kanan — dan gerbang ini pernah
+ * merah di CI dengan bunyi persis "panel Properti keluar layar (+14px)", yaitu
+ * angka keyframe-nya sendiri. Bukan cacat tata letak: cacat PENGUKURAN yang
+ * balapan dengan animasi, sama kelasnya dengan tangkapan berlian yang dulu
+ * bergantung pada render hover.
+ *
+ * Menunggu lewat `sleep` yang lebih panjang hanya menggeser peluangnya. Yang
+ * dipakai di sini janji `animation.finished` milik peramban, jadi ia menunggu
+ * TEPAT selama animasinya berjalan.
+ *
+ * Animasi tak berujung (pemuat berputar) sengaja dikecualikan — menunggunya
+ * berarti menggantung selamanya — dan seluruh penantian dibatasi satu detik
+ * supaya gerbang tidak pernah bisa berhenti bernapas karena satu animasi yang
+ * tidak pernah selesai.
+ */
+const SETTLE = `(() => {
+  const all = typeof document.getAnimations === "function" ? document.getAnimations() : [];
+  const habis = all.filter((anim) => {
+    const timing = anim.effect && anim.effect.getComputedTiming();
+    return timing && Number.isFinite(timing.iterations) && Number.isFinite(timing.endTime);
+  });
+  return Promise.race([
+    Promise.all(habis.map((anim) => anim.finished.catch(() => null))),
+    new Promise((resolve) => setTimeout(resolve, 1000)),
+  ]).then(() => habis.length);
+})()`;
+
 interface Report {
   overlaps: string[];
   clippedTools: string[];
@@ -312,6 +344,7 @@ const main = async (): Promise<void> => {
         deviceScaleFactor: 1,
       });
       await sleep(220);
+      await page.evaluate(SETTLE);
       const report = (await page.evaluate(MEASURE)) as Report;
       const problems = [
         ...report.overlaps,
@@ -343,6 +376,7 @@ const main = async (): Promise<void> => {
           // Penambahan lapisan lewat patch: server, lalu SSE, lalu render ulang.
           if (state === "ditambah") await sleep(700);
         }
+        await page.evaluate(SETTLE);
         const tabReport = (await page.evaluate(MEASURE)) as Report;
         for (const overlap of tabReport.overlaps) {
           problems.push(`tab ${label}: ${overlap}`);

@@ -147,6 +147,60 @@ describe("server MCP Dalang", () => {
     await close();
   });
 
+  /**
+   * Ringkasan untuk scene BERKLIP BANYAK (ADR-0033).
+   *
+   * Agent pemanggil hanya melihat ringkasan ini. "asetSiap: true" pada scene
+   * yang dua dari tiga potongannya masih kosong bukan sekadar kurang tepat —
+   * ia menyuruh agent itu langsung merender.
+   */
+  it("asetSiap scene berklip banyak menuntut SEMUA potongannya punya berkas", async () => {
+    const { root, planPath } = makeWorkspace();
+    const berklip = parseScenePlan({
+      ...planInput(),
+      scenes: [
+        {
+          id: "sc-satu",
+          narration: "Satu kalimat, tiga potongan.",
+          clips: [
+            { id: "k1", type: "stock", durationSec: 3 },
+            { id: "k2", type: "stock", durationSec: 3 },
+            { id: "k3", type: "stock", durationSec: 3 },
+          ],
+        },
+      ],
+      renderState: {
+        narrationAudio: {},
+        clipAssets: {
+          k1: { file: "media/a.mp4", kind: "video", source: "local" },
+        },
+      },
+    });
+    writeFileSync(
+      planPath,
+      `${JSON.stringify(berklip, null, 2)}
+`,
+    );
+
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const ringkas = await callJson(client, "dalang_get_plan", { proyek: "proyekku" });
+    const scene = (
+      ringkas.value as {
+        scenes: Array<{
+          asetSiap: boolean;
+          klip?: Array<{ id: string; asetSiap: boolean }>;
+        }>;
+      }
+    ).scenes[0];
+    expect(scene?.asetSiap).toBe(false);
+    expect(scene?.klip?.map((clip) => [clip.id, clip.asetSiap])).toEqual([
+      ["k1", true],
+      ["k2", false],
+      ["k3", false],
+    ]);
+    await close();
+  });
+
   it("menolak path di luar akar dengan HASIL bertanda error, bukan koneksi putus", async () => {
     const { root } = makeWorkspace();
     const { client, close } = await connect({ workspace: { root, readOnly: false } });

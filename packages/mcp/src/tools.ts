@@ -1,6 +1,7 @@
 import { dirname, join } from "node:path";
 import {
   applyPatch,
+  clipAsset,
   computeTimeline,
   critiquePlan,
   type PatchOp,
@@ -8,7 +9,6 @@ import {
   primaryClip,
   resolveSceneDurationSec,
   type ScenePlan,
-  sceneAsset,
 } from "@dalang/core";
 import { buildEditTimeline, otioToJson, toFcpxml } from "@dalang/interop";
 import { atomicWriteFile } from "@dalang/pipeline";
@@ -69,7 +69,13 @@ export interface PlanSummary {
     asetSiap: boolean;
     suaraSiap: boolean;
     /** Potongan gambar di dalam scene ini — hanya saat lebih dari satu (ADR-0033). */
-    klip?: Array<{ id: string; durasiDetik: number; dariDetik: number; visual: string }>;
+    klip?: Array<{
+      id: string;
+      durasiDetik: number;
+      dariDetik: number;
+      visual: string;
+      asetSiap: boolean;
+    }>;
   }>;
 }
 
@@ -99,7 +105,11 @@ export const summarizePlan = (workspace: Workspace, planPath: string): PlanSumma
       naskah: scene.narration,
       visual:
         primaryClip(scene).query ?? primaryClip(scene).variant ?? primaryClip(scene).type,
-      asetSiap: sceneAsset(plan, scene) !== undefined,
+      // Untuk scene berklip banyak, "siap" berarti SEMUA potongannya punya
+      // berkas. Membaca potongan pertama saja akan menjawab `true` pada scene
+      // yang dua dari tiga potongannya masih kosong — dan agent pemanggil yang
+      // mempercayainya akan langsung menyuruh render.
+      asetSiap: scene.clips.every((clip) => clipAsset(plan, clip.id) !== undefined),
       suaraSiap: plan.renderState.narrationAudio[scene.id] !== undefined,
       // Potongan (ADR-0033) ikut ke ringkasan dengan alasan yang sama dengan
       // lapisan di bawah: agent pemanggil yang cuma melihat satu baris
@@ -112,6 +122,7 @@ export const summarizePlan = (workspace: Workspace, planPath: string): PlanSumma
               durasiDetik: Number((clip.durationSec ?? 0).toFixed(2)),
               dariDetik: clip.trimStartSec,
               visual: clip.query ?? clip.variant ?? clip.type,
+              asetSiap: clipAsset(plan, clip.id) !== undefined,
             })),
           }
         : {}),
