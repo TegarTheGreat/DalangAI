@@ -134,6 +134,18 @@ jobs:
           pnpm --filter @dalang/renderer asset-url-parity
           pnpm --filter @dalang/renderer asset-url-parity examples/tutorial-studio/plan.json
 
+      # Kalau salah satu gerbang paritas merah, PNG yang berselisih ikut naik.
+      # Selisih byte tidak bisa dilihat; gambarnya bisa — dan tanpa langkah ini
+      # satu-satunya cara memeriksanya adalah menebak dari jauh.
+      - name: Upload bukti paritas (hanya bila merah)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bukti-paritas
+          path: artefak-paritas
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload smoke frames
         uses: actions/upload-artifact@v4
         with:

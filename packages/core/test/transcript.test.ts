@@ -3,9 +3,14 @@ import {
   FILLER_WORDS,
   findFillerSpans,
   findPhraseSpans,
+  parseScenePlan,
+  setClipAsset,
+  setTranscript,
   speechSpans,
   type Transcript,
   textInSpan,
+  transcriptForClip,
+  transcriptForScene,
   transcriptToWordTimestamps,
   wordsInSpan,
 } from "../src/index";
@@ -228,5 +233,62 @@ describe("speechSpans", () => {
 
   it("transkrip kosong menghasilkan nol rentang", () => {
     expect(speechSpans(transcript([]))).toEqual([]);
+  });
+});
+
+/**
+ * Transkrip dicari lewat BERKAS, dan berkas melekat pada KLIP (ADR-0033).
+ *
+ * Scene berklip banyak boleh memakai dua rekaman berbeda; pencarian yang cuma
+ * mengenal potongan pertama akan menjawab transkrip yang SALAH untuk potongan
+ * kedua — dan jawaban yang salah jauh lebih mahal daripada tidak ada jawaban,
+ * karena isinya terbaca masuk akal.
+ */
+describe("transcriptForClip / transcriptForScene", () => {
+  const duaRekaman = () => {
+    let plan = parseScenePlan({
+      version: 2,
+      projectId: "uji-transkrip",
+      meta: { title: "Uji" },
+      audio: {},
+      scenes: [
+        {
+          id: "sc-001",
+          narration: "Dua potongan.",
+          clips: [
+            { id: "sc-001-k1", type: "stock", durationSec: 3 },
+            { id: "sc-001-k2", type: "stock", durationSec: 3 },
+          ],
+        },
+      ],
+    });
+    plan = setClipAsset(plan, "sc-001-k1", {
+      file: "media/a.mp4",
+      kind: "video",
+      source: "local",
+    });
+    plan = setClipAsset(plan, "sc-001-k2", {
+      file: "media/b.mp4",
+      kind: "video",
+      source: "local",
+    });
+    plan = setTranscript(plan, "media/a.mp4", transcript([["pertama", 0, 1]]));
+    plan = setTranscript(plan, "media/b.mp4", transcript([["kedua", 0, 1]]));
+    return plan;
+  };
+
+  it("menjawab transkrip berkas milik klip yang diminta", () => {
+    const plan = duaRekaman();
+    expect(transcriptForClip(plan, "sc-001-k1")?.words[0]?.word).toBe("pertama");
+    expect(transcriptForClip(plan, "sc-001-k2")?.words[0]?.word).toBe("kedua");
+  });
+
+  it("lewat scene tetap menjawab potongan PERTAMA, apa adanya", () => {
+    expect(transcriptForScene(duaRekaman(), "sc-001")?.words[0]?.word).toBe("pertama");
+  });
+
+  it("klip tanpa berkas menjawab undefined, bukan transkrip tetangganya", () => {
+    const plan = duaRekaman();
+    expect(transcriptForClip(plan, "klip-yang-tidak-ada")).toBeUndefined();
   });
 });

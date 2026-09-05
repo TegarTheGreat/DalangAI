@@ -14,6 +14,16 @@
  * pun — ia hanya membuat gambar atau suara hilang di video, dan hanya terlihat
  * kalau ada yang benar-benar merender. Skrip ini yang merender.
  *
+ * APA ARTI SELISIH BYTE DI SINI, diuji dengan mutasi dan bukan diduga: satu
+ * pemanggil `staticFile()` untuk aset PLAN membuat render jalur URL GAGAL
+ * TOTAL, bukan menghasilkan gambar yang berbeda sedikit — asetnya memang tidak
+ * ada di bundle jalur itu, jadi Remotion membatalkan render-nya. Dicoba dua
+ * kali (mengganti `assetSrc` dengan `staticFile`, lalu menyajikan SVG dengan
+ * content-type yang salah), keduanya berakhir sebagai CancelledError. Jadi
+ * selisih byte yang LOLOS render bukan aset yang hilang: ia perbedaan
+ * rasterisasi. Hitungan piksel di pesan kegagalan yang membedakan keduanya,
+ * dan PNG-nya ikut disimpan supaya bisa dilihat.
+ *
  * DUA PERCOBAAN, BUKAN SATU. Frame yang berselisih dirender ulang sekali
  * sebelum divonis, dan hanya selisih yang BERULANG yang menggagalkan gerbang.
  * Alasannya ada di src/parity-verdict.ts: pemanggil `staticFile()` yang
@@ -30,7 +40,14 @@
  */
 
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -43,6 +60,7 @@ import {
   type ParityAttempt,
   parityVerdict,
 } from "../src/parity-verdict";
+import { describeDiff, diffPng } from "../src/png-diff";
 import { renderPlanStills } from "../src/render";
 
 // Bawaannya relatif AKAR REPO, bukan cwd: skrip ini dipanggil lewat
@@ -164,6 +182,49 @@ const renderBothPaths = async (
   );
 };
 
+/**
+ * Bukti yang bisa DILIHAT, bukan cuma sha256 yang berbeda.
+ *
+ * Vonis gerbang ini benar tapi diagnosisnya buta: "132759 byte vs 132736 byte"
+ * tidak bisa membedakan gambar yang hilang dari sepuhan tepi yang bergeser satu
+ * tingkat, padahal penanganan keduanya berlawanan. Jadi saat selisihnya
+ * berulang, dua hal disimpan: hitungan piksel (lewat `diffPng`) dan berkas
+ * PNG-nya sendiri di folder yang diunggah CI sebagai artefak.
+ */
+// Folder tetap di akar repo, bukan variabel lingkungan: satu tempat yang
+// selalu sama membuat langkah unggah CI dan orang yang mencarinya di mesin
+// sendiri menyebut path yang persis sama.
+const artefakDir = join(repoRoot, "artefak-paritas");
+
+const simpanBukti = (frame: number, tags: string[]): string[] => {
+  mkdirSync(artefakDir, { recursive: true });
+  const disimpan: string[] = [];
+  for (const tag of tags) {
+    for (const jalur of ["lokal", "url"]) {
+      const sumber = join(outDir, `${tag}-${jalur}-${frame}.png`);
+      if (!existsSync(sumber)) continue;
+      const tujuan = join(artefakDir, `aset-f${frame}-${tag}-${jalur}.png`);
+      copyFileSync(sumber, tujuan);
+      disimpan.push(tujuan);
+    }
+  }
+  return disimpan;
+};
+
+/** Satu baris hitungan piksel untuk satu percobaan. */
+const bedaPiksel = (frame: number, tag: string): string => {
+  try {
+    return describeDiff(
+      diffPng(
+        readFileSync(join(outDir, `${tag}-lokal-${frame}.png`)),
+        readFileSync(join(outDir, `${tag}-url-${frame}.png`)),
+      ),
+    );
+  } catch (error) {
+    return `gagal dibandingkan piksel: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
 try {
   const first = await renderBothPaths(FRAMES, "p1");
 
@@ -189,14 +250,22 @@ try {
     const attempt2 = second.get(frame) as ParityAttempt;
     const verdict = parityVerdict(attempt1, attempt2);
     if (verdict === "berbeda") {
+      const bukti = simpanBukti(frame, ["p1", "p2"]);
       throw new Error(
         `Frame ${frame}: render lokal dan render lewat URL BERBEDA, dua kali berturut-turut.\n` +
           describeAttempt("percobaan 1", attempt1) +
           "\n" +
+          `    piksel      : ${bedaPiksel(frame, "p1")}\n` +
           describeAttempt("percobaan 2", attempt2) +
           "\n" +
+          `    piksel      : ${bedaPiksel(frame, "p2")}\n` +
           `  aset terlayani: ${[...new Set(servedPaths)].join(", ")}\n` +
-          "Biasanya berarti ada pemanggil staticFile() untuk aset PLAN yang belum dipindah ke useAssetSrc().",
+          `  bukti gambar : ${bukti.join(", ") || "(gagal disimpan)"}\n` +
+          "Aset yang benar-benar hilang menggagalkan render, bukan menggeser byte " +
+          "(lihat catatan di kepala berkas ini), jadi selisih yang lolos sampai sini " +
+          "adalah perbedaan RASTERISASI. Bidang luas dengan selisih kanal besar " +
+          "berarti isi gambarnya berbeda; pecahan persen dengan selisih kecil berarti " +
+          "sepuhan tepi bergeser satu tingkat di lingkungan ini.",
       );
     }
     console.warn(

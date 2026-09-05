@@ -1,7 +1,8 @@
 import {
+  clipAsset,
   getScene,
+  primaryClip,
   type ScenePlan,
-  sceneAsset,
   type Transcript,
   type TranscriptWord,
   type WordTimestamp,
@@ -19,14 +20,30 @@ import {
  * yang tahu `visual.trimStartSec`.
  */
 
-/** Transkrip untuk aset visual sebuah scene, kalau ada. */
+/** Transkrip untuk berkas sebuah KLIP, kalau ada (ADR-0033). */
+export const transcriptForClip = (
+  plan: ScenePlan,
+  clipId: string,
+): Transcript | undefined => {
+  const file = clipAsset(plan, clipId)?.file;
+  return file ? plan.renderState.transcripts[file] : undefined;
+};
+
+/**
+ * Transkrip untuk visual DASAR sebuah scene, kalau ada.
+ *
+ * Sengaja tetap menyasar potongan pertama, bukan menggabungkan semuanya:
+ * pemakainya adalah caption karaoke, yang menerjemahkan waktu rekaman ke waktu
+ * scene memakai satu `trimStartSec` — dan menyatukan transkrip beberapa
+ * rekaman di belakangnya berarti mengarang satu garis waktu yang tidak dimiliki
+ * berkas mana pun. Untuk potongan tertentu, pakai `transcriptForClip`.
+ */
 export const transcriptForScene = (
   plan: ScenePlan,
   sceneId: string,
 ): Transcript | undefined => {
   const scene = getScene(plan, sceneId);
-  const file = scene ? sceneAsset(plan, scene)?.file : undefined;
-  return file ? plan.renderState.transcripts[file] : undefined;
+  return scene ? transcriptForClip(plan, primaryClip(scene).id) : undefined;
 };
 
 /** Kata-kata yang jatuh di dalam rentang waktu rekaman, inklusif-tumpang-tindih. */

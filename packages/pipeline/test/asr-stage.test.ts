@@ -95,6 +95,65 @@ describe("recordingsInPlan", () => {
       ["media/wawancara.mp4", ["sc-002"]],
     ]);
   });
+
+  it("menemukan rekaman yang cuma dipakai potongan KEDUA (ADR-0033)", () => {
+    // Sebelumnya hanya klip pertama yang dilihat, jadi rekaman kedua tidak
+    // pernah ditranskrip — dan yang hilang bukan berkasnya melainkan
+    // kemampuan agent membaca isinya sebelum memutuskan potongan.
+    let plan = parseScenePlan(
+      basicPlan({
+        scenes: [
+          {
+            id: "sc-001",
+            narration: "Dua potongan dari dua rekaman berbeda.",
+            clips: [
+              { id: "sc-001-k1", type: "stock", durationSec: 3 },
+              { id: "sc-001-k2", type: "stock", durationSec: 3 },
+            ],
+          },
+        ],
+      }),
+    );
+    plan = setClipAsset(plan, "sc-001-k1", {
+      file: "media/a.mp4",
+      kind: "video",
+      source: "local",
+    });
+    plan = setClipAsset(plan, "sc-001-k2", {
+      file: "media/b.mp4",
+      kind: "video",
+      source: "local",
+    });
+    expect([...recordingsInPlan(plan)]).toEqual([
+      ["media/a.mp4", ["sc-001"]],
+      ["media/b.mp4", ["sc-001"]],
+    ]);
+  });
+
+  it("menyebut satu scene sekali walau beberapa potongannya berkas yang sama", () => {
+    let plan = parseScenePlan(
+      basicPlan({
+        scenes: [
+          {
+            id: "sc-001",
+            narration: "Dua potongan dari satu wawancara.",
+            clips: [
+              { id: "sc-001-k1", type: "stock", durationSec: 3 },
+              { id: "sc-001-k2", type: "stock", trimStartSec: 30, durationSec: 3 },
+            ],
+          },
+        ],
+      }),
+    );
+    for (const clipId of ["sc-001-k1", "sc-001-k2"]) {
+      plan = setClipAsset(plan, clipId, {
+        file: "media/wawancara.mp4",
+        kind: "video",
+        source: "local",
+      });
+    }
+    expect([...recordingsInPlan(plan)]).toEqual([["media/wawancara.mp4", ["sc-001"]]]);
+  });
 });
 
 describe("runAsrStage", () => {

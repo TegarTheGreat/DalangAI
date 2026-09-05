@@ -14,7 +14,7 @@ import {
   phrasesFound,
   proseStatsOf,
 } from "./prose";
-import { primaryClip, type Scene, type ScenePlan, sceneAsset } from "./scene-plan";
+import { clipAsset, primaryClip, type Scene, type ScenePlan } from "./scene-plan";
 
 /**
  * Kritik sutradara otomatis (ADR-0014): heuristik deterministik atas
@@ -300,7 +300,16 @@ const critiqueAudio = (plan: ScenePlan): DirectorNote[] => {
   };
 
   for (const scene of plan.scenes) {
-    check(primaryClip(scene).audio, sceneAsset(plan, scene)?.lufs, `aset ${scene.id}`);
+    // Per KLIP (ADR-0033): potongan kedua yang bersuara tapi belum diukur
+    // adalah lompatan kenyaringan di TENGAH scene, dan dengan pemeriksaan
+    // per-scene ia lolos tanpa satu pun perhatian.
+    for (const clip of scene.clips) {
+      check(
+        clip.audio,
+        clipAsset(plan, clip.id)?.lufs,
+        scene.clips.length > 1 ? `aset ${clip.id}` : `aset ${scene.id}`,
+      );
+    }
     for (const layer of scene.layers) {
       check(
         layer.visual.audio,

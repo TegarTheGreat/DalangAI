@@ -29,12 +29,13 @@
  */
 
 import { createHash } from "node:crypto";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseScenePlan } from "@dalang/core";
+import { describeDiff, diffPng } from "../src/png-diff";
 import { renderPlanStills } from "../src/render";
 
 const sha256 = (file: string): string =>
@@ -190,6 +191,33 @@ const main = async () => {
       return;
     }
 
+    /**
+     * Bukti yang bisa DILIHAT saat merah, bukan cuma dua sha256 yang berbeda.
+     *
+     * Hitungan piksel memisahkan dua sebab yang penanganannya berlawanan:
+     * field yang benar-benar tidak ikut pindah menggeser blok besar, sementara
+     * sepuhan tepi yang berbeda satu tingkat menyentuh pecahan persen bidang.
+     * PNG-nya sendiri ikut disimpan supaya bisa dibuka mata manusia.
+     */
+    const artefakDir = join(repoRoot, "artefak-paritas");
+    const bukti = (frame: number, pasangan: [string, string][]): string => {
+      mkdirSync(artefakDir, { recursive: true });
+      const tersimpan: string[] = [];
+      for (const [label, file] of pasangan) {
+        const tujuan = join(artefakDir, `migrasi-f${frame}-${label}.png`);
+        copyFileSync(file, tujuan);
+        tersimpan.push(tujuan);
+      }
+      return tersimpan.join(", ");
+    };
+    const piksel = (a: string, b: string): string => {
+      try {
+        return describeDiff(diffPng(readFileSync(a), readFileSync(b)));
+      } catch (error) {
+        return `gagal dibandingkan piksel: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    };
+
     let beda = 0;
     let goyah = 0;
     for (const [index, fileV1] of berkasV1.entries()) {
@@ -200,20 +228,39 @@ const main = async () => {
       const bUlang = sha256(ulangV2[index] as string);
       const stabil = a === aUlang && b === bUlang;
       const cocok = a === b;
+      const nomor = frames[index] as number;
       if (!stabil) {
         goyah++;
+        const sisi = a === aUlang ? "v2" : "v1";
+        const pasangan: [string, string] =
+          sisi === "v1"
+            ? [fileV1, ulangV1[index] as string]
+            : [fileV2, ulangV2[index] as string];
         console.log(
-          `  frame ${frames[index]}: GOYAH — plan yang sama memberi hasil berbeda ` +
+          `  frame ${nomor}: GOYAH — plan yang sama memberi hasil berbeda ` +
             `(v1 ${a.slice(0, 12)}/${aUlang.slice(0, 12)}, ` +
-            `v2 ${b.slice(0, 12)}/${bUlang.slice(0, 12)})`,
+            `v2 ${b.slice(0, 12)}/${bUlang.slice(0, 12)})\n` +
+            `      sisi ${sisi}: ${piksel(pasangan[0], pasangan[1])}\n` +
+            `      bukti: ${bukti(nomor, [
+              [`${sisi}-a`, pasangan[0]],
+              [`${sisi}-b`, pasangan[1]],
+            ])}`,
         );
         continue;
       }
-      if (!cocok) beda++;
-      console.log(
-        `  frame ${frames[index]}: ${cocok ? "identik" : "BERBEDA"} ` +
-          `v1=${a.slice(0, 12)} v2=${b.slice(0, 12)}`,
-      );
+      if (!cocok) {
+        beda++;
+        console.log(
+          `  frame ${nomor}: BERBEDA v1=${a.slice(0, 12)} v2=${b.slice(0, 12)}\n` +
+            `      ${piksel(fileV1, fileV2)}\n` +
+            `      bukti: ${bukti(nomor, [
+              ["v1", fileV1],
+              ["v2", fileV2],
+            ])}`,
+        );
+        continue;
+      }
+      console.log(`  frame ${nomor}: identik v1=${a.slice(0, 12)} v2=${b.slice(0, 12)}`);
     }
 
     if (goyah > 0) {

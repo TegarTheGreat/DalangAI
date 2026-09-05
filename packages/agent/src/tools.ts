@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
   addMemoryEntry,
+  allClips,
   clipAsset,
   critiquePlan,
   defaultPublishMetadata,
@@ -28,7 +29,6 @@ import {
   recipeFor,
   removeMemoryEntry,
   type ScenePlanInput,
-  sceneAsset,
   scenePlanSchema,
   setClipAsset,
   setGraphicAsset,
@@ -494,11 +494,13 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           // Gerbang biaya (§6.3). Menranskrip rekaman panjang di provider
           // berbayar adalah pengeluaran nyata, dan panjangnya baru diketahui
           // dari aset — bukan dari jumlah scene.
+          // Dicari di SELURUH klip (ADR-0033), bukan cuma klip pertama tiap
+          // scene: rekaman yang hanya dipakai potongan kedua terhitung nol
+          // detik, dan gerbang biaya yang menghitung nol tidak menjaga apa pun.
+          const semuaAset = allClips(plan).map(({ clip }) => clipAsset(plan, clip.id));
           const totalSec = [...recordings.keys()].reduce((sum, file) => {
-            const owner = plan.scenes.find(
-              (scene) => sceneAsset(plan, scene)?.file === file,
-            );
-            return sum + (owner ? (sceneAsset(plan, owner)?.durationSec ?? 0) : 0);
+            const asset = semuaAset.find((candidate) => candidate?.file === file);
+            return sum + (asset?.durationSec ?? 0);
           }, 0);
           const berbayar = providers[0]?.offline !== true;
           if (berbayar && totalSec > 0) {

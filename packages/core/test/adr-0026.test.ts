@@ -385,4 +385,43 @@ describe("critiquePlan soal audio", () => {
       "audio-belum-diukur",
     );
   });
+
+  /**
+   * Potongan KEDUA yang bersuara (ADR-0033).
+   *
+   * Pemeriksaan yang cuma membaca klip pertama membuat lompatan kenyaringan di
+   * TENGAH scene lolos tanpa satu pun perhatian — dan itu justru tempat yang
+   * paling terdengar, karena penonton baru saja mendengar potongan sebelumnya.
+   */
+  it("mengeluhkan potongan kedua yang berbunyi tapi belum terukur", () => {
+    const duaKlip = plan({
+      scenes: [
+        {
+          id: "a",
+          narration: "Satu.",
+          clips: [
+            { id: "a-k1", type: "stock", durationSec: 3 },
+            { id: "a-k2", type: "stock", durationSec: 3, audio: { volume: 0.6 } },
+          ],
+        },
+      ],
+      renderState: {
+        clipAssets: {
+          "a-k1": { file: "media/a.mp4", kind: "video", source: "pexels" },
+          "a-k2": { file: "media/b.mp4", kind: "video", source: "pexels" },
+        },
+      },
+    });
+    const notes = critiquePlan(duaKlip);
+    expect(notes.map((note) => note.code)).toContain("audio-belum-diukur");
+    // Yang disebut adalah KLIP-nya, bukan scene-nya: "aset a" tidak memberi
+    // tahu potongan mana yang harus diukur.
+    expect(notes.find((note) => note.code === "audio-belum-diukur")?.message).toContain(
+      "a-k2",
+    );
+    // Dan diam setelah berkas potongan itu terukur.
+    expect(
+      critiquePlan(setLoudness(duaKlip, "media/b.mp4", -20)).map((note) => note.code),
+    ).not.toContain("audio-belum-diukur");
+  });
 });

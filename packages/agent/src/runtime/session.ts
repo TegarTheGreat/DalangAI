@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import {
   applyPatch,
+  clipAsset,
   computeTimeline,
   countWords,
   critiquePlan,
@@ -260,15 +261,25 @@ export class ProjectSession {
     const lines = plan.scenes.map((scene, index) => {
       const audio = plan.renderState.narrationAudio[scene.id];
       const asset = sceneAsset(plan, scene);
+      const beraset = scene.clips.filter(
+        (clip) => clipAsset(plan, clip.id) !== undefined,
+      ).length;
       const flags = [
         scene.locked ? "TERKUNCI" : null,
         primaryClip(scene).pinned ? "pinned" : null,
         audio ? (audio.fallbackQuality ? "suara:fallback" : "suara:ok") : null,
-        asset
-          ? `aset:${asset.kind}`
-          : primaryClip(scene).type === "stock"
-            ? "aset:belum"
-            : null,
+        // Klip (ADR-0033). Tanpa ini agent tidak pernah tahu scene ini punya
+        // beberapa potongan: ia akan menyunting potongan pertama saja karena
+        // itu bawaan `updateScene` tanpa clipId, dan tidak akan pernah
+        // mencarikan aset untuk sisanya.
+        scene.clips.length > 1 ? `klip:${beraset}/${scene.clips.length} beraset` : null,
+        scene.clips.length > 1
+          ? null
+          : asset
+            ? `aset:${asset.kind}`
+            : primaryClip(scene).type === "stock"
+              ? "aset:belum"
+              : null,
         // Lapisan (ADR-0025) ikut ke konteks: kalau tidak, agent tidak pernah
         // tahu sisipan yang sudah ada dan akan menumpuknya sampai batas.
         scene.layers.length > 0

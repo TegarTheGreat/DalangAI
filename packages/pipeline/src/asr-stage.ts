@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
+  clipAsset,
   type ScenePlan,
-  sceneAsset,
   setTranscript,
   type Transcript,
   transcriptSchema,
@@ -62,6 +62,14 @@ export const fileContentHash = (path: string): Promise<string> =>
  *
  * Hanya aset video/audio: menranskrip gambar diam adalah pekerjaan yang pasti
  * tidak menghasilkan apa-apa, dan biayanya nyata pada provider berbayar.
+ *
+ * Dipindai per KLIP (ADR-0033), bukan per scene. Sebelumnya hanya klip pertama
+ * yang dilihat, jadi scene yang potongan keduanya rekaman LAIN tidak pernah
+ * ditranskrip — dan yang hilang bukan berkasnya melainkan kemampuan agent
+ * membaca isinya sebelum memutuskan potongan. Scene tetap disebut sekali
+ * meski beberapa potongannya memakai berkas yang sama: yang dibawa peta ini
+ * adalah "siapa yang memakai rekaman ini", dan menyebut satu scene dua kali
+ * hanya membuat laporannya lebih panjang tanpa lebih benar.
  */
 export const recordingsInPlan = (
   plan: ScenePlan,
@@ -71,9 +79,13 @@ export const recordingsInPlan = (
   const byFile = new Map<string, string[]>();
   for (const scene of plan.scenes) {
     if (wanted && !wanted.has(scene.id)) continue;
-    const asset = sceneAsset(plan, scene);
-    if (!asset || (asset.kind !== "video" && asset.kind !== "audio")) continue;
-    byFile.set(asset.file, [...(byFile.get(asset.file) ?? []), scene.id]);
+    for (const clip of scene.clips) {
+      const asset = clipAsset(plan, clip.id);
+      if (!asset || (asset.kind !== "video" && asset.kind !== "audio")) continue;
+      const users = byFile.get(asset.file) ?? [];
+      if (!users.includes(scene.id)) users.push(scene.id);
+      byFile.set(asset.file, users);
+    }
   }
   return byFile;
 };
