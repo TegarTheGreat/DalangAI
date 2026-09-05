@@ -161,8 +161,26 @@ const main = async () => {
       return hasil.outputs.map((o) => o.outputLocation);
     };
 
+    /**
+     * Tiap plan dirender DUA KALI, dan itu bukan pemborosan.
+     *
+     * Gerbang ini menuduh satu hal saja: "ada field yang tidak ikut pindah".
+     * Tuduhan itu hanya sah kalau rendernya sendiri deterministik — kalau
+     * bukan, dua berkas berbeda dari plan yang SAMA akan dilaporkan sebagai
+     * cacat migrasi, dan orang yang membacanya akan mencari kesalahan di
+     * tempat yang tidak ada kesalahannya. Sudah terjadi: satu jalan CI
+     * melaporkan frame 240 berbeda padahal kedua plan terbukti identik setelah
+     * parse (pemeriksaan JSON di atas lolos), jadi yang berbeda mustahil
+     * datang dari migrasi.
+     *
+     * Dua render kontrol per sisi menjawabnya di tempat: kalau sebuah sisi
+     * berbeda dengan DIRINYA SENDIRI, yang dilaporkan adalah rendernya yang
+     * tidak deterministik, bukan migrasinya.
+     */
     const berkasV1 = await render(jalurV1, "v1");
+    const ulangV1 = await render(jalurV1, "v1-ulang");
     const berkasV2 = await render(jalurV2, "v2");
+    const ulangV2 = await render(jalurV2, "v2-ulang");
 
     if (berkasV1.length !== berkasV2.length) {
       console.error(
@@ -173,16 +191,40 @@ const main = async () => {
     }
 
     let beda = 0;
+    let goyah = 0;
     for (const [index, fileV1] of berkasV1.entries()) {
       const fileV2 = berkasV2[index] as string;
       const a = sha256(fileV1);
       const b = sha256(fileV2);
+      const aUlang = sha256(ulangV1[index] as string);
+      const bUlang = sha256(ulangV2[index] as string);
+      const stabil = a === aUlang && b === bUlang;
       const cocok = a === b;
+      if (!stabil) {
+        goyah++;
+        console.log(
+          `  frame ${frames[index]}: GOYAH — plan yang sama memberi hasil berbeda ` +
+            `(v1 ${a.slice(0, 12)}/${aUlang.slice(0, 12)}, ` +
+            `v2 ${b.slice(0, 12)}/${bUlang.slice(0, 12)})`,
+        );
+        continue;
+      }
       if (!cocok) beda++;
       console.log(
         `  frame ${frames[index]}: ${cocok ? "identik" : "BERBEDA"} ` +
           `v1=${a.slice(0, 12)} v2=${b.slice(0, 12)}`,
       );
+    }
+
+    if (goyah > 0) {
+      console.error(
+        `GAGAL: ${goyah} dari ${berkasV1.length} frame TIDAK DETERMINISTIK — plan ` +
+          "yang sama memberi berkas berbeda pada dua render berturut-turut. Ini " +
+          "cacat renderer atau lingkungannya, BUKAN cacat migrasi: paritas v1/v2 " +
+          "tidak bisa diperiksa sampai rendernya stabil.",
+      );
+      process.exitCode = 1;
+      return;
     }
 
     if (beda > 0) {

@@ -914,7 +914,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     resolveAssets: tool({
       description:
-        "Resolve otomatis aset stock untuk scene bertipe 'stock' yang belum punya aset (kandidat pertama; video diutamakan). Scene pinned/terkunci dilewati. Untuk kontrol penuh pakai searchAssets + pickAsset.",
+        "Resolve otomatis aset stock untuk SETIAP klip bertipe 'stock' yang belum punya aset (kandidat pertama; video diutamakan). Klip kedua dan seterusnya wajib punya clip.query sendiri — kueri klip tidak diturunkan dari narasi. Klip pinned dan scene terkunci dilewati. Untuk kontrol penuh pakai searchAssets + pickAsset.",
       inputSchema: z.object({ sceneIds: z.array(z.string()).optional() }),
       execute: (input) =>
         run("resolveAssets", input, async () => {
@@ -1586,7 +1586,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     pickAsset: tool({
       description:
-        "Unduh & pasang kandidat hasil searchAssets ke sebuah scene (berdasarkan query + index kandidat). Isi layerId untuk memasangnya ke lapisan video, bukan ke visual dasar. Scene terkunci/pinned ditolak.",
+        "Unduh & pasang kandidat hasil searchAssets ke sebuah scene (berdasarkan query + index kandidat). Isi layerId untuk memasangnya ke lapisan video, atau clipId untuk memasangnya ke satu potongan tertentu di scene berklip banyak. Scene terkunci/klip pinned ditolak.",
       inputSchema: z.object({
         sceneId: z.string(),
         query: z.string(),
@@ -1596,6 +1596,13 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           .nullable()
           .default(null)
           .describe("Id lapisan dari addLayer; null = visual dasar scene."),
+        clipId: z
+          .string()
+          .nullable()
+          .default(null)
+          .describe(
+            "Id klip di dalam scene (ADR-0033); null = klip pertama. Diabaikan bila layerId diisi.",
+          ),
       }),
       execute: (input) =>
         run("pickAsset", input, async () => {
@@ -1624,6 +1631,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             db: session.db,
             sceneId: input.sceneId,
             ...(input.layerId ? { layerId: input.layerId } : {}),
+            ...(input.clipId ? { clipId: input.clipId } : {}),
             provider,
             candidate,
           });

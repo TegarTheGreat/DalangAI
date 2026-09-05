@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { primaryClip, type ScenePlan, sceneAsset, setLoudness } from "@dalang/core";
+import { clipAsset, type ScenePlan, setLoudness } from "@dalang/core";
 import type { PipelineDb } from "./db";
 import { contentHash } from "./hash";
 import { measureWavLoudness } from "./loudness";
@@ -55,8 +55,17 @@ export const audibleFiles = (plan: ScenePlan): Job[] => {
     add(audio.file, `narasi ${sceneId}`);
   }
   for (const scene of plan.scenes) {
-    if (primaryClip(scene).audio.volume > 0) {
-      add(sceneAsset(plan, scene)?.file, `suara aset ${scene.id}`);
+    // Per KLIP (ADR-0033): scene berklip banyak punya berkas berbeda-beda,
+    // dan membaca klip pertama saja berarti potongan lain yang bersuara tidak
+    // pernah dinormalisasi — lompatan kenyaringan di tengah scene, tepat pada
+    // potongan yang tidak pernah diukur.
+    for (const clip of scene.clips) {
+      if (clip.audio.volume > 0) {
+        add(
+          clipAsset(plan, clip.id)?.file,
+          scene.clips.length > 1 ? `suara aset ${clip.id}` : `suara aset ${scene.id}`,
+        );
+      }
     }
     for (const layer of scene.layers) {
       if (layer.visual.audio.volume > 0) {

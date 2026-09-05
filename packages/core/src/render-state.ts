@@ -250,25 +250,40 @@ export const orphanMediaAssetIds = (
 
 /**
  * Pipeline auto-resolve write path: records the chosen asset in
- * renderState AND fills `visual.assetId` (PRD §5.1: "diisi pipeline setelah
+ * renderState AND fills `clip.assetId` (PRD §5.1: "diisi pipeline setelah
  * fetch") — WITHOUT pinning, so the user/agent can still replace it.
- * Refuses pinned scenes: an explicitly chosen asset is never auto-replaced.
+ * Refuses pinned clips: an explicitly chosen asset is never auto-replaced.
+ *
+ * `clipId` memilih POTONGAN yang ditulisi (ADR-0033); tanpa itu potongan
+ * pertama, yaitu perilaku sebelum klip ada. Pin diperiksa pada potongan yang
+ * disasar, bukan pada potongan pertama: satu potongan yang dipilih tangan
+ * tidak boleh ditimpa auto-resolve, dan potongan lain di scene yang sama tidak
+ * boleh ikut terkunci karenanya.
  */
 export const assignResolvedAsset = (
   plan: ScenePlan,
   sceneId: string,
   assetId: string,
   asset: ResolvedAsset,
+  clipId?: string,
 ): ScenePlan => {
   const next = structuredClone(plan);
   const scene = next.scenes.find((candidate) => candidate.id === sceneId);
   if (!scene) {
     throw new Error(`assignResolvedAsset: scene "${sceneId}" tidak ditemukan`);
   }
-  const clip = primaryClip(scene);
+  const clip =
+    clipId === undefined
+      ? primaryClip(scene)
+      : scene.clips.find((candidate) => candidate.id === clipId);
+  if (!clip) {
+    throw new Error(
+      `assignResolvedAsset: klip "${clipId}" tidak ada di scene "${sceneId}"`,
+    );
+  }
   if (clip.pinned) {
     throw new Error(
-      `assignResolvedAsset: aset scene "${sceneId}" ter-pin — auto-resolve tidak boleh menimpanya`,
+      `assignResolvedAsset: aset klip "${clip.id}" ter-pin — auto-resolve tidak boleh menimpanya`,
     );
   }
   clip.assetId = assetId;

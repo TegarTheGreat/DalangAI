@@ -305,8 +305,8 @@ scene sampah, karena dua belas potongan dari satu wawancara sekarang satu
 scene dengan dua belas klip, satu narasi, satu caption. Skema naik ke v2
 dengan fungsi migrasi pertama repo ini (dijaga gerbang paritas byte), empat op
 klip beserta aritmetika ripple/roll hidup di core, renderer menyusun stripnya,
-titik potong bisa diseret di timeline, dan interop memetakan klip satu-ke-satu
-di kedua arah — dijaga gerbang yang membaca varian berklip banyak dengan
+titik potong bisa diseret di timeline, pipeline meresolusi aset per KLIP, dan
+interop memetakan klip satu-ke-satu di kedua arah — dijaga gerbang yang membaca varian berklip banyak dengan
 OpenTimelineIO resmi, bukan cuma plan contoh yang kebetulan berklip satu. Di
 antara dua potongan bawaannya potong keras; larut dipasang per potongan lewat
 `updateScene.clip.transition`. Batasnya di "Batas yang dinyatakan" ADR-0033 (bukan J/L cut,

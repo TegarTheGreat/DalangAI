@@ -3,7 +3,6 @@ import {
   assignLayerAsset,
   assignResolvedAsset,
   getScene,
-  primaryClip,
   type ResolvedAsset,
   type ScenePlan,
   setClipAsset,
@@ -33,6 +32,7 @@ export const materializeCandidate = async ({
   db,
   sceneId,
   layerId,
+  clipId,
   provider,
   candidate,
   allowPinned = false,
@@ -43,6 +43,8 @@ export const materializeCandidate = async ({
   sceneId: string;
   /** Menyasar satu lapisan video di dalam scene (ADR-0025); kosong = visual dasar. */
   layerId?: string;
+  /** Menyasar satu KLIP di dalam scene (ADR-0033); kosong = klip pertama. */
+  clipId?: string;
   provider: StockProvider;
   candidate: StockCandidate;
   allowPinned?: boolean;
@@ -55,14 +57,27 @@ export const materializeCandidate = async ({
   if (layerId !== undefined && !scene.layers.some((layer) => layer.id === layerId)) {
     throw new Error(`Lapisan "${layerId}" tidak ada di scene "${sceneId}"`);
   }
+  const clipIndex =
+    clipId === undefined ? 0 : scene.clips.findIndex((clip) => clip.id === clipId);
+  if (clipIndex < 0) {
+    throw new Error(`Klip "${clipId}" tidak ada di scene "${sceneId}"`);
+  }
+  const clip = scene.clips[clipIndex] as (typeof scene.clips)[number];
 
   const inputHash = contentHash({
     kind: "stock-pick",
     assetId: candidate.assetId,
   });
-  // Kunci run ikut menyebut lapisannya, sama seperti di auto-resolve: tanpa
-  // itu memilih aset lapisan menimpa riwayat pilihan visual dasarnya.
-  const runKey = layerId === undefined ? sceneId : `${sceneId}#${layerId}`;
+  // Kunci run ikut menyebut lapisan ATAU klipnya, sama seperti di auto-resolve:
+  // tanpa itu memilih aset lapisan (atau potongan kedua) menimpa riwayat
+  // pilihan visual dasarnya. Klip pertama tetap memakai id scene apa adanya,
+  // supaya cache proyek yang sudah ada tidak batal seluruhnya.
+  const runKey =
+    layerId !== undefined
+      ? `${sceneId}#${layerId}`
+      : clipIndex === 0
+        ? sceneId
+        : `${sceneId}@${clip.id}`;
   db.startRun(plan.projectId, runKey, "assets", inputHash);
   const startedAt = Date.now();
 
@@ -84,8 +99,8 @@ export const materializeCandidate = async ({
     const next =
       layerId === undefined
         ? allowPinned
-          ? setClipAsset(plan, primaryClip(scene).id, asset)
-          : assignResolvedAsset(plan, sceneId, candidate.assetId, asset)
+          ? setClipAsset(plan, clip.id, asset)
+          : assignResolvedAsset(plan, sceneId, candidate.assetId, asset, clip.id)
         : allowPinned
           ? setLayerAsset(plan, layerId, asset)
           : assignLayerAsset(plan, sceneId, layerId, candidate.assetId, asset);

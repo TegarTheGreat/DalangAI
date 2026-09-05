@@ -248,6 +248,19 @@ potongan, bukan isi salah satunya. Kartunya menghapus field-nya alih-alih
 menyetel tipe `none`: keduanya terlihat sama di layar tapi yang satu tidak
 memakai tumpang-tindih sama sekali sementara yang lain tetap memakan durasinya.
 
+**Pipeline.** Tahap aset bersatuan KLIP, bukan scene. Sebelumnya ia membaca
+`primaryClip(scene)` saja, jadi scene berklip tiga dengan tiga kueri berbeda
+hanya bisa mendapat berkas untuk potongan pertama — dua sisanya tidak pernah
+dicari, dan kegagalannya baru muncul jauh di hilir sebagai latar prosedural di
+tengah video. Kunci cache klip pertama tetap id SCENE apa adanya supaya proyek
+yang sudah ada tidak mengunduh ulang seluruh asetnya; potongan berikutnya
+memakai `scene@klip`, pola yang sama dengan `scene#lapisan` milik ADR-0025.
+Kueri turunan dari narasi tetap hanya untuk potongan pertama: menurunkannya
+untuk potongan kedua memberi kueri yang sama persis, dan dua potongan berisi
+gambar yang sama bukan penyuntingan. Tahap ukur kenyaringan ikut per klip —
+potongan bersuara yang tidak pernah diukur adalah lompatan kenyaringan di
+tengah scene.
+
 **Interop.** Ekspor: satu klip Dalang = satu klip OTIO/FCPXML, transisi di
 dalam scene ikut. Impor: potongan berurutan dari BERKAS yang sama jadi satu
 scene berklip banyak, bukan satu scene per potongan. Catatan "yang tidak ikut
@@ -272,6 +285,8 @@ Cacat yang ditemukan test dan gerbang selama fase ini:
 | uji `clipFrameSpans` | scene yang lebih pendek dari jumlah klipnya melahirkan petak nol bingkai — ditolak Remotion, dan mustahil dilacak balik ke pembulatan |
 | uji mutasi pada gerbang interop | harapan jumlah peralihan dibaca dari `timeline` yang sedang diuji: mematikan ekspor transisi di dalam scene membuat kedua sisi turun bersamaan dan gerbangnya tetap hijau — tautologi yang persis diperingatkan komentar gerbang itu sendiri |
 | pembacaan permukaan | `clip.transition` ada di skema dan dipakai renderer, tapi tidak ada op yang bisa menyetelnya selain menulis ulang seluruh daftar; kemampuannya nyata dan tidak terjangkau |
+| pembacaan pipeline | tahap aset, tahap kenyaringan, dan `materializeCandidate` semuanya bersatuan SCENE: scene berklip banyak hanya bisa meresolusi potongan pertamanya |
+| gerbang paritas migrasi di CI | gerbangnya menuduh "ada field yang tidak ikut pindah" untuk selisih byte apa pun, padahal kedua plan sudah terbukti identik setelah parse — selisihnya mustahil datang dari migrasi. Kini tiap sisi dirender dua kali sebagai kontrol, dan render yang tidak deterministik dilaporkan sebagai dirinya sendiri |
 
 ## Rencana verifikasi
 

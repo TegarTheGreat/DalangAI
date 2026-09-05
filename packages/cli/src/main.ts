@@ -452,17 +452,33 @@ const STATUS_ICON: Record<SceneStageResult["status"], string> = {
   error: "GAGAL",
 };
 
+/**
+ * Nama baris: scene, atau scene/potongan bila barisnya menyasar sesuatu di
+ * DALAM scene (lapisan ADR-0025, klip ADR-0033).
+ *
+ * Tanpa ini, scene berklip tiga mencetak tiga baris dengan nama yang sama
+ * persis — dan kalau satu di antaranya gagal, tidak ada yang bisa mengatakan
+ * potongan mana.
+ */
+const stageRowLabel = (result: SceneStageResult): string =>
+  result.layerId
+    ? `${result.sceneId}/${result.layerId}`
+    : result.clipId
+      ? `${result.sceneId}/${result.clipId}`
+      : result.sceneId;
+
 const printStageResults = (title: string, results: SceneStageResult[]): void => {
   if (results.length === 0) {
     console.log(`  ${title}: tidak ada scene yang perlu diproses`);
     return;
   }
   console.log(`  ${title}:`);
+  const width = Math.max(10, ...results.map((result) => stageRowLabel(result).length));
   for (const result of results) {
     const cost =
       result.costUsd && result.costUsd > 0 ? ` · ~$${result.costUsd.toFixed(4)}` : "";
     console.log(
-      `    ${STATUS_ICON[result.status]} ${result.sceneId.padEnd(10)} ${result.detail}${cost}`,
+      `    ${STATUS_ICON[result.status]} ${stageRowLabel(result).padEnd(width)} ${result.detail}${cost}`,
     );
   }
 };
