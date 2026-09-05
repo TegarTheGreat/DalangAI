@@ -148,6 +148,39 @@ describe("server MCP Dalang", () => {
   });
 
   /**
+   * Zona aman platform (ADR-0034) di ringkasan MCP.
+   *
+   * Agent pemanggil hanya melihat ringkasan ini. Kalau ia diam soal tepi yang
+   * sudah dipesan, agent itu akan menaruh teks di pita yang justru
+   * dikosongkan — dan kesalahannya akan terlihat seperti kesalahan agent-nya
+   * sendiri, bukan seperti ringkasan yang tidak lengkap.
+   */
+  it("zona aman ikut ke ringkasan saat menyala, dan DIAM saat mati", async () => {
+    const { root, planPath } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+
+    const mati = await callJson(client, "dalang_get_plan", { proyek: "proyekku" });
+    expect((mati.value as Record<string, unknown>).zonaAman).toBeUndefined();
+
+    const dengan = parseScenePlan({
+      ...planInput(),
+      meta: {
+        ...planInput().meta,
+        safeArea: { top: 0.06, bottom: 0.18, left: 0, right: 0.12 },
+      },
+    });
+    writeFileSync(planPath, JSON.stringify(dengan, null, 2));
+    const nyala = await callJson(client, "dalang_get_plan", { proyek: "proyekku" });
+    expect((nyala.value as Record<string, unknown>).zonaAman).toEqual({
+      atas: 0.06,
+      bawah: 0.18,
+      kiri: 0,
+      kanan: 0.12,
+    });
+    await close();
+  });
+
+  /**
    * Ringkasan untuk scene BERKLIP BANYAK (ADR-0033).
    *
    * Agent pemanggil hanya melihat ringkasan ini. "asetSiap: true" pada scene

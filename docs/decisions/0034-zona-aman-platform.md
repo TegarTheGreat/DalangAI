@@ -133,6 +133,13 @@ naik keluar pita bawah, rel kanan mempersempit kedua sisi, zona aman kecil
 tidak mengurangi margin desain, dan bidang tersisa tetap positif di batas
 paling ekstrem skema (0,4 keempat sisi).
 
+Permukaannya menyebutkan zona aman di semua tempat yang menggambarkan plan:
+dialog Gaya Studio (dengan persentasenya terlihat), baris kepala
+`dalang validate` (hanya saat menyala), kaidah agent, dan ringkasan server MCP
+— yang terakhir penting karena agent LAIN hanya melihat ringkasan itu, dan
+ringkasan yang diam soal tepi yang sudah dipesan membuat agent itu menaruh teks
+di pita yang justru dikosongkan.
+
 ## Batas yang dinyatakan
 
 - **Angkanya bukan spesifikasi platform.** Repo ini tidak pernah mengukur

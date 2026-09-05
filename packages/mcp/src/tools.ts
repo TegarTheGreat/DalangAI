@@ -58,6 +58,15 @@ export interface PlanSummary {
   aspectRatio: string;
   format: string;
   bahasa: string;
+  /**
+   * Zona aman platform (ADR-0034), HANYA saat menyala.
+   *
+   * Agent lain yang menaruh teks di plan ini perlu tahu tepi mana yang sudah
+   * dipesan; tanpa itu ia menaruhnya di pita yang justru dikosongkan, dan
+   * ringkasan yang diam soal batas tata letak membuat kesalahan itu terlihat
+   * seperti kesalahan agent-nya sendiri.
+   */
+  zonaAman?: { atas: number; bawah: number; kiri: number; kanan: number };
   totalDetik: number;
   scenes: Array<{
     id: string;
@@ -96,6 +105,19 @@ export const summarizePlan = (workspace: Workspace, planPath: string): PlanSumma
     aspectRatio: plan.meta.aspectRatio,
     format: plan.meta.format,
     bahasa: plan.meta.language,
+    ...(plan.meta.safeArea.top > 0 ||
+    plan.meta.safeArea.bottom > 0 ||
+    plan.meta.safeArea.left > 0 ||
+    plan.meta.safeArea.right > 0
+      ? {
+          zonaAman: {
+            atas: plan.meta.safeArea.top,
+            bawah: plan.meta.safeArea.bottom,
+            kiri: plan.meta.safeArea.left,
+            kanan: plan.meta.safeArea.right,
+          },
+        }
+      : {}),
     totalDetik: Number(totalSec.toFixed(2)),
     scenes: plan.scenes.map((scene, index) => ({
       id: scene.id,
