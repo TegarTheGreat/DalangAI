@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPatch,
+  type Clip,
   clampTrimDelta,
   clipOutPointSec,
   computeClipTimings,
   critiquePlan,
+  cutClipOps,
   MIN_CLIP_SEC,
   PatchError,
   type PatchOpInput,
+  parseScenePlan,
   resolveSceneDurationSec,
+  type Scene,
   type ScenePlan,
   type ScenePlanInput,
   trimBounds,
@@ -800,5 +804,118 @@ describe("penjagaan kunci", () => {
       () => apply(plan, [{ op: "removeClip", sceneId: "sc-002", clipId: "hantu" }]),
       "CLIP_NOT_FOUND",
     );
+  });
+});
+
+/**
+ * `cutClipOps` — aturan "panjang potongan disimpan di mana" satu tempat.
+ *
+ * Dua pemanggil pernah melanggarnya sendiri-sendiri (tool cutByWords milik
+ * agent dan tombol "Potong ke sini" di tab Transkrip Studio), keduanya gagal
+ * merah persis di scene berklip banyak. Test ini menjaga aturannya, bukan
+ * salah satu pemanggilnya.
+ */
+describe("cutClipOps", () => {
+  const satuKlip = parseScenePlan({
+    version: 2,
+    projectId: "p",
+    meta: { title: "T" },
+    scenes: [
+      {
+        id: "sc-1",
+        narration: "",
+        clips: [{ id: "k1", type: "stock", trimStartSec: 5, speed: 1 }],
+      },
+    ],
+  });
+  const banyakKlip = parseScenePlan({
+    version: 2,
+    projectId: "p",
+    meta: { title: "T" },
+    scenes: [
+      {
+        id: "sc-1",
+        narration: "",
+        duration: "auto",
+        clips: [
+          { id: "k1", type: "stock", trimStartSec: 5, durationSec: 4 },
+          { id: "k2", type: "stock", trimStartSec: 40, durationSec: 3 },
+        ],
+      },
+    ],
+  });
+  const scene = (plan: typeof satuKlip) => plan.scenes[0] as Scene;
+
+  it("scene berklip satu menyetel durasi SCENE, tanpa clipId", () => {
+    const ops = cutClipOps(scene(satuKlip), scene(satuKlip).clips[0] as Clip, {
+      fromSec: 10,
+      toSec: 12.5,
+    });
+    expect(ops).toEqual([
+      {
+        op: "updateScene",
+        id: "sc-1",
+        patch: { clip: { trimStartSec: 10 }, duration: 2.5 },
+      },
+    ]);
+  });
+
+  it("scene berklip banyak TIDAK pernah menulis angka ke duration scene", () => {
+    const ops = cutClipOps(scene(banyakKlip), scene(banyakKlip).clips[1] as Clip, {
+      fromSec: 50,
+      toSec: 51.5,
+    });
+    expect(ops).toEqual([
+      {
+        op: "updateScene",
+        id: "sc-1",
+        clipId: "k2",
+        patch: { clip: { trimStartSec: 50 } },
+      },
+      {
+        op: "trimClip",
+        sceneId: "sc-1",
+        clipId: "k2",
+        edge: "keluar",
+        mode: "ripple",
+        deltaSec: -1.5,
+      },
+    ]);
+    // Bukan cuma bentuknya: op-nya harus benar-benar diterima applyPatch.
+    const { plan } = applyPatch(banyakKlip, ops, { origin: "user" });
+    const sesudah = plan.scenes[0] as Scene;
+    expect(sesudah.duration).toBe("auto");
+    expect(sesudah.clips[1]?.trimStartSec).toBe(50);
+    expect(sesudah.clips[1]?.durationSec).toBeCloseTo(1.5, 3);
+    expect(sesudah.clips[0]?.durationSec).toBe(4);
+  });
+
+  it("panjang yang sudah pas tidak melahirkan trimClip kosong", () => {
+    const ops = cutClipOps(scene(banyakKlip), scene(banyakKlip).clips[1] as Clip, {
+      fromSec: 40,
+      toSec: 43,
+    });
+    expect(ops).toHaveLength(1);
+  });
+
+  it("kecepatan klip ikut dihitung: 2x memakan dua kali rentang rekaman", () => {
+    const cepat = parseScenePlan({
+      version: 2,
+      projectId: "p",
+      meta: { title: "T" },
+      scenes: [
+        {
+          id: "sc-1",
+          narration: "",
+          clips: [{ id: "k1", type: "stock", trimStartSec: 0, speed: 2 }],
+        },
+      ],
+    });
+    const ops = cutClipOps(scene(cepat), scene(cepat).clips[0] as Clip, {
+      fromSec: 10,
+      toSec: 14,
+    });
+    // 4 detik rekaman pada 2x = 2 detik di linimasa.
+    expect((ops[0] as { patch: { duration: number } }).patch.duration).toBe(2);
   });
 });

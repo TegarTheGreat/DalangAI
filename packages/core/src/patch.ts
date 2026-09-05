@@ -702,6 +702,65 @@ const applyOne = (
 // ---------------------------------------------------------------------------
 
 /**
+ * Op untuk "tampilkan PERSIS rentang rekaman ini di potongan ini".
+ *
+ * Ada di sini, bukan di pemanggilnya, karena panjang sebuah potongan disimpan
+ * di TEMPAT YANG BERBEDA tergantung jumlah klip scene (ADR-0033 §2): di
+ * `scene.duration` saat klipnya satu, dan di `clip.durationSec` saat lebih —
+ * dan menulis angka ke `scene.duration` scene berklip banyak DITOLAK skema.
+ * Aturan itu sudah pernah dilanggar dua kali oleh dua pemanggil yang berbeda
+ * (tool `cutByWords` milik agent dan tombol "Potong ke sini" di tab Transkrip
+ * Studio), masing-masing gagal merah persis di scene hasil pembelahan. Dua
+ * salinan aturan yang sama akan menyimpang, dan yang menyimpang duluan pasti
+ * yang jarang dibaca.
+ *
+ * Klip yang lebih dari satu digeser lewat `trimClip` ripple, bukan lewat
+ * penulisan `durationSec` langsung: batas ujung rekaman dan durasi minimum
+ * dijaga di sana, dan inversnya (daftar klip sebelumnya) membuat undo
+ * mengembalikan titik masuk SEKALIGUS panjangnya.
+ *
+ * `toSec` yang melewati akhir rekaman TIDAK dijepit di sini — penjepitan butuh
+ * panjang aset, yang cuma diketahui pemanggilnya, dan menjepit diam-diam pada
+ * nilai yang tidak diketahui adalah cara termudah memindahkan kesalahan ke
+ * tempat yang tidak bisa dilacak.
+ */
+export const cutClipOps = (
+  scene: Scene,
+  clip: Clip,
+  range: { fromSec: number; toSec: number },
+): PatchOpInput[] => {
+  const speed = clip.speed > 0 ? clip.speed : 1;
+  const durationSec = Number(((range.toSec - range.fromSec) / speed).toFixed(3));
+  const banyak = scene.clips.length > 1;
+  const ops: PatchOpInput[] = [
+    {
+      op: "updateScene",
+      id: scene.id,
+      ...(banyak ? { clipId: clip.id } : {}),
+      patch: {
+        clip: { trimStartSec: range.fromSec },
+        ...(banyak ? {} : { duration: durationSec }),
+      },
+    },
+  ];
+  if (!banyak) return ops;
+
+  // Titik masuk digeser oleh op di atas, jadi batas tepi keluar dihitung
+  // terhadap sisa rekaman SETELAH titik masuk baru — bukan terhadap yang lama.
+  const deltaSec = Number((durationSec - (clip.durationSec ?? 0)).toFixed(3));
+  if (Math.abs(deltaSec) < 0.001) return ops;
+  ops.push({
+    op: "trimClip",
+    sceneId: scene.id,
+    clipId: clip.id,
+    edge: "keluar",
+    mode: "ripple",
+    deltaSec,
+  });
+  return ops;
+};
+
+/**
  * Validate and apply a batch of ops atomically: either every op applies and a
  * new plan is returned, or a PatchError is thrown and the original plan is
  * untouched. Ops are validated against `patchOpSchema` first, so this is safe

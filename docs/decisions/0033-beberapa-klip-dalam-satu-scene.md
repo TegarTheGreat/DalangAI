@@ -284,6 +284,26 @@ daripada galat. `locateUiElement` sengaja TETAP membaca potongan pertama —
 anotasi tutorial-01 milik scene (lihat Batas yang dinyatakan), jadi ia harus
 menunjuk screenshot yang sama dengan yang digambar preset itu.
 
+**Caption rekaman.** Kata caption dikumpulkan PER POTONGAN, lewat petak yang
+sama yang dipakai `ClipStrip` (`clipFrameSpans`). Sebelumnya `captionWords`
+membaca titik masuk klip pertama lalu menarik kata sepanjang durasi scene —
+mengandaikan scene itu satu rentang utuh di rekaman. Wawancara yang dibelah
+justru menampilkan rentang yang TERPISAH, jadi captionnya benar hanya untuk
+potongan pertama dan memuat kata-kata yang tadi sengaja dibuang. Cacat itu
+mendarat di VIDEO JADI dan hanya terlihat oleh yang menonton sambil membaca.
+Tiap potongan boleh berasal dari rekaman berbeda; transkrip dicari per klip,
+dan potongan tanpa transkrip dilewati alih-alih menghapus caption seluruh
+scene.
+
+**Satu aturan potong, dua pemanggil.** `cutClipOps` di core menyusun op untuk
+"tampilkan persis rentang rekaman ini". Aturan §2 — panjang potongan ada di
+`scene.duration` saat klipnya satu dan di `clip.durationSec` saat lebih —
+sudah dilanggar sendiri-sendiri oleh dua pemanggil (`cutByWords` milik agent
+dan tombol "Potong ke sini" di tab Transkrip Studio), keduanya gagal merah
+persis di scene hasil pembelahan. Sekarang keduanya memanggil fungsi yang
+sama. Tab Transkrip ikut menyasar potongan TERPILIH: jendela sorotnya, lompatan
+playhead-nya (yang kini menambahkan bingkai awal potongan), dan potongannya.
+
 **Interop.** Ekspor: satu klip Dalang = satu klip OTIO/FCPXML, transisi di
 dalam scene ikut. Impor: potongan berurutan dari BERKAS yang sama jadi satu
 scene berklip banyak, bukan satu scene per potongan. Catatan "yang tidak ikut
@@ -313,6 +333,8 @@ Cacat yang ditemukan test dan gerbang selama fase ini:
 | gerbang paritas migrasi di CI | gerbangnya menuduh "ada field yang tidak ikut pindah" untuk selisih byte apa pun, padahal kedua plan sudah terbukti identik setelah parse — selisihnya mustahil datang dari migrasi. Kini tiap sisi dirender dua kali sebagai kontrol, dan render yang tidak deterministik dilaporkan sebagai dirinya sendiri |
 | hitungan piksel gerbang paritas | render kontrol membuktikan sumbernya bukan migrasi, dan hitungan pikselnya memberi angkanya: 248 piksel (0,191% bidang), selisih kanal terbesar 2/255 — pembulatan rasterisasi, bukan gambar yang berganti. Kedua gerbang paritas kini memakai satu ambang bersama (`withinRasterNoise`), dan setiap toleransi dicetak beserta angkanya. Diuji mutasi: mengganti satu teks memberi 3060 piksel dengan selisih kanal 165/255 — tetap jatuh |
 | tes tool agent | `cutByWords` selalu gagal di scene berklip banyak; `ingestVideo`, `getTranscript`, `findMoments`, dan `analyzeImage` menyunting potongan pertama tanpa satu pun tanda |
+| pembacaan model caption | caption rekaman menarik satu rentang utuh dari titik masuk klip pertama — untuk scene berklip banyak ia menampilkan kata yang justru dibuang, di VIDEO JADI |
+| pembacaan tab Transkrip | jendela sorot, lompatan playhead, dan tombol "Potong ke sini" semuanya memakai klip pertama; tombolnya bahkan mengulang persis cacat `duration` yang baru saja diperbaiki di agent — bukti bahwa aturannya harus satu fungsi, bukan satu kebiasaan |
 
 ## Rencana verifikasi
 

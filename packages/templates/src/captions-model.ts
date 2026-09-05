@@ -2,10 +2,9 @@ import {
   estimateWordTimestamps,
   NARRATION_LEAD_IN_SEC,
   narrationWindowSec,
-  primaryClip,
   type Scene,
   type ScenePlan,
-  transcriptForScene,
+  transcriptForClip,
   transcriptToWordTimestamps,
   type WordTimestamp,
 } from "@dalang/core";
@@ -13,6 +12,7 @@ import {
   createTikTokStyleCaptions,
   type Caption as RemotionCaption,
 } from "@remotion/captions";
+import { clipFrameSpans } from "./layout";
 
 /**
  * Pure caption timing model — no React, fully unit-tested.
@@ -91,18 +91,53 @@ const captionWords = (
     };
   }
 
-  const transcript = transcriptForScene(plan, scene.id);
-  if (!transcript) return { words: [], offsetMs: 0 };
-
-  const speed = primaryClip(scene).speed;
-  const fromSec = primaryClip(scene).trimStartSec;
-  // Rentang rekaman yang benar-benar terpakai: durasi scene DIKALI kecepatan,
-  // karena scene 5 detik pada 2x memakan 10 detik rekaman.
-  const toSec = fromSec + (sceneDurationFrames / fps) * (speed > 0 ? speed : 1);
-  return {
-    words: transcriptToWordTimestamps(transcript, fromSec, toSec, { speed }),
-    offsetMs: 0,
-  };
+  /**
+   * Dikumpulkan PER POTONGAN, bukan sekali untuk seluruh scene (ADR-0033).
+   *
+   * Scene berklip banyak dari satu wawancara menampilkan potongan-potongan
+   * yang TERPISAH di rekaman: potongan pertama dari detik 12, kedua dari detik
+   * 340, ketiga dari detik 88. Membaca titik masuk klip pertama lalu menarik
+   * kata sepanjang durasi scene mengandaikan scene itu satu rentang utuh —
+   * hasilnya caption yang benar hanya untuk potongan pertama, dan yang justru
+   * memuat kata-kata yang tadi dibuang. Cacat itu mendarat di VIDEO JADI, dan
+   * hanya terlihat oleh yang menonton sambil membaca.
+   *
+   * Petaknya diambil dari `clipFrameSpans`, fungsi yang sama yang dipakai
+   * `ClipStrip` untuk memutuskan potongan mana yang tampil di bingkai mana.
+   * Satu sumber kebenaran: caption yang memakai aritmetika sendiri akan
+   * menyimpang dari gambarnya begitu salah satunya berubah, dan yang
+   * menyimpang duluan pasti yang jarang dibaca.
+   *
+   * Scene berklip SATU melewati jalur yang sama persis — `clipFrameSpans`
+   * mengembalikan satu petak sepanjang scene, jadi hasilnya identik dengan
+   * sebelum ADR-0033 dan tidak ada cabang kedua yang bisa menyimpang.
+   */
+  const words: WordTimestamp[] = [];
+  for (const span of clipFrameSpans(scene, sceneDurationFrames)) {
+    const clip = scene.clips[span.index];
+    if (!clip) continue;
+    // Tiap potongan boleh berasal dari REKAMAN yang berbeda; transkrip
+    // dicari per klip, bukan sekali untuk scene.
+    const transcript = transcriptForClip(plan, clip.id);
+    if (!transcript) continue;
+    const speed = clip.speed > 0 ? clip.speed : 1;
+    const fromSec = clip.trimStartSec;
+    // Rentang rekaman yang benar-benar terpakai POTONGAN INI: durasinya
+    // DIKALI kecepatan, karena potongan 5 detik pada 2x memakan 10 detik
+    // rekaman.
+    const toSec = fromSec + (span.frames / fps) * speed;
+    const geserSec = span.startFrame / fps;
+    for (const word of transcriptToWordTimestamps(transcript, fromSec, toSec, {
+      speed,
+    })) {
+      words.push({
+        word: word.word,
+        startSec: Number((word.startSec + geserSec).toFixed(3)),
+        endSec: Number((word.endSec + geserSec).toFixed(3)),
+      });
+    }
+  }
+  return { words, offsetMs: 0 };
 };
 
 export const buildCaptionPages = ({

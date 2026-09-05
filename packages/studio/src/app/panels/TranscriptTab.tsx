@@ -1,15 +1,16 @@
 import {
-  primaryClip,
+  clipAsset,
+  cutClipOps,
   type Scene,
   type ScenePlan,
-  sceneAsset,
   type Transcript,
   type TranscriptSpan,
 } from "@dalang/core";
-import { computeFrameLayout, FPS } from "@dalang/templates/layout";
+import { clipFrameSpans, computeFrameLayout, FPS } from "@dalang/templates/layout";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api";
 import { IconMic } from "../icons";
+import { selectedClip } from "../model/plan-meta";
 import { playback } from "../playback";
 import { studioClient, useStudio } from "../use-studio";
 
@@ -48,9 +49,15 @@ export const TranscriptTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
   plan,
   scene,
 }) => {
-  const { project } = useStudio();
-  const file = sceneAsset(plan, scene)?.file;
-  const kind = sceneAsset(plan, scene)?.kind;
+  const { project, selectedClipId } = useStudio();
+  // Menyasar potongan TERPILIH, sama seperti tab Visual, tab Audio, dan panel
+  // Sumber (ADR-0033). Scene wawancara berklip dua belas menampilkan dua belas
+  // rentang rekaman yang berbeda; panel yang selalu menunjukkan rentang
+  // potongan pertama menjawab dengan yakin tentang potongan yang tidak sedang
+  // dilihat siapa pun.
+  const clip = selectedClip(scene, selectedClipId);
+  const file = clipAsset(plan, clip.id)?.file;
+  const kind = clipAsset(plan, clip.id)?.kind;
   const summary = project?.transcripts.find((item) => item.file === file);
 
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -101,13 +108,21 @@ export const TranscriptTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
     );
   }
 
-  const trimStart = primaryClip(scene).trimStartSec;
-  const speed = primaryClip(scene).speed > 0 ? primaryClip(scene).speed : 1;
-  const sceneSec =
+  const trimStart = clip.trimStartSec;
+  const speed = clip.speed > 0 ? clip.speed : 1;
+  const sceneFrames =
     computeFrameLayout(plan).sceneFrames[
       plan.scenes.findIndex((item) => item.id === scene.id)
-    ];
-  const windowEnd = trimStart + ((sceneSec ?? 0) / FPS) * speed;
+    ] ?? 0;
+  // Petak POTONGAN INI di dalam scene — dari `clipFrameSpans`, fungsi yang
+  // sama yang dipakai renderer. Jendela yang dihitung dari durasi scene utuh
+  // akan menyorot kalimat yang sebenarnya sudah dibuang.
+  const petak = clipFrameSpans(scene, Math.max(sceneFrames, scene.clips.length)).find(
+    (item) => item.id === clip.id,
+  );
+  const clipFrames = petak?.frames ?? sceneFrames;
+  const clipStartFrame = petak?.startFrame ?? 0;
+  const windowEnd = trimStart + (clipFrames / FPS) * speed;
 
   const runTranscribe = async () => {
     setError(null);
@@ -125,25 +140,34 @@ export const TranscriptTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
   };
 
   const seekTo = (recSec: number) => {
-    // Waktu REKAMAN -> waktu SCENE -> frame komposisi. Melewatkan pembagian
-    // kecepatan akan meleset makin jauh pada scene yang dipercepat.
-    const inScene = Math.max(0, (recSec - trimStart) / speed);
-    playback.requestSeek(sceneStartFrame(plan, scene.id) + Math.round(inScene * FPS));
+    // Waktu REKAMAN -> waktu di dalam POTONGAN -> frame komposisi. Dua
+    // penyesuaian yang gampang terlewat: pembagian kecepatan (meleset makin
+    // jauh pada potongan yang dipercepat) dan bingkai awal potongan di dalam
+    // scene — tanpa yang kedua, mengklik kalimat potongan ketiga melompat ke
+    // awal scene.
+    const inClip = Math.max(0, (recSec - trimStart) / speed);
+    playback.requestSeek(
+      sceneStartFrame(plan, scene.id) + clipStartFrame + Math.round(inClip * FPS),
+    );
   };
 
-  const cutTo = (span: TranscriptSpan) =>
+  /**
+   * Potong ke kalimat ini.
+   *
+   * Op-nya disusun `cutClipOps` di core, bukan di sini: panjang potongan
+   * disimpan di tempat yang BERBEDA tergantung jumlah klip scene (ADR-0033
+   * §2), dan sebelum ini tombol ini selalu mengirim `duration` berupa angka —
+   * yang untuk scene berklip banyak DITOLAK skema, jadi tombolnya gagal merah
+   * persis di scene hasil pembelahan, satu-satunya tempat ia paling
+   * dibutuhkan. Tool `cutByWords` milik agent memakai fungsi yang sama.
+   */
+  const cutTo = (target: TranscriptSpan) =>
     studioClient.applyPatch(
-      [
-        {
-          op: "updateScene",
-          id: scene.id,
-          patch: {
-            clip: { trimStartSec: Number(span.startSec.toFixed(3)) },
-            duration: Number(((span.endSec - span.startSec) / speed).toFixed(3)),
-          },
-        },
-      ],
-      `${scene.id} dipotong ke "${span.text.slice(0, 40)}"`,
+      cutClipOps(scene, clip, {
+        fromSec: Number(target.startSec.toFixed(3)),
+        toSec: Number(target.endSec.toFixed(3)),
+      }),
+      `${scene.clips.length > 1 ? clip.id : scene.id} dipotong ke "${target.text.slice(0, 40)}"`,
     );
 
   return (

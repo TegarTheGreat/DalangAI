@@ -223,3 +223,100 @@ describe("caption dari transkrip rekaman (ADR-0021)", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * Caption untuk scene BERKLIP BANYAK (ADR-0033).
+ *
+ * Sebelum ini `captionWords` membaca titik masuk klip pertama lalu menarik kata
+ * sepanjang durasi scene — mengandaikan scene itu satu rentang utuh di rekaman.
+ * Wawancara yang dibelah jadi beberapa potongan justru menampilkan rentang yang
+ * TERPISAH, jadi captionnya benar hanya untuk potongan pertama dan memuat
+ * kata-kata yang tadi sengaja dibuang. Cacat itu mendarat di video jadi.
+ */
+describe("buildCaptionPages · potongan di dalam satu scene", () => {
+  const KATA = [
+    { word: "Halo", startSec: 10, endSec: 10.4 },
+    { word: "semua", startSec: 10.5, endSec: 11 },
+    // Rentang yang DIBUANG editor — tidak boleh muncul di caption.
+    { word: "anu", startSec: 11.1, endSec: 11.4 },
+    { word: "gimana", startSec: 11.5, endSec: 12 },
+    { word: "Sampai", startSec: 20, endSec: 20.4 },
+    { word: "jumpa", startSec: 20.5, endSec: 21 },
+  ];
+
+  /** Satu rekaman, dua potongan dari dua rentang yang berjauhan. */
+  const duaPotongan = (kedua = { file: "media/talk.mp4", trimStartSec: 20 }) => {
+    let plan = parseScenePlan({
+      version: 2,
+      projectId: "p",
+      meta: { title: "T" },
+      scenes: [
+        {
+          id: "sc-1",
+          narration: "",
+          duration: "auto",
+          caption: { enabled: true, style: "klasik", size: "m", position: "bottom" },
+          clips: [
+            { id: "k1", type: "stock", trimStartSec: 10, durationSec: 1 },
+            { id: "k2", type: "stock", trimStartSec: kedua.trimStartSec, durationSec: 1 },
+          ],
+        },
+      ],
+    });
+    plan = setClipAsset(plan, "k1", {
+      file: "media/talk.mp4",
+      kind: "video",
+      source: "local",
+    });
+    plan = setClipAsset(plan, "k2", { file: kedua.file, kind: "video", source: "local" });
+    plan = setTranscript(plan, "media/talk.mp4", {
+      source: "uji",
+      language: "id",
+      durationSec: 30,
+      words: KATA,
+      segments: [],
+    });
+    return plan;
+  };
+
+  const pages = (plan: ScenePlan) =>
+    buildCaptionPages({
+      scene: plan.scenes[0] as Scene,
+      plan,
+      sceneDurationFrames: 60,
+      fps: 30,
+    });
+  const kataDari = (plan: ScenePlan) =>
+    pages(plan).flatMap((page) => page.tokens.map((token) => token.text.trim()));
+
+  it("tiap potongan menyumbang kata dari rentangnya SENDIRI", () => {
+    // Perilaku lama menarik [10, 12] utuh: "Halo semua anu gimana" — benar
+    // untuk potongan pertama, salah untuk yang kedua, dan memuat justru yang
+    // dibuang.
+    expect(kataDari(duaPotongan())).toEqual(["Halo", "semua", "Sampai", "jumpa"]);
+  });
+
+  it("kata potongan kedua berbunyi di paruh kedua scene, bukan di awal", () => {
+    // Diperiksa pada TOKEN, bukan pada halaman: penggabungan halaman memang
+    // menyatukan kata yang berdekatan, jadi startMs halaman tidak mengatakan
+    // apa pun tentang kapan sebuah kata muncul. Geserannya sendiri diambil
+    // dari petak `clipFrameSpans` — fungsi yang sama yang memutuskan potongan
+    // mana yang tampil di bingkai mana.
+    const token = pages(duaPotongan())
+      .flatMap((page) => page.tokens)
+      .find((item) => item.text.trim() === "Sampai");
+    // Potongan pertama 1 detik, jadi kata potongan kedua tidak boleh mulai
+    // sebelum detik ke-1. Perilaku lama menaruhnya di 0 ms (atau tidak
+    // menampilkannya sama sekali).
+    expect(token?.fromMs).toBeGreaterThanOrEqual(1000);
+    expect(token?.toMs).toBeLessThanOrEqual(2000);
+  });
+
+  it("potongan tanpa transkrip dilewati, bukan menghapus caption potongan lain", () => {
+    // Potongan kedua menunjuk rekaman yang belum ditranskrip sama sekali.
+    expect(kataDari(duaPotongan({ file: "media/lain.mp4", trimStartSec: 3 }))).toEqual([
+      "Halo",
+      "semua",
+    ]);
+  });
+});

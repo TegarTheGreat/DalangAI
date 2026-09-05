@@ -7,6 +7,7 @@ import {
   type Clip,
   clipAsset,
   critiquePlan,
+  cutClipOps,
   defaultPublishMetadata,
   findFillerSpans,
   findPhraseSpans,
@@ -18,7 +19,6 @@ import {
   MAX_LAYERS,
   MAX_MEMORY_TEXT,
   MEMORY_KINDS,
-  type PatchOpInput,
   type ProxyMedia,
   PUBLISH_DESCRIPTION_MAX,
   PUBLISH_PRIVACIES,
@@ -763,49 +763,12 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
           const transcript = transcriptForClip(plan, clip.id) as Transcript | undefined;
 
-          /**
-           * Dua jalur, karena "panjang potongan" disimpan di tempat yang
-           * berbeda tergantung jumlah klipnya (ADR-0033 §2).
-           *
-           * Scene berklip SATU: panjangnya ada di `scene.duration`, persis
-           * seperti sebelum ADR-0033 ada.
-           *
-           * Scene berklip BANYAK: `scene.duration` wajib "auto", jadi menulis
-           * angka ke sana ditolak skema — sebelum perbaikan ini tool ini
-           * memang selalu gagal di scene hasil belahannya sendiri, yaitu
-           * satu-satunya tempat ia paling dibutuhkan. Yang benar adalah
-           * menggeser tepi KELUAR klip lewat `trimClip` ripple: aritmetikanya
-           * sudah ada di core, batas ujung rekaman ikut dijaga di sana, dan
-           * inversnya (daftar klip sebelumnya) membuat undo tetap utuh.
-           */
-          const ops: PatchOpInput[] = [
-            {
-              op: "updateScene",
-              id: input.sceneId,
-              ...(scene.clips.length > 1 ? { clipId: clip.id } : {}),
-              patch:
-                scene.clips.length > 1
-                  ? { clip: { trimStartSec: input.dariDetik } }
-                  : { clip: { trimStartSec: input.dariDetik }, duration: durationSec },
-            },
-          ];
-          if (scene.clips.length > 1) {
-            // Titik masuk digeser lebih dulu (op di atas), jadi batas tepi
-            // keluar dihitung terhadap sisa rekaman SETELAH titik masuk baru —
-            // bukan terhadap yang lama.
-            const deltaSec = Number((durationSec - (clip.durationSec ?? 0)).toFixed(3));
-            if (Math.abs(deltaSec) >= 0.001) {
-              ops.push({
-                op: "trimClip",
-                sceneId: input.sceneId,
-                clipId: clip.id,
-                edge: "keluar",
-                mode: "ripple",
-                deltaSec,
-              });
-            }
-          }
-          const { summary } = session.applyAgentPatch(ops);
+          // "Panjang potongan" disimpan di tempat yang berbeda tergantung
+          // jumlah klip scene (ADR-0033 §2); aturannya milik core, bukan tool
+          // ini — tab Transkrip Studio memakai fungsi yang sama.
+          const { summary } = session.applyAgentPatch(
+            cutClipOps(scene, clip, { fromSec: input.dariDetik, toSec: end }),
+          );
           return {
             ok: true,
             sceneId: input.sceneId,
