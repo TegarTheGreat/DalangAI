@@ -919,3 +919,82 @@ describe("cutClipOps", () => {
     expect((ops[0] as { patch: { duration: number } }).patch.duration).toBe(2);
   });
 });
+
+/**
+ * Kartu judul/outro tidak boleh jadi salah satu potongan.
+ *
+ * Ditemukan lewat RENDER, bukan lewat pembacaan: scene [template-anim 2 dtk,
+ * stock 3 dtk] lolos skema, rendernya sukses, dan still di detik 3,5 masih
+ * menampilkan kartu judulnya — potongan kedua hilang tanpa satu pun pesan.
+ * Kedua preset merutekan scene ke kartu itu begitu klip pertama bertipe
+ * `template-anim`, dan rute itu tidak pernah menyentuh `clips[1..]`.
+ */
+describe("kartu judul di scene berklip banyak", () => {
+  const planDengan = (clips: unknown[]) => ({
+    version: 2,
+    projectId: "p",
+    meta: { title: "T" },
+    scenes: [{ id: "sc-1", narration: "", duration: "auto", clips }],
+  });
+
+  it("ditolak beserta saran memisahkannya jadi scene sendiri", () => {
+    expect(() =>
+      parseScenePlan(
+        planDengan([
+          { id: "k1", type: "template-anim", variant: "title", durationSec: 2 },
+          { id: "k2", type: "stock", durationSec: 3 },
+        ]),
+      ),
+    ).toThrow(/kartu judul\/outro.*scene tersendiri/s);
+  });
+
+  it("posisi kartunya tidak penting — di tengah pun tetap ditolak", () => {
+    expect(() =>
+      parseScenePlan(
+        planDengan([
+          { id: "k1", type: "stock", durationSec: 3 },
+          { id: "k2", type: "template-anim", variant: "outro", durationSec: 2 },
+        ]),
+      ),
+    ).toThrow(/template-anim/);
+  });
+
+  it("kartu judul berklip SATU tetap sah — itu bentuk normalnya", () => {
+    const plan = parseScenePlan({
+      version: 2,
+      projectId: "p",
+      meta: { title: "T" },
+      scenes: [
+        {
+          id: "sc-1",
+          narration: "",
+          clips: [{ id: "k1", type: "template-anim", variant: "title" }],
+        },
+      ],
+    });
+    expect(plan.scenes[0]?.clips).toHaveLength(1);
+  });
+
+  it("membelah kartu judul ditolak sebagai kalimat, bukan sebagai galat skema", () => {
+    const plan = parseScenePlan({
+      version: 2,
+      projectId: "p",
+      meta: { title: "T" },
+      scenes: [
+        {
+          id: "sc-1",
+          narration: "",
+          duration: 6,
+          clips: [{ id: "k1", type: "template-anim", variant: "title" }],
+        },
+      ],
+    });
+    expect(() =>
+      applyPatch(
+        plan,
+        [{ op: "splitClip", sceneId: "sc-1", clipId: "k1", atSec: 3, newClipId: "k2" }],
+        { origin: "user" },
+      ),
+    ).toThrow(/kartu judul\/outro.*tidak bisa dibelah/s);
+  });
+});

@@ -217,6 +217,17 @@ export const splitBounds = (
   if (findClipIndex(scene, clipId) < 0) {
     return `Klip "${clipId}" tidak ada di scene "${scene.id}"`;
   }
+  // Kartu judul/outro memakai SELURUH scene, jadi membelahnya menghasilkan
+  // plan yang ditolak skema. Ditolak di sini supaya alasannya terbaca sebagai
+  // kalimat, bukan sebagai kegagalan validasi di ujung penerapan patch.
+  const clip = scene.clips[findClipIndex(scene, clipId)] as Clip;
+  if (clip.type === "template-anim") {
+    return (
+      `Klip "${clipId}" adalah kartu judul/outro, dan kartu itu memakai seluruh ` +
+      `scene — ia tidak bisa dibelah jadi beberapa potongan. Pisahkan isinya ke ` +
+      `scene tersendiri.`
+    );
+  }
   const total = clipDurationSec(plan, scene, clipId) ?? 0;
   if (total < MIN_CLIP_SEC * 2) {
     return (

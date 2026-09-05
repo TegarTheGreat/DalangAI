@@ -1059,6 +1059,34 @@ export const scenePlanSchema = z
               `memuat lebih dari satu klip.`,
           });
         }
+        /**
+         * Kartu judul/outro adalah komposisi SATU SCENE UTUH, bukan potongan
+         * gambar (ADR-0033). Kedua preset merutekan scene ke kartu itu begitu
+         * klip PERTAMA bertipe `template-anim`, dan rute itu tidak pernah
+         * menyentuh `clips[1..]` — jadi plan seperti ini lolos skema, render
+         * sukses, dan potongan sesudahnya HILANG tanpa satu pun pesan.
+         *
+         * Dibuktikan dengan still, bukan dengan pembacaan: scene
+         * [template-anim 2 dtk, stock 3 dtk] pada detik 3,5 masih menampilkan
+         * kartu judulnya.
+         *
+         * Ditolak, bukan didamaikan. Mengubah kartu judul jadi renderer
+         * per-klip berarti membongkar rute kedua preset demi susunan yang
+         * bertentangan dengan definisi scene itu sendiri: kartu judul adalah
+         * GAGASANNYA sendiri, jadi tempatnya scene tersendiri — persis yang
+         * disarankan pesan ini.
+         */
+        if (clip.type === "template-anim") {
+          ctx.addIssue({
+            code: "custom",
+            path: ["scenes", index, "clips", clipIndex, "type"],
+            message:
+              `Klip "${clip.id}" bertipe template-anim (kartu judul/outro), dan ` +
+              `kartu itu memakai SELURUH scene — ia tidak bisa jadi salah satu ` +
+              `potongan di scene "${scene.id}" yang berklip ${scene.clips.length}. ` +
+              `Pisahkan kartunya jadi scene tersendiri.`,
+          });
+        }
       });
     });
 

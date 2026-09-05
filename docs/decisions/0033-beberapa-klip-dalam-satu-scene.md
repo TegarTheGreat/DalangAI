@@ -335,6 +335,7 @@ Cacat yang ditemukan test dan gerbang selama fase ini:
 | tes tool agent | `cutByWords` selalu gagal di scene berklip banyak; `ingestVideo`, `getTranscript`, `findMoments`, dan `analyzeImage` menyunting potongan pertama tanpa satu pun tanda |
 | pembacaan model caption | caption rekaman menarik satu rentang utuh dari titik masuk klip pertama — untuk scene berklip banyak ia menampilkan kata yang justru dibuang, di VIDEO JADI |
 | pembacaan tab Transkrip | jendela sorot, lompatan playhead, dan tombol "Potong ke sini" semuanya memakai klip pertama; tombolnya bahkan mengulang persis cacat `duration` yang baru saja diperbaiki di agent — bukti bahwa aturannya harus satu fungsi, bukan satu kebiasaan |
+| still yang dirender tangan | scene [template-anim 2 dtk, stock 3 dtk] lolos skema dan rendernya SUKSES, tapi still di detik 3,5 masih menampilkan kartu judul — kedua preset merutekan scene berkartu ke komposisi satu-scene dan tidak pernah menyentuh `clips[1..]`, jadi potongan sesudahnya hilang tanpa satu pun pesan |
 
 ## Rencana verifikasi
 
@@ -410,6 +411,13 @@ Yang TIDAK diberikan ADR ini, supaya tidak ada yang menyangka sebaliknya:
   tidak membawa anotasinya sendiri. Menjadikan anotasi milik klip adalah
   keputusan tersendiri dengan pertanyaannya sendiri soal apa yang terjadi saat
   klipnya dibelah.
+- **Kartu judul/outro tidak bisa jadi salah satu potongan.** `template-anim`
+  adalah komposisi satu scene UTUH, bukan potongan gambar, dan kedua preset
+  merutekan scene ke kartu itu begitu klip pertamanya bertipe itu. Kombinasinya
+  DITOLAK skema, bukan didamaikan: menjadikan kartu judul renderer per-klip
+  berarti membongkar rute kedua preset demi susunan yang bertentangan dengan
+  definisi scene itu sendiri — kartu judul adalah gagasannya sendiri, jadi
+  tempatnya scene tersendiri.
 - **Belum ada rekaman kamera asli** yang melewati pipeline di repo ini; media
   ujinya disintesis ffmpeg. ADR ini tidak mengubah keadaan itu.
 
