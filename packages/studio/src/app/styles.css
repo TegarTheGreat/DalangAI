@@ -2471,6 +2471,118 @@ input[type="color"]::-webkit-color-swatch {
   }
 }
 
+/* Daftar potongan di panel Properti (ADR-0033). Barisnya rapat dan
+   bernomor: yang dicari mata saat memilih potongan adalah URUTANNYA, bukan
+   idnya. */
+.clip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.clip-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg-deep);
+  padding: 2px 4px 2px 0;
+}
+.clip-list li.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-deep));
+}
+.clip-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 6px 4px 6px 8px;
+  cursor: pointer;
+}
+.clip-no {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.clip-list li.selected .clip-no {
+  background: var(--accent);
+  color: var(--bg-deep);
+}
+.clip-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.clip-dur {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.clip-tools {
+  display: flex;
+  gap: 2px;
+}
+
+/* Titik potong antar-klip di dalam satu scene (ADR-0033).
+
+   Garisnya TIPIS dan selalu terlihat: potongan adalah fakta struktur, bukan
+   keadaan hover. Zona tangkapnya jauh lebih lebar daripada garisnya (11 px vs
+   1 px) karena yang ditangkap jari bukan yang dilihat mata. */
+.clip-cut {
+  position: absolute;
+  top: 0;
+  width: 11px;
+  height: 100%;
+  margin-left: -5px;
+  cursor: ew-resize;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  touch-action: none;
+}
+.clip-cut::before {
+  content: "";
+  width: 1px;
+  height: 100%;
+  background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 22%, transparent);
+  transition:
+    background 120ms ease,
+    width 120ms ease;
+}
+.clip-cut:hover::before,
+.clip-cut.dragging::before {
+  width: 3px;
+  background: var(--accent);
+  box-shadow: none;
+}
+.cut-label {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 /* Trim handle di tepi kanan klip (mekanika CapCut) */
 .clip-trim {
   position: absolute;

@@ -77,6 +77,7 @@ interface PlanLite {
     id: string;
     annotations: { target: Target }[];
     layers: { tracks: { points: { at: number }[] }[] }[];
+    clips: { id: string; durationSec?: number }[];
   }[];
 }
 
@@ -132,6 +133,18 @@ const main = async (): Promise<void> => {
     },
     { id: "tx-sub", content: "Sub", role: "kicker", position: "top" },
   ];
+  // sc-step-2 dijadikan DUA potongan (ADR-0033): gerbang ini menyeret titik
+  // potong di antaranya. Disuntik di sini, bukan di contoh, dengan alasan yang
+  // sama dengan track keyframe di atas — contoh adalah dokumentasi, dan 5+3
+  // detik adalah geometri yang gerbang ini butuhkan.
+  const step2 = seed.scenes.find((scene) => scene.id === "sc-step-2");
+  if (!step2) throw new Error("contoh tutorial-studio tidak punya sc-step-2");
+  const dasar = step2.clips[0] as Record<string, unknown>;
+  step2.clips = [
+    { ...dasar, durationSec: 5 },
+    { ...dasar, id: "sc-step-2-k2", durationSec: 3 },
+  ] as typeof step2.clips;
+
   // Musik latar disuntikkan supaya bar musik (dan pegangan fade-nya) ada.
   (seed.audio as Record<string, unknown>).music = {
     assetId: "pustaka:tenang",
@@ -683,6 +696,76 @@ const main = async (): Promise<void> => {
       `fadeInSec → ${musicShifted?.fadeInSec}`,
     );
     await shot("gate-fade.png");
+
+    console.log("\nTitik potong klip di timeline (ADR-0033)");
+    // Kotak scene digulirkan ke tengah dulu: pada zoom tinggi ia bisa berada
+    // di luar viewport, dan pointer CDP menekan KOORDINAT LAYAR — menekan
+    // koordinat elemen yang sedang di luar layar berarti menekan apa pun yang
+    // kebetulan ada di sana.
+    await page.evaluate(
+      `(() => { const boxes = Array.from(document.querySelectorAll(".clip")); const box = boxes.find((b) => (b.querySelector(".clip-id") || {}).textContent === "sc-step-2"); if (box) box.scrollIntoView({ inline: "center", block: "nearest" }); return Boolean(box); })()`,
+    );
+    await sleep(300);
+    const sceneBox = (await page.evaluate(
+      `(() => { const boxes = Array.from(document.querySelectorAll(".clip")); const box = boxes.find((b) => (b.querySelector(".clip-id") || {}).textContent === "sc-step-2"); if (!box) return null; const r = box.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`,
+    )) as Rect | null;
+    const cutHandle = await rect('[data-testid="potong-sc-step-2-k1"]');
+    if (!sceneBox || !cutHandle)
+      throw new Error("kotak scene / titik potong sc-step-2 tidak ditemukan");
+    const clipsBefore = sceneOf(await plan(), "sc-step-2").clips.map(
+      (clip) => clip.durationSec ?? 0,
+    );
+    const totalBefore = clipsBefore.reduce((sum, value) => sum + value, 0);
+    // Skala dibaca dari LEBAR KOTAKNYA, bukan dari zoom bawaan: gerbang ini
+    // berjalan setelah timeline diperbesar, dan angka px/dtk yang ditulis
+    // tangan akan diam-diam salah begitu urutan kasusnya berubah.
+    const pxPerSec = sceneBox.w / Math.max(totalBefore, 0.001);
+    const dx = 40;
+    await drag(center(cutHandle), { x: center(cutHandle).x + dx, y: center(cutHandle).y });
+    await sleep(SETTLE_MS);
+    const clipsAfter = sceneOf(await plan(), "sc-step-2").clips.map(
+      (clip) => clip.durationSec ?? 0,
+    );
+    const expected = dx / pxPerSec;
+    check(
+      `seret titik potong ${dx}px ke kanan = +${expected.toFixed(2)} dtk di klip pertama`,
+      near(at(clipsAfter, 0), at(clipsBefore, 0) + expected, 0.12),
+      `klip 1 ${fmt(at(clipsBefore, 0))} → ${fmt(at(clipsAfter, 0))}`,
+    );
+    check(
+      "roll: panjang scene TIDAK berubah",
+      near(
+        clipsAfter.reduce((sum, value) => sum + value, 0),
+        totalBefore,
+        0.001,
+      ),
+      `jumlah ${fmt(totalBefore)} → ${fmt(clipsAfter.reduce((sum, v) => sum + v, 0))}`,
+    );
+    await shot("gate-klip.png");
+
+    // Pisau di transport membelah KLIP di bawah playhead, bukan scene.
+    await clickClip("sc-step-2");
+    await sleep(SETTLE_MS);
+    const jumlahSebelum = sceneOf(await plan(), "sc-step-2").clips.length;
+    await page.evaluate(
+      `(() => { const el = document.querySelector('[data-testid="belah-klip"]'); if (el) el.click(); return Boolean(el); })()`,
+    );
+    await sleep(SETTLE_MS);
+    const setelahBelah = sceneOf(await plan(), "sc-step-2");
+    check(
+      "tombol pisau menambah satu potongan tanpa menambah scene",
+      setelahBelah.clips.length === jumlahSebelum + 1,
+      `klip ${jumlahSebelum} → ${setelahBelah.clips.length}, scene ${(await plan()).scenes.length}`,
+    );
+    check(
+      "belahan tidak menggeser panjang scene",
+      near(
+        setelahBelah.clips.reduce((sum, clip) => sum + (clip.durationSec ?? 0), 0),
+        totalBefore,
+        0.05,
+      ),
+      `jumlah ${fmt(totalBefore)} → ${fmt(setelahBelah.clips.reduce((sum, c) => sum + (c.durationSec ?? 0), 0))}`,
+    );
 
     console.log("\nTombol unggah di riwayat render (ADR-0030, tanpa token)");
     const publishButton = await rect(".render-publish");

@@ -350,7 +350,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
     // sebagai aset, lalu tiap scene memotongnya lewat visual.trimStartSec.
     ingestVideo: tool({
       description:
-        "Daftarkan file VIDEO lokal di folder proyek (mis. 'assets/podcast.mp4') sebagai aset scene, dan baca durasi + dimensinya. Dipakai untuk MENGKLIP rekaman panjang: panggil sekali per scene, lalu set visual.trimStartSec (detik) dan duration scene lewat applyPatch untuk memilih potongan. Aset ini ter-pin.",
+        "Daftarkan file VIDEO lokal di folder proyek (mis. 'assets/podcast.mp4') sebagai aset scene, dan baca durasi + dimensinya. Dipakai untuk MENGKLIP rekaman panjang: panggil sekali per scene, lalu set clip.trimStartSec (detik) dan duration scene lewat applyPatch untuk memilih potongan. Aset ini ter-pin.",
       inputSchema: z.object({
         sceneId: z.string().min(1),
         file: z
@@ -398,7 +398,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             {
               op: "updateScene",
               id: input.sceneId,
-              patch: { visual: { type: "image" } },
+              patch: { clip: { type: "image" } },
             },
           ]);
 
@@ -441,7 +441,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             catatanProxy,
             ringkasanPerubahan: summary,
             catatan:
-              "Pilih potongan lewat applyPatch: visual.trimStartSec = detik mulai, dan duration scene = panjang potongan.",
+              "Pilih potongan lewat applyPatch: clip.trimStartSec = detik mulai, dan duration scene = panjang potongan.",
           };
         }),
     }),
@@ -670,7 +670,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     cutByWords: tool({
       description:
-        "Potong scene supaya menampilkan PERSIS rentang rekaman yang kamu pilih (dari transkrip). Menyetel visual.trimStartSec dan durasi scene sekaligus. Dapatkan detiknya dari getTranscript atau findMoments lebih dulu — jangan menebak.",
+        "Potong scene supaya menampilkan PERSIS rentang rekaman yang kamu pilih (dari transkrip). Menyetel clip.trimStartSec dan durasi scene sekaligus. Dapatkan detiknya dari getTranscript atau findMoments lebih dulu — jangan menebak.",
       inputSchema: z.object({
         sceneId: z.string().min(1),
         dariDetik: z.number().min(0),
@@ -713,7 +713,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
               op: "updateScene",
               id: input.sceneId,
               patch: {
-                visual: { trimStartSec: input.dariDetik },
+                clip: { trimStartSec: input.dariDetik },
                 duration: durationSec,
               },
             },
@@ -794,7 +794,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             catatan:
               report.silences.length === 0
                 ? "Tidak ada jeda terdeteksi — rekaman mungkin bermusik/berdesir terus. Potongan harus ditentukan dari transkrip."
-                : "Pakai titik potong ini untuk visual.trimStartSec dan akhir potongan, supaya potongan tidak jatuh di tengah kata. Isi potongan tetap perlu transkrip dari user.",
+                : "Pakai titik potong ini untuk clip.trimStartSec dan akhir potongan, supaya potongan tidak jatuh di tengah kata. Isi potongan tetap perlu transkrip dari user.",
           };
         }),
     }),
@@ -824,7 +824,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     writeScenePlan: tool({
       description:
-        "Buat draft scene-plan awal untuk proyek KOSONG (satu kali). Susun 6–10 scene: pembuka template-anim variant 'title', badan bernarasi 12–20 kata per scene dengan visual.query bahasa Inggris yang spesifik, penutup variant 'outro'. Proyek yang sudah punya plan harus diubah lewat applyPatch.",
+        "Buat draft scene-plan awal untuk proyek KOSONG (satu kali). Susun 6–10 scene: pembuka template-anim variant 'title', badan bernarasi 12–20 kata per scene dengan clips[0].query bahasa Inggris yang spesifik, penutup variant 'outro'. Proyek yang sudah punya plan harus diubah lewat applyPatch.",
       inputSchema: z.object({ plan: scenePlanSchema }),
       execute: (input) =>
         run("writeScenePlan", input, async () => {
@@ -2057,7 +2057,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           const asset = clipAsset(plan, primaryClipId(plan, input.sceneId));
           if (!asset) {
             throw new Error(
-              `Scene ${input.sceneId} belum punya aset ter-resolve — jalankan stage assets dulu (aset lokal butuh visual.assetId path file)`,
+              `Scene ${input.sceneId} belum punya aset ter-resolve — jalankan stage assets dulu (aset lokal butuh assetId path file di klipnya)`,
             );
           }
           if (asset.kind !== "image") {

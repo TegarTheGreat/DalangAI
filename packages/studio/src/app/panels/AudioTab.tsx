@@ -50,7 +50,7 @@ export const AudioTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
             targetLufs={target}
             onChange={(audio) =>
               void studioClient.applyPatch(
-                [{ op: "updateScene", id: scene.id, patch: { visual: { audio } } }],
+                [{ op: "updateScene", id: scene.id, patch: { clip: { audio } } }],
                 `Suara aset ${scene.id}`,
               )
             }

@@ -24,7 +24,16 @@ import {
 } from "@dalang/core";
 import { useEffect, useRef, useState } from "react";
 import { Segmented, Switch, useScrollFade } from "../components/controls";
-import { IconImage, IconMic, IconPin, IconPlus, IconSearch, IconTrash } from "../icons";
+import {
+  IconImage,
+  IconMic,
+  IconNextScene,
+  IconPin,
+  IconPlus,
+  IconPrevScene,
+  IconSearch,
+  IconTrash,
+} from "../icons";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
 import { AudioTab } from "./AudioTab";
@@ -544,17 +553,116 @@ const AnotasiTab: React.FC<{ scene: Scene; stylePreset: string }> = ({
   );
 };
 
+/**
+ * Daftar potongan gambar sebuah scene (ADR-0033).
+ *
+ * Muncul HANYA saat potongannya lebih dari satu. Scene berklip satu adalah
+ * mayoritas dunia, dan menambahkan baris "Klip 1" di atas setiap panel Visual
+ * hanya menyuruh orang membaca kata baru yang tidak menjelaskan apa pun
+ * tentang video mereka.
+ *
+ * Yang ada di sini adalah tindakan yang TIDAK bisa dilakukan dengan pointer di
+ * timeline: memilih potongan untuk disunting, menukar urutannya, dan
+ * membuangnya. Menggeser tepi tetap di timeline — di sanalah waktunya terlihat.
+ */
+const ClipList: React.FC<{ scene: Scene; selected: string; busy: boolean }> = ({
+  scene,
+  selected,
+  busy,
+}) => {
+  if (scene.clips.length < 2) return null;
+  const order = scene.clips.map((clip) => clip.id);
+  const move = (id: string, arah: -1 | 1) => {
+    const from = order.indexOf(id);
+    const to = from + arah;
+    if (to < 0 || to >= order.length) return;
+    const next = [...order];
+    next.splice(to, 0, ...next.splice(from, 1));
+    void studioClient.applyPatch(
+      [{ op: "reorderClips", sceneId: scene.id, order: next }],
+      `Urutan klip ${scene.id} diubah`,
+    );
+  };
+  return (
+    <section className="prop-group">
+      <h4>Potongan ({scene.clips.length})</h4>
+      <ul className="clip-list">
+        {scene.clips.map((clip, index) => (
+          <li key={clip.id} className={clip.id === selected ? "selected" : ""}>
+            <button
+              type="button"
+              className="clip-pick"
+              data-testid={`pilih-klip-${clip.id}`}
+              onClick={() => studioClient.selectClip(clip.id)}
+            >
+              <span className="clip-no">{index + 1}</span>
+              <span className="clip-name">{clip.query ?? clip.variant ?? clip.type}</span>
+              <span className="clip-dur">{(clip.durationSec ?? 0).toFixed(1)}s</span>
+            </button>
+            <span className="clip-tools">
+              <button
+                type="button"
+                className="mini"
+                disabled={busy || index === 0}
+                data-tip="Geser ke kiri"
+                onClick={() => move(clip.id, -1)}
+              >
+                <IconPrevScene />
+              </button>
+              <button
+                type="button"
+                className="mini"
+                disabled={busy || index === scene.clips.length - 1}
+                data-tip="Geser ke kanan"
+                onClick={() => move(clip.id, 1)}
+              >
+                <IconNextScene />
+              </button>
+              <button
+                type="button"
+                className="mini danger"
+                disabled={busy}
+                data-tip="Buang potongan ini"
+                data-testid={`hapus-klip-${clip.id}`}
+                onClick={() =>
+                  void studioClient.applyPatch(
+                    [{ op: "removeClip", sceneId: scene.id, clipId: clip.id }],
+                    `Klip ${clip.id} dibuang`,
+                  )
+                }
+              >
+                <IconTrash />
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
 const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
-  const { project } = useStudio();
+  const { project, selectedClipId } = useStudio();
   const busy = project?.busy.mutation !== null;
   const uploadRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState(primaryClip(scene).query ?? "");
-  useEffect(() => setQuery(primaryClip(scene).query ?? ""), [scene]);
+  /**
+   * Potongan yang sedang disunting (ADR-0033).
+   *
+   * Semua kendali di tab ini menyasar SATU klip lewat `updateScene.clipId`.
+   * Tanpa itu, scene wawancara berklip dua belas hanya bisa disetel gerak dan
+   * filternya di potongan pertama — dan sebelas sisanya diam-diam tak
+   * tersentuh oleh kendali yang tampak berlaku untuk semuanya.
+   */
+  const clip =
+    scene.clips.find((candidate) => candidate.id === selectedClipId) ??
+    primaryClip(scene);
+  const [query, setQuery] = useState(clip.query ?? "");
+  useEffect(() => setQuery(clip.query ?? ""), [clip]);
 
   const patch = (ops: PatchOpInput[], label?: string) =>
     void studioClient.applyPatch(ops, label);
   // Nilai efektif = filter tersimpan ATAU netral (untuk slider).
-  const filter: VisualFilter = primaryClip(scene).filter ?? visualFilterSchema.parse({});
+  const filter: VisualFilter = clip.filter ?? visualFilterSchema.parse({});
 
   const commitFilter = (partial: Partial<VisualFilter>, label?: string) =>
     patch(
@@ -562,7 +670,8 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
         {
           op: "updateScene",
           id: scene.id,
-          patch: { visual: { filter: { ...filter, ...partial } } },
+          clipId: clip.id,
+          patch: { clip: { filter: { ...filter, ...partial } } },
         },
       ],
       label,
@@ -570,18 +679,20 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
 
   return (
     <>
+      <ClipList scene={scene} selected={clip.id} busy={busy} />
       <section className="prop-group">
         <h4>Sumber</h4>
         <label className="field">
           <span>Tipe visual</span>
           <select
-            value={primaryClip(scene).type}
+            value={clip.type}
             onChange={(event) =>
               patch([
                 {
                   op: "updateScene",
                   id: scene.id,
-                  patch: { visual: { type: event.target.value as never } },
+                  clipId: clip.id,
+                  patch: { clip: { type: event.target.value as never } },
                 },
               ])
             }
@@ -633,12 +744,13 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onBlur={() => {
-              if (query !== (primaryClip(scene).query ?? "")) {
+              if (query !== (clip.query ?? "")) {
                 patch([
                   {
                     op: "updateScene",
                     id: scene.id,
-                    patch: { visual: { query: query.trim() === "" ? null : query } },
+                    clipId: clip.id,
+                    patch: { clip: { query: query.trim() === "" ? null : query } },
                   },
                 ]);
               }
@@ -654,10 +766,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             onClick={() =>
               void studioClient.searchAssets(
                 scene.id,
-                (
-                  primaryClip(scene).query ??
-                  scene.narration.split(/\s+/).slice(0, 8).join(" ")
-                ).trim(),
+                (clip.query ?? scene.narration.split(/\s+/).slice(0, 8).join(" ")).trim(),
                 "video",
               )
             }
@@ -665,7 +774,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             <IconSearch />
             Cari aset
           </button>
-          {primaryClip(scene).pinned ? (
+          {clip.pinned ? (
             <button
               type="button"
               className="ghost with-icon"
@@ -692,11 +801,18 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             <button
               key={motion}
               type="button"
-              className={primaryClip(scene).motion === motion ? "chip active" : "chip"}
+              className={clip.motion === motion ? "chip active" : "chip"}
               disabled={busy}
               onClick={() =>
                 patch(
-                  [{ op: "updateScene", id: scene.id, patch: { visual: { motion } } }],
+                  [
+                    {
+                      op: "updateScene",
+                      id: scene.id,
+                      clipId: clip.id,
+                      patch: { clip: { motion } },
+                    },
+                  ],
                   `Gerak ${MOTION_LABEL[motion]}`,
                 )
               }
@@ -716,10 +832,17 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           max={1}
           step={0.05}
           neutral={0.5}
-          value={primaryClip(scene).focusX}
+          value={clip.focusX}
           format={(v) => `${Math.round(v * 100)}%`}
           onCommit={(focusX) =>
-            patch([{ op: "updateScene", id: scene.id, patch: { visual: { focusX } } }])
+            patch([
+              {
+                op: "updateScene",
+                id: scene.id,
+                clipId: clip.id,
+                patch: { clip: { focusX } },
+              },
+            ])
           }
         />
         <SliderRow
@@ -728,20 +851,34 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           max={1}
           step={0.05}
           neutral={0.5}
-          value={primaryClip(scene).focusY}
+          value={clip.focusY}
           format={(v) => `${Math.round(v * 100)}%`}
           onCommit={(focusY) =>
-            patch([{ op: "updateScene", id: scene.id, patch: { visual: { focusY } } }])
+            patch([
+              {
+                op: "updateScene",
+                id: scene.id,
+                clipId: clip.id,
+                patch: { clip: { focusY } },
+              },
+            ])
           }
         />
         <div className="switch-row">
           <Switch
-            checked={primaryClip(scene).flipH}
+            checked={clip.flipH}
             disabled={busy}
             label="Cermin horizontal"
             onChange={(flipH) =>
               patch(
-                [{ op: "updateScene", id: scene.id, patch: { visual: { flipH } } }],
+                [
+                  {
+                    op: "updateScene",
+                    id: scene.id,
+                    clipId: clip.id,
+                    patch: { clip: { flipH } },
+                  },
+                ],
                 flipH ? "Aset dicerminkan" : "Cermin dilepas",
               )
             }
@@ -754,11 +891,18 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             max={4}
             step={0.25}
             neutral={1}
-            value={primaryClip(scene).speed}
+            value={clip.speed}
             format={(v) => `${v}x`}
             onCommit={(speed) =>
               patch(
-                [{ op: "updateScene", id: scene.id, patch: { visual: { speed } } }],
+                [
+                  {
+                    op: "updateScene",
+                    id: scene.id,
+                    clipId: clip.id,
+                    patch: { clip: { speed } },
+                  },
+                ],
                 `Kecepatan ${speed}x`,
               )
             }
@@ -766,7 +910,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
         ) : null}
       </section>
 
-      {primaryClip(scene).type === "solid" || primaryClip(scene).type === "stock" ? (
+      {clip.type === "solid" || clip.type === "stock" ? (
         <section className="prop-group">
           <h4>Seni prosedural</h4>
           <p className="group-hint">
@@ -777,17 +921,22 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             grow
             options={ART_VARIANTS}
             value={
-              (ART_VARIANTS as readonly string[]).includes(
-                primaryClip(scene).variant ?? "",
-              )
-                ? (primaryClip(scene).variant as (typeof ART_VARIANTS)[number])
+              (ART_VARIANTS as readonly string[]).includes(clip.variant ?? "")
+                ? (clip.variant as (typeof ART_VARIANTS)[number])
                 : "duotone"
             }
             disabled={busy}
             label={(variant) => ART_LABEL[variant] ?? variant}
             onChange={(variant) =>
               patch(
-                [{ op: "updateScene", id: scene.id, patch: { visual: { variant } } }],
+                [
+                  {
+                    op: "updateScene",
+                    id: scene.id,
+                    clipId: clip.id,
+                    patch: { clip: { variant } },
+                  },
+                ],
                 `Seni ${ART_LABEL[variant]}`,
               )
             }
@@ -798,7 +947,7 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
       <section className="prop-group">
         <div className="group-head">
           <h4>Filter</h4>
-          {primaryClip(scene).filter ? (
+          {clip.filter ? (
             <button
               type="button"
               className="mini"
@@ -809,7 +958,8 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                     {
                       op: "updateScene",
                       id: scene.id,
-                      patch: { visual: { filter: null } },
+                      clipId: clip.id,
+                      patch: { clip: { filter: null } },
                     },
                   ],
                   "Filter direset",

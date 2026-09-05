@@ -381,7 +381,7 @@ export const SourceSection: React.FC<{
       );
     } else {
       void studioClient.applyPatch(
-        [{ op: "updateScene", id: scene.id, patch: { visual: { trimStartSec } } }],
+        [{ op: "updateScene", id: scene.id, patch: { clip: { trimStartSec } } }],
         label,
       );
     }

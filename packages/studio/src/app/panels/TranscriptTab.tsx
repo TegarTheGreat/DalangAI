@@ -138,7 +138,7 @@ export const TranscriptTab: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
           op: "updateScene",
           id: scene.id,
           patch: {
-            visual: { trimStartSec: Number(span.startSec.toFixed(3)) },
+            clip: { trimStartSec: Number(span.startSec.toFixed(3)) },
             duration: Number(((span.endSec - span.startSec) / speed).toFixed(3)),
           },
         },

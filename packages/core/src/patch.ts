@@ -65,14 +65,20 @@ const finitePositive = z.number().positive().finite();
 
 /**
  * Creative fields of a scene that updateScene may touch.
- * `id` is immutable; `locked` only changes via lockScene; `visual.assetId` /
- * `visual.pinned` only change via replaceAsset — one invariant per op.
+ * `id` is immutable; `locked` only changes via lockScene; `clip.assetId` /
+ * `clip.pinned` only change via replaceAsset — one invariant per op.
  * `null` clears an optional field.
  */
 export const sceneUpdateSchema = z.strictObject({
   narration: z.string().optional(),
   duration: z.union([z.literal("auto"), finitePositive]).optional(),
-  visual: z
+  /**
+   * Properti satu KLIP (ADR-0033). Dulu bernama `visual`, waktu satu scene
+   * hanya punya satu gambar; namanya ikut berganti bersama op klip supaya
+   * tidak ada dua kosakata untuk satu benda. Klip mana yang disasar ditentukan
+   * `updateScene.clipId` — tanpa itu, klip pertama.
+   */
+  clip: z
     .strictObject({
       type: visualTypeSchema.optional(),
       query: z.string().nullable().optional(),
@@ -162,6 +168,15 @@ export const patchOpSchema = z.discriminatedUnion("op", [
   z.strictObject({
     op: z.literal("updateScene"),
     id: z.string(),
+    /**
+     * Klip yang disasar `patch.clip`; tanpa ini klip PERTAMA (ADR-0033).
+     *
+     * Duduk di op, bukan di dalam `patch`: `patch` berisi field-field scene,
+     * dan "klip yang mana" bukan salah satunya. Invers sebuah updateScene
+     * membawa id ini apa adanya — undo yang mendarat di klip lain adalah
+     * kerusakan yang jauh lebih sulit dilihat daripada undo yang gagal.
+     */
+    clipId: z.string().optional(),
     patch: sceneUpdateSchema,
   }),
   z.strictObject({
@@ -445,22 +460,21 @@ const applyOne = (
       assertNotLockedForAgent(scene, origin, enforce, opIndex);
 
       const inversePatch: Record<string, unknown> = {};
-      const { visual, caption, ...rest } = op.patch;
+      const { clip: clipPatch, caption, ...rest } = op.patch;
 
       for (const [key, value] of Object.entries(rest)) {
         if (value === undefined) continue;
         inversePatch[key] = clone((scene as unknown as Record<string, unknown>)[key]);
         (scene as unknown as Record<string, unknown>)[key] = clone(value);
       }
-      if (visual) {
-        // ADR-0033: `patch.visual` menyasar KLIP DASAR (`clips[0]`). Nama
-        // field di wire sengaja belum berganti: penyuntingan per-klip datang
-        // bersama op klip di fase berikutnya, dan mengganti nama sekarang
-        // hanya memindahkan churn ke Studio, agent, dan MCP tanpa satu pun
-        // kemampuan baru untuk ditunjukkan.
-        const clip = primaryClip(scene) as unknown as Record<string, unknown>;
-        inversePatch.visual = priorOf(clip, visual);
-        mergeDefined(clip, visual);
+      if (clipPatch) {
+        const target =
+          op.clipId === undefined
+            ? primaryClip(scene)
+            : requireClip(scene, op.clipId, opIndex);
+        const record = target as unknown as Record<string, unknown>;
+        inversePatch.clip = priorOf(record, clipPatch);
+        mergeDefined(record, clipPatch);
       }
       if (caption) {
         inversePatch.caption = priorOf(
@@ -472,6 +486,7 @@ const applyOne = (
       return {
         op: "updateScene",
         id: op.id,
+        ...(op.clipId === undefined ? {} : { clipId: op.clipId }),
         patch: inversePatch as SceneUpdate,
       };
     }
@@ -727,7 +742,8 @@ const describeOp = (op: PatchOp): string => {
       const fields = Object.entries(op.patch)
         .filter(([, value]) => value !== undefined)
         .map(([key]) => key);
-      return `mengubah scene ${op.id} (${fields.join(", ") || "tanpa field"})`;
+      const where = op.clipId === undefined ? "" : ` klip ${op.clipId}`;
+      return `mengubah scene ${op.id}${where} (${fields.join(", ") || "tanpa field"})`;
     }
     case "reorderScenes":
       return `mengurutkan ulang scene (${op.order.join(" → ")})`;

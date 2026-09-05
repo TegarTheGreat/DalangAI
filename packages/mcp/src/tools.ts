@@ -68,6 +68,8 @@ export interface PlanSummary {
     visual: string;
     asetSiap: boolean;
     suaraSiap: boolean;
+    /** Potongan gambar di dalam scene ini — hanya saat lebih dari satu (ADR-0033). */
+    klip?: Array<{ id: string; durasiDetik: number; dariDetik: number; visual: string }>;
   }>;
 }
 
@@ -99,6 +101,20 @@ export const summarizePlan = (workspace: Workspace, planPath: string): PlanSumma
         primaryClip(scene).query ?? primaryClip(scene).variant ?? primaryClip(scene).type,
       asetSiap: sceneAsset(plan, scene) !== undefined,
       suaraSiap: plan.renderState.narrationAudio[scene.id] !== undefined,
+      // Potongan (ADR-0033) ikut ke ringkasan dengan alasan yang sama dengan
+      // lapisan di bawah: agent pemanggil yang cuma melihat satu baris
+      // "visual" akan mengira scene wawancara dua belas potongan ini satu
+      // gambar utuh, lalu menyarankan memotongnya lagi.
+      ...(scene.clips.length > 1
+        ? {
+            klip: scene.clips.map((clip) => ({
+              id: clip.id,
+              durasiDetik: Number((clip.durationSec ?? 0).toFixed(2)),
+              dariDetik: clip.trimStartSec,
+              visual: clip.query ?? clip.variant ?? clip.type,
+            })),
+          }
+        : {}),
       // Lapisan (ADR-0025) ikut ke ringkasan: agent pemanggil yang tidak
       // melihatnya akan mengira scene ini punya satu gambar, lalu menyarankan
       // menambah sisipan yang sudah ada di sana.

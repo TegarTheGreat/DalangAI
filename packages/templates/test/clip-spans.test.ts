@@ -14,7 +14,12 @@ const sceneWith = (durations: number[], transitions: (number | null)[] = []): Sc
   const input: ScenePlanInput = {
     version: 2,
     projectId: "p",
-    meta: { title: "T", aspectRatio: "16:9", language: "id", stylePreset: "documentary-01" },
+    meta: {
+      title: "T",
+      aspectRatio: "16:9",
+      language: "id",
+      stylePreset: "documentary-01",
+    },
     audio: {},
     scenes: [
       {

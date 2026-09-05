@@ -42,7 +42,7 @@ describe("ADR-0011: patch ops", () => {
         {
           op: "updateScene",
           id: "a",
-          patch: { visual: { filter: { preset: "warm", saturation: 1.3 } } },
+          patch: { clip: { filter: { preset: "warm", saturation: 1.3 } } },
         },
       ],
       { origin: "user" },
@@ -60,7 +60,7 @@ describe("ADR-0011: patch ops", () => {
 
     const { plan: cleared } = applyPatch(
       withFilter,
-      [{ op: "updateScene", id: "a", patch: { visual: { filter: null } } }],
+      [{ op: "updateScene", id: "a", patch: { clip: { filter: null } } }],
       { origin: "user" },
     );
     expect(cleared.scenes[0]?.clips[0]?.filter).toBeUndefined();

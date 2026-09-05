@@ -1,11 +1,16 @@
 import {
   type AnimatableProperty,
+  clampTrimDelta,
+  computeClipTimings,
+  isRefusal,
   MIN_SCENE_SEC,
   type Music,
   moveKeyframe,
+  resolveSceneDurationSec,
   type Scene,
   type ScenePlan,
   snapKeyframeTime,
+  splitBounds,
   substituteProxies,
 } from "@dalang/core";
 import { DalangVideo } from "@dalang/templates/video";
@@ -20,6 +25,7 @@ import {
   IconPlus,
   IconPrevScene,
   IconSplit,
+  IconSplitScene,
 } from "../icons";
 import { type PlanMeta, planMeta } from "../model/plan-meta";
 import { deriveSceneStatus } from "../model/scene-status";
@@ -50,6 +56,21 @@ const laneOffsetPx = (index: number, count: number): number =>
   (index - (count - 1) / 2) * 7;
 /** Batas atas bingkai filmstrip per klip — penjaga biaya render thumbnail. */
 const MAX_FILMSTRIP_FRAMES = 40;
+
+/**
+ * Id untuk potongan baru: `<scene>-kN` dengan N pertama yang belum dipakai.
+ *
+ * Dihitung dari SELURUH plan, bukan dari jumlah klip scene-nya: id klip wajib
+ * unik se-plan (ADR-0033 §4), dan scene yang klipnya pernah dihapus akan
+ * mengulang nomor kalau yang dihitung cuma panjangnya.
+ */
+const nextClipId = (plan: ScenePlan, sceneId: string): string => {
+  const dipakai = new Set(plan.scenes.flatMap((s) => s.clips.map((clip) => clip.id)));
+  for (let n = 1; ; n += 1) {
+    const id = `${sceneId}-k${n}`;
+    if (!dipakai.has(id)) return id;
+  }
+};
 
 const formatTime = (frame: number, fps: number): string => {
   const totalSec = frame / fps;
@@ -89,9 +110,19 @@ const Clip: React.FC<{
 }) => {
   const { project } = useStudio();
   // Trim (mekanika CapCut): seret tepi kanan = ubah durasi scene. Selama
-  // seretan hanya state lokal + label; patch updateScene dikirim saat lepas.
+  // seretan hanya state lokal + label; patch dikirim saat lepas.
   const [trimSec, setTrimSec] = useState<number | null>(null);
   const trimFrom = useRef<{ x: number; sec: number } | null>(null);
+  /**
+   * Batas antar-klip yang sedang diseret (ADR-0033).
+   *
+   * `delta` hidup di sini selama jari bergerak dan baru jadi satu patch saat
+   * dilepas — satu langkah undo per seretan, bukan satu per piksel. Nilainya
+   * SUDAH dijepit `clampTrimDelta` dari core, jadi batasnya sama persis dengan
+   * yang dipakai op untuk menolak.
+   */
+  const [cutDrag, setCutDrag] = useState<{ clipId: string; delta: number } | null>(null);
+  const cutFrom = useRef<{ x: number; clipId: string } | null>(null);
   const status = deriveSceneStatus(
     plan,
     scene,
@@ -118,9 +149,74 @@ const Clip: React.FC<{
     trimFrom.current = null;
     setTrimSec(null);
     if (!from || sec === null || Math.abs(sec - from.sec) < 0.05) return;
+    const last = scene.clips.at(-1);
+    if (scene.clips.length > 1 && last) {
+      // Scene berklip banyak TIDAK punya durasi sendiri (ADR-0033 §2): yang
+      // memanjang adalah potongan terakhirnya, dan sisanya ikut lewat ripple.
+      // Mengirim `duration` di sini akan ditolak skema — dan penolakan itu
+      // muncul sebagai galat merah setelah seretan yang terlihat berhasil.
+      const delta = clampTrimDelta(
+        plan,
+        scene,
+        last.id,
+        "keluar",
+        "ripple",
+        sec - from.sec,
+      );
+      if (delta === 0) return;
+      void studioClient.applyPatch(
+        [
+          {
+            op: "trimClip",
+            sceneId: scene.id,
+            clipId: last.id,
+            edge: "keluar",
+            mode: "ripple",
+            deltaSec: delta,
+          },
+        ],
+        `Klip ${last.id} ${delta > 0 ? "+" : ""}${delta.toFixed(2)}s`,
+      );
+      return;
+    }
     void studioClient.applyPatch(
       [{ op: "updateScene", id: scene.id, patch: { duration: sec } }],
       `Durasi ${scene.id} jadi ${sec.toFixed(1)}s`,
+    );
+  };
+
+  /**
+   * Batas potong di dalam kotak scene (ADR-0033).
+   *
+   * Yang diseret adalah TITIK POTONG, dan seretannya `roll`: kedua potongan
+   * bertukar durasi sehingga panjang scene tidak berubah. Itu bukan pilihan
+   * gaya — kalau batas dalam menggeser panjang scene, seluruh kotak sesudahnya
+   * ikut bergeser di bawah jari yang sedang menahan satu garis, dan yang
+   * terlihat adalah timeline yang melompat.
+   */
+  const clipCuts = computeClipTimings(scene, resolveSceneDurationSec(scene, plan)).slice(
+    0,
+    -1,
+  );
+
+  const endCut = () => {
+    const from = cutFrom.current;
+    const drag = cutDrag;
+    cutFrom.current = null;
+    setCutDrag(null);
+    if (!from || !drag || drag.delta === 0) return;
+    void studioClient.applyPatch(
+      [
+        {
+          op: "trimClip",
+          sceneId: scene.id,
+          clipId: drag.clipId,
+          edge: "keluar",
+          mode: "roll",
+          deltaSec: drag.delta,
+        },
+      ],
+      `Titik potong ${drag.clipId} ${drag.delta > 0 ? "+" : ""}${drag.delta.toFixed(2)}s`,
     );
   };
 
@@ -215,6 +311,59 @@ const Clip: React.FC<{
         </span>
         <span className="clip-active-bar" />
       </button>
+      {/* Titik potong antar-klip: garis yang terlihat SELALU (potongan harus
+          bisa dilihat tanpa mengarahkan pointer ke mana pun) dan bisa diseret
+          untuk menggesernya. */}
+      {clipCuts.map((cut) => {
+        const dragging = cutDrag?.clipId === cut.id;
+        const atSec = cut.startSec + cut.durationSec + (dragging ? cutDrag.delta : 0);
+        const left = Math.round((atSec / Math.max(durSec, 0.001)) * width);
+        return (
+          <div
+            key={cut.id}
+            className={`clip-cut${dragging ? " dragging" : ""}`}
+            data-testid={`potong-${cut.id}`}
+            title={`Titik potong sesudah ${cut.id} — seret untuk menggesernya`}
+            style={{ left }}
+            onPointerDown={(event) => {
+              if (busy) return;
+              event.preventDefault();
+              event.stopPropagation();
+              cutFrom.current = { x: event.clientX, clipId: cut.id };
+              setCutDrag({ clipId: cut.id, delta: 0 });
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              const from = cutFrom.current;
+              if (!from) return;
+              // Dijepit oleh core, bukan oleh UI: batas yang dihitung dua kali
+              // adalah batas yang suatu saat berbeda (ADR-0033 §5).
+              setCutDrag({
+                clipId: from.clipId,
+                delta: clampTrimDelta(
+                  plan,
+                  scene,
+                  from.clipId,
+                  "keluar",
+                  "roll",
+                  (event.clientX - from.x) / pxPerSec,
+                ),
+              });
+            }}
+            onPointerUp={endCut}
+            onPointerCancel={() => {
+              cutFrom.current = null;
+              setCutDrag(null);
+            }}
+          />
+        );
+      })}
+      {cutDrag && cutDrag.delta !== 0 ? (
+        <span className="trim-label cut-label">
+          {cutDrag.delta > 0 ? "+" : ""}
+          {cutDrag.delta.toFixed(2)}s
+        </span>
+      ) : null}
       {trimSec !== null ? (
         <span className="trim-label">{trimSec.toFixed(1)}s</span>
       ) : null}
@@ -393,6 +542,34 @@ export const TimelineStrip: React.FC = () => {
   })();
 
   /**
+   * Target belah KLIP (ADR-0033): potongan di bawah playhead.
+   *
+   * Berbeda dari belah SCENE di atas — yang ini memotong GAMBAR tanpa
+   * menyentuh narasi, caption, atau transisi. Itulah pisau yang dicari orang
+   * saat menyunting rekaman; belah scene dipakai saat gagasannya yang berganti.
+   */
+  const splitClipTarget = (() => {
+    let index = 0;
+    for (let i = 0; i < meta.sceneStarts.length; i += 1) {
+      if (frame >= (meta.sceneStarts[i] ?? 0)) index = i;
+    }
+    const scene = plan.scenes[index];
+    if (!scene || scene.locked) return null;
+    const sceneSec = (meta.sceneFrames[index] ?? 0) / meta.fps;
+    const localSec = (frame - (meta.sceneStarts[index] ?? 0)) / meta.fps;
+    const timing = computeClipTimings(scene, sceneSec).find(
+      (candidate) =>
+        localSec >= candidate.startSec &&
+        localSec < candidate.startSec + candidate.durationSec,
+    );
+    if (!timing) return null;
+    const atSec = Math.round((localSec - timing.startSec) * 100) / 100;
+    const bounds = splitBounds(plan, scene, timing.id);
+    if (isRefusal(bounds) || atSec < bounds.minSec || atSec > bounds.maxSec) return null;
+    return { sceneId: scene.id, clipId: timing.id, atSec };
+  })();
+
+  /**
    * Batas scene di kiri/kanan playhead. Navigasi antar-scene adalah kontrol
    * transport baku di editor mana pun, dan datanya sudah ada — tanpa ini
    * satu-satunya cara berpindah scene adalah menyeret playhead dengan mata.
@@ -478,15 +655,40 @@ export const TimelineStrip: React.FC = () => {
         <button
           type="button"
           className="mini split-btn"
+          data-testid="belah-klip"
+          disabled={busy || !splitClipTarget}
+          data-tip="Belah klip di playhead (gambar saja)"
+          onClick={() => {
+            if (!splitClipTarget) return;
+            void studioClient.applyPatch(
+              [
+                {
+                  op: "splitClip",
+                  sceneId: splitClipTarget.sceneId,
+                  clipId: splitClipTarget.clipId,
+                  atSec: splitClipTarget.atSec,
+                  newClipId: nextClipId(plan, splitClipTarget.sceneId),
+                },
+              ],
+              `Belah klip ${splitClipTarget.clipId} di ${splitClipTarget.atSec.toFixed(2)}s`,
+            );
+          }}
+        >
+          <IconSplit />
+        </button>
+        <button
+          type="button"
+          className="mini split-btn"
+          data-testid="belah-scene"
           disabled={busy || !splitTarget}
-          data-tip="Belah scene di playhead"
+          data-tip="Belah scene di playhead (narasi ikut terbagi)"
           onClick={() => {
             if (splitTarget) {
               void studioClient.splitScene(splitTarget.sceneId, splitTarget.atSec);
             }
           }}
         >
-          <IconSplit />
+          <IconSplitScene />
         </button>
         <span className="transport-spacer" />
         {/* Scene di bawah playhead. Bentangan tengah transport tadinya

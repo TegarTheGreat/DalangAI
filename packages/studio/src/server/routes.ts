@@ -7,14 +7,17 @@ import {
   UNPARSED_WARNING,
 } from "@dalang/agent";
 import {
+  clipAsset,
+  computeClipTimings,
+  isRefusal,
   PatchError,
   patchOpSchema,
   primaryClip,
   primaryClipId,
   resolveSceneDurationSec,
-  sceneAsset,
   setClipAsset,
   speechSpans,
+  splitClipAt,
 } from "@dalang/core";
 import { buildEditTimeline, otioToJson, toFcpxml } from "@dalang/interop";
 import {
@@ -747,7 +750,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
           ops.push({
             op: "updateScene",
             id: body.data.sceneId,
-            patch: { visual: { type: "image" } },
+            patch: { clip: { type: "image" } },
           });
         }
         const { summary } = session.applyUserPatch(ops);
@@ -788,28 +791,78 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
 
     const newId = `${scene.id.slice(0, 16)}-p${Date.now().toString(36).slice(-4)}`;
-    // Klip scene baru mendapat idnya sendiri: id klip wajib unik SE-PLAN
-    // (ADR-0033), jadi menyalin id klip lama akan menolak plan hasil belahan.
-    const newClipId = `${newId}-k1`;
+    /**
+     * Belah scene di plan berklip banyak (ADR-0033).
+     *
+     * Potongan yang ada DIBAGI ke dua scene di titik belahnya; klip yang
+     * kebetulan dilewati titik itu dibelah dulu memakai aritmetika core yang
+     * sama dengan op `splitClip`. Menyalin `clips[0]` saja — perilaku sebelum
+     * klip ada — akan menghapus potongan kedua dan seterusnya tanpa
+     * memberitahu siapa pun.
+     */
+    const timings = computeClipTimings(scene, total);
+    const hit = timings.find(
+      (timing) =>
+        d1 > timing.startSec + 0.001 && d1 < timing.startSec + timing.durationSec - 0.001,
+    );
+    let newClipId: string | null = null;
+    let clips = scene.clips;
+    if (hit) {
+      // Id klip wajib unik SE-PLAN, jadi dihitung dari seluruh plan.
+      const dipakai = new Set(plan.scenes.flatMap((s) => s.clips.map((c) => c.id)));
+      let n = 1;
+      while (dipakai.has(`${newId}-k${n}`)) n += 1;
+      newClipId = `${newId}-k${n}`;
+      const dibelah = splitClipAt(plan, scene, hit.id, d1 - hit.startSec, newClipId);
+      if (isRefusal(dibelah)) return c.json({ error: dibelah }, 400);
+      clips = dibelah;
+    }
+    const cutIndex = hit
+      ? clips.findIndex((clip) => clip.id === newClipId)
+      : timings.findIndex((timing) => timing.startSec >= d1 - 0.001);
+    const before = clips.slice(0, cutIndex < 0 ? 1 : cutIndex);
+    const after = clips.slice(cutIndex < 0 ? 1 : cutIndex);
+    /**
+     * Scene berklip SATU tidak menyimpan durasi di klipnya (§2), jadi angkanya
+     * dikembalikan ke `scene.duration`. Tanpa ini, separuh hasil belahan akan
+     * membawa `durationSec` yang tidak dibaca siapa pun lalu panjangnya
+     * melompat ke panjang narasi.
+     */
+    const asScene = (list: typeof clips, seconds: number) =>
+      list.length === 1
+        ? {
+            clips: [{ ...(list[0] as (typeof clips)[number]), durationSec: undefined }],
+            duration: seconds,
+          }
+        : { clips: list, duration: "auto" as const };
+    const kiri = asScene(before, d1);
+    const kanan = asScene(after, d2);
+
     try {
       const startedAt = Date.now();
       const result = await store.runExclusive("pick", async () => {
         const current = store.freshPlan();
         if (!current) throw new Error("Plan hilang di tengah split");
-        const asset = sceneAsset(current, scene);
-        if (asset) {
-          session.plan = setClipAsset(current, newClipId, asset);
+        if (newClipId) {
+          // Paruh kedua klip yang dibelah memakai BERKAS yang sama persis.
+          const asset = clipAsset(current, hit?.id ?? "");
+          if (asset) session.plan = setClipAsset(current, newClipId, asset);
         }
         const { summary } = session.applyUserPatch([
-          { op: "updateScene", id: scene.id, patch: { duration: d1 } },
+          {
+            op: "setClips",
+            sceneId: scene.id,
+            clips: kiri.clips as never,
+            duration: kiri.duration,
+          },
           {
             op: "addScene",
             afterId: scene.id,
             scene: {
               id: newId,
               narration: "",
-              duration: d2,
-              clips: [{ ...primaryClip(scene), id: newClipId }],
+              duration: kanan.duration,
+              clips: kanan.clips as never,
               caption: { ...scene.caption },
               transition: { ...scene.transition },
               texts: [],

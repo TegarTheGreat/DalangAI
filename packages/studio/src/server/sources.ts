@@ -596,14 +596,14 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
           ops.push({
             op: "updateScene",
             id: scene.id,
-            patch: { visual: { type: "image" } },
+            patch: { clip: { type: "image" } },
           });
         }
         if (!layerId && body.data.trimStartSec !== undefined) {
           ops.push({
             op: "updateScene",
             id: scene.id,
-            patch: { visual: { trimStartSec: body.data.trimStartSec } },
+            patch: { clip: { trimStartSec: body.data.trimStartSec } },
           });
         }
         const { summary } = session.applyUserPatch(ops);

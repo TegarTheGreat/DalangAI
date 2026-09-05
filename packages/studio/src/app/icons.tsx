@@ -134,6 +134,22 @@ export const IconSplit: React.FC = () => (
   </Icon>
 );
 
+/**
+ * Belah SCENE — dua kotak yang terpisah garis putus-putus.
+ *
+ * Sengaja berbeda bentuk dari `IconSplit` (yang membelah satu klip): dua
+ * tindakan berbeda dengan ikon nyaris sama adalah cara paling andal membuat
+ * orang menekan yang salah, lalu membatalkannya, lalu berhenti memakai
+ * keduanya.
+ */
+export const IconSplitScene: React.FC = () => (
+  <Icon>
+    <rect x="3" y="7" width="7" height="10" rx="1.5" />
+    <rect x="14" y="7" width="7" height="10" rx="1.5" />
+    <path d="M12 3v18" strokeDasharray="2.6 2.4" />
+  </Icon>
+);
+
 export const IconX: React.FC = () => (
   <Icon>
     <path d="M18 6 6 18" />

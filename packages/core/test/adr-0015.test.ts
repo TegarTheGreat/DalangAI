@@ -45,7 +45,7 @@ describe("ADR-0015: motion baru, blur, speed, flipH, fokus", () => {
         {
           op: "updateScene",
           id: "sc-1",
-          patch: { visual: { motion: "pan-up", speed: 0.5, flipH: true } },
+          patch: { clip: { motion: "pan-up", speed: 0.5, flipH: true } },
         },
       ],
       { origin: "user" },

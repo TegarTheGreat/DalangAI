@@ -112,6 +112,16 @@ export interface StudioState {
   switching: string | null;
   project: ProjectStatePayload | null;
   selectedSceneId: string | null;
+  /**
+   * Klip terpilih di dalam scene terpilih (ADR-0033); null = klip pertama.
+   *
+   * Hidup di store, bukan di dalam panel Properti, karena dua permukaan
+   * memakainya: timeline menyorot potongan yang sedang disunting, dan panel
+   * Properti menyunting potongan yang sedang disorot. Kalau masing-masing
+   * menyimpannya sendiri, keduanya akan menunjuk potongan berbeda persis pada
+   * saat seseorang mengubah sesuatu.
+   */
+  selectedClipId: string | null;
   chat: ChatMessage[];
   chatBusy: boolean;
   approval: PendingApproval | null;
@@ -142,6 +152,7 @@ const emptyState: StudioState = {
   switching: null,
   project: null,
   selectedSceneId: null,
+  selectedClipId: null,
   chat: [],
   chatBusy: false,
   approval: null,
@@ -240,6 +251,7 @@ export class StudioClient {
       view: "lobby",
       project: null,
       selectedSceneId: null,
+      selectedClipId: null,
       chat: [],
       chatBusy: false,
       approval: null,
@@ -302,7 +314,13 @@ export class StudioClient {
     this.set({ switching: id });
     try {
       const { workspace } = await api.openProject(id);
-      this.set({ workspace, project: null, selectedSceneId: null, chat: [] });
+      this.set({
+        workspace,
+        project: null,
+        selectedSceneId: null,
+        selectedClipId: null,
+        chat: [],
+      });
       await this.enterEditor();
     } catch (error) {
       this.failure(error);
@@ -316,7 +334,13 @@ export class StudioClient {
     this.set({ switching: "baru" });
     try {
       const { project, workspace } = await api.createProject(input);
-      this.set({ workspace, project: null, selectedSceneId: null, chat: [] });
+      this.set({
+        workspace,
+        project: null,
+        selectedSceneId: null,
+        selectedClipId: null,
+        chat: [],
+      });
       await this.enterEditor();
       this.toast(`Proyek "${project.title}" siap — folder ${project.id}`);
       return true;
@@ -340,7 +364,13 @@ export class StudioClient {
     this.set({ switching: "baru" });
     try {
       const { project, workspace, catatan } = await api.importTimeline(isi, judul);
-      this.set({ workspace, project: null, selectedSceneId: null, chat: [] });
+      this.set({
+        workspace,
+        project: null,
+        selectedSceneId: null,
+        selectedClipId: null,
+        chat: [],
+      });
       await this.enterEditor();
       this.toast(`Diimpor jadi "${project.title}" — folder ${project.id}`);
       return catatan;
@@ -725,7 +755,20 @@ export class StudioClient {
         project.plan?.scenes.some((scene) => scene.id === this.state.selectedSceneId)
           ? this.state.selectedSceneId
           : (project.plan?.scenes[0]?.id ?? null);
-      this.set({ project, selectedSceneId: selected, fatal: null });
+      // Klip terpilih ikut dilepas begitu ia tidak ada lagi di scene itu —
+      // dihapus, dibelah, atau scene-nya berganti.
+      const scene = project.plan?.scenes.find((candidate) => candidate.id === selected);
+      const selectedClip =
+        this.state.selectedClipId &&
+        scene?.clips.some((clip) => clip.id === this.state.selectedClipId)
+          ? this.state.selectedClipId
+          : null;
+      this.set({
+        project,
+        selectedSceneId: selected,
+        selectedClipId: selectedClip,
+        fatal: null,
+      });
     } catch (error) {
       if (this.state.project === null) {
         this.set({
@@ -740,7 +783,12 @@ export class StudioClient {
   // -- seleksi & patch manual ------------------------------------------------
 
   selectScene(id: string | null): void {
-    this.set({ selectedSceneId: id });
+    this.set({ selectedSceneId: id, selectedClipId: null });
+  }
+
+  /** Pilih satu potongan di dalam scene terpilih; null = kembali ke yang pertama. */
+  selectClip(id: string | null): void {
+    this.set({ selectedClipId: id });
   }
 
   async applyPatch(ops: PatchOpInput[], label?: string): Promise<boolean> {

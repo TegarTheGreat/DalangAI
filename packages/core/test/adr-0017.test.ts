@@ -113,7 +113,7 @@ describe("trimStartSec (klip dari video sumber)", () => {
 
     const { plan: after, applied } = applyPatch(
       p,
-      [{ op: "updateScene", id: "a", patch: { visual: { trimStartSec: 42.5 } } }],
+      [{ op: "updateScene", id: "a", patch: { clip: { trimStartSec: 42.5 } } }],
       { origin: "agent" },
     );
     expect(after.scenes[0]?.clips[0]?.trimStartSec).toBe(42.5);

@@ -88,7 +88,7 @@ describe("applyPatch — basic ops", () => {
       {
         op: "updateScene",
         id: "sc-001",
-        patch: { visual: { motion: "kenburns-in", query: null } },
+        patch: { clip: { motion: "kenburns-in", query: null } },
       },
     ]);
     expect(next.scenes[0]?.clips[0]?.motion).toBe("kenburns-in");
@@ -104,7 +104,7 @@ describe("applyPatch — basic ops", () => {
           {
             op: "updateScene",
             id: "sc-001",
-            patch: { visual: { assetId: "px-123" } } as never,
+            patch: { clip: { assetId: "px-123" } } as never,
           },
         ]),
       "INVALID_OP",
@@ -313,7 +313,7 @@ describe("applyPatch — inverses", () => {
         patch: {
           narration: "Beda.",
           duration: 9,
-          visual: { motion: "pan-left", query: "new query", variant: "quote" },
+          clip: { motion: "pan-left", query: "new query", variant: "quote" },
           caption: { enabled: false },
         },
       },

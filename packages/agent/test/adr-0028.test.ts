@@ -150,9 +150,7 @@ describe("analyzeImage pada aset video (ADR-0028)", () => {
     const tools = buildAgentTools(session, deps);
     await exec(tools, "ingestVideo", { sceneId: "sc-001", file: "assets/podcast.mp4" });
     await exec(tools, "applyPatch", {
-      ops: [
-        { op: "updateScene", id: "sc-001", patch: { visual: { trimStartSec: 120 } } },
-      ],
+      ops: [{ op: "updateScene", id: "sc-001", patch: { clip: { trimStartSec: 120 } } }],
     });
     // Tanpa model vision tier-volume, tool berhenti SETELAH memeriksa aset
     // dan SEBELUM mengambil bingkai — jadi galat yang muncul adalah soal model.

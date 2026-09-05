@@ -104,12 +104,12 @@ describe("ingestVideo (ADR-0017)", () => {
         {
           op: "updateScene",
           id: "sc-001",
-          patch: { visual: { trimStartSec: 65 }, duration: 18 },
+          patch: { clip: { trimStartSec: 65 }, duration: 18 },
         },
         {
           op: "updateScene",
           id: "sc-002",
-          patch: { visual: { trimStartSec: 402.5 }, duration: 22 },
+          patch: { clip: { trimStartSec: 402.5 }, duration: 22 },
         },
       ],
     });

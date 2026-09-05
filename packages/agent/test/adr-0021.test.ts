@@ -264,7 +264,7 @@ describe("ADR-0021 · cutByWords", () => {
   it("durasi scene memperhitungkan visual.speed", async () => {
     const { session } = withTranscript();
     session.applyUserPatch([
-      { op: "updateScene", id: "sc-001", patch: { visual: { speed: 2 } } },
+      { op: "updateScene", id: "sc-001", patch: { clip: { speed: 2 } } },
     ]);
     const tools = buildAgentTools(session, makeDeps({}).deps);
     const result = await exec(tools, "cutByWords", {
