@@ -492,8 +492,40 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
     });
   };
 
+  /**
+   * Pita zona aman platform (ADR-0034), digambar di kanvas.
+   *
+   * Menyetelnya tanpa melihatnya membuat yang menyunting menebak: ia tahu
+   * captionnya bergeser, tapi tidak tahu SEBERAPA dan sampai mana batasnya —
+   * jadi teks yang ia seret sendiri tetap bisa mendarat di pita yang justru
+   * dikosongkan. Pitanya digambar dari `plan.meta.safeArea` langsung, bukan
+   * dari `safe` di atas: `safe` sudah dijepit ke margin desain (Math.max),
+   * dan yang harus terlihat di sini adalah pita yang DIMINTA, bukan margin
+   * yang berlaku.
+   *
+   * Tidak ada tombol untuk menyembunyikannya: pitanya hanya muncul saat
+   * seseorang benar-benar menyetel zona aman, dan panduan yang muncul cuma
+   * saat diminta tidak perlu tombol untuk tidak diminta.
+   */
+  const zona = plan.meta.safeArea;
+  const pita: { key: string; style: React.CSSProperties }[] = [
+    { key: "top", style: { top: 0, left: 0, right: 0, height: `${zona.top * 100}%` } },
+    {
+      key: "bottom",
+      style: { bottom: 0, left: 0, right: 0, height: `${zona.bottom * 100}%` },
+    },
+    { key: "left", style: { top: 0, bottom: 0, left: 0, width: `${zona.left * 100}%` } },
+    {
+      key: "right",
+      style: { top: 0, bottom: 0, right: 0, width: `${zona.right * 100}%` },
+    },
+  ].filter((band) => (zona[band.key as keyof typeof zona] ?? 0) > 0);
+
   return (
     <div className="canvas-layer" ref={hostRef}>
+      {pita.map((band) => (
+        <span key={`zona-${band.key}`} className="canvas-safe-band" style={band.style} />
+      ))}
       {locked ? (
         <span className="canvas-locked">
           Scene terkunci — buka kuncinya untuk menggeser

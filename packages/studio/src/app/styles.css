@@ -2868,6 +2868,21 @@ input[type="color"]::-webkit-color-swatch {
   right: 0;
   height: 1px;
 }
+/* Pita zona aman platform (ADR-0034): tepi yang akan ditimpa antarmuka
+   platform tujuan. Digambar sebagai arsir samar, BUKAN blok pekat — ia
+   panduan di atas gambar yang sedang disunting, dan panduan yang menutupi
+   gambarnya berhenti membantu. Garis dalamnya yang menandai batas persisnya;
+   arsirnya cuma memberi tahu sisi mana yang dipesan. */
+.canvas-safe-band {
+  position: absolute;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(228, 166, 76, 0.16) 0 6px,
+    rgba(228, 166, 76, 0) 6px 12px
+  );
+  box-shadow: inset 0 0 0 1px rgba(228, 166, 76, 0.42);
+}
 .canvas-locked {
   position: absolute;
   left: 50%;

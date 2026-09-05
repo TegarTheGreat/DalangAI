@@ -290,7 +290,9 @@ Lora, Plus Jakarta Sans karya Tokotype, dan Anton.
   platform: repo ini tidak bisa memverifikasi ukuran antarmuka TikTok, Reels,
   atau Shorts, dan angka tak terverifikasi yang dibekukan sebagai nama platform
   akan menua diam-diam. Bawaannya nol, jadi plan yang sudah ada tidak bergeser
-  satu piksel pun — dibuktikan gerbang paritas byte, bukan diklaim.
+  satu piksel pun — dibuktikan gerbang paritas byte, bukan diklaim. Pitanya
+  digambar di kanvas Studio supaya yang menyunting melihat batasnya, bukan cuma
+  akibatnya; gerbang interaksi mengukur ketiga pitanya lewat pointer sungguhan.
 
 Rujukan: [ADR-0016](docs/decisions/0016-tipografi.md),
 [ADR-0034](docs/decisions/0034-zona-aman-platform.md)

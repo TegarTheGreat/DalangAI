@@ -149,6 +149,17 @@ const main = async (): Promise<void> => {
     { ...dasar, id: "sc-step-2-k2", durationSec: 3 },
   ] as typeof step2.clips;
 
+  // Zona aman platform (ADR-0034) disuntikkan supaya pita panduannya ada di
+  // kanvas untuk diukur. Angkanya sengaja tidak bulat dan berbeda di tiap
+  // sisi: pita yang salah dipetakan (atas dipakai untuk bawah, tinggi dipakai
+  // untuk lebar) akan tetap lulus kalau keempatnya sama.
+  (seed as unknown as { meta: Record<string, unknown> }).meta.safeArea = {
+    top: 0.07,
+    bottom: 0.23,
+    left: 0,
+    right: 0.13,
+  };
+
   // Musik latar disuntikkan supaya bar musik (dan pegangan fade-nya) ada.
   (seed.audio as Record<string, unknown>).music = {
     assetId: "pustaka:tenang",
@@ -586,6 +597,56 @@ const main = async (): Promise<void> => {
       typeof subText?.offsetX === "number" && subText.offsetX !== 0,
       `offsetX tx-sub = ${subText?.offsetX}`,
     );
+
+    // --- Pita zona aman platform (ADR-0034) -----------------------------
+    //
+    // Diukur, bukan dilihat: yang dijanjikan fitur ini adalah pita yang
+    // PERSIS sebesar fraksi yang diminta. Pita yang ada tapi salah ukuran
+    // lebih buruk daripada tidak ada — ia membuat yang menyunting percaya
+    // pada batas yang bukan batasnya.
+    {
+      const host = await rect(".canvas-layer");
+      const bands =
+        ((await page.evaluate(
+          '(() => Array.from(document.querySelectorAll(".canvas-safe-band")).map((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }))()',
+        )) as Rect[]) ?? [];
+      check(
+        "sisi yang disetel nol TIDAK menggambar pita",
+        bands.length === 3,
+        `pita tergambar = ${bands.length}, diharapkan 3 (atas, bawah, kanan; kiri nol)`,
+      );
+      if (host && bands.length === 3) {
+        // Dikenali dari BENTUKNYA, bukan dari satu tepi saja: pita atas juga
+        // rata kanan (ia membentang selebar kanvas), jadi "tepi kanannya
+        // menempel" cocok untuk tiga pita sekaligus. Pita mendatar selebar
+        // kanvas vs pita tegak setinggi kanvas memisahkannya tanpa ragu —
+        // dan versi pertama pemeriksaan ini memang tertipu, lalu melaporkan
+        // pita kanan selebar 732 piksel.
+        const mendatar = bands.filter((band) => near(band.w, host.w, 2));
+        const tegak = bands.filter((band) => near(band.h, host.h, 2));
+        const atas = mendatar.find((band) => near(band.y, host.y, 2));
+        const bawah = mendatar.find((band) => near(band.y + band.h, host.y + host.h, 2));
+        const kanan = tegak.find((band) => near(band.x + band.w, host.x + host.w, 2));
+        // Toleransi 2 px: kanvas diskalakan ke lebar panel, jadi fraksi
+        // bertemu pembulatan piksel peramban.
+        check(
+          "pita atas setinggi 7% kanvas",
+          atas !== undefined && near(atas.h, host.h * 0.07, 2),
+          `tinggi = ${fmt(atas?.h ?? -1)}, diharapkan ${fmt(host.h * 0.07)}`,
+        );
+        check(
+          "pita bawah setinggi 23% kanvas — bukan tertukar dengan yang atas",
+          bawah !== undefined && near(bawah.h, host.h * 0.23, 2),
+          `tinggi = ${fmt(bawah?.h ?? -1)}, diharapkan ${fmt(host.h * 0.23)}`,
+        );
+        check(
+          "pita kanan selebar 13% kanvas",
+          kanan !== undefined && near(kanan.w, host.w * 0.13, 2),
+          `lebar = ${fmt(kanan?.w ?? -1)}, diharapkan ${fmt(host.w * 0.13)}`,
+        );
+      }
+      await shot("gate-zona-aman.png");
+    }
 
     console.log("\nPemilihan jamak di kanvas");
     // Setelah seretan tadi tx-sub terpilih. Shift+klik pada teks lebar

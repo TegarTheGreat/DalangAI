@@ -112,6 +112,22 @@ Bingkai yang sama dari contoh `klip-borobudur`, dirender dua kali:
 | kicker tepat di bawah chrome | kicker turun mengikuti margin atas |
 | judul chrome utuh selebar bingkai | judul terpotong elipsis karena kolomnya menyempit |
 
+**Pitanya digambar di kanvas Studio**, diarsir samar dengan garis batas di
+tepi dalamnya — panduan di atas gambar yang sedang disunting, bukan blok pekat
+yang menutupinya. Digambar dari `meta.safeArea` LANGSUNG, bukan dari margin
+yang berlaku: yang harus terlihat adalah pita yang DIMINTA, sementara margin
+yang berlaku sudah dijepit ke margin desain. Tidak ada tombol menyembunyikan —
+pitanya hanya muncul saat seseorang benar-benar menyetel zona aman, dan
+panduan yang muncul cuma saat diminta tidak perlu tombol untuk tidak diminta.
+
+Gerbang interaksi mengukur ketiga pitanya terhadap kanvas sungguhan lewat CDP,
+dengan fraksi yang sengaja berbeda di tiap sisi (7% / 23% / 13%, kiri nol):
+pita yang salah dipetakan — atas dipakai untuk bawah, tinggi untuk lebar —
+akan tetap lulus kalau keempatnya sama. Versi pertama pemeriksaan itu sendiri
+tertipu (ia mengenali pita dari satu tepi saja, dan pita atas juga rata kanan),
+melaporkan pita kanan selebar 732 piksel; yang dibetulkan pemeriksaannya, bukan
+komponennya.
+
 Lima test aritmetika menjaga sifatnya: bawaan tidak menggeser apa pun, caption
 naik keluar pita bawah, rel kanan mempersempit kedua sisi, zona aman kecil
 tidak mengurangi margin desain, dan bidang tersisa tetap positif di batas
@@ -123,9 +139,6 @@ paling ekstrem skema (0,4 keempat sisi).
   antarmuka TikTok, Reels, atau Shorts. Pilihan "Sedang" dan "Longgar" di
   Studio adalah cadangan konservatif yang persentasenya ditampilkan, bukan
   hasil pengukuran.
-- **Tidak ada penanda zona aman di kanvas Studio.** Yang menyunting melihat
-  akibatnya (teks bergeser), bukan pitanya. Menggambar pita itu adalah
-  keputusan UI tersendiri.
 - **Anotasi tutorial-01 tidak ikut bergeser.** Sorotan dan panah berjangkar
   pada koordinat screenshot, bukan pada margin tata letak.
 - **Kiri dan kanan tidak bisa asimetris**, lihat §5.
