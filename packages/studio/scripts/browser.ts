@@ -40,3 +40,40 @@ export const launchBrowser = async (
 export const exitSoon = (): void => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 1500).unref();
 };
+
+/**
+ * Ekspresi yang menunggu SEMUA animasi CSS selesai — dipakai kedua gerbang UI
+ * lewat `page.evaluate`.
+ *
+ * Kenapa ada: `.inspector-panel` masuk dengan `drawer-in-right`, yang keyframe
+ * awalnya `translate: 14px 0` selama 180 ms dengan `fill-mode: both`. Mengukur
+ * di dalam jendela itu memberi kotak yang bergeser ke kanan, dan gerbang tata
+ * letak pernah merah di CI dengan bunyi persis "panel Properti keluar layar
+ * (+14px)" — angka keyframe-nya sendiri. Bukan cacat tata letak: cacat
+ * PENGUKURAN yang balapan dengan animasi.
+ *
+ * Gerbang interaksi punya bahaya yang sama dan lebih buruk akibatnya: kotak
+ * yang bergeser membuat pointer mendarat di tempat yang salah, jadi seretan
+ * bisa meleset dari pegangannya tanpa satu pun pesan yang menjelaskan kenapa.
+ *
+ * Menunggu lewat `sleep` yang lebih panjang hanya menggeser peluangnya; yang
+ * dipakai di sini janji `animation.finished` milik peramban, jadi ia menunggu
+ * TEPAT selama animasinya berjalan. Animasi tak berujung (pemuat berputar)
+ * dikecualikan — menunggunya berarti menggantung selamanya — dan seluruh
+ * penantian dibatasi satu detik.
+ *
+ * Dibuktikan terpisah terhadap halaman beranimasi 700 ms berisi satu animasi
+ * berujung dan satu yang tidak: ditunggu 698 ms, yang tak berujung dilewati,
+ * dan kotak yang diukur bergeser 14 piksel ke tempatnya.
+ */
+export const SETTLE_ANIMATIONS = `(() => {
+  const all = typeof document.getAnimations === "function" ? document.getAnimations() : [];
+  const habis = all.filter((anim) => {
+    const timing = anim.effect && anim.effect.getComputedTiming();
+    return timing && Number.isFinite(timing.iterations) && Number.isFinite(timing.endTime);
+  });
+  return Promise.race([
+    Promise.all(habis.map((anim) => anim.finished.catch(() => null))),
+    new Promise((resolve) => setTimeout(resolve, 1000)),
+  ]).then(() => habis.length);
+})()`;

@@ -274,7 +274,7 @@ Tiga panel: **Chat (agent)** — **Preview (player)** — **Timeline/Inspector (
 ### 8.2 Interaksi Kunci
 
 - Klik scene di timeline → inspector menampilkan properti (narasi, visual, durasi, caption) yang bisa diedit langsung.
-- Tombol lock 🔒 per scene.
+- Tombol lock (gembok) per scene.
 - Setiap balasan agent yang mengubah plan menampilkan **diff ringkas** ("mengubah 2 scene, menambah 1") dengan tombol undo.
 - Kandidat aset dari `searchAssets` tampil sebagai grid thumbnail — user bisa memilih manual, pilihan itu tercatat sebagai patch user (dan asset ter-pin).
 - Indikator status pipeline per scene (pending / processing / done / fallback / error) di timeline.

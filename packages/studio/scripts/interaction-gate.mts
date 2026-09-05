@@ -44,7 +44,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startStudioServer } from "../src/server/index";
-import { exitSoon, launchBrowser } from "./browser";
+import { exitSoon, launchBrowser, SETTLE_ANIMATIONS } from "./browser";
 import { stubDeps } from "./stub-deps";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -228,10 +228,20 @@ const main = async (): Promise<void> => {
   const SHIFT = 8;
 
   // --- pembacaan DOM & plan --------------------------------------------------
-  const rect = async (selector: string, index = 0): Promise<Rect | null> =>
-    (await page.evaluate(
+  /**
+   * Kotak sebuah elemen, diukur SETELAH animasi CSS selesai.
+   *
+   * Pointer CDP menekan KOORDINAT LAYAR: kotak yang dibaca saat panelnya masih
+   * bergeser membuat seretan mendarat di tempat yang salah — dan yang muncul
+   * bukan pesan "kotaknya bergeser", melainkan pemeriksaan yang gagal dengan
+   * alasan yang menyesatkan. Alasan lengkapnya di `SETTLE_ANIMATIONS`.
+   */
+  const rect = async (selector: string, index = 0): Promise<Rect | null> => {
+    await page.evaluate(SETTLE_ANIMATIONS);
+    return (await page.evaluate(
       `(() => { const el = document.querySelectorAll(${JSON.stringify(selector)})[${index}]; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`,
     )) as Rect | null;
+  };
   const center = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
   const attr = async (selector: string, index: number, name: string) =>
     (await page.evaluate(
