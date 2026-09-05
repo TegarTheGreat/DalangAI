@@ -1,14 +1,15 @@
 import { dirname, isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  allClips,
+  type Clip,
+  clipAsset,
   DIMENSIONS,
   NARRATION_LEAD_IN_SEC,
-  primaryClip,
   type ResolvedAsset,
   type ScenePlan,
-  sceneAsset,
 } from "@dalang/core";
-import { computeFrameLayout, FPS } from "@dalang/templates/layout";
+import { clipFrameSpans, computeFrameLayout, FPS } from "@dalang/templates/layout";
 import { resolveMusicFile } from "@dalang/templates/music";
 import type { InteropNote } from "./report";
 
@@ -204,7 +205,14 @@ export const buildEditTimeline = (
   const notes: InteropNote[] = [];
   const cuts = cutPoints(layout.sceneStarts, layout.boundaryFrames, layout.totalFrames);
 
-  // --- Trek video: satu klip per scene, adu-tumpul di titik potong ---------
+  // --- Trek video: satu klip per KLIP, adu-tumpul di titik potong ---------
+  //
+  // Satu-ke-satu sejak ADR-0033: sebelumnya satu scene selalu jadi satu klip,
+  // jadi wawancara berklip dua belas menyeberang sebagai satu blok panjang
+  // yang titik potongnya hilang. Kuantisasi bingkainya memakai `clipFrameSpans`
+  // yang SAMA dengan renderer — kalau interop membulatkan sendiri, hasil di
+  // Resolve akan bergeser satu bingkai dari hasil render Dalang, dan tidak ada
+  // yang bisa mengatakan mana yang benar.
   const videoItems: (EditClip | EditGap)[] = [];
   const transitions: EditTransition[] = [];
   const unresolved: string[] = [];
@@ -213,34 +221,66 @@ export const buildEditTimeline = (
   plan.scenes.forEach((scene, index) => {
     const end = cuts[index] ?? layout.totalFrames;
     const durationFrames = Math.max(1, end - cursor);
-    const asset: ResolvedAsset | undefined = sceneAsset(plan, scene);
+    const spans = clipFrameSpans(scene, durationFrames);
 
-    if (!asset) {
-      // Scene tanpa aset nyata (template-anim, atau belum diresolusi) tidak
-      // bisa jadi klip: tidak ada berkas untuk ditunjuk. Gap yang jujur.
-      unresolved.push(scene.id);
-      videoItems.push({ kind: "gap", startFrame: cursor, durationFrames });
-    } else {
-      const markers: EditMarker[] = [
-        { startFrame: 0, durationFrames: 1, value: `Dalang: ${scene.id}` },
-      ];
-      if (scene.narration.trim()) {
-        markers.push({ startFrame: 0, durationFrames: 1, value: scene.narration.trim() });
+    spans.forEach((span) => {
+      const clip = scene.clips[span.index];
+      const asset: ResolvedAsset | undefined = clip
+        ? clipAsset(plan, clip.id)
+        : undefined;
+      const startFrame = cursor + span.startFrame;
+
+      if (!asset || !clip) {
+        // Klip tanpa aset nyata (template-anim, atau belum diresolusi) tidak
+        // bisa jadi klip: tidak ada berkas untuk ditunjuk. Gap yang jujur.
+        unresolved.push(spans.length > 1 ? `${scene.id}/${span.id}` : scene.id);
+        videoItems.push({ kind: "gap", startFrame, durationFrames: span.frames });
+      } else {
+        const markers: EditMarker[] = [
+          {
+            startFrame: 0,
+            durationFrames: 1,
+            value:
+              spans.length > 1
+                ? `Dalang: ${scene.id} · klip ${span.index + 1}`
+                : `Dalang: ${scene.id}`,
+          },
+        ];
+        // Narasi milik SCENE, jadi ia menempel di potongan pertama saja;
+        // menyalinnya ke tiap potongan akan terbaca sebagai kalimat yang
+        // diucapkan berkali-kali.
+        if (span.index === 0 && scene.narration.trim()) {
+          markers.push({
+            startFrame: 0,
+            durationFrames: 1,
+            value: scene.narration.trim(),
+          });
+        }
+        videoItems.push({
+          kind: "clip",
+          sceneId: scene.id,
+          name: spans.length > 1 ? span.id : scene.id,
+          startFrame,
+          durationFrames: span.frames,
+          url: fileUrlFor(planDir, asset.file),
+          media: asset.kind,
+          // Gambar diam tidak punya titik masuk; hanya video yang dipotong.
+          sourceStartSec: asset.kind === "video" ? clip.trimStartSec : 0,
+          sourceDurationSec: asset.durationSec ?? null,
+          markers,
+        });
       }
-      videoItems.push({
-        kind: "clip",
-        sceneId: scene.id,
-        name: scene.id,
-        startFrame: cursor,
-        durationFrames,
-        url: fileUrlFor(planDir, asset.file),
-        media: asset.kind,
-        // Gambar diam tidak punya titik masuk; hanya video yang dipotong.
-        sourceStartSec: asset.kind === "video" ? primaryClip(scene).trimStartSec : 0,
-        sourceDurationSec: asset.durationSec ?? null,
-        markers,
-      });
-    }
+
+      // Transisi DI DALAM scene (ADR-0033 §6) ikut menyeberang.
+      if (span.transitionFrames > 0 && span.transitionType) {
+        transitions.push({
+          afterClipIndex: videoItems.length - 1,
+          offsetFrames: Math.round(span.transitionFrames / 2),
+          dalangType: span.transitionType,
+          dissolve: span.transitionType === "cross-fade",
+        });
+      }
+    });
 
     const boundary = layout.boundaryFrames[index];
     if (index < plan.scenes.length - 1 && boundary && scene.transition.type !== "none") {
@@ -485,15 +525,25 @@ export const buildEditTimeline = (
       detail: `${sentence(bagian.join(" dan "))} tidak ikut — digambar preset Dalang saat render, bukan disimpan sebagai berkas.`,
     });
   }
-  const motion = countScenes(plan, (scene) => primaryClip(scene).motion !== "none");
-  const filtered = countScenes(
-    plan,
-    (scene) => (primaryClip(scene).filter?.preset ?? "none") !== "none",
-  );
+  /**
+   * Hitungan kehilangan dihitung per KLIP, bukan per scene (ADR-0033).
+   *
+   * Sebelumnya semuanya membaca `primaryClip(scene)` saja, jadi wawancara
+   * berklip dua belas yang sebelas potongannya ber-Ken Burns dilaporkan
+   * sebagai "0 scene" begitu potongan pertamanya kebetulan diam. Catatan
+   * interop adalah permukaan KEJUJURAN ekspor: hitungan yang cuma memandang
+   * potongan pertama bukan sekadar kurang tepat, ia meleset ke arah yang
+   * paling merugikan pembacanya — mengaku tidak kehilangan apa-apa.
+   */
+  const clips = allClips(plan).map(({ clip }) => clip);
+  const countClips = (predicate: (clip: Clip) => boolean): number =>
+    clips.filter(predicate).length;
+  const motion = countClips((clip) => clip.motion !== "none");
+  const filtered = countClips((clip) => (clip.filter?.preset ?? "none") !== "none");
   if (motion + filtered > 0) {
     const bagian = [
-      motion > 0 ? `gerak kamera (${motion} scene)` : null,
-      filtered > 0 ? `filter warna (${filtered} scene)` : null,
+      motion > 0 ? `gerak kamera (${motion} klip)` : null,
+      filtered > 0 ? `filter warna (${filtered} klip)` : null,
     ].filter((part) => part !== null);
     notes.push({
       code: "gerak-filter",
@@ -529,7 +579,7 @@ export const buildEditTimeline = (
     });
   }
   const bersuara =
-    countScenes(plan, (scene) => primaryClip(scene).audio.volume > 0) +
+    countClips((clip) => clip.audio.volume > 0) +
     plan.scenes.reduce(
       (sum, scene) =>
         sum + scene.layers.filter((layer) => layer.visual.audio.volume > 0).length,
@@ -541,12 +591,12 @@ export const buildEditTimeline = (
       detail: `${bersuara} klip bersuara diekspor dengan audionya utuh, tapi volume, fade, ducking di bawah narasi, dan normalisasi kenyaringannya TIDAK ikut — semuanya otomatisasi milik render. Atur ulang levelnya di editor tujuan.`,
     });
   }
-  const speedy = countScenes(plan, (scene) => primaryClip(scene).speed !== 1);
-  const flipped = countScenes(plan, (scene) => primaryClip(scene).flipH);
+  const speedy = countClips((clip) => clip.speed !== 1);
+  const flipped = countClips((clip) => clip.flipH);
   if (speedy + flipped > 0) {
     const bagian = [
-      speedy > 0 ? `kecepatan putar (${speedy} scene)` : null,
-      flipped > 0 ? `cermin horizontal (${flipped} scene)` : null,
+      speedy > 0 ? `kecepatan putar (${speedy} klip)` : null,
+      flipped > 0 ? `cermin horizontal (${flipped} klip)` : null,
     ].filter((part) => part !== null);
     notes.push({
       code: "speed-flip",

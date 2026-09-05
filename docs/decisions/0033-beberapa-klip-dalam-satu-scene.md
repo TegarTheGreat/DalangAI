@@ -1,6 +1,6 @@
 # ADR-0033 — Beberapa klip dalam satu scene
 
-**Status:** diterima (fase 1 diterapkan) · **Tanggal:** 2 September 2026 · **Fase:** 9 (§9.6, baru)
+**Status:** diterima (diterapkan) · **Tanggal:** 2 September 2026 · **Fase:** 9 (§9.6, baru)
 
 ## Konteks
 
@@ -205,19 +205,73 @@ yang sama — kunci scene dipakai di tempat yang menuntut kunci klip:
 | uji audio | `setLoudness` menulis ke kunci yang tidak dibaca siapa pun, jadi kritik "belum diukur" tidak pernah diam |
 | pembacaan diff | `splitScene` menyalin id klip induk ke scene baru — id klip wajib unik se-plan, jadi plan hasil belahan ditolak skema |
 
-Yang BELUM: keempat op klip (`splitClip`, `trimClip`, `removeClip`,
-`reorderClips`), pengeditan klip di timeline Studio, dan pemetaan interop satu
-ke satu. Sampai op-nya ada, tidak ada jalur yang bisa MEMBUAT klip kedua;
-skema sudah menerimanya dan aturan waktunya (§2) sudah berlaku, tapi renderer
-belum menyusun lebih dari satu klip per scene.
+## Penerapan: fase 2 (5 September 2026)
 
-**Satu penyimpangan dari ADR ini, dinyatakan:** field payload
-`updateScene.patch.visual` BELUM berganti nama jadi `clip`. Ia sekarang
-menyasar `clips[0]`. Alasannya: mengganti nama di wire menyentuh Studio,
-agent, dan MCP tanpa satu pun kemampuan baru untuk ditunjukkan, dan
-penyuntingan per-klip yang membuat nama itu berarti baru datang di fase 2.
-Bentuk DATA-nya tunggal seperti yang diputuskan ADR ini — yang ditunda hanya
-nama field di satu payload patch.
+Keempat op klipnya ada, renderernya menyusun potongannya, timeline-nya bisa
+disentuh, dan kedua arah interop memetakannya satu-ke-satu.
+
+**Core.** `clips.ts` memegang seluruh aritmetikanya — `splitClipAt`,
+`trimClipEdge`, `removeClipAt`, `reorderClipsTo`, plus `trimBounds` /
+`splitBounds` / `clampTrimDelta` yang DIEKSPOR supaya seretan pointer memakai
+rumus yang sama dengan yang dipakai op untuk menolak. Op-nya sendiri di
+`patch.ts`, dan invers keempatnya `setClips` yang membawa daftar klip
+sebelumnya apa adanya beserta durasi scene-nya.
+
+`setClips` adalah op KELIMA yang tidak disebut ADR ini. Ia lahir dari
+inversnya: daftar klip sebelumnya harus punya op yang bisa memasangnya
+kembali. Ia sekaligus jalan bagi agent untuk mengarang seluruh strip sekaligus,
+dan bagi rute belah-scene untuk membagi potongan ke dua scene dalam satu patch.
+
+**Renderer.** `ClipStrip` dipakai kedua preset lewat render-prop. Potong keras
+memakai petak `Sequence` yang menutup rapat; larut memakai `TransitionSeries`
+dengan separuh tumpang tindih di tiap sisi, sehingga panjang scene tidak
+berubah dan titik tengah larut mendarat tepat di batas potongan.
+`clipFrameSpans` membulatkan dari jumlah KUMULATIF — membulatkan tiap durasi
+sendiri-sendiri menumpuk selisih setengah bingkai sampai potongan terakhir
+berakhir sebelum scene-nya.
+
+**Studio.** Titik potong digambar di dalam kotak scene dan bisa diseret
+(`roll`, supaya kotak sesudahnya tidak melompat di bawah jari). Pisau di
+transport membelah KLIP; tombol kedua membelah SCENE. Panel Properti punya
+daftar potongan, dan seluruh kendali visualnya menyasar potongan terpilih. Di
+bawah daftar itu ada kartu potongan: bawaannya potong keras, dan larut dipasang
+per potongan kalau memang dibutuhkan.
+
+**Potongan antar klip (§6) punya jalan masuk.** `updateScene.patch.clip`
+menerima `transition`, dan `null` mengembalikannya ke potong keras. Sebelum ini
+satu-satunya cara menyilangkan dua potongan adalah menulis ulang SELURUH daftar
+lewat `setClips` — jalur yang tidak dipakai UI mana pun dan tidak pernah dipakai
+agent, jadi kemampuan yang sudah ada di skema dan di renderer praktis tidak
+terjangkau. Ia duduk di `clip`, bukan sebagai op sendiri, karena ini properti
+sebuah klip persis seperti `motion` dan `filter`; op klip mengubah SUSUNAN
+potongan, bukan isi salah satunya. Kartunya menghapus field-nya alih-alih
+menyetel tipe `none`: keduanya terlihat sama di layar tapi yang satu tidak
+memakai tumpang-tindih sama sekali sementara yang lain tetap memakan durasinya.
+
+**Interop.** Ekspor: satu klip Dalang = satu klip OTIO/FCPXML, transisi di
+dalam scene ikut. Impor: potongan berurutan dari BERKAS yang sama jadi satu
+scene berklip banyak, bukan satu scene per potongan. Catatan "yang tidak ikut
+menyeberang" dihitung ulang per KLIP: sebelumnya semuanya membaca klip pertama
+saja, jadi scene berklip dua belas yang sebelas potongannya ber-Ken Burns
+melaporkan nol.
+
+**Penyimpangan fase 1 DITUTUP.** `updateScene.patch.visual` kini bernama
+`patch.clip`, dan op-nya menerima `clipId`. Alasan penundaannya — "belum ada
+kemampuan baru untuk ditunjukkan" — habis begitu penyuntingan per-klip ada:
+tanpa `clipId`, scene wawancara berklip dua belas hanya bisa disetel gerak dan
+filternya di potongan pertama. Nama `visual` tetap dipakai LAPISAN video; di
+sana ia memang bukan klip.
+
+Cacat yang ditemukan test dan gerbang selama fase ini:
+
+| Ditemukan oleh | Cacat |
+| --- | --- |
+| pembacaan diff Studio | pegangan trim tepi kanan mengirim `updateScene { duration }`, yang untuk scene berklip banyak DITOLAK skema (§2) — seretan terlihat berhasil lalu gagal merah |
+| pembacaan rute | belah scene menyalin `clips[0]` saja, jadi potongan kedua dan seterusnya hilang tanpa memberi tahu siapa pun |
+| uji impor | tiga potongan dari satu berkas jadi tiga scene; setelah dikelompokkan, penempelan lapisan masih memakai indeks KLIP sebagai indeks SCENE |
+| uji `clipFrameSpans` | scene yang lebih pendek dari jumlah klipnya melahirkan petak nol bingkai — ditolak Remotion, dan mustahil dilacak balik ke pembulatan |
+| uji mutasi pada gerbang interop | harapan jumlah peralihan dibaca dari `timeline` yang sedang diuji: mematikan ekspor transisi di dalam scene membuat kedua sisi turun bersamaan dan gerbangnya tetap hijau — tautologi yang persis diperingatkan komentar gerbang itu sendiri |
+| pembacaan permukaan | `clip.transition` ada di skema dan dipakai renderer, tapi tidak ada op yang bisa menyetelnya selain menulis ulang seluruh daftar; kemampuannya nyata dan tidak terjangkau |
 
 ## Rencana verifikasi
 
@@ -232,17 +286,35 @@ tidak dikarang belakangan agar cocok dengan hasil.
    satu piksel pun — bukan cuma konsisten dengan dirinya sendiri.
 2. **Ripple diuji sebagai aritmetika murni**, bukan lewat UI: memendekkan klip
    ketiga dari lima menggeser klip empat dan lima persis sebesar selisihnya, dan
-   jumlah durasi scene ikut berubah persis sebesar itu juga.
+   jumlah durasi scene ikut berubah persis sebesar itu juga. SUDAH —
+   `adr-0033-klip.test.ts`.
 3. **Undo satu langkah mengembalikan SEMUA klip** yang tersentuh ripple —
-   properti yang paling mudah rusak kalau invers dihitung ulang.
+   properti yang paling mudah rusak kalau invers dihitung ulang. SUDAH.
 4. **Belah lalu gabung kembali** menghasilkan klip yang identik dengan aslinya,
-   termasuk `trimStartSec` dan asetnya.
+   termasuk `trimStartSec` dan asetnya. SUDAH.
 5. **Migrasi dijalankan pada setiap plan contoh di repo**, dan hasilnya lolos
    skema versi 2 tanpa satu pun field hilang. SUDAH — keduanya dimigrasikan
    lewat fungsinya sendiri lalu disimpan sebagai v2.
 6. **Gerbang interaksi** menyeret tepi klip di timeline dengan pointer sungguhan
    lewat CDP, lalu memeriksa PLAN DI SERVER — seretan yang cuma menggeser kotak
    di layar tanpa patch adalah cacat yang tidak ditangkap unit test mana pun.
+   SUDAH: seretan 40 px menggeser potongan pertama +1,67 dtk sementara jumlah
+   durasi scene tidak bergeser satu milidetik pun (roll), dan pisau menambah
+   satu potongan tanpa menambah scene.
+7. **Paritas render setelah renderer disentuh.** Tiga still dari plan demo
+   dirender SEBELUM dan SESUDAH `ClipStrip` masuk; ketiga sha256-nya sama
+   persis, jadi scene berklip satu benar-benar tidak bergeser satu piksel pun.
+8. **Gerbang interop membaca plan BERKLIP BANYAK**, bukan cuma plan contoh yang
+   kebetulan berklip satu. SUDAH: gerbangnya menjalankan tiap plan dua kali —
+   apa adanya, lalu sebagai varian yang satu scene-nya dibelah jadi tiga lewat
+   op `splitClip` sungguhan dengan satu batas disilangkan. Dibuktikan menggigit
+   dengan dua mutasi: menggeser awal klip satu bingkai dan mematikan ekspor
+   transisi di dalam scene, dua-duanya merah sekarang dan salah satunya hijau
+   sebelum ini.
+9. **Kartu potongan mengirim patch, bukan cuma menyala.** SUDAH — gerbang
+   interaksi menekan kartunya lewat pointer CDP dan memeriksa PLAN DI SERVER:
+   `transition` muncul sebagai cross-fade, lalu benar-benar HILANG (bukan jadi
+   tipe `none`) setelah kartu potong keras ditekan.
 
 ## Batas yang dinyatakan
 
@@ -261,6 +333,12 @@ Yang TIDAK diberikan ADR ini, supaya tidak ada yang menyangka sebaliknya:
   soal apa yang terjadi saat klip di bawahnya dibelah.
 - **Visual dasar tetap tidak bisa di-keyframe.** Batas ini dari ADR-0027 tidak
   ikut dicabut di sini.
+- **Preset tutorial-01 menggambar potongannya, tapi ANOTASINYA tetap milik
+  scene.** Sorotan, panah, dan zoom berjangkar pada satu screenshot dengan
+  waktu relatif terhadap scene; potongan kedua yang menampilkan layar lain
+  tidak membawa anotasinya sendiri. Menjadikan anotasi milik klip adalah
+  keputusan tersendiri dengan pertanyaannya sendiri soal apa yang terjadi saat
+  klipnya dibelah.
 - **Belum ada rekaman kamera asli** yang melewati pipeline di repo ini; media
   ujinya disintesis ffmpeg. ADR ini tidak mengubah keadaan itu.
 

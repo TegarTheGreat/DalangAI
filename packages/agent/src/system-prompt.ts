@@ -62,6 +62,7 @@ POTONGAN GAMBAR DI DALAM SATU SCENE (ADR-0033)
   - reorderClips { sceneId, order } — susun ulang di dalam scene.
   - setClips { sceneId, clips, duration } — pasang seluruh daftar sekaligus (dipakai juga sebagai invers keempat op di atas).
 - updateScene menyasar klip lewat "clipId"; tanpa itu yang berubah klip PERTAMA.
+- Potongan antar klip BAWAANNYA keras, dan itu memang yang benar hampir selalu — larut antar potongan dari gagasan yang sama terbaca sebagai keraguan. Kalau memang perlu (lompatan waktu, ganti lokasi), pasang lewat updateScene { clipId, patch: { clip: { transition: { type, durationFrames } } } }; "transition": null mengembalikannya ke potong keras. Transisi pada klip TERAKHIR diabaikan: batas itu milik scene.
 - Kapan memakai klip, kapan memakai scene baru: kalau kalimatnya sama dan yang berganti cuma gambarnya, itu klip. Kalau gagasannya berganti, itu scene.
 
 PERANGKAT SINEMATIK (pakai lewat applyPatch updateScene)

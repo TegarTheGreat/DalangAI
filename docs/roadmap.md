@@ -18,7 +18,7 @@ Yang sudah nyata, bukan rencana:
 
 | Lapisan | Isi |
 | --- | --- |
-| Model data | scene-plan JSON (Zod ketat), 8 patch op, tiap op punya inversnya → undo/redo lintas restart |
+| Model data | scene-plan JSON v2 (Zod ketat, dengan rantai migrasi), 13 patch op, tiap op punya inversnya → undo/redo lintas restart |
 | Pipeline | TTS + aset, cache content-hash, resume, fallback berjenjang, ledger biaya SQLite |
 | Agent | 21 tool, guardrail (batas langkah, batas anggaran, approval gate), resep per format konten, `critiqueDraft` |
 | Render | Remotion 4.0.518, lokal + Lambda lewat port `RenderTarget`, 4 format × 3 resolusi × 3 mutu |
@@ -151,7 +151,8 @@ ada memori preferensi lintas proyek ("saya selalu pakai caption tegas").
 Tidak ada proxy, tidak ada strategi untuk rekaman satu jam. `MAX_FILMSTRIP_FRAMES`
 membatasi thumbnail, tapi tidak ada jalur khusus untuk sumber besar.
 *(Ditutup oleh ADR-0028 — proxy per berkas, unggah streaming, strip bingkai +
-gelombang untuk memilih titik masuk.)*
+gelombang untuk memilih titik masuk — dan ADR-0033, yang memberi BENTUK DATA
+untuk potongannya: satu scene, banyak klip, dengan ripple di core.)*
 
 ### 3.11 Tanpa footage generatif
 
@@ -295,7 +296,21 @@ titik masuknya dengan MELIHAT rekamannya: strip bingkai dan bentuk gelombang
 sepanjang seluruh rekaman, jendela scene digambar di atasnya. Efek
 sampingnya yang paling berharga: dekoder ffmpeg yang sama mencabut batas
 "AAC/MP4 tidak terukur" milik ADR-0026 dan mengukur CAMPURAN AKHIR setiap
-render. Fase 9 dengan itu selesai seluruhnya; batasnya ada di "Batas" ADR-0028.
+render.
+
+**§9.6 sudah dikerjakan** (ADR-0033): satu scene boleh memuat beberapa klip
+berurutan. Ini bentuk data yang menutup kelemahan struktural yang dinyatakan
+di §1 dokumen ini — memotong satu jam rekaman berhenti melahirkan puluhan
+scene sampah, karena dua belas potongan dari satu wawancara sekarang satu
+scene dengan dua belas klip, satu narasi, satu caption. Skema naik ke v2
+dengan fungsi migrasi pertama repo ini (dijaga gerbang paritas byte), empat op
+klip beserta aritmetika ripple/roll hidup di core, renderer menyusun stripnya,
+titik potong bisa diseret di timeline, dan interop memetakan klip satu-ke-satu
+di kedua arah — dijaga gerbang yang membaca varian berklip banyak dengan
+OpenTimelineIO resmi, bukan cuma plan contoh yang kebetulan berklip satu. Di
+antara dua potongan bawaannya potong keras; larut dipasang per potongan lewat
+`updateScene.clip.transition`. Batasnya di "Batas yang dinyatakan" ADR-0033 (bukan J/L cut,
+bukan speed ramp, bukan multicam; lapisan dan anotasi tetap milik scene).
 
 > Membuka: pekerjaan yang hari ini harus dilakukan lewat form.
 
@@ -306,6 +321,7 @@ render. Fase 9 dengan itu selesai seluruhnya; batasnya ada di "Batas" ADR-0028.
 | 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027) |
 | 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | Selesai (ADR-0026) |
 | 9.5 | Proxy + penanganan rekaman panjang | Selesai (ADR-0028) |
+| 9.6 | Beberapa klip dalam satu scene: belah, trim ripple/roll, buang, susun ulang | Selesai (ADR-0033) |
 
 **Catatan urutan:** 9.1 memberi rasa paling besar per biaya. 9.2 memang yang
 paling mahal — ia menyentuh skema, kedua preset, pipeline, Studio, dan kedua

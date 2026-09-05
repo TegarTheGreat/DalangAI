@@ -95,6 +95,19 @@ export const sceneUpdateSchema = z.strictObject({
       focusY: z.number().min(0).max(1).optional(),
       /** ADR-0026: amplop audio klip (volume, fade, ducking, normalisasi). */
       audio: clipAudioSchema.optional(),
+      /**
+       * Transisi KELUAR ke klip berikutnya di dalam scene (ADR-0033 §6);
+       * `null` mengembalikannya ke potong keras, yang jadi bawaannya.
+       *
+       * Ada di sini, bukan sebagai op sendiri, karena ini properti sebuah
+       * klip — sama seperti `motion` dan `filter`. Op klip (belah, geser,
+       * buang, urut) mengubah SUSUNAN potongan; yang ini mengubah salah satu
+       * potongannya. Tanpa jalan masuk ini, satu-satunya cara menyilangkan
+       * dua potongan adalah menulis ulang seluruh daftar lewat `setClips`,
+       * dan menuntut pemanggilnya menyusun ulang daftar utuh demi satu field
+       * adalah cara termudah kehilangan klip di ujungnya.
+       */
+      transition: transitionSchema.nullable().optional(),
     })
     .optional(),
   caption: z

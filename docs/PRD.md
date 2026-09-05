@@ -179,7 +179,20 @@ reorderScenes(order[])
 setMeta(partial) / setAudio(partial)
 lockScene(id, bool)               // hanya dari UI/user, bukan agent
 replaceAsset(sceneId, assetRef)
+
+// Potongan gambar di dalam satu scene — ditambahkan ADR-0033
+setClips(sceneId, clips[], duration)
+splitClip(sceneId, clipId, atSec, newClipId)
+trimClip(sceneId, clipId, edge, mode, deltaSec)
+removeClip(sceneId, clipId)
+reorderClips(sceneId, order[])
 ```
+
+> Lima op klip di bawah garis ditambahkan [ADR-0033](decisions/0033-beberapa-klip-dalam-satu-scene.md);
+> `updateScene` sejak itu juga menerima `clipId`, dan payload `visual`-nya
+> bernama `clip`. Yang mengubah SUSUNAN potongan adalah op klip; yang mengubah
+> ISI satu potongan — termasuk transisi keluarnya ke potongan berikutnya — tetap
+> `updateScene`.
 
 Konsekuensi desain:
 

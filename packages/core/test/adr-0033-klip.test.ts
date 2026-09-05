@@ -533,6 +533,138 @@ describe("undo (rencana verifikasi butir 3 & 4)", () => {
   });
 });
 
+describe("potongan antar klip (§6)", () => {
+  it("bawaannya potong keras: tidak ada transisi yang tersimpan", () => {
+    const plan = lima();
+    expect(scene(plan).clips.map((clip) => clip.transition)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("dipasang lewat updateScene berclipId, bukan dengan menulis ulang daftarnya", () => {
+    const plan = lima();
+    const after = apply(plan, [
+      {
+        op: "updateScene",
+        id: "sc-002",
+        clipId: "sc-002-k2",
+        patch: { clip: { transition: { type: "cross-fade", durationFrames: 12 } } },
+      },
+    ]).plan;
+    expect(scene(after).clips[1]?.transition).toEqual({
+      type: "cross-fade",
+      durationFrames: 12,
+    });
+    // Yang lain tidak ikut tersentuh: ini properti SATU potongan.
+    expect(scene(after).clips[0]?.transition).toBeUndefined();
+    expect(durasi(after)).toEqual([3, 2, 4, 2.5, 1.5]);
+  });
+
+  it("null mengembalikannya ke potong keras, dan undo memulihkan yang tadi", () => {
+    const plan = lima();
+    const dipasang = apply(plan, [
+      {
+        op: "updateScene",
+        id: "sc-002",
+        clipId: "sc-002-k2",
+        patch: { clip: { transition: { type: "wipe-right", durationFrames: 9 } } },
+      },
+    ]);
+    const dicabut = apply(dipasang.plan, [
+      {
+        op: "updateScene",
+        id: "sc-002",
+        clipId: "sc-002-k2",
+        patch: { clip: { transition: null } },
+      },
+    ]);
+    expect(scene(dicabut.plan).clips[1]?.transition).toBeUndefined();
+
+    // Invers pencabutan harus MENGEMBALIKAN transisinya — kalau inversnya
+    // ikut menghapus, undo terlihat berhasil dan diam-diam kehilangan sunting.
+    const undo = apply(dicabut.plan, dicabut.applied.inverse);
+    expect(scene(undo.plan).clips[1]?.transition).toEqual({
+      type: "wipe-right",
+      durationFrames: 9,
+    });
+
+    // Dan undo dari pemasangannya mengembalikan ketiadaannya.
+    const undoPasang = apply(dipasang.plan, dipasang.applied.inverse);
+    expect(scene(undoPasang.plan).clips[1]?.transition).toBeUndefined();
+  });
+
+  it("mendarat di klip yang disebut, bukan di klip pertama", () => {
+    const plan = lima();
+    const after = apply(plan, [
+      {
+        op: "updateScene",
+        id: "sc-002",
+        clipId: "sc-002-k4",
+        patch: { clip: { transition: { type: "slide-left", durationFrames: 15 } } },
+      },
+    ]).plan;
+    expect(scene(after).clips.map((clip) => clip.transition?.type ?? "keras")).toEqual([
+      "keras",
+      "keras",
+      "keras",
+      "slide-left",
+      "keras",
+    ]);
+  });
+
+  it("belahan memberikan transisi keluar aslinya ke potongan KEDUA", () => {
+    const plan = lima();
+    const bertransisi = apply(plan, [
+      {
+        op: "updateScene",
+        id: "sc-002",
+        clipId: "sc-002-k1",
+        patch: { clip: { transition: { type: "cross-fade", durationFrames: 15 } } },
+      },
+    ]).plan;
+    const dibelah = apply(bertransisi, [
+      {
+        op: "splitClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k1",
+        atSec: 1.5,
+        newClipId: "sc-002-k1b",
+      },
+    ]).plan;
+    // Potongan pertama dapat potong keras (batas baru di dalam rekaman yang
+    // sama), yang kedua memegang batas lama ke klip sesudahnya.
+    expect(dibelah.scenes[1]?.clips[0]?.transition).toBeUndefined();
+    expect(dibelah.scenes[1]?.clips[1]?.transition).toEqual({
+      type: "cross-fade",
+      durationFrames: 15,
+    });
+  });
+
+  it("agent ditolak menyentuh transisi klip di scene terkunci", () => {
+    const plan = apply(lima(), [{ op: "lockScene", id: "sc-002", locked: true }]).plan;
+    expectPatchError(
+      () =>
+        apply(
+          plan,
+          [
+            {
+              op: "updateScene",
+              id: "sc-002",
+              clipId: "sc-002-k2",
+              patch: { clip: { transition: { type: "cross-fade", durationFrames: 12 } } },
+            },
+          ],
+          "agent",
+        ),
+      "SCENE_LOCKED",
+    );
+  });
+});
+
 describe("kritik: narasi lebih panjang dari gambar (§2)", () => {
   const kode = (plan: ScenePlan) =>
     critiquePlan(plan)

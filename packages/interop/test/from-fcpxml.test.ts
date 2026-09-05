@@ -97,16 +97,23 @@ describe("impor FCPXML", () => {
     const xml = doc(
       '<asset id="r2" name="X" src="file:///proyek/x.mp4" start="0s" duration="99s" hasVideo="1" format="r1"/>',
       [
-        '<asset-clip name="ketiga" ref="r2" offset="20s" duration="5s"/>',
+        // `start` = titik masuk di REKAMAN; masing-masing beda supaya urutan
+        // hasilnya bisa dibaca dari isinya, bukan cuma dari namanya.
+        '<asset-clip name="ketiga" ref="r2" offset="20s" start="45s" duration="5s"/>',
         '<clip name="pertama" offset="0s" duration="5s"><video offset="0s" ref="r2" duration="99s"/></clip>',
-        '<asset-clip name="kedua" ref="r2" offset="10s" duration="5s"/>',
+        '<asset-clip name="kedua" ref="r2" offset="10s" start="30s" duration="5s"/>',
       ].join("\n"),
     );
     const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
-    expect(plan.scenes.map((scene) => scene.id)).toEqual([
-      "sc-pertama",
-      "sc-kedua",
-      "sc-ketiga",
+    // Ketiganya dari BERKAS yang sama dan berurutan, jadi sejak ADR-0033
+    // mereka satu scene berklip tiga — dan urutan yang diuji di sini adalah
+    // urutan POTONGANNYA, yang tetap datang dari offset, bukan dari tag.
+    expect(plan.scenes.map((scene) => scene.id)).toEqual(["sc-pertama"]);
+    expect(plan.scenes[0]?.clips.map((clip) => clip.durationSec)).toEqual([5, 5, 5]);
+    expect(plan.scenes[0]?.clips.map((clip) => clip.trimStartSec)).toEqual([
+      undefined,
+      30,
+      45,
     ]);
   });
 
@@ -155,11 +162,13 @@ describe("impor FCPXML", () => {
       ].join("\n"),
     );
     const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
-    // 4 + (3601 - 3600) = 5s -> di dalam scene kedua (4s..10s).
-    expect(plan.scenes[0]?.layers ?? []).toHaveLength(0);
-    const layers = plan.scenes[1]?.layers ?? [];
+    // 4 + (3601 - 3600) = 5s. Kedua potongan dari berkas yang sama kini SATU
+    // scene 0..10s (ADR-0033), jadi sisipannya menempel di sana — dan
+    // fraksinya diukur terhadap jendela scene itu, bukan terhadap potongannya.
+    expect(plan.scenes).toHaveLength(1);
+    const layers = plan.scenes[0]?.layers ?? [];
     expect(layers).toHaveLength(1);
-    expect(layers[0]?.startFrac).toBeCloseTo((5 - 4) / 6, 3);
+    expect(layers[0]?.startFrac).toBeCloseTo(5 / 10, 3);
   });
 
   it("lane negatif (audio tempelan) tetap dilewati dan dihitung", () => {
@@ -180,15 +189,49 @@ describe("impor FCPXML", () => {
   it("id scene dibuat unik walau namanya sama", () => {
     // Satu rekaman dipakai berkali-kali adalah pola normal; skema menolak
     // scene berid kembar, jadi impor tidak boleh menghasilkannya.
+    // Dua BERKAS berbeda yang kebetulan bernama sama: potongan dari berkas
+    // berbeda tidak dikelompokkan (ADR-0033), jadi keduanya jadi scene sendiri
+    // dan idnya harus dibedakan.
     const xml = doc(
-      '<asset id="r2" name="sama" src="file:///proyek/s.mp4" start="0s" duration="60s" hasVideo="1" format="r1"/>',
+      [
+        '<asset id="r2" name="sama" src="file:///proyek/s.mp4" start="0s" duration="60s" hasVideo="1" format="r1"/>',
+        '<asset id="r3" name="sama" src="file:///proyek/t.mp4" start="0s" duration="60s" hasVideo="1" format="r1"/>',
+      ].join("\n"),
       [
         '<asset-clip name="sama" ref="r2" offset="0s" duration="5s"/>',
-        '<asset-clip name="sama" ref="r2" offset="5s" duration="5s"/>',
+        '<asset-clip name="sama" ref="r3" offset="5s" duration="5s"/>',
       ].join("\n"),
     );
     const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
     expect(plan.scenes.map((scene) => scene.id)).toEqual(["sc-sama", "sc-sama-2"]);
+  });
+
+  /**
+   * ADR-0033: potongan berurutan dari SATU rekaman adalah satu gagasan yang
+   * disunting, bukan dua belas gagasan. Impor yang memecahnya jadi dua belas
+   * scene memaksa yang membukanya menggabungkannya kembali dengan tangan.
+   */
+  it("potongan berurutan dari berkas berbeda TETAP jadi scene sendiri", () => {
+    const xml = doc(
+      [
+        '<asset id="r2" name="A" src="file:///proyek/a.mp4" start="0s" duration="60s" hasVideo="1" format="r1"/>',
+        '<asset id="r3" name="B" src="file:///proyek/b.mp4" start="0s" duration="60s" hasVideo="1" format="r1"/>',
+      ].join("\n"),
+      [
+        '<asset-clip name="wawancara" ref="r2" offset="0s" duration="4s"/>',
+        '<asset-clip name="wawancara" ref="r2" offset="4s" start="20s" duration="3s"/>',
+        '<asset-clip name="broll" ref="r3" offset="7s" duration="5s"/>',
+        '<asset-clip name="wawancara" ref="r2" offset="12s" start="40s" duration="6s"/>',
+      ].join("\n"),
+    );
+    const { plan } = fromFcpxml(xml, { projectDir: "/proyek" });
+    expect(plan.scenes.map((scene) => scene.clips.length)).toEqual([2, 1, 1]);
+    expect(plan.scenes[0]?.duration).toBeUndefined();
+    expect(plan.scenes[0]?.clips.map((clip) => clip.durationSec)).toEqual([4, 3]);
+    // Potongan ketiga kembali ke berkas pertama TAPI tidak berurutan dengannya
+    // lagi, jadi ia scene tersendiri — batas gambar dari sumber lain adalah
+    // batas yang paling mungkin juga batas gagasan.
+    expect(plan.scenes[2]?.clips[0]?.trimStartSec).toBe(40);
   });
 
   it("menolak berkas yang bukan FCPXML dengan pesan yang menyebut sebabnya", () => {

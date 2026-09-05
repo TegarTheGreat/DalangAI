@@ -637,7 +637,109 @@ const ClipList: React.FC<{ scene: Scene; selected: string; busy: boolean }> = ({
           </li>
         ))}
       </ul>
+      <ClipCut scene={scene} clipId={selected} busy={busy} />
     </section>
+  );
+};
+
+/**
+ * Potongan dari klip terpilih ke klip sesudahnya (ADR-0033 §6).
+ *
+ * Bawaannya POTONG KERAS, dan itu bukan kelalaian: di dalam satu scene,
+ * potongan keras adalah yang benar hampir selalu — larut antar potongan dari
+ * gagasan yang sama terbaca sebagai keraguan. Yang disediakan di sini adalah
+ * jalan keluar untuk kasus yang memang membutuhkannya (lompatan waktu, ganti
+ * lokasi), bukan hiasan yang dipasang karena bisa.
+ *
+ * "Potong keras" MENGHAPUS field-nya (null), bukan menyetel tipe "none".
+ * Keduanya terlihat sama di layar tapi tidak sama di linimasa: yang satu tidak
+ * memakai tumpang-tindih sama sekali, yang satu lagi tetap memakan durasinya
+ * untuk pergantian seketika. Menawarkan dua-duanya berarti menawarkan pilihan
+ * yang tidak bisa dibedakan pemakainya, jadi yang ditawarkan cuma satu.
+ */
+const ClipCut: React.FC<{ scene: Scene; clipId: string; busy: boolean }> = ({
+  scene,
+  clipId,
+  busy,
+}) => {
+  const index = scene.clips.findIndex((clip) => clip.id === clipId);
+  const clip = scene.clips[index];
+  // Klip terakhir tidak punya "berikutnya": batas itu milik scene, dan
+  // transisinya diatur di tab Transisi.
+  if (!clip || index < 0 || index === scene.clips.length - 1) return null;
+  const current = clip.transition ?? null;
+  const kirim = (
+    transition: { type: TransitionType; durationFrames: number } | null,
+    label: string,
+  ) =>
+    void studioClient.applyPatch(
+      [{ op: "updateScene", id: scene.id, clipId, patch: { clip: { transition } } }],
+      label,
+    );
+  return (
+    <div className="clip-cut-edit">
+      <h5>
+        Potongan ke klip {index + 2}
+        <span className="clip-cut-state">
+          {current ? TRANSITION_LABEL[current.type] : "Potong keras"}
+        </span>
+      </h5>
+      <div className="transition-grid tight">
+        <button
+          type="button"
+          className={current ? "transition-card" : "transition-card active"}
+          disabled={busy}
+          data-testid={`potong-keras-${clipId}`}
+          onClick={() => kirim(null, `Potongan ${clipId}: potong keras`)}
+        >
+          <span className="transition-glyph none" aria-hidden>
+            <span className="ga" />
+            <span className="gb" />
+          </span>
+          Potong keras
+        </button>
+        {TRANSITION_TYPES.filter((type) => type !== "none").map((type) => (
+          <button
+            key={type}
+            type="button"
+            className={
+              current?.type === type ? "transition-card active" : "transition-card"
+            }
+            disabled={busy}
+            data-testid={`silang-${type}-${clipId}`}
+            onClick={() =>
+              kirim(
+                { type, durationFrames: current?.durationFrames ?? 15 },
+                `Potongan ${clipId}: ${TRANSITION_LABEL[type]}`,
+              )
+            }
+          >
+            <span className={`transition-glyph ${type}`} aria-hidden>
+              <span className="ga" />
+              <span className="gb" />
+            </span>
+            {TRANSITION_LABEL[type]}
+          </button>
+        ))}
+      </div>
+      {current ? (
+        <SliderRow
+          label="Durasi silang"
+          min={MIN_TRANSITION_FRAMES}
+          max={MAX_TRANSITION_FRAMES}
+          step={1}
+          value={current.durationFrames}
+          neutral={15}
+          format={(value) => `${(value / 30).toFixed(2)}s`}
+          onCommit={(durationFrames) =>
+            kirim(
+              { type: current.type, durationFrames },
+              `Durasi silang ${(durationFrames / 30).toFixed(2)}s`,
+            )
+          }
+        />
+      ) : null}
+    </div>
   );
 };
 

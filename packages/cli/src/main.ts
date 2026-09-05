@@ -4,6 +4,7 @@ import { createInterface } from "node:readline/promises";
 import { defaultMemoryPath, fileMemoryStore } from "@dalang/agent";
 import {
   addMemoryEntry,
+  clipAsset,
   computeTimeline,
   countWords,
   critiquePlan,
@@ -141,6 +142,9 @@ const printPlanSummary = (plan: ScenePlan): void => {
       "#": index + 1,
       id: scene.id,
       tipe: primaryClip(scene).type,
+      // Jumlah potongan (ADR-0033); kosong saat cuma satu, supaya tabel scene
+      // biasa tidak dipenuhi angka 1 yang tidak mengatakan apa-apa.
+      klip: scene.clips.length > 1 ? scene.clips.length : "",
       kata: countWords(scene.narration),
       durasi: formatSec(resolveSceneDurationSec(scene, plan)),
       suara: audio
@@ -151,11 +155,15 @@ const printPlanSummary = (plan: ScenePlan): void => {
           ? "—"
           : "",
       aset:
-        sceneAsset(plan, scene)?.file ??
-        (primaryClip(scene).type === "template-anim" ||
-        primaryClip(scene).type === "solid"
-          ? "(template)"
-          : "(belum di-resolve)"),
+        scene.clips.length > 1
+          ? // Berkas per potongan berbeda-beda; menampilkan berkas potongan
+            // pertama saja akan terbaca sebagai satu-satunya berkas scene itu.
+            `${scene.clips.filter((clip) => clipAsset(plan, clip.id)).length}/${scene.clips.length} klip beraset`
+          : (sceneAsset(plan, scene)?.file ??
+            (primaryClip(scene).type === "template-anim" ||
+            primaryClip(scene).type === "solid"
+              ? "(template)"
+              : "(belum di-resolve)")),
       lock: scene.locked ? "terkunci" : "",
     };
   });

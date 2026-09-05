@@ -207,10 +207,13 @@ Rujukan: [ADR-0009](docs/decisions/0009-agent-runtime.md),
 ### Editor yang terasa seperti editor
 
 Timeline NLE dengan ruler ber-scrub, klip filmstrip selebar durasinya, trim di
-tepi klip, belah di playhead, track suara per scene, dan transport. Teks,
-grafis, dan lapisan video **diseret langsung di atas preview**, bukan lewat
-form angka. Semua keluarannya patch op biasa: tercatat, bisa Ctrl+Z, dan
-terlihat agent di giliran berikutnya.
+tepi klip, belah di playhead, track suara per scene, dan transport. Satu scene
+boleh memuat **beberapa potongan gambar berurutan**: titik potongnya digambar
+di dalam kotak scene dan bisa diseret, pisau di transport membelah POTONGAN
+sementara tombol di sebelahnya membelah SCENE. Teks, grafis, dan lapisan video
+**diseret langsung di atas preview**, bukan lewat form angka. Semua keluarannya
+patch op biasa: tercatat, bisa Ctrl+Z, dan terlihat agent di giliran
+berikutnya.
 
 <details>
 <summary>Kanvas, lapisan, dan keyframe</summary>
@@ -225,6 +228,13 @@ terlihat agent di giliran berikutnya.
   jamak**: Shift+klik menambah anggota, menyeret salah satu memindahkan
   semuanya sejauh yang sama dalam satu patch, jadi satu undo mengembalikan
   semuanya.
+- **Potongan di dalam satu scene** (maks 24): belah, geser tepi, buang, susun
+  ulang. Menggeser tepi punya dua rasa — `ripple` memanjangkan atau memendekkan
+  scene-nya, `roll` menukar durasi dengan potongan tetangga sehingga panjang
+  scene tidak berubah dan yang bergerak hanya titik potongnya. Aritmetikanya
+  hidup di core dan mengekspor BATASNYA, jadi seretan pointer berhenti di tempat
+  yang sama dengan tempat op menolak. Di antara dua potongan bawaannya potong
+  keras; larut dipasang per potongan kalau memang dibutuhkan.
 - **Lapisan video** (maks 2 per scene) untuk B-roll, picture-in-picture, atau
   bukti visual. Medianya memakai bentuk `visual` yang sama, jadi Ken Burns,
   filter, kecepatan, trim, cermin, dan titik fokus berlaku tanpa rumus kedua —
@@ -255,7 +265,8 @@ Rujukan: [ADR-0011](docs/decisions/0011-pengayaan-editor.md),
 [ADR-0015](docs/decisions/0015-kehandalan-gerak.md),
 [ADR-0024](docs/decisions/0024-manipulasi-langsung-di-kanvas.md),
 [ADR-0025](docs/decisions/0025-lapisan-video.md),
-[ADR-0027](docs/decisions/0027-keyframe-properti.md)
+[ADR-0027](docs/decisions/0027-keyframe-properti.md),
+[ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md)
 </details>
 
 ### Teks dan tipografi
@@ -531,13 +542,13 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 
 | Gerbang | Yang dijaganya |
 |---|---|
-| 1095 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
+| 1149 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
 | Render smoke test | Render sungguhan di CI, bukan mock |
 | Gerbang paritas migrasi | Plan v1 (dimigrasikan) dan plan v2 dirender, wajib identik byte per byte |
 | Gerbang tata letak | Geometri UI di 18 lebar layar (380-1920), editor dan lobi: kontrol yang saling menindih, tergunting, atau membuat halaman bisa digeser ke samping |
 | Gerbang interaksi | Seretan pointer dan papan ketik **sungguhan** lewat CDP, lalu plan **di server** yang diperiksa — seretan yang cuma menggeser kotak di layar tanpa patch adalah cacat yang tidak ditangkap unit test mana pun |
 | Gerbang paritas aset | Satu still dirender lewat dua jalur (bundel dan URL) dan wajib identik byte per byte |
-| Gerbang interop | Keluaran OTIO dibaca ulang dengan pustaka OpenTimelineIO resmi |
+| Gerbang interop | Keluaran OTIO/FCPXML dibaca ulang dengan pustaka OpenTimelineIO dan adapter fcpx_xml resmi, atas plan apa adanya DAN varian berklip banyak |
 | Eval self-check | Penilai yang rusak atau plan contoh yang melanggar kaidahnya sendiri membuat CI merah, tanpa kunci API dan tanpa biaya |
 
 Semua berjalan di CI GitHub Actions, tanpa kunci API dan tanpa jaringan
@@ -580,12 +591,16 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   diperintahkan meminta transkrip, bukan menebak.
 - **Visual dasar scene belum bisa di-keyframe**, dan **screen recording**
   (deteksi klik, auto-zoom kursor) belum dibangun.
-- **Satu scene masih = satu klip yang tampil.** Skemanya sudah `scene.clips[]`
-  (ADR-0033 fase 1, skema v2), tapi keempat op klipnya — belah, trim beripple,
-  buang, susun ulang — belum ada, jadi belum ada jalur yang bisa MEMBUAT klip
-  kedua. Memotong rekaman panjang untuk sekarang tetap berarti membuat banyak
-  scene. [ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md)
-  menulis apa yang sudah ada dan apa yang belum.
+- **Klip di dalam scene belum bisa J/L cut, speed ramp, atau multicam.** Satu
+  scene sekarang memang boleh memuat beberapa potongan berurutan yang bisa
+  dibelah, digeser tepinya (ripple/roll), dibuang, dan disusun ulang — tapi
+  audio tetap melekat pada kliknya sendiri, `speed` tetap satu angka per klip,
+  dan tidak ada sinkronisasi banyak sumber.
+  [ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) menulis
+  batasnya lengkap.
+- **Preset tutorial-01 menggambar potongannya, tapi anotasinya tetap milik
+  scene.** Sorotan dan panah berjangkar pada satu screenshot; kalau potongan
+  kedua menampilkan layar lain, anotasinya tidak ikut berpindah.
 
 Batas per keputusan ditulis lengkap di bagian "Batas" masing-masing ADR.
 

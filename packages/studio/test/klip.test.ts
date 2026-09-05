@@ -151,6 +151,45 @@ describe("op klip lewat /api/patch", () => {
   });
 });
 
+describe("potongan antar klip lewat updateScene", () => {
+  it("memasang larut pada satu potongan lalu mengembalikannya ke potong keras", async () => {
+    const studio = boot();
+    await duaKlip(studio);
+
+    const dipasang = await patch(studio, [
+      {
+        op: "updateScene",
+        id: "sc-batu",
+        clipId: "sc-batu-k1",
+        patch: { clip: { transition: { type: "cross-fade", durationFrames: 12 } } },
+      },
+    ]);
+    expect(dipasang.status).toBe(200);
+    expect((await sceneOf(studio, "sc-batu")).clips[0]?.transition).toEqual({
+      type: "cross-fade",
+      durationFrames: 12,
+    });
+
+    const dicabut = await patch(studio, [
+      {
+        op: "updateScene",
+        id: "sc-batu",
+        clipId: "sc-batu-k1",
+        patch: { clip: { transition: null } },
+      },
+    ]);
+    expect(dicabut.status).toBe(200);
+    expect((await sceneOf(studio, "sc-batu")).clips[0]?.transition).toBeUndefined();
+
+    // Undo pencabutan mengembalikan larutnya — bukan menghapus dua-duanya.
+    await call(studio, "/api/undo", { method: "POST" });
+    expect((await sceneOf(studio, "sc-batu")).clips[0]?.transition).toEqual({
+      type: "cross-fade",
+      durationFrames: 12,
+    });
+  });
+});
+
 describe("belah scene pada scene berklip banyak", () => {
   it("membagi potongannya ke dua scene, bukan membuang yang kedua", async () => {
     const studio = boot();

@@ -2544,6 +2544,48 @@ input[type="color"]::-webkit-color-swatch {
   gap: 2px;
 }
 
+/* Potongan dari klip terpilih ke klip sesudahnya (ADR-0033 §6).
+
+   Duduk MENEMPEL di bawah daftar, bukan sebagai grup properti sendiri: yang
+   diaturnya adalah batas antara dua baris yang persis di atasnya, dan kontrol
+   yang jauh dari benda yang diubahnya menuntut pemakainya mengingat pilihan
+   mana yang sedang aktif. Petaknya lebih rapat daripada grid transisi scene
+   karena panel ini sempit dan kartunya di sini tujuh, bukan enam. */
+.clip-cut-edit {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+.clip-cut-edit h5 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.clip-cut-state {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.transition-grid.tight {
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 6px;
+}
+.transition-grid.tight .transition-card {
+  padding: 7px 4px;
+  gap: 5px;
+  font-size: 10px;
+}
+.transition-grid.tight .transition-glyph {
+  width: 34px;
+  height: 20px;
+}
+
 /* Titik potong antar-klip di dalam satu scene (ADR-0033).
 
    Garisnya TIPIS dan selalu terlihat: potongan adalah fakta struktur, bukan

@@ -42,6 +42,76 @@ describe("garis waktu interop", () => {
     expect(firstEnd).toBe(expected);
   });
 
+  /**
+   * ADR-0033: pemetaannya satu-ke-satu. Sebelum klip ada, satu scene selalu
+   * jadi satu klip — jadi wawancara berklip dua belas menyeberang sebagai satu
+   * blok panjang yang setiap titik potongnya hilang di editor tujuan.
+   */
+  it("tiap KLIP jadi satu klip di garis waktu, dengan titik masuknya sendiri", () => {
+    const plan = makePlan((input) => {
+      const scene = input.scenes[1] as Record<string, unknown>;
+      scene.duration = "auto";
+      scene.clips = [
+        {
+          id: "sc-batu-k1",
+          type: "stock",
+          assetId: "aset-batu",
+          trimStartSec: 2,
+          durationSec: 2,
+        },
+        {
+          id: "sc-batu-k2",
+          type: "stock",
+          assetId: "aset-batu",
+          trimStartSec: 30,
+          durationSec: 4,
+        },
+      ];
+      const state = input.renderState as { clipAssets: Record<string, unknown> };
+      state.clipAssets["sc-batu-k2"] = { ...(state.clipAssets["sc-batu-k1"] as object) };
+    });
+    const project = tempProject(plan);
+    const timeline = buildEditTimeline(plan, { planPath: project.planPath });
+    const video = timeline.tracks.find((track) => track.kind === "video");
+    const klip = clipsOf(video?.items ?? []).filter((item) => item.sceneId === "sc-batu");
+
+    expect(klip.map((item) => item.name)).toEqual(["sc-batu-k1", "sc-batu-k2"]);
+    expect(klip.map((item) => item.sourceStartSec)).toEqual([2, 30]);
+    // Petaknya tetap menutup rapat: klip kedua mulai persis saat yang pertama
+    // berakhir, dan keduanya mengisi jendela scene-nya tanpa sisa.
+    expect(klip[1]?.startFrame).toBe(
+      (klip[0]?.startFrame ?? 0) + (klip[0]?.durationFrames ?? 0),
+    );
+    // Narasi milik scene, jadi ia menempel di potongan pertama saja.
+    expect(klip[0]?.markers.length).toBe(2);
+    expect(klip[1]?.markers.length).toBe(1);
+  });
+
+  it("transisi DI DALAM scene ikut menyeberang", () => {
+    const plan = makePlan((input) => {
+      const scene = input.scenes[1] as Record<string, unknown>;
+      scene.duration = "auto";
+      scene.clips = [
+        {
+          id: "sc-batu-k1",
+          type: "stock",
+          assetId: "aset-batu",
+          durationSec: 3,
+          transition: { type: "wipe-right", durationFrames: 12 },
+        },
+        { id: "sc-batu-k2", type: "stock", assetId: "aset-batu", durationSec: 3 },
+      ];
+      const state = input.renderState as { clipAssets: Record<string, unknown> };
+      state.clipAssets["sc-batu-k2"] = { ...(state.clipAssets["sc-batu-k1"] as object) };
+    });
+    const project = tempProject(plan);
+    const timeline = buildEditTimeline(plan, { planPath: project.planPath });
+    const video = timeline.tracks.find((track) => track.kind === "video");
+    expect(video?.transitions.map((transition) => transition.dalangType)).toContain(
+      "wipe-right",
+    );
+  });
+
   it("scene tanpa aset jadi gap, bukan klip yang menunjuk berkas hantu", () => {
     const plan = makePlan();
     const project = tempProject(plan);

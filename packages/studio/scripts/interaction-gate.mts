@@ -77,7 +77,11 @@ interface PlanLite {
     id: string;
     annotations: { target: Target }[];
     layers: { tracks: { points: { at: number }[] }[] }[];
-    clips: { id: string; durationSec?: number }[];
+    clips: {
+      id: string;
+      durationSec?: number;
+      transition?: { type: string; durationFrames: number };
+    }[];
   }[];
 }
 
@@ -721,7 +725,10 @@ const main = async (): Promise<void> => {
     // tangan akan diam-diam salah begitu urutan kasusnya berubah.
     const pxPerSec = sceneBox.w / Math.max(totalBefore, 0.001);
     const dx = 40;
-    await drag(center(cutHandle), { x: center(cutHandle).x + dx, y: center(cutHandle).y });
+    await drag(center(cutHandle), {
+      x: center(cutHandle).x + dx,
+      y: center(cutHandle).y,
+    });
     await sleep(SETTLE_MS);
     const clipsAfter = sceneOf(await plan(), "sc-step-2").clips.map(
       (clip) => clip.durationSec ?? 0,
@@ -766,6 +773,41 @@ const main = async (): Promise<void> => {
       ),
       `jumlah ${fmt(totalBefore)} → ${fmt(setelahBelah.clips.reduce((sum, c) => sum + (c.durationSec ?? 0), 0))}`,
     );
+
+    // Potongan antar klip (ADR-0033 §6): kartunya ada di daftar potongan tab
+    // Visual, dan yang dibuktikan bukan kelasnya berubah melainkan PLAN DI
+    // SERVER ikut berubah — kartu yang menyala tanpa mengirim patch adalah
+    // persis cacat yang gerbang ini ada untuk menangkapnya.
+    await page.evaluate(
+      `(() => { const b = Array.from(document.querySelectorAll(".tab")).find((el) => (el.textContent || "").trim().indexOf("Visual") === 0); if (b) b.click(); return Boolean(b); })()`,
+    );
+    await sleep(SETTLE_MS);
+    const klipAwal = setelahBelah.clips[0]?.id ?? "";
+    await page.evaluate(
+      `(() => { const el = document.querySelector('[data-testid="pilih-klip-${klipAwal}"]'); if (el) el.click(); return Boolean(el); })()`,
+    );
+    await sleep(SETTLE_MS);
+    const kartuLarut = await page.evaluate(
+      `(() => { const el = document.querySelector('[data-testid="silang-cross-fade-${klipAwal}"]'); if (el) el.click(); return Boolean(el); })()`,
+    );
+    await sleep(SETTLE_MS);
+    const dilarutkan = sceneOf(await plan(), "sc-step-2").clips[0];
+    check(
+      "kartu Larut memasang transisi DI DALAM scene pada potongan pertama",
+      kartuLarut === true && dilarutkan?.transition?.type === "cross-fade",
+      `transition = ${JSON.stringify(dilarutkan?.transition ?? null)}`,
+    );
+    await page.evaluate(
+      `(() => { const el = document.querySelector('[data-testid="potong-keras-${klipAwal}"]'); if (el) el.click(); return Boolean(el); })()`,
+    );
+    await sleep(SETTLE_MS);
+    const dikeraskan = sceneOf(await plan(), "sc-step-2").clips[0];
+    check(
+      "kartu Potong keras MENGHAPUS field-nya, bukan menyetel tipe none",
+      dikeraskan?.transition === undefined,
+      `transition = ${JSON.stringify(dikeraskan?.transition ?? null)}`,
+    );
+    await shot("gate-potongan-klip.png");
 
     console.log("\nTombol unggah di riwayat render (ADR-0030, tanpa token)");
     const publishButton = await rect(".render-publish");

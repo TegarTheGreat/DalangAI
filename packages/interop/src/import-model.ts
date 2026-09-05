@@ -100,21 +100,53 @@ export const clipsToPlan = (
   const luarProyek: string[] = [];
   const dipakai = new Set<string>();
 
+  /**
+   * Klip berurutan DARI BERKAS YANG SAMA jadi SATU scene berklip banyak
+   * (ADR-0033), bukan satu scene per potongan.
+   *
+   * Ini yang dijanjikan ADR-nya soal impor: dua belas potongan dari satu
+   * wawancara adalah satu gagasan yang disunting, bukan dua belas gagasan.
+   * Memecahnya jadi dua belas scene menghasilkan plan yang setiap barisnya
+   * menuntut narasi, caption, dan transisi sendiri-sendiri — dan yang membuka
+   * hasilnya harus menggabungkannya kembali dengan tangan.
+   *
+   * Yang TIDAK dikelompokkan: potongan dari berkas berbeda, dan potongan yang
+   * berkasnya tidak dikenal. Keduanya memang ganti gambar, dan ganti gambar
+   * dari sumber lain adalah batas yang paling mungkin juga batas gagasan.
+   */
+  const runs: {
+    file: string | undefined;
+    items: { clip: ImportedClip; index: number }[];
+  }[] = [];
+  const fileOf = (clip: ImportedClip): string | undefined => {
+    if (!clip.url?.startsWith("file://")) return undefined;
+    const absolute = fileURLToPath(clip.url);
+    const rel = relative(root, absolute);
+    return rel && !rel.startsWith("..") ? rel : undefined;
+  };
   clips.forEach((clip, index) => {
-    let file: string | undefined;
-    if (clip.url?.startsWith("file://")) {
-      const absolute = fileURLToPath(clip.url);
-      const rel = relative(root, absolute);
-      // Aset di LUAR folder proyek tidak dirujuk: path relatif yang keluar dari
-      // proyek akan gagal saat render dan saat proyeknya dipindah. Yang
-      // ditawarkan adalah kebenarannya, bukan tautan yang rusak.
-      if (rel && !rel.startsWith("..")) file = rel;
-      else luarProyek.push(absolute);
+    const file = fileOf(clip);
+    const last = runs.at(-1);
+    if (last && file !== undefined && last.file === file) {
+      last.items.push({ clip, index });
+    } else {
+      runs.push({ file, items: [{ clip, index }] });
+    }
+  });
+
+  /** Indeks scene untuk tiap klip impor — dipakai penempelan lapisan di bawah. */
+  const sceneOfClip: number[] = [];
+
+  runs.forEach((run, runIndex) => {
+    const first = run.items[0] as { clip: ImportedClip; index: number };
+    const file = run.file;
+    if (file === undefined && first.clip.url?.startsWith("file://")) {
+      luarProyek.push(fileURLToPath(first.clip.url));
     }
 
     // Id harus unik: satu rekaman yang dipakai lima kali menghasilkan lima
     // klip bernama sama, dan skema menolak scene berid kembar.
-    let id = slugId(clip.name, index);
+    let id = slugId(first.clip.name, runIndex);
     if (dipakai.has(id)) {
       let n = 2;
       while (dipakai.has(`${id}-${n}`)) n++;
@@ -123,40 +155,50 @@ export const clipsToPlan = (
     dipakai.add(id);
 
     const kind = file ? mediaKindOf(file) : "image";
-    const trimStartSec = Math.max(0, clip.sourceStartSec);
-    // Satu klip OTIO/FCPXML jadi satu scene berklip-satu (ADR-0033). Pemetaan
-    // satu-ke-satu ke `clips[]` — beberapa klip dalam satu scene — menunggu op
-    // klipnya ada; sampai itu, memecahnya jadi scene tetap yang paling jujur.
-    const clipId = `${id}-k1`;
+    const banyak = run.items.length > 1;
+    const total = run.items.reduce((sum, item) => sum + item.clip.durationSec, 0);
+
+    const sceneClips = run.items.map((item, clipIndex) => {
+      sceneOfClip[item.index] = scenes.length;
+      const clipId = `${id}-k${clipIndex + 1}`;
+      const trimStartSec = Math.max(0, item.clip.sourceStartSec);
+      const dasar = file
+        ? {
+            id: clipId,
+            type: (kind === "video" ? "stock" : "image") as "stock" | "image",
+            assetId: id,
+            pinned: true,
+            ...(kind === "video" && trimStartSec > 0
+              ? { trimStartSec: Number(trimStartSec.toFixed(3)) }
+              : {}),
+          }
+        : { id: clipId, type: "image" as const, assetId: null };
+      // Durasi per klip HANYA berarti saat potongannya lebih dari satu; klip
+      // tunggal mengisi seluruh scene dan angkanya justru akan diabaikan (§2).
+      const withDur = banyak
+        ? { ...dasar, durationSec: Number(item.clip.durationSec.toFixed(3)) }
+        : dasar;
+      if (file) {
+        clipAssets[clipId] = {
+          file,
+          kind,
+          source,
+          ...(item.clip.sourceDurationSec !== undefined && item.clip.sourceDurationSec > 0
+            ? { durationSec: Number(item.clip.sourceDurationSec.toFixed(3)) }
+            : {}),
+        };
+      }
+      return withDur;
+    });
+
     scenes.push({
       id,
       narration: "",
-      duration: Number(clip.durationSec.toFixed(3)),
-      clips: [
-        file
-          ? {
-              id: clipId,
-              type: kind === "video" ? "stock" : "image",
-              assetId: id,
-              pinned: true,
-              ...(kind === "video" && trimStartSec > 0
-                ? { trimStartSec: Number(trimStartSec.toFixed(3)) }
-                : {}),
-            }
-          : { id: clipId, type: "image", assetId: null },
-      ],
+      // Scene berklip banyak WAJIB "auto" (§2): panjangnya jumlah potongannya.
+      ...(banyak ? {} : { duration: Number(total.toFixed(3)) }),
+      clips: sceneClips as NonNullable<ScenePlanInput["scenes"]>[number]["clips"],
       caption: { enabled: false, style: "klasik", size: "m", position: "bottom" },
     });
-    if (file) {
-      clipAssets[clipId] = {
-        file,
-        kind,
-        source,
-        ...(clip.sourceDurationSec !== undefined && clip.sourceDurationSec > 0
-          ? { durationSec: Number(clip.sourceDurationSec.toFixed(3)) }
-          : {}),
-      };
-    }
   });
 
   // --- Sisipan (lane / trek video kedua) jadi LAPISAN (ADR-0025) ----------
@@ -165,11 +207,22 @@ export const clipsToPlan = (
   // gap di spine tidak jadi scene, jadi garis waktu hasil impor lebih pendek
   // daripada aslinya, dan mencocokkan pakai indeks akan menaruh sisipan di
   // scene yang salah begitu ada satu lubang saja.
-  const sceneSpans = clips.map((clip, index) => {
+  const clipSpans = clips.map((clip, index) => {
     const start =
       clip.timelineStartSec ??
       clips.slice(0, index).reduce((sum, earlier) => sum + earlier.durationSec, 0);
     return { start, end: start + clip.durationSec, index };
+  });
+  // Rentang SCENE = dari awal potongan pertamanya sampai akhir yang terakhir.
+  // Sisipan menempel pada scene, bukan pada potongan, jadi fraksi tampilnya
+  // harus diukur terhadap jendela yang sama dengan yang dipakai renderer.
+  const sceneSpans = scenes.map((_, sceneIndex) => {
+    const milik = clipSpans.filter((span) => sceneOfClip[span.index] === sceneIndex);
+    return {
+      start: Math.min(...milik.map((span) => span.start)),
+      end: Math.max(...milik.map((span) => span.end)),
+      index: sceneIndex,
+    };
   });
   const layerAssets: Record<string, unknown> = {};
   let tanpaScene = 0;
