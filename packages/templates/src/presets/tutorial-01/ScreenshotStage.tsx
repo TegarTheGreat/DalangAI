@@ -1,6 +1,14 @@
-import type { Annotation, ResolvedAsset, Scene } from "@dalang/core";
+import {
+  type Annotation,
+  clipAsset,
+  primaryClip,
+  type ResolvedAsset,
+  type Scene,
+  type ScenePlan,
+} from "@dalang/core";
 import { AbsoluteFill, Img, useCurrentFrame, useVideoConfig } from "remotion";
 import { useAssetSrc } from "../../asset-src";
+import { ClipStrip } from "../../ClipStrip";
 import type { AspectMetrics } from "../../layout";
 import {
   type ArrowSide,
@@ -199,15 +207,19 @@ const BlurLayer: React.FC<{ annotation: Annotation; presence: number }> = ({
 
 export const ScreenshotStage: React.FC<{
   scene: Scene;
-  asset: ResolvedAsset | undefined;
+  plan: ScenePlan;
   metrics: AspectMetrics;
   theme: TutTheme;
   durationInFrames: number;
   debug: boolean;
-}> = ({ scene, asset, metrics, theme, durationInFrames, debug }) => {
+}> = ({ scene, plan, metrics, theme, durationInFrames, debug }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const assetSrc = useAssetSrc();
+  // Ukuran kartu diambil dari klip PERTAMA dan tidak berubah di tengah scene:
+  // panggung yang menyusut ganti gambar akan terbaca sebagai cacat, bukan
+  // sebagai potongan (ADR-0033).
+  const asset = clipAsset(plan, primaryClip(scene).id);
   const box = stageBox(metrics, asset);
   const zoom = activeZoom(
     scene.annotations,
@@ -249,30 +261,39 @@ export const ScreenshotStage: React.FC<{
               transform: `scale(${zoom.scale}) translate(${zoom.translateX}px, ${zoom.translateY}px)`,
             }}
           >
-            {asset ? (
-              <Img
-                src={assetSrc(asset.file)}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            ) : (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background:
-                    "repeating-linear-gradient(45deg, rgba(29,33,41,0.04) 0 22px, rgba(29,33,41,0.08) 22px 44px)",
-                  color: theme.inkSoft,
-                  fontFamily: theme.fontBody,
-                  fontSize: 30,
-                  fontWeight: 600,
-                }}
-              >
-                {debug ? "Screenshot belum dipasang" : ""}
-              </div>
-            )}
+            {/* Potongan gambar (ADR-0033): yang berganti hanya GAMBARNYA.
+                Anotasi tetap saudara sekandungnya di luar strip, jadi
+                waktunya tetap relatif terhadap SCENE — bukan mulai ulang di
+                tiap potongan, yang akan membuat satu sorotan muncul berkali
+                kali di tempat yang tidak lagi menjadi targetnya. */}
+            <ClipStrip scene={scene} plan={plan} durationInFrames={durationInFrames}>
+              {({ asset: clipShot }) =>
+                clipShot ? (
+                  <Img
+                    src={assetSrc(clipShot.file)}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background:
+                        "repeating-linear-gradient(45deg, rgba(29,33,41,0.04) 0 22px, rgba(29,33,41,0.08) 22px 44px)",
+                      color: theme.inkSoft,
+                      fontFamily: theme.fontBody,
+                      fontSize: 30,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {debug ? "Screenshot belum dipasang" : ""}
+                  </div>
+                )
+              }
+            </ClipStrip>
             {scene.annotations.map((annotation, index) => {
               const presence = annotationPresence(
                 frame,

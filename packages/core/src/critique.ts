@@ -1,4 +1,9 @@
-import { computeTimeline } from "./durations";
+import {
+  computeTimeline,
+  estimateNarrationSeconds,
+  NARRATION_LEAD_IN_SEC,
+  sumClipDurationsSec,
+} from "./durations";
 import { type FormatRecipe, isBodyScene, recipeFor } from "./format-recipe";
 import {
   HEDGING_ID,
@@ -170,8 +175,61 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   // 12. Audio per klip (ADR-0026).
   notes.push(...critiqueAudio(plan));
 
+  // 13. Potongan gambar di dalam scene (ADR-0033).
+  notes.push(...critiqueClips(plan));
+
   notes.push(...critiqueFormat(plan, recipe));
   notes.push(...critiqueProse(plan, recipe));
+  return notes;
+};
+
+/**
+ * Selisih narasi terhadap gambar yang masih wajar, detik.
+ *
+ * Bukan nol: suara yang berakhir sepersekian detik setelah potongan terakhir
+ * adalah ritme, bukan cacat. Yang dilaporkan adalah selisih yang cukup panjang
+ * untuk TERLIHAT sebagai layar yang membeku sementara orangnya masih bicara.
+ */
+const CLIP_NARRATION_SLACK_SEC = 0.8;
+
+/**
+ * Potongan gambar di dalam scene (ADR-0033 §2).
+ *
+ * Begitu sebuah scene punya dua klip, durasinya datang dari POTONGANNYA — dan
+ * narasi yang lebih panjang daripada jumlah potongan itu bukan galat skema:
+ * itu keputusan penyuntingan yang mungkin memang disengaja. Yang terjadi di
+ * layar tetap perlu dikatakan: gambar terakhir membeku sampai kalimatnya
+ * selesai.
+ *
+ * Diukur terhadap audio narasi yang SUDAH ADA lebih dulu, baru terhadap
+ * perkiraan suku kata: menuduh seorang pengarah kekurangan gambar berdasarkan
+ * tebakan sementara berkas suaranya tersedia adalah cara tercepat membuat
+ * kritik ini diabaikan seluruhnya.
+ */
+const critiqueClips = (plan: ScenePlan): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
+  const speed = plan.audio.voice?.speed ?? 1;
+  for (const scene of plan.scenes) {
+    if (scene.clips.length < 2) continue;
+    const gambarSec = sumClipDurationsSec(scene);
+    const audio = plan.renderState.narrationAudio[scene.id];
+    const narasiSec = audio
+      ? audio.durationSec
+      : estimateNarrationSeconds(scene.narration, speed);
+    if (narasiSec === 0) continue;
+    const butuh = NARRATION_LEAD_IN_SEC + narasiSec;
+    if (butuh - gambarSec <= CLIP_NARRATION_SLACK_SEC) continue;
+    notes.push({
+      code: "narasi-lebih-panjang-dari-gambar",
+      level: "saran",
+      sceneId: scene.id,
+      message:
+        `Scene ${scene.id}: narasinya ${butuh.toFixed(1)} dtk tapi potongannya cuma ` +
+        `${gambarSec.toFixed(1)} dtk, jadi gambar terakhir membeku ` +
+        `${(butuh - gambarSec).toFixed(1)} dtk. Panjangkan potongan terakhir, ` +
+        "tambah satu potongan, atau potong kalimatnya — kalau memang disengaja, abaikan.",
+    });
+  }
   return notes;
 };
 

@@ -1,13 +1,27 @@
 import { z } from "zod";
 import {
+  type ClipRefusal,
+  isRefusal,
+  removeClipAt,
+  reorderClipsTo,
+  splitClipAt,
+  type TrimEdge,
+  type TrimMode,
+  trimClipEdge,
+} from "./clips";
+import {
+  allClips,
   annotationSchema,
   aspectRatioSchema,
   audioTrackSchema,
+  type Clip,
   captionPositionSchema,
   clipAudioSchema,
+  clipSchema,
   designTokensSchema,
   getSceneIndex,
   graphicSchema,
+  MAX_CLIPS,
   MAX_LAYERS,
   type Meta,
   metaSchema,
@@ -162,6 +176,61 @@ export const patchOpSchema = z.discriminatedUnion("op", [
     id: z.string(),
     locked: z.boolean(),
   }),
+  // -------------------------------------------------------------------------
+  // Op klip (ADR-0033 §5). Aritmetikanya hidup di `clips.ts`; yang di bawah ini
+  // cuma jalur masuk, penjagaan kunci, dan invers.
+  //
+  // INVERS KEEMPATNYA SAMA: `setClips` yang membawa daftar klip SEBELUMNYA apa
+  // adanya. Bukan operasi kebalikan yang dihitung ulang — ripple menyentuh
+  // banyak klip sekaligus, dan membalikkannya dengan aritmetika terbalik adalah
+  // cara halus kehilangan satu klip di ujung. Daftar sebelum-dan-sesudah selalu
+  // benar, dan biayanya beberapa ratus byte per langkah undo.
+  // -------------------------------------------------------------------------
+  z.strictObject({
+    op: z.literal("setClips"),
+    sceneId: z.string(),
+    clips: z.array(clipSchema).min(1).max(MAX_CLIPS),
+    /**
+     * Durasi scene yang menyertai daftar ini; tanpa ini scene jadi "auto".
+     *
+     * Keduanya satu fakta (§2): begitu ada dua klip, durasi scene adalah
+     * jumlah klipnya, dan begitu klipnya kembali tinggal satu, durasi itu
+     * kembali milik scene. Kalau invers cuma membawa daftar klipnya, undo dari
+     * belahan pertama akan mengembalikan klipnya tapi kehilangan angka durasi
+     * yang dipaku belahan itu.
+     */
+    duration: z.union([z.literal("auto"), finitePositive]).optional(),
+  }),
+  z.strictObject({
+    op: z.literal("splitClip"),
+    sceneId: z.string(),
+    clipId: z.string(),
+    /** Titik belah, detik dari AWAL KLIP (bukan dari awal scene). */
+    atSec: finitePositive,
+    /** Id potongan kedua; wajib unik se-plan, sama seperti id klip lain. */
+    newClipId: z.string().min(1),
+  }),
+  z.strictObject({
+    op: z.literal("trimClip"),
+    sceneId: z.string(),
+    clipId: z.string(),
+    edge: z.enum(["masuk", "keluar"]),
+    /** Bawaannya ripple: yang menyerap adalah panjang scene, bukan tetangga. */
+    mode: z.enum(["ripple", "roll"]).default("ripple"),
+    /** Geseran tepi di LINIMASA; positif = ke kanan. */
+    deltaSec: z.number().finite(),
+  }),
+  z.strictObject({
+    op: z.literal("removeClip"),
+    sceneId: z.string(),
+    clipId: z.string(),
+  }),
+  z.strictObject({
+    op: z.literal("reorderClips"),
+    sceneId: z.string(),
+    /** Wajib permutasi dari semua id klip scene itu. */
+    order: z.array(z.string()).min(1),
+  }),
   z.strictObject({
     op: z.literal("replaceAsset"),
     sceneId: z.string(),
@@ -188,6 +257,10 @@ export type PatchErrorCode =
   | "LAST_SCENE"
   | "BAD_REORDER"
   | "LAYER_NOT_FOUND"
+  /** ADR-0033. `CLIP_REFUSED` = aritmetika klipnya menolak; pesannya menyebut kenapa. */
+  | "CLIP_NOT_FOUND"
+  | "CLIP_EXISTS"
+  | "CLIP_REFUSED"
   | "PLAN_INVALID";
 
 export class PatchError extends Error {
@@ -274,6 +347,45 @@ const mergeDefined = <T extends Record<string, unknown>>(
       (target as Record<string, unknown>)[key] = value;
     }
   }
+};
+
+const requireClip = (scene: Scene, clipId: string, opIndex: number): Clip => {
+  const clip = scene.clips.find((candidate) => candidate.id === clipId);
+  if (!clip) {
+    throw new PatchError(
+      "CLIP_NOT_FOUND",
+      `Klip "${clipId}" tidak ada di scene "${scene.id}"`,
+      opIndex,
+    );
+  }
+  return clip;
+};
+
+/**
+ * Pasang daftar klip hasil satu op klip, dan kembalikan inversnya (ADR-0033).
+ *
+ * `scene.duration` selalu jadi "auto" sesudahnya, dan itu bukan penyederhanaan:
+ * scene berklip banyak memang wajib "auto" (§2), dan scene yang kembali
+ * berklip satu memang kembali mengikuti narasi. Angka yang tadinya ada dibawa
+ * utuh oleh inversnya, jadi undo mengembalikan keduanya sekaligus.
+ */
+const commitClips = (
+  scene: Scene,
+  result: Clip[] | ClipRefusal,
+  code: PatchErrorCode,
+  opIndex: number,
+  duration: "auto" | number = "auto",
+): PatchOp => {
+  if (isRefusal(result)) throw new PatchError(code, result, opIndex);
+  const inverse: PatchOp = {
+    op: "setClips",
+    sceneId: scene.id,
+    clips: clone(scene.clips),
+    duration: scene.duration,
+  };
+  scene.clips = result;
+  scene.duration = duration;
+  return inverse;
 };
 
 /** Prior values of the keys a patch touches, with `null` for keys that were absent. */
@@ -432,6 +544,80 @@ const applyOne = (
       return { op: "lockScene", id: op.id, locked: prior };
     }
 
+    case "setClips": {
+      const { scene } = requireScene(plan, op.sceneId, opIndex);
+      assertNotLockedForAgent(scene, origin, enforce, opIndex);
+      return commitClips(
+        scene,
+        clone(op.clips),
+        "CLIP_REFUSED",
+        opIndex,
+        op.duration ?? "auto",
+      );
+    }
+
+    case "splitClip": {
+      const { scene } = requireScene(plan, op.sceneId, opIndex);
+      assertNotLockedForAgent(scene, origin, enforce, opIndex);
+      requireClip(scene, op.clipId, opIndex);
+      // Id klip wajib unik SE-PLAN, bukan cuma se-scene (§4). Skema akhirnya
+      // juga menangkap ini, tapi dengan pesan tentang larik yang jauh dari
+      // kata "belah" — dan yang membaca pesan itu sedang membelah klip.
+      if (allClips(plan).some(({ clip }) => clip.id === op.newClipId)) {
+        throw new PatchError(
+          "CLIP_EXISTS",
+          `Id klip "${op.newClipId}" sudah dipakai di plan ini`,
+          opIndex,
+        );
+      }
+      const inverse = commitClips(
+        scene,
+        splitClipAt(plan, scene, op.clipId, op.atSec, op.newClipId),
+        "CLIP_REFUSED",
+        opIndex,
+      );
+      // Potongan kedua memakai BERKAS yang sama persis. Menyalin entri
+      // `clipAssets`-nya bukan kelonggaran: tanpa itu, belahan yang seharusnya
+      // tidak mengubah apa pun justru membuat paruh kedua kehilangan gambarnya
+      // sampai tahap aset dijalankan lagi. Sisa entri yatim sesudah undo
+      // dibersihkan `pruneRenderState`, sama seperti sesudah removeScene.
+      const asset = plan.renderState.clipAssets[op.clipId];
+      if (asset) plan.renderState.clipAssets[op.newClipId] = clone(asset);
+      return inverse;
+    }
+
+    case "trimClip": {
+      const { scene } = requireScene(plan, op.sceneId, opIndex);
+      assertNotLockedForAgent(scene, origin, enforce, opIndex);
+      requireClip(scene, op.clipId, opIndex);
+      return commitClips(
+        scene,
+        trimClipEdge(
+          plan,
+          scene,
+          op.clipId,
+          op.edge as TrimEdge,
+          op.mode as TrimMode,
+          op.deltaSec,
+        ),
+        "CLIP_REFUSED",
+        opIndex,
+      );
+    }
+
+    case "removeClip": {
+      const { scene } = requireScene(plan, op.sceneId, opIndex);
+      assertNotLockedForAgent(scene, origin, enforce, opIndex);
+      requireClip(scene, op.clipId, opIndex);
+      return commitClips(scene, removeClipAt(scene, op.clipId), "CLIP_REFUSED", opIndex);
+    }
+
+    case "reorderClips": {
+      const { scene } = requireScene(plan, op.sceneId, opIndex);
+      assertNotLockedForAgent(scene, origin, enforce, opIndex);
+      return commitClips(scene, reorderClipsTo(scene, op.order), "BAD_REORDER", opIndex);
+    }
+
     case "replaceAsset": {
       const { scene } = requireScene(plan, op.sceneId, opIndex);
       assertNotLockedForAgent(scene, origin, enforce, opIndex);
@@ -557,6 +743,21 @@ const describeOp = (op: PatchOp): string => {
       );
       return `mengubah audio (${fields.join(", ")})`;
     }
+    case "setClips":
+      return `menetapkan ${op.clips.length} klip di scene ${op.sceneId}`;
+    case "splitClip":
+      return `membelah klip ${op.clipId} di ${op.atSec} dtk → ${op.newClipId}`;
+    case "trimClip": {
+      const arah = op.deltaSec >= 0 ? "kanan" : "kiri";
+      return (
+        `menggeser tepi ${op.edge} klip ${op.clipId} ${Math.abs(op.deltaSec)} dtk ` +
+        `ke ${arah} (${op.mode})`
+      );
+    }
+    case "removeClip":
+      return `menghapus klip ${op.clipId} dari scene ${op.sceneId}`;
+    case "reorderClips":
+      return `mengurutkan ulang klip scene ${op.sceneId} (${op.order.join(" → ")})`;
     case "lockScene":
       return op.locked ? `mengunci scene ${op.id}` : `membuka kunci scene ${op.id}`;
     case "replaceAsset": {

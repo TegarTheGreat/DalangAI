@@ -1,0 +1,621 @@
+import { describe, expect, it } from "vitest";
+import {
+  applyPatch,
+  clampTrimDelta,
+  clipOutPointSec,
+  computeClipTimings,
+  critiquePlan,
+  MIN_CLIP_SEC,
+  PatchError,
+  type PatchOpInput,
+  resolveSceneDurationSec,
+  type ScenePlan,
+  type ScenePlanInput,
+  trimBounds,
+} from "../src/index";
+import { makePlan } from "./fixtures";
+
+/**
+ * ADR-0033 fase 2 — op klip.
+ *
+ * Rencana verifikasi ADR-nya ditulis SEBELUM penerapannya; berkas ini menagih
+ * butir 2 (ripple sebagai aritmetika murni), 3 (undo satu langkah
+ * mengembalikan semua klip yang tersentuh), dan 4 (belah lalu gabung kembali
+ * menghasilkan klip yang identik dengan aslinya).
+ */
+
+const apply = (plan: ScenePlan, ops: PatchOpInput[], origin: "user" | "agent" = "user") =>
+  applyPatch(plan, ops, { origin, now: () => new Date("2026-09-05T00:00:00Z") });
+
+const expectPatchError = (fn: () => unknown, code: string): PatchError => {
+  try {
+    fn();
+    expect.unreachable("expected PatchError");
+  } catch (error) {
+    expect(error).toBeInstanceOf(PatchError);
+    expect((error as PatchError).code).toBe(code);
+    return error as PatchError;
+  }
+  throw new Error("unreachable");
+};
+
+/** Scene sc-002 jadi lima potongan dari satu rekaman yang sama. */
+const lima = (durations = [3, 2, 4, 2.5, 1.5]) =>
+  makePlan((input: ScenePlanInput) => {
+    const scene = input.scenes[1] as Record<string, unknown>;
+    scene.clips = durations.map((durationSec, index) => ({
+      id: `sc-002-k${index + 1}`,
+      type: "stock" as const,
+      query: "wawancara",
+      assetId: "aset-wawancara",
+      trimStartSec: index * 10,
+      durationSec,
+    }));
+    input.renderState = {
+      clipAssets: Object.fromEntries(
+        durations.map((_, index) => [
+          `sc-002-k${index + 1}`,
+          {
+            file: "media/wawancara.mp4",
+            kind: "video" as const,
+            source: "local",
+            durationSec: 600,
+          },
+        ]),
+      ),
+    };
+  });
+
+const scene = (plan: ScenePlan) => plan.scenes[1] as ScenePlan["scenes"][number];
+const durasi = (plan: ScenePlan) =>
+  scene(plan).clips.map((clip) => clip.durationSec ?? 0);
+
+describe("durasi scene datang dari potongannya (§2)", () => {
+  it("menjumlahkan durasi klip, bukan menebak dari narasi", () => {
+    const plan = lima();
+    expect(resolveSceneDurationSec(scene(plan), plan)).toBe(13);
+  });
+
+  it("klip tunggal tetap mengisi seluruh scene, durationSec-nya diabaikan", () => {
+    const plan = makePlan((input) => {
+      (input.scenes[0] as Record<string, unknown>).duration = 6;
+      const clips = (input.scenes[0] as { clips: Record<string, unknown>[] }).clips;
+      (clips[0] as Record<string, unknown>).durationSec = 99;
+    });
+    const first = plan.scenes[0] as ScenePlan["scenes"][number];
+    expect(resolveSceneDurationSec(first, plan)).toBe(6);
+    expect(computeClipTimings(first, 6)).toEqual([
+      { id: "sc-001-k1", index: 0, startSec: 0, durationSec: 6 },
+    ]);
+  });
+
+  it("menyusun klip berurutan dari awal scene", () => {
+    const plan = lima();
+    expect(computeClipTimings(scene(plan), 13).map((timing) => timing.startSec)).toEqual([
+      0, 3, 5, 9, 11.5,
+    ]);
+  });
+
+  it("titik keluar di rekaman sumber dihitung, bukan disimpan (§3)", () => {
+    const plan = lima();
+    const clip = scene(plan).clips[0] as { trimStartSec: number; speed: number };
+    expect(clipOutPointSec(clip as never, 3)).toBe(3);
+    // speed 2 berarti tiga detik linimasa memakan enam detik rekaman.
+    expect(clipOutPointSec({ ...clip, speed: 2 } as never, 3)).toBe(6);
+  });
+});
+
+describe("splitClip", () => {
+  it("membelah tepat, mewarisi aset, dan memajukan titik masuk paruh kedua", () => {
+    const plan = lima();
+    const { plan: next } = apply(plan, [
+      {
+        op: "splitClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        atSec: 1.5,
+        newClipId: "sc-002-k3b",
+      },
+    ]);
+    const ids = scene(next).clips.map((clip) => clip.id);
+    expect(ids).toEqual([
+      "sc-002-k1",
+      "sc-002-k2",
+      "sc-002-k3",
+      "sc-002-k3b",
+      "sc-002-k4",
+      "sc-002-k5",
+    ]);
+    expect(durasi(next)).toEqual([3, 2, 1.5, 2.5, 2.5, 1.5]);
+    // Panjang scene tidak bergeser satu bingkai pun oleh belahan.
+    expect(resolveSceneDurationSec(scene(next), next)).toBe(13);
+
+    const kedua = scene(next).clips[3] as {
+      trimStartSec: number;
+      assetId: string | null;
+    };
+    expect(kedua.trimStartSec).toBe(21.5); // 20 + 1.5 * speed(1)
+    expect(kedua.assetId).toBe("aset-wawancara");
+    // Berkasnya ikut, jadi paruh kedua tidak kehilangan gambarnya.
+    expect(next.renderState.clipAssets["sc-002-k3b"]?.file).toBe("media/wawancara.mp4");
+  });
+
+  it("memajukan titik masuk sebesar detik REKAMAN saat speed bukan 1", () => {
+    const plan = lima();
+    const { plan: cepat } = apply(plan, [
+      {
+        op: "setClips",
+        sceneId: "sc-002",
+        clips: scene(plan).clips.map((clip, index) =>
+          index === 0 ? { ...clip, speed: 2 } : clip,
+        ),
+      },
+    ]);
+    const { plan: next } = apply(cepat, [
+      {
+        op: "splitClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k1",
+        atSec: 1,
+        newClipId: "sc-002-k1b",
+      },
+    ]);
+    expect((scene(next).clips[1] as { trimStartSec: number }).trimStartSec).toBe(2);
+  });
+
+  it("memaku durasi scene yang tadinya angka tetap, tanpa menggesernya", () => {
+    const plan = makePlan((input) => {
+      (input.scenes[0] as Record<string, unknown>).duration = 6;
+    });
+    const { plan: next } = apply(plan, [
+      {
+        op: "splitClip",
+        sceneId: "sc-001",
+        clipId: "sc-001-k1",
+        atSec: 2,
+        newClipId: "sc-001-k2",
+      },
+    ]);
+    const first = next.scenes[0] as ScenePlan["scenes"][number];
+    expect(first.duration).toBe("auto");
+    expect(first.clips.map((clip) => clip.durationSec)).toEqual([2, 4]);
+    expect(resolveSceneDurationSec(first, next)).toBe(6);
+  });
+
+  it("memberikan transisi keluar klip aslinya kepada paruh KEDUA", () => {
+    const plan = lima();
+    const { plan: bertransisi } = apply(plan, [
+      {
+        op: "setClips",
+        sceneId: "sc-002",
+        clips: scene(plan).clips.map((clip, index) =>
+          index === 0
+            ? { ...clip, transition: { type: "cross-fade", durationFrames: 12 } }
+            : clip,
+        ),
+      },
+    ]);
+    const { plan: next } = apply(bertransisi, [
+      {
+        op: "splitClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k1",
+        atSec: 1,
+        newClipId: "sc-002-k1b",
+      },
+    ]);
+    expect(scene(next).clips[0]?.transition).toBeUndefined();
+    expect(scene(next).clips[1]?.transition).toEqual({
+      type: "cross-fade",
+      durationFrames: 12,
+    });
+  });
+
+  it("menolak titik belah yang menyisakan potongan lebih pendek dari lantainya", () => {
+    const plan = lima();
+    const error = expectPatchError(
+      () =>
+        apply(plan, [
+          {
+            op: "splitClip",
+            sceneId: "sc-002",
+            clipId: "sc-002-k2",
+            atSec: 0.05,
+            newClipId: "x",
+          },
+        ]),
+      "CLIP_REFUSED",
+    );
+    expect(error.message).toContain("di luar batas");
+  });
+
+  it("menolak id klip yang sudah dipakai di plan yang sama", () => {
+    const plan = lima();
+    expectPatchError(
+      () =>
+        apply(plan, [
+          {
+            op: "splitClip",
+            sceneId: "sc-002",
+            clipId: "sc-002-k1",
+            atSec: 1,
+            newClipId: "sc-001-k1",
+          },
+        ]),
+      "CLIP_EXISTS",
+    );
+  });
+});
+
+describe("trimClip — ripple (rencana verifikasi butir 2)", () => {
+  it("memendekkan klip ketiga menggeser klip empat dan lima persis sebesar selisihnya", () => {
+    const plan = lima();
+    const sebelum = computeClipTimings(scene(plan), 13);
+    const { plan: next } = apply(plan, [
+      {
+        op: "trimClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        edge: "keluar",
+        deltaSec: -1.5,
+      },
+    ]);
+    const sesudah = computeClipTimings(
+      scene(next),
+      resolveSceneDurationSec(scene(next), next),
+    );
+
+    expect(durasi(next)).toEqual([3, 2, 2.5, 2.5, 1.5]);
+    // Klip 4 dan 5 bergeser ke kiri persis 1.5 dtk; klip 1-3 tidak bergerak.
+    expect(sesudah[3]?.startSec).toBe((sebelum[3]?.startSec ?? 0) - 1.5);
+    expect(sesudah[4]?.startSec).toBe((sebelum[4]?.startSec ?? 0) - 1.5);
+    expect(sesudah.slice(0, 3).map((timing) => timing.startSec)).toEqual(
+      sebelum.slice(0, 3).map((timing) => timing.startSec),
+    );
+    // Jumlah durasi scene ikut berubah persis sebesar itu juga.
+    expect(resolveSceneDurationSec(scene(next), next)).toBe(11.5);
+    // Ripple tidak menyentuh titik masuk siapa pun.
+    expect(scene(next).clips.map((clip) => clip.trimStartSec)).toEqual([
+      0, 10, 20, 30, 40,
+    ]);
+  });
+
+  it("tepi masuk memajukan titik masuk klip itu sendiri", () => {
+    const plan = lima();
+    const { plan: next } = apply(plan, [
+      {
+        op: "trimClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k2",
+        edge: "masuk",
+        deltaSec: 0.5,
+      },
+    ]);
+    expect(durasi(next)).toEqual([3, 1.5, 4, 2.5, 1.5]);
+    expect(scene(next).clips[1]?.trimStartSec).toBe(10.5);
+    expect(resolveSceneDurationSec(scene(next), next)).toBe(12.5);
+  });
+});
+
+describe("trimClip — roll", () => {
+  it("menukar durasi dengan tetangga kanan tanpa mengubah panjang scene", () => {
+    const plan = lima();
+    const { plan: next } = apply(plan, [
+      {
+        op: "trimClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k2",
+        edge: "keluar",
+        mode: "roll",
+        deltaSec: 1,
+      },
+    ]);
+    expect(durasi(next)).toEqual([3, 3, 3, 2.5, 1.5]);
+    expect(resolveSceneDurationSec(scene(next), next)).toBe(13);
+    // Tetangga kanan mulai satu detik lebih belakangan DI REKAMAN, bukan cuma
+    // di linimasa: titik potongnya yang bergerak.
+    expect(scene(next).clips[2]?.trimStartSec).toBe(21);
+  });
+
+  it("menukar durasi dengan tetangga kiri lewat tepi masuk", () => {
+    const plan = lima();
+    const { plan: next } = apply(plan, [
+      {
+        op: "trimClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        edge: "masuk",
+        mode: "roll",
+        deltaSec: -1,
+      },
+    ]);
+    expect(durasi(next)).toEqual([3, 1, 5, 2.5, 1.5]);
+    expect(scene(next).clips[2]?.trimStartSec).toBe(19);
+    expect(resolveSceneDurationSec(scene(next), next)).toBe(13);
+  });
+
+  it("menolak roll di tepi yang tidak punya tetangga", () => {
+    const plan = lima();
+    const error = expectPatchError(
+      () =>
+        apply(plan, [
+          {
+            op: "trimClip",
+            sceneId: "sc-002",
+            clipId: "sc-002-k1",
+            edge: "masuk",
+            mode: "roll",
+            deltaSec: 0.5,
+          },
+        ]),
+      "CLIP_REFUSED",
+    );
+    expect(error.message).toContain("pakai ripple");
+  });
+});
+
+describe("batas seretan", () => {
+  it("tepi keluar tidak bisa melewati ujung rekaman sumber", () => {
+    const plan = makePlan((input) => {
+      const target = input.scenes[1] as Record<string, unknown>;
+      target.clips = [
+        { id: "a", type: "stock", trimStartSec: 4, durationSec: 3 },
+        { id: "b", type: "stock", trimStartSec: 0, durationSec: 3 },
+      ];
+      input.renderState = {
+        clipAssets: {
+          a: { file: "m.mp4", kind: "video", source: "local", durationSec: 10 },
+        },
+      };
+    });
+    const bounds = trimBounds(plan, scene(plan), "a", "keluar", "ripple");
+    expect(bounds).toEqual({ minDelta: MIN_CLIP_SEC - 3, maxDelta: 3 });
+    // 4 + 3 + 3 = 10 dtk: tepat di ujung rekaman, tidak lebih.
+    expect(clampTrimDelta(plan, scene(plan), "a", "keluar", "ripple", 99)).toBe(3);
+  });
+
+  it("gambar diam tidak punya batas kanan — ia bisa ditahan selama apa pun", () => {
+    const plan = lima();
+    const gambar = makePlan((input) => {
+      const target = input.scenes[1] as Record<string, unknown>;
+      target.clips = [
+        { id: "a", type: "image", durationSec: 3 },
+        { id: "b", type: "image", durationSec: 3 },
+      ];
+    });
+    expect(trimBounds(gambar, scene(gambar), "a", "keluar", "ripple")).toEqual({
+      minDelta: MIN_CLIP_SEC - 3,
+      maxDelta: Number.POSITIVE_INFINITY,
+    });
+    expect(clampTrimDelta(plan, scene(plan), "sc-002-k1", "masuk", "ripple", -99)).toBe(
+      0,
+    );
+  });
+
+  it("scene berklip satu menolak trimClip dan menunjuk jalur yang benar", () => {
+    const plan = makePlan();
+    const error = expectPatchError(
+      () =>
+        apply(plan, [
+          {
+            op: "trimClip",
+            sceneId: "sc-001",
+            clipId: "sc-001-k1",
+            edge: "keluar",
+            deltaSec: 1,
+          },
+        ]),
+      "CLIP_REFUSED",
+    );
+    expect(error.message).toContain("trimStartSec");
+  });
+});
+
+describe("removeClip & reorderClips", () => {
+  it("menutup celahnya dan memendekkan scene", () => {
+    const plan = lima();
+    const { plan: next } = apply(plan, [
+      { op: "removeClip", sceneId: "sc-002", clipId: "sc-002-k2" },
+    ]);
+    expect(scene(next).clips.map((clip) => clip.id)).toEqual([
+      "sc-002-k1",
+      "sc-002-k3",
+      "sc-002-k4",
+      "sc-002-k5",
+    ]);
+    expect(resolveSceneDurationSec(scene(next), next)).toBe(11);
+  });
+
+  it("mengembalikan scene ke narasi saat klipnya tinggal satu", () => {
+    const plan = lima([3, 2]);
+    const { plan: next } = apply(plan, [
+      { op: "removeClip", sceneId: "sc-002", clipId: "sc-002-k2" },
+    ]);
+    expect(scene(next).clips).toHaveLength(1);
+    expect(scene(next).clips[0]?.durationSec).toBeUndefined();
+    expect(scene(next).duration).toBe("auto");
+    expect(resolveSceneDurationSec(scene(next), next)).toBeGreaterThan(2);
+  });
+
+  it("menolak membuang klip terakhir sebuah scene", () => {
+    const plan = makePlan();
+    const error = expectPatchError(
+      () => apply(plan, [{ op: "removeClip", sceneId: "sc-001", clipId: "sc-001-k1" }]),
+      "CLIP_REFUSED",
+    );
+    expect(error.message).toContain("minimal satu klip");
+  });
+
+  it("menyusun ulang klip di dalam scene", () => {
+    const plan = lima([3, 2]);
+    const { plan: next } = apply(plan, [
+      { op: "reorderClips", sceneId: "sc-002", order: ["sc-002-k2", "sc-002-k1"] },
+    ]);
+    expect(scene(next).clips.map((clip) => clip.id)).toEqual(["sc-002-k2", "sc-002-k1"]);
+    expect(durasi(next)).toEqual([2, 3]);
+  });
+
+  it("menolak urutan yang bukan permutasi", () => {
+    const plan = lima([3, 2]);
+    expectPatchError(
+      () =>
+        apply(plan, [{ op: "reorderClips", sceneId: "sc-002", order: ["sc-002-k1"] }]),
+      "BAD_REORDER",
+    );
+  });
+});
+
+describe("undo (rencana verifikasi butir 3 & 4)", () => {
+  it("satu langkah undo mengembalikan SEMUA klip yang tersentuh ripple", () => {
+    const plan = lima();
+    const { plan: dipotong, applied } = apply(plan, [
+      {
+        op: "trimClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        edge: "keluar",
+        deltaSec: -1.5,
+      },
+    ]);
+    expect(applied.inverse).toHaveLength(1);
+    const { plan: kembali } = applyPatch(dipotong, applied.inverse, {
+      origin: "user",
+      enforce: false,
+    });
+    expect(kembali.scenes[1]).toEqual(plan.scenes[1]);
+  });
+
+  it("undo belahan mengembalikan durasi scene yang dipaku belahan itu", () => {
+    const plan = makePlan((input) => {
+      (input.scenes[0] as Record<string, unknown>).duration = 6;
+    });
+    const { plan: dibelah, applied } = apply(plan, [
+      {
+        op: "splitClip",
+        sceneId: "sc-001",
+        clipId: "sc-001-k1",
+        atSec: 2,
+        newClipId: "sc-001-k2",
+      },
+    ]);
+    const { plan: kembali } = applyPatch(dibelah, applied.inverse, {
+      origin: "user",
+      enforce: false,
+    });
+    expect(kembali.scenes[0]?.duration).toBe(6);
+    expect(kembali.scenes[0]?.clips).toEqual(plan.scenes[0]?.clips);
+  });
+
+  it("belah lalu gabung kembali menghasilkan klip yang identik dengan aslinya", () => {
+    const plan = lima();
+    const asli = scene(plan).clips[2];
+    const { plan: dibelah } = apply(plan, [
+      {
+        op: "splitClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        atSec: 1.5,
+        newClipId: "sc-002-k3b",
+      },
+    ]);
+    const { plan: digabung } = apply(dibelah, [
+      { op: "removeClip", sceneId: "sc-002", clipId: "sc-002-k3b" },
+      {
+        op: "trimClip",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        edge: "keluar",
+        deltaSec: 2.5,
+      },
+    ]);
+    expect(scene(digabung).clips[2]).toEqual(asli);
+    expect(resolveSceneDurationSec(scene(digabung), digabung)).toBe(13);
+  });
+});
+
+describe("kritik: narasi lebih panjang dari gambar (§2)", () => {
+  const kode = (plan: ScenePlan) =>
+    critiquePlan(plan)
+      .filter((note) => note.code === "narasi-lebih-panjang-dari-gambar")
+      .map((note) => note.sceneId);
+
+  it("melaporkan scene yang gambarnya habis sebelum kalimatnya", () => {
+    const plan = lima([1, 0.5]);
+    expect(kode(plan)).toEqual(["sc-002"]);
+  });
+
+  it("diam saat potongannya cukup", () => {
+    expect(kode(lima([6, 6]))).toEqual([]);
+  });
+
+  it("diam untuk scene berklip satu — di sana durasinya memang mengikuti narasi", () => {
+    expect(kode(makePlan())).toEqual([]);
+  });
+
+  it("memakai durasi audio yang sudah ada, bukan tebakan suku kata", () => {
+    const plan = makePlan((input) => {
+      const target = input.scenes[1] as Record<string, unknown>;
+      target.clips = [
+        { id: "a", type: "solid", durationSec: 3 },
+        { id: "b", type: "solid", durationSec: 3 },
+      ];
+      input.renderState = {
+        narrationAudio: {
+          "sc-002": { file: "vo/sc-002.wav", durationSec: 20 },
+        },
+      };
+    });
+    const notes = critiquePlan(plan).filter(
+      (note) => note.code === "narasi-lebih-panjang-dari-gambar",
+    );
+    expect(notes[0]?.message).toContain("20.3 dtk");
+  });
+});
+
+describe("penjagaan kunci", () => {
+  it("scene terkunci menolak op klip dari agent", () => {
+    const plan = lima();
+    const { plan: terkunci } = apply(plan, [
+      { op: "lockScene", id: "sc-002", locked: true },
+    ]);
+    for (const op of [
+      { op: "removeClip" as const, sceneId: "sc-002", clipId: "sc-002-k2" },
+      { op: "reorderClips" as const, sceneId: "sc-002", order: ["sc-002-k2"] },
+      {
+        op: "trimClip" as const,
+        sceneId: "sc-002",
+        clipId: "sc-002-k2",
+        edge: "keluar" as const,
+        deltaSec: 1,
+      },
+      {
+        op: "splitClip" as const,
+        sceneId: "sc-002",
+        clipId: "sc-002-k2",
+        atSec: 1,
+        newClipId: "baru",
+      },
+    ]) {
+      expectPatchError(() => apply(terkunci, [op], "agent"), "SCENE_LOCKED");
+    }
+  });
+
+  it("user tetap boleh menyunting klip di scene terkunci", () => {
+    const plan = lima();
+    const { plan: terkunci } = apply(plan, [
+      { op: "lockScene", id: "sc-002", locked: true },
+    ]);
+    const { plan: next } = apply(terkunci, [
+      { op: "removeClip", sceneId: "sc-002", clipId: "sc-002-k2" },
+    ]);
+    expect(scene(next).clips).toHaveLength(4);
+  });
+
+  it("klip yang tidak ada dilaporkan sebagai CLIP_NOT_FOUND", () => {
+    const plan = lima();
+    expectPatchError(
+      () => apply(plan, [{ op: "removeClip", sceneId: "sc-002", clipId: "hantu" }]),
+      "CLIP_NOT_FOUND",
+    );
+  });
+});

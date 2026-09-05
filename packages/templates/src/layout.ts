@@ -2,7 +2,10 @@ import {
   type AspectRatio,
   computeTimeline,
   DIMENSIONS,
+  type Scene,
   type ScenePlan,
+  sumClipDurationsSec,
+  type TransitionType,
 } from "@dalang/core";
 
 /**
@@ -52,6 +55,91 @@ export const computeFrameLayout = (plan: ScenePlan): FrameLayout => {
   });
 
   return { sceneFrames, sceneStarts, boundaryFrames, totalFrames: cursor };
+};
+
+/** Satu potongan gambar di dalam scene, sudah dikuantisasi ke bingkai. */
+export interface ClipSpan {
+  id: string;
+  index: number;
+  /** Bingkai pertama klip, dihitung dari AWAL SCENE. */
+  startFrame: number;
+  frames: number;
+  /** Tumpang tindih ke klip BERIKUTNYA; 0 = potong keras (bawaan, ADR-0033 §6). */
+  transitionFrames: number;
+  transitionType: TransitionType | null;
+}
+
+/**
+ * Kuantisasi klip sebuah scene ke bingkai (ADR-0033).
+ *
+ * Dua sifat yang dijaga, dan keduanya adalah alasan fungsi ini ada alih-alih
+ * `Math.round(durationSec * FPS)` di tempat pemakaian:
+ *
+ * 1. **Petaknya menutup rapat.** Bingkai awal klip berikutnya dihitung dari
+ *    jumlah KUMULATIF, bukan dari penjumlahan durasi yang sudah dibulatkan
+ *    satu per satu. Membulatkan tiap durasi sendiri-sendiri menumpuk selisih
+ *    setengah bingkai sampai klip terakhir berakhir sebelum scene-nya — dan
+ *    yang terlihat adalah kedipan hitam yang tak seorang pun bisa lacak
+ *    kembali ke pembulatan.
+ * 2. **Jumlahnya persis `sceneFrames`.** Scene sangat pendek dinaikkan ke
+ *    lantai bingkai oleh `computeFrameLayout`; di situ klipnya diskalakan
+ *    proporsional, bukan dibiarkan menyisakan celah.
+ *
+ * SYARAT: `sceneFrames` minimal sebanyak klipnya — tiap klip butuh setidaknya
+ * satu bingkai. Itu dijamin di hulu dan bukan kebetulan: lantai
+ * `computeFrameLayout` 54 bingkai, sementara `MAX_CLIPS` 24.
+ */
+export const clipFrameSpans = (scene: Scene, sceneFrames: number): ClipSpan[] => {
+  const clips = scene.clips;
+  if (clips.length === 1) {
+    return [
+      {
+        id: clips[0]?.id ?? scene.id,
+        index: 0,
+        startFrame: 0,
+        frames: sceneFrames,
+        transitionFrames: 0,
+        transitionType: null,
+      },
+    ];
+  }
+
+  const total = sumClipDurationsSec(scene) || 1;
+  const starts: number[] = [0];
+  let cursorSec = 0;
+  for (let index = 1; index < clips.length; index += 1) {
+    cursorSec += clips[index - 1]?.durationSec ?? 0;
+    const ideal = Math.round((cursorSec / total) * sceneFrames);
+    // Setiap klip menyisakan minimal satu bingkai untuk dirinya DAN untuk
+    // setiap klip sesudahnya; tanpa jepitan ini scene yang lebih pendek dari
+    // jumlah klipnya melahirkan petak nol bingkai yang ditolak Remotion.
+    const floor = (starts[index - 1] ?? 0) + 1;
+    const ceiling = sceneFrames - (clips.length - index);
+    starts.push(Math.min(Math.max(ideal, floor), Math.max(ceiling, floor)));
+  }
+
+  return clips.map((clip, index) => {
+    const startFrame = starts[index] ?? 0;
+    const frames = (starts[index + 1] ?? sceneFrames) - startFrame;
+    const nextFrames = (starts[index + 2] ?? sceneFrames) - (starts[index + 1] ?? 0);
+    const isLast = index === clips.length - 1;
+    // Transisi klip TERAKHIR diabaikan: batas itu milik scene (ADR-0033 §6).
+    // Yang lain dijepit supaya tidak pernah lebih panjang dari petak yang
+    // ditumpanginya — Remotion menolak transisi yang melebihi sequence-nya.
+    const wanted = isLast ? 0 : (clip.transition?.durationFrames ?? 0);
+    const transitionFrames = Math.max(
+      0,
+      Math.min(wanted, frames - 1, Math.max(nextFrames - 1, 0)),
+    );
+    return {
+      id: clip.id,
+      index,
+      startFrame,
+      frames,
+      transitionFrames,
+      transitionType: transitionFrames > 0 ? (clip.transition?.type ?? null) : null,
+    };
+  });
 };
 
 /**

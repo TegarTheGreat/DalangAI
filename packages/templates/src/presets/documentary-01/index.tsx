@@ -12,12 +12,7 @@ import { type ReactNode, useMemo } from "react";
 import { AbsoluteFill, staticFile, useVideoConfig } from "remotion";
 import { AudioTracks } from "../../AudioTracks";
 import { useAssetSrc } from "../../asset-src";
-import {
-  buildClipVolume,
-  type DuckWindow,
-  duckWindows,
-  narrationVolume,
-} from "../../audio-model";
+import { type DuckWindow, duckWindows, narrationVolume } from "../../audio-model";
 import { ensureFontsLoaded } from "../../fonts";
 import { GraphicsOverlay } from "../../GraphicsOverlay";
 import { LayersOverlay } from "../../LayersOverlay";
@@ -62,24 +57,15 @@ const SceneRouter: React.FC<{
   const { fps } = useVideoConfig();
   const assetSrc = useAssetSrc();
   const narrationAudio = plan.renderState.narrationAudio[scene.id];
-  // Suara aset visual dasar: amplop yang sama dengan lapisan dan trek.
-  const assetVolume = buildClipVolume({
-    audio: primaryClip(scene).audio,
-    lufs: sceneAsset(plan, scene)?.lufs,
-    channels: sceneAsset(plan, scene)?.channels,
-    targetLufs: plan.meta.loudnessTarget,
-    startFrame: sceneStartFrame,
-    frames: props.durationInFrames,
-    fps,
-    ducks,
-  });
 
   let content: ReactNode;
   if (primaryClip(scene).type === "template-anim") {
     const variant = primaryClip(scene).variant ?? "title";
     content = variant === "outro" ? <OutroScene {...props} /> : <TitleScene {...props} />;
   } else {
-    content = <BodyScene {...props} volume={assetVolume} />;
+    // Amplop suara aset dibangun PER KLIP di dalam BodyScene (ADR-0033): tiap
+    // potongan punya rekaman, kenyaringan, dan jendela waktunya sendiri.
+    content = <BodyScene {...props} />;
   }
 
   return (

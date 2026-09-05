@@ -3,7 +3,6 @@ import {
   primaryClip,
   type Scene,
   type ScenePlan,
-  sceneAsset,
 } from "@dalang/core";
 import { Audio } from "@remotion/media";
 import { TransitionSeries } from "@remotion/transitions";
@@ -130,7 +129,6 @@ const SceneRouter: React.FC<{
       <StepScene
         scene={scene}
         plan={plan}
-        asset={primaryClip(scene).type === "solid" ? undefined : sceneAsset(plan, scene)}
         metrics={metrics}
         theme={theme}
         durationInFrames={durationInFrames}

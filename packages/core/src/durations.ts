@@ -1,4 +1,9 @@
-import type { Scene, ScenePlan, WordTimestamp } from "./scene-plan";
+import {
+  primaryClip,
+  type Scene,
+  type ScenePlan,
+  type WordTimestamp,
+} from "./scene-plan";
 import { countSyllables, SYLLABLES_PER_SECOND } from "./syllables";
 
 /**
@@ -38,7 +43,24 @@ export const estimateNarrationSeconds = (narration: string, speed = 1): number =
   return syllables / (SYLLABLES_PER_SECOND * speed);
 };
 
+/**
+ * Jumlah durasi klip sebuah scene (ADR-0033 §2).
+ *
+ * Berarti HANYA saat klipnya lebih dari satu; klip tunggal mengisi seluruh
+ * scene dan `durationSec`-nya memang diabaikan.
+ */
+export const sumClipDurationsSec = (scene: Scene): number =>
+  scene.clips.reduce((total, clip) => total + (clip.durationSec ?? 0), 0);
+
 export const resolveSceneDurationSec = (scene: Scene, plan: ScenePlan): number => {
+  /**
+   * ADR-0033 §2 — begitu ada dua klip, waktu datang dari POTONGANNYA. Ini
+   * diperiksa lebih dulu daripada `scene.duration` bukan karena keduanya bisa
+   * bersaing (skema menolak angka tetap bersamaan dengan klip jamak), tapi
+   * supaya urutan bacanya sama dengan urutan aturannya: potongan dulu, baru
+   * yang lain.
+   */
+  if (scene.clips.length > 1) return sumClipDurationsSec(scene);
   if (typeof scene.duration === "number") return scene.duration;
 
   const audio = plan.renderState.narrationAudio[scene.id];
@@ -60,6 +82,48 @@ export interface SceneTiming {
   startSec: number;
   durationSec: number;
 }
+
+/** Letak satu klip di dalam scene-nya; `startSec` dihitung dari AWAL SCENE. */
+export interface ClipTiming {
+  id: string;
+  index: number;
+  startSec: number;
+  durationSec: number;
+}
+
+/**
+ * Susunan klip di dalam satu scene (ADR-0033 §2).
+ *
+ * Satu klip mengisi SELURUH scene — `durationSec`-nya diabaikan, persis
+ * perilaku sebelum klip ada. Dua klip atau lebih memakai durasi masing-masing,
+ * dan jumlahnya adalah durasi scene itu sendiri.
+ *
+ * `sceneDurationSec` diterima sebagai argumen, bukan dihitung ulang di sini,
+ * supaya pemanggil yang sudah punya linimasa scene tidak menghitung dua kali —
+ * dan supaya renderer bisa memberi durasi yang sudah dibulatkan ke bingkai.
+ */
+export const computeClipTimings = (
+  scene: Scene,
+  sceneDurationSec: number,
+): ClipTiming[] => {
+  if (scene.clips.length === 1) {
+    return [
+      {
+        id: primaryClip(scene).id,
+        index: 0,
+        startSec: 0,
+        durationSec: sceneDurationSec,
+      },
+    ];
+  }
+  let cursor = 0;
+  return scene.clips.map((clip, index) => {
+    const durationSec = clip.durationSec ?? 0;
+    const timing: ClipTiming = { id: clip.id, index, startSec: cursor, durationSec };
+    cursor += durationSec;
+    return timing;
+  });
+};
 
 export interface Timeline {
   timings: SceneTiming[];

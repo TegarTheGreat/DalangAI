@@ -1,4 +1,4 @@
-import type { ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
+import type { Scene, ScenePlan } from "@dalang/core";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import type { AspectMetrics } from "../../layout";
 import type { StepInfo } from "./annotate";
@@ -82,18 +82,17 @@ const StepChip: React.FC<{
 export const StepScene: React.FC<{
   scene: Scene;
   plan: ScenePlan;
-  asset: ResolvedAsset | undefined;
   metrics: AspectMetrics;
   theme: TutTheme;
   durationInFrames: number;
   step: StepInfo | undefined;
   debug: boolean;
-}> = ({ scene, plan, asset, metrics, theme, durationInFrames, step, debug }) => (
+}> = ({ scene, plan, metrics, theme, durationInFrames, step, debug }) => (
   <AbsoluteFill>
     <Paper theme={theme} />
     <ScreenshotStage
       scene={scene}
-      asset={asset}
+      plan={plan}
       metrics={metrics}
       theme={theme}
       durationInFrames={durationInFrames}
