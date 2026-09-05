@@ -141,7 +141,10 @@ const printPlanSummary = (plan: ScenePlan): void => {
     return {
       "#": index + 1,
       id: scene.id,
-      tipe: primaryClip(scene).type,
+      // Tipe SEMUA potongannya, bukan cuma yang pertama: scene berisi
+      // [rekaman, gambar, gambar] yang terbaca "stock" saja adalah jawaban
+      // yang percaya diri tentang dua potongan yang tidak dilihatnya.
+      tipe: [...new Set(scene.clips.map((clip) => clip.type))].join("+"),
       // Jumlah potongan (ADR-0033); kosong saat cuma satu, supaya tabel scene
       // biasa tidak dipenuhi angka 1 yang tidak mengatakan apa-apa.
       klip: scene.clips.length > 1 ? scene.clips.length : "",
