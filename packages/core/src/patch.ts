@@ -267,6 +267,12 @@ export const patchOpSchema = z.discriminatedUnion("op", [
      * Kosong/null = visual dasar, persis perilaku sebelum lapisan ada.
      */
     layerId: z.string().nullable().optional(),
+    /**
+     * Menyasar satu KLIP di dalam scene (ADR-0033); kosong/null = klip
+     * pertama, persis perilaku sebelum klip ada. Diabaikan bila `layerId`
+     * diisi — lapisan punya asetnya sendiri, bukan aset salah satu klip.
+     */
+    clipId: z.string().nullable().optional(),
     /** `null` clears the asset (back to unresolved). */
     assetId: z.string().nullable(),
     /** Defaults to true when setting an asset, false when clearing. */
@@ -655,9 +661,18 @@ const applyOne = (
       // di dua tempat yang harus tetap seragam selamanya.
       const target =
         op.layerId == null
-          ? primaryClip(scene)
+          ? op.clipId == null
+            ? primaryClip(scene)
+            : scene.clips.find((clip) => clip.id === op.clipId)
           : scene.layers.find((layer) => layer.id === op.layerId)?.visual;
       if (!target) {
+        if (op.layerId == null) {
+          throw new PatchError(
+            "CLIP_NOT_FOUND",
+            `Klip "${op.clipId}" tidak ada di scene "${op.sceneId}"`,
+            opIndex,
+          );
+        }
         throw new PatchError(
           "LAYER_NOT_FOUND",
           `Lapisan "${op.layerId}" tidak ada di scene "${op.sceneId}"`,
@@ -672,6 +687,9 @@ const applyOne = (
         op: "replaceAsset",
         sceneId: op.sceneId,
         ...(op.layerId == null ? {} : { layerId: op.layerId }),
+        // Invers membawa `clipId` apa adanya: undo yang mendarat di klip lain
+        // adalah kerusakan yang jauh lebih sulit dilihat daripada undo gagal.
+        ...(op.clipId == null ? {} : { clipId: op.clipId }),
         assetId: priorAssetId,
         pinned: priorPinned,
       };
@@ -792,7 +810,9 @@ const describeOp = (op: PatchOp): string => {
     case "replaceAsset": {
       const where =
         op.layerId == null
-          ? `scene ${op.sceneId}`
+          ? op.clipId == null
+            ? `scene ${op.sceneId}`
+            : `klip ${op.clipId} (scene ${op.sceneId})`
           : `lapisan ${op.layerId} (scene ${op.sceneId})`;
       return op.assetId === null
         ? `melepas aset ${where}`

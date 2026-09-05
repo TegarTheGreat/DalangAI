@@ -665,6 +665,57 @@ describe("potongan antar klip (§6)", () => {
   });
 });
 
+describe("replaceAsset menyasar klip (§5)", () => {
+  it("memasang aset ke potongan yang disebut, bukan ke potongan pertama", () => {
+    const plan = lima();
+    const after = apply(plan, [
+      {
+        op: "replaceAsset",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        assetId: "pilihan-tangan",
+      },
+    ]).plan;
+    const clips = scene(after).clips;
+    expect(clips[2]?.assetId).toBe("pilihan-tangan");
+    expect(clips[2]?.pinned).toBe(true);
+    // Potongan pertama tidak tersentuh.
+    expect(clips[0]?.assetId).toBe("aset-wawancara");
+    expect(clips[0]?.pinned).toBe(false);
+  });
+
+  it("undo mengembalikan aset potongan ITU, bukan potongan pertama", () => {
+    const plan = lima();
+    const applied = apply(plan, [
+      {
+        op: "replaceAsset",
+        sceneId: "sc-002",
+        clipId: "sc-002-k3",
+        assetId: "pilihan-tangan",
+      },
+    ]);
+    const undone = apply(applied.plan, applied.applied.inverse).plan;
+    expect(scene(undone).clips[2]?.assetId).toBe("aset-wawancara");
+    expect(scene(undone).clips[2]?.pinned).toBe(false);
+  });
+
+  it("klip yang tidak ada ditolak dengan kode klip, bukan kode lapisan", () => {
+    const error = expectPatchError(
+      () =>
+        apply(lima(), [
+          {
+            op: "replaceAsset",
+            sceneId: "sc-002",
+            clipId: "klip-hantu",
+            assetId: "apa-saja",
+          },
+        ]),
+      "CLIP_NOT_FOUND",
+    );
+    expect(error.message).toContain("klip-hantu");
+  });
+});
+
 describe("kritik: narasi lebih panjang dari gambar (§2)", () => {
   const kode = (plan: ScenePlan) =>
     critiquePlan(plan)

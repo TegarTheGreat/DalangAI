@@ -495,7 +495,7 @@ export class StudioClient {
   /** Unggah rekaman (streaming, dengan kemajuan) lalu pasang ke scene/lapisan. */
   async uploadSource(
     file: File,
-    target: { sceneId: string; layerId?: string | null } | null,
+    target: { sceneId: string; layerId?: string | null; clipId?: string | null } | null,
   ): Promise<void> {
     this.set({ sourceUpload: { name: file.name, progress: 0 } });
     let announced = false;
@@ -518,6 +518,9 @@ export class StudioClient {
           file: uploaded.file,
           sceneId: target.sceneId,
           ...(target.layerId ? { layerId: target.layerId } : {}),
+          // Unggah-lalu-pasang mendarat di potongan yang sama dengan yang
+          // dipilih pemakainya (ADR-0033) — bukan selalu potongan pertama.
+          ...(target.clipId ? { clipId: target.clipId } : {}),
         });
       } else {
         this.toast(`Rekaman tersimpan: ${uploaded.file}`);

@@ -80,6 +80,8 @@ const registerBody = z.object({
   file: z.string().min(1),
   sceneId: z.string().min(1),
   layerId: z.string().min(1).nullish(),
+  /** Potongan di dalam scene (ADR-0033); kosong = potongan pertama. */
+  clipId: z.string().min(1).nullish(),
   trimStartSec: z.number().min(0).finite().optional(),
 });
 
@@ -537,6 +539,15 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
     if (layerId && !scene.layers.some((layer) => layer.id === layerId)) {
       return c.json({ error: `Lapisan ${layerId} tidak ada di scene ${scene.id}` }, 400);
     }
+    // Potongan yang disasar (ADR-0033). Tanpa ini, menaruh rekaman ke scene
+    // berklip banyak selalu mendarat di potongan PERTAMA — dan yang menaruhnya
+    // baru sadar setelah melihat potongan yang salah berganti gambar.
+    const clipId = layerId ? null : (body.data.clipId ?? null);
+    if (clipId && !scene.clips.some((clip) => clip.id === clipId)) {
+      return c.json({ error: `Klip ${clipId} tidak ada di scene ${scene.id}` }, 400);
+    }
+    const clip =
+      scene.clips.find((candidate) => candidate.id === clipId) ?? primaryClip(scene);
     const info = await probeOf(file);
     if (!info || (!info.codec && !info.width)) {
       return c.json({ error: `Rekaman "${file}" tidak terbaca sebagai video` }, 400);
@@ -560,7 +571,7 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
         };
         session.plan = layerId
           ? setLayerAsset(current, layerId, asset)
-          : setClipAsset(current, primaryClip(scene).id, asset);
+          : setClipAsset(current, clip.id, asset);
         // Urutan op PENTING: patch `layers` menulis seluruh larik lapisan dari
         // snapshot scene SEBELUM pendaftaran, jadi ia harus lebih dulu — kalau
         // di belakang, ia menimpa assetId/pin yang baru saja dipasang.
@@ -585,17 +596,15 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
           op: "replaceAsset",
           sceneId: scene.id,
           ...(layerId ? { layerId } : {}),
+          ...(clipId ? { clipId } : {}),
           assetId: file,
           pinned: true,
         });
-        if (
-          !layerId &&
-          primaryClip(scene).type !== "image" &&
-          primaryClip(scene).type !== "screenshot"
-        ) {
+        if (!layerId && clip.type !== "image" && clip.type !== "screenshot") {
           ops.push({
             op: "updateScene",
             id: scene.id,
+            ...(clipId ? { clipId } : {}),
             patch: { clip: { type: "image" } },
           });
         }
@@ -603,6 +612,7 @@ export const registerSourceRoutes = (app: Hono, ctx: StudioContext): void => {
           ops.push({
             op: "updateScene",
             id: scene.id,
+            ...(clipId ? { clipId } : {}),
             patch: { clip: { trimStartSec: body.data.trimStartSec } },
           });
         }

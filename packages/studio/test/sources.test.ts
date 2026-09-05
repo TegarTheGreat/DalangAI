@@ -297,6 +297,76 @@ describe("POST /api/sources/register", () => {
     );
   });
 
+  /**
+   * Menaruh rekaman ke POTONGAN tertentu (ADR-0033).
+   *
+   * Tanpa `clipId`, rekaman selalu mendarat di potongan pertama — dan yang
+   * menaruhnya baru sadar setelah melihat potongan yang salah berganti gambar.
+   */
+  it("memasang ke KLIP lewat clipId, bukan selalu ke potongan pertama", async () => {
+    const { studio } = boot();
+    // sc-batu jadi dua potongan dulu, lewat op yang sama dengan yang dipakai
+    // bilah belah di timeline.
+    await call(studio, "/api/patch", {
+      method: "POST",
+      body: JSON.stringify({
+        ops: [
+          {
+            op: "setClips",
+            sceneId: "sc-batu",
+            clips: [
+              { id: "sc-batu-k1", type: "stock", durationSec: 4 },
+              { id: "sc-batu-k2", type: "stock", durationSec: 3 },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const { status } = await callJson<RegisterSourceResponse>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          file: "assets/podcast.mp4",
+          sceneId: "sc-batu",
+          clipId: "sc-batu-k2",
+          trimStartSec: 30,
+        }),
+      },
+    );
+    expect(status).toBe(200);
+
+    const project = await getProject(studio);
+    const scene = project.plan?.scenes.find((s) => s.id === "sc-batu");
+    expect(scene?.clips[1]?.assetId).toBe("assets/podcast.mp4");
+    expect(scene?.clips[1]?.pinned).toBe(true);
+    expect(scene?.clips[1]?.trimStartSec).toBe(30);
+    expect(project.plan?.renderState.clipAssets["sc-batu-k2"]?.kind).toBe("video");
+    // Potongan pertama tidak tersentuh sama sekali.
+    expect(scene?.clips[0]?.pinned).toBe(false);
+    expect(project.plan?.renderState.clipAssets["sc-batu-k1"]).toBeUndefined();
+  });
+
+  it("menolak clipId yang tidak ada di scene itu, dengan menyebut klipnya", async () => {
+    const { studio } = boot();
+    const { status, body } = await callJson<{ error: string }>(
+      studio,
+      "/api/sources/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          file: "assets/podcast.mp4",
+          sceneId: "sc-batu",
+          clipId: "klip-hantu",
+        }),
+      },
+    );
+    expect(status).toBe(400);
+    expect(body.error).toContain("klip-hantu");
+  });
+
   it("memasang ke LAPISAN lewat layerId, dengan titik masuk lapisan", async () => {
     const { studio } = boot();
     await call(studio, "/api/patch", {

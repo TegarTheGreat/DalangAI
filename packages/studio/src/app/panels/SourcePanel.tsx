@@ -1,15 +1,10 @@
-import {
-  clockLabel,
-  primaryClip,
-  type Scene,
-  type ScenePlan,
-  sceneAsset,
-} from "@dalang/core";
+import { clipAsset, clockLabel, type Scene, type ScenePlan } from "@dalang/core";
 import { computeFrameLayout, FPS } from "@dalang/templates/layout";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SourceLite } from "../../shared/api-types";
 import { api } from "../api";
 import { IconFilm, IconPlus } from "../icons";
+import { selectedClip } from "../model/plan-meta";
 import { studioClient, useStudio } from "../use-studio";
 
 /**
@@ -218,9 +213,11 @@ const SourceStrip: React.FC<{
 const RecordingPicker: React.FC<{
   sceneId: string;
   layerId: string | null;
+  /** Potongan yang disasar (ADR-0033); null = potongan pertama. */
+  clipId: string | null;
   currentFile: string | null;
   disabled: boolean;
-}> = ({ sceneId, layerId, currentFile, disabled }) => {
+}> = ({ sceneId, layerId, clipId, currentFile, disabled }) => {
   const { sources, sourceUpload } = useStudio();
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -230,7 +227,11 @@ const RecordingPicker: React.FC<{
   }, [open]);
 
   const videos = (sources?.items ?? []).filter((item) => item.kind === "video");
-  const target = { sceneId, ...(layerId ? { layerId } : {}) };
+  const target = {
+    sceneId,
+    ...(layerId ? { layerId } : {}),
+    ...(!layerId && clipId ? { clipId } : {}),
+  };
 
   return (
     <div className="source-picker">
@@ -345,12 +346,18 @@ export const SourceSection: React.FC<{
   /** Diisi = mengurus lapisan ini, bukan visual dasar scene. */
   layerId?: string;
 }> = ({ plan, scene, layerId }) => {
-  const { project } = useStudio();
+  const { project, selectedClipId } = useStudio();
   const busy = project?.busy.mutation !== null;
   const proxyJob = project?.proxyJob ?? null;
   const layer = layerId ? scene.layers.find((item) => item.id === layerId) : undefined;
-  const visual = layer ? layer.visual : primaryClip(scene);
-  const asset = layerId ? plan.renderState.layerAssets[layerId] : sceneAsset(plan, scene);
+  // Panel Sumber mengurus POTONGAN TERPILIH, bukan selalu yang pertama
+  // (ADR-0033): menaruh rekaman ke scene berklip banyak yang selalu mendarat
+  // di potongan pertama membuat orang mengira panel ini rusak.
+  const clip = selectedClip(scene, selectedClipId);
+  const visual = layer ? layer.visual : clip;
+  const asset = layerId
+    ? plan.renderState.layerAssets[layerId]
+    : clipAsset(plan, clip.id);
   const isVideo = asset?.kind === "video";
 
   const index = plan.scenes.findIndex((item) => item.id === scene.id);
@@ -361,7 +368,9 @@ export const SourceSection: React.FC<{
     : sceneSec * speed;
 
   const setIn = (trimStartSec: number) => {
-    const label = `Titik masuk ${layerId ?? scene.id} ${clock(trimStartSec)}`;
+    const label = `Titik masuk ${
+      layerId ?? (scene.clips.length > 1 ? clip.id : scene.id)
+    } ${clock(trimStartSec)}`;
     if (layer) {
       void studioClient.applyPatch(
         [
@@ -381,7 +390,14 @@ export const SourceSection: React.FC<{
       );
     } else {
       void studioClient.applyPatch(
-        [{ op: "updateScene", id: scene.id, patch: { clip: { trimStartSec } } }],
+        [
+          {
+            op: "updateScene",
+            id: scene.id,
+            clipId: clip.id,
+            patch: { clip: { trimStartSec } },
+          },
+        ],
         label,
       );
     }
@@ -441,6 +457,7 @@ export const SourceSection: React.FC<{
       <RecordingPicker
         sceneId={scene.id}
         layerId={layerId ?? null}
+        clipId={scene.clips.length > 1 ? clip.id : null}
         currentFile={isVideo && asset ? asset.file : null}
         disabled={busy || scene.locked}
       />

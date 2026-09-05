@@ -445,6 +445,8 @@ export interface RegisterSourceRequest {
   file: string;
   sceneId: string;
   layerId?: string | null;
+  /** Potongan yang disasar (ADR-0033); kosong = potongan pertama. */
+  clipId?: string | null;
   trimStartSec?: number;
 }
 

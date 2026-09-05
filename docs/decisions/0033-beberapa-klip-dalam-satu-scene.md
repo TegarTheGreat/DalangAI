@@ -263,6 +263,12 @@ gambar yang sama bukan penyuntingan. Tahap ukur kenyaringan ikut per klip —
 potongan bersuara yang tidak pernah diukur adalah lompatan kenyaringan di
 tengah scene.
 
+**Permukaan aset per klip.** `replaceAsset` menerima `clipId` (setara `layerId`
+milik ADR-0025), rute Sumber Studio meneruskannya, dan panel Sumber menyasar
+potongan TERPILIH. Sebelum ini menaruh rekaman ke scene berklip banyak selalu
+mendarat di potongan pertama — dan yang menaruhnya baru sadar setelah melihat
+potongan yang salah berganti gambar.
+
 **Interop.** Ekspor: satu klip Dalang = satu klip OTIO/FCPXML, transisi di
 dalam scene ikut. Impor: potongan berurutan dari BERKAS yang sama jadi satu
 scene berklip banyak, bukan satu scene per potongan. Catatan "yang tidak ikut
@@ -288,6 +294,7 @@ Cacat yang ditemukan test dan gerbang selama fase ini:
 | uji mutasi pada gerbang interop | harapan jumlah peralihan dibaca dari `timeline` yang sedang diuji: mematikan ekspor transisi di dalam scene membuat kedua sisi turun bersamaan dan gerbangnya tetap hijau — tautologi yang persis diperingatkan komentar gerbang itu sendiri |
 | pembacaan permukaan | `clip.transition` ada di skema dan dipakai renderer, tapi tidak ada op yang bisa menyetelnya selain menulis ulang seluruh daftar; kemampuannya nyata dan tidak terjangkau |
 | pembacaan pipeline | tahap aset, tahap kenyaringan, dan `materializeCandidate` semuanya bersatuan SCENE: scene berklip banyak hanya bisa meresolusi potongan pertamanya |
+| audit permukaan lanjutan | lencana aset timeline, kritik gerak monoton, tab Audio, panel Sumber, rute Sumber, dan `recordingsInPlan` semuanya membaca potongan pertama saja — masing-masing menjawab dengan yakin tentang seluruh scene |
 | gerbang paritas migrasi di CI | gerbangnya menuduh "ada field yang tidak ikut pindah" untuk selisih byte apa pun, padahal kedua plan sudah terbukti identik setelah parse — selisihnya mustahil datang dari migrasi. Kini tiap sisi dirender dua kali sebagai kontrol, dan render yang tidak deterministik dilaporkan sebagai dirinya sendiri |
 
 ## Rencana verifikasi
