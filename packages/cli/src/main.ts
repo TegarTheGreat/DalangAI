@@ -128,13 +128,34 @@ const collectSeconds = (value: string, previous: number[]): number[] => [
 
 const formatSec = (sec: number): string => `${sec.toFixed(1)}s`;
 
+/** Ringkasan zona aman untuk baris kepala `dalang validate`; kosong bila mati. */
+const zonaAmanRingkas = (plan: ScenePlan): string => {
+  const area = plan.meta.safeArea;
+  const sisi = (["top", "bottom", "left", "right"] as const)
+    .filter((key) => area[key] > 0)
+    .map((key) => `${LABEL_SISI[key]} ${Math.round(area[key] * 100)}%`);
+  return sisi.length === 0 ? "" : ` · zona aman ${sisi.join("/")}`;
+};
+
+const LABEL_SISI = {
+  top: "atas",
+  bottom: "bawah",
+  left: "kiri",
+  right: "kanan",
+} as const;
+
 const printPlanSummary = (plan: ScenePlan): void => {
   const layout = computeFrameLayout(plan);
   const { timings, totalSec } = computeTimeline(plan);
 
   console.log(`\n  ${plan.meta.title}`);
   console.log(
-    `  ${plan.meta.aspectRatio} · preset ${plan.meta.stylePreset} · bahasa ${plan.meta.language}\n`,
+    `  ${plan.meta.aspectRatio} · preset ${plan.meta.stylePreset} · bahasa ${plan.meta.language}` +
+      // Zona aman (ADR-0034) disebut HANYA saat menyala: baris "zona aman: —"
+      // di setiap plan cuma menambah kebisingan pada setelan yang jarang
+      // dipakai. Saat menyala ia menggeser tata letak, dan yang menggeser tata
+      // letak harus terbaca.
+      `${zonaAmanRingkas(plan)}\n`,
   );
   const rows = plan.scenes.map((scene, index) => {
     const audio = plan.renderState.narrationAudio[scene.id];

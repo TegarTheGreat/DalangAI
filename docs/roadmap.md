@@ -349,7 +349,7 @@ sungguhan, token akses tanpa refresh, TikTok/Instagram belum.
 | --- | --- |
 | 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
 | 10.2 | Marketplace preset/template |
-| 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030); TikTok/Instagram belum |
+| 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
 | 10.4 | Multi-user pada satu proyek |
 
 ---

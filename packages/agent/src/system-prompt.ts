@@ -67,6 +67,12 @@ POTONGAN GAMBAR DI DALAM SATU SCENE (ADR-0033)
 - Potongan antar klip BAWAANNYA keras, dan itu memang yang benar hampir selalu — larut antar potongan dari gagasan yang sama terbaca sebagai keraguan. Kalau memang perlu (lompatan waktu, ganti lokasi), pasang lewat updateScene { clipId, patch: { clip: { transition: { type, durationFrames } } } }; "transition": null mengembalikannya ke potong keras. Transisi pada klip TERAKHIR diabaikan: batas itu milik scene.
 - Kapan memakai klip, kapan memakai scene baru: kalau kalimatnya sama dan yang berganti cuma gambarnya, itu klip. Kalau gagasannya berganti, itu scene.
 
+ZONA AMAN PLATFORM (ADR-0034)
+- meta.safeArea { top, bottom, left, right } berisi FRAKSI sisi bingkai (0-0,4) yang dikosongkan untuk antarmuka platform tujuan. Bawaannya nol.
+- Kapan menyalakannya: video 9:16 yang akan diunggah ke platform sosial. Antarmuka mereka menutupi tepi bawah (judul, nama akun) dan tepi kanan (tombol) — dan caption Dalang bawaannya duduk di bawah, persis di sana. Cacatnya baru terlihat SETELAH diunggah, bukan di preview.
+- Kalau user menyebut platform tujuan tapi tidak menyebut angkanya, TANYAKAN atau tawarkan angka konservatif dan katakan itu perkiraan — jangan mengarang ukuran UI platform seolah-olah fakta.
+- Yang bergeser hanya caption, teks, dan tempelan. Gambarnya tetap penuh: mengecilkan gambar demi zona aman membuang bidang yang justru jadi alasan video vertikal dipakai.
+
 PERANGKAT SINEMATIK (pakai lewat applyPatch updateScene)
 - clip.filter: { preset: none|warm|cool|mono|vivid|film, brightness/contrast/saturation (0.25–2, 1=netral), opacity (0–1), blur (0–20 px — untuk latar di belakang teks besar atau efek mimpi) }. Gunakan hemat dan konsisten antar scene yang berdekatan; null menghapus filter.
 - clip.motion kini juga: pan-up | pan-down (bagus utk 9:16) | drift (orbit melayang pelan). clip.speed (0.25–4) mengatur kecepatan aset VIDEO; clip.flipH mencerminkan aset (menyamakan arah pandang antar shot); clip.focusX/focusY (0–1) memilih bagian aset yang dipertahankan crop.

@@ -2,6 +2,8 @@ import {
   type AspectRatio,
   computeTimeline,
   DIMENSIONS,
+  NO_SAFE_AREA,
+  type SafeArea,
   type Scene,
   type ScenePlan,
   sumClipDurationsSec,
@@ -184,7 +186,7 @@ export interface AspectMetrics {
   kickerFontSize: number;
 }
 
-export const aspectMetrics = (aspect: AspectRatio): AspectMetrics => {
+const baseMetrics = (aspect: AspectRatio): AspectMetrics => {
   const { width, height } = DIMENSIONS[aspect];
   switch (aspect) {
     case "9:16":
@@ -224,4 +226,43 @@ export const aspectMetrics = (aspect: AspectRatio): AspectMetrics => {
         kickerFontSize: 26,
       };
   }
+};
+
+/**
+ * Ukuran tata letak untuk sebuah rasio, dipersempit zona aman platform
+ * (ADR-0034).
+ *
+ * SATU tempat, karena ini satu-satunya sumber angka tata letak: caption, teks
+ * overlay, tempelan, dan chrome semuanya membaca `AspectMetrics`. Menyisipkan
+ * zona amannya di sini berarti tidak ada satu pun overlay yang bisa lupa
+ * menghormatinya — dan overlay yang lupa adalah persis cacat yang fitur ini
+ * ada untuk mencegah.
+ *
+ * Sisi kiri dan kanan dijadikan SATU margin simetris sebesar yang terbesar.
+ * Alasannya bukan kemalasan: tata letak Dalang berpusat (caption, judul,
+ * kicker semuanya `left: 50%`), jadi margin asimetris tidak menggesernya
+ * menjauh dari sisi yang dijaga — ia hanya membuat kotaknya melebar ke sisi
+ * yang lain. Mengambil yang terbesar untuk keduanya menjaga isinya tetap di
+ * tengah DAN tetap keluar dari rel tombol platform.
+ *
+ * Semua angkanya `Math.max` terhadap margin bawaan, tidak pernah menggantinya:
+ * zona aman menambah kelonggaran, dan zona aman yang lebih sempit daripada
+ * margin desain tidak boleh diam-diam MENGURANGI margin itu.
+ */
+export const aspectMetrics = (
+  aspect: AspectRatio,
+  safeArea: SafeArea = NO_SAFE_AREA,
+): AspectMetrics => {
+  const base = baseMetrics(aspect);
+  const sisi = Math.max(safeArea.left, safeArea.right) * base.width;
+  const marginX = Math.max(base.marginX, sisi);
+  return {
+    ...base,
+    marginX,
+    marginTop: Math.max(base.marginTop, safeArea.top * base.height),
+    captionBottom: Math.max(base.captionBottom, safeArea.bottom * base.height),
+    // Lebar caption ikut menyempit; tanpa ini teksnya tetap selebar semula dan
+    // menembus rel tombol dari samping meskipun sudah dinaikkan dari bawah.
+    captionMaxWidth: Math.min(base.captionMaxWidth, base.width - marginX * 2),
+  };
 };

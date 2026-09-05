@@ -119,7 +119,7 @@ export const DocumentaryPreset: React.FC<{
 }> = ({ plan, debug }) => {
   ensureFontsLoaded();
   const theme = themeFromPlan(plan);
-  const metrics = aspectMetrics(plan.meta.aspectRatio);
+  const metrics = aspectMetrics(plan.meta.aspectRatio, plan.meta.safeArea);
   const layout = computeFrameLayout(plan);
 
   // Musik latar (ADR-0014): bed di-loop + ducking di bawah narasi.

@@ -4,6 +4,7 @@ import {
   allRecipes,
   critiquePlan,
   recipeFor,
+  type SafeArea,
 } from "@dalang/core";
 import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
@@ -331,6 +332,56 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
  */
 const STYLE_PRESETS = ["documentary-01", "tutorial-01"] as const;
 
+/**
+ * Pilihan zona aman (ADR-0034), dinamai dari APA YANG DILAKUKANNYA, bukan dari
+ * nama platform.
+ *
+ * Menamainya "TikTok" berarti menjanjikan angka yang tidak bisa diverifikasi
+ * repo ini dan akan menua diam-diam saat platformnya berubah tata letak —
+ * pemakainya mengira sudah aman padahal tidak. Persentasenya ditampilkan apa
+ * adanya di bawah tiap pilihan supaya yang memilih tahu persis apa yang ia
+ * dapat, dan bisa menggantinya lewat plan kalau platform tujuannya menuntut
+ * lain.
+ */
+const SAFE_AREA_CHOICES = [
+  { key: "none", label: "Tidak ada", area: { top: 0, bottom: 0, left: 0, right: 0 } },
+  {
+    key: "sedang",
+    label: "Sedang",
+    area: { top: 0.06, bottom: 0.14, left: 0, right: 0.1 },
+  },
+  {
+    key: "longgar",
+    label: "Longgar",
+    area: { top: 0.1, bottom: 0.22, left: 0, right: 0.16 },
+  },
+] as const;
+
+type SafeAreaKey = (typeof SAFE_AREA_CHOICES)[number]["key"];
+
+const safeAreaKeyOf = (area: SafeArea | undefined): SafeAreaKey => {
+  const found = SAFE_AREA_CHOICES.find(
+    (choice) =>
+      area !== undefined &&
+      choice.area.top === area.top &&
+      choice.area.bottom === area.bottom &&
+      choice.area.left === area.left &&
+      choice.area.right === area.right,
+  );
+  return found?.key ?? "none";
+};
+
+const safeAreaSummary = (area: SafeArea): string => {
+  const sisi: string[] = [];
+  if (area.top > 0) sisi.push(`atas ${Math.round(area.top * 100)}%`);
+  if (area.bottom > 0) sisi.push(`bawah ${Math.round(area.bottom * 100)}%`);
+  if (area.left > 0) sisi.push(`kiri ${Math.round(area.left * 100)}%`);
+  if (area.right > 0) sisi.push(`kanan ${Math.round(area.right * 100)}%`);
+  return sisi.length === 0
+    ? "seluruh bingkai dipakai"
+    : `dikosongkan: ${sisi.join(", ")}`;
+};
+
 const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   open,
   onClose,
@@ -340,6 +391,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
   const [stylePreset, setStylePreset] = useState<string>("documentary-01");
   const [format, setFormat] = useState<string>("bebas");
+  const [safeAreaKey, setSafeAreaKey] = useState<SafeAreaKey>("none");
   const [accent, setAccent] = useState("#e4a64c");
   const [primary, setPrimary] = useState("#0b0e17");
   const [fontDisplay, setFontDisplay] = useState("");
@@ -352,6 +404,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
     const tokens = plan.meta.tokens ?? {};
     setAspectRatio(plan.meta.aspectRatio);
     setStylePreset(plan.meta.stylePreset);
+    setSafeAreaKey(safeAreaKeyOf(plan.meta.safeArea));
     setFormat(plan.meta.format);
     setAccent(
       tokens.accent ?? (plan.meta.stylePreset === "tutorial-01" ? "#2e5fd7" : "#e4a64c"),
@@ -381,6 +434,10 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
             aspectRatio,
             stylePreset,
             format,
+            safeArea: {
+              ...(SAFE_AREA_CHOICES.find((choice) => choice.key === safeAreaKey)?.area ??
+                SAFE_AREA_CHOICES[0].area),
+            },
             tokens: {
               accent,
               primary,
@@ -462,6 +519,29 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               }
               onChange={setStylePreset}
             />
+          </div>
+          {/* Zona aman platform (ADR-0034): tepi bingkai yang dikosongkan
+              supaya caption dan teks tidak tertimpa antarmuka platform tujuan.
+              Angkanya ditampilkan, bukan disembunyikan di balik nama platform
+              yang tidak bisa kami verifikasi. */}
+          <div className="field">
+            <span>Zona aman platform</span>
+            <Segmented
+              grow
+              options={SAFE_AREA_CHOICES.map((choice) => choice.key)}
+              value={safeAreaKey}
+              label={(key) =>
+                SAFE_AREA_CHOICES.find((choice) => choice.key === key)?.label ?? key
+              }
+              onChange={(key) => setSafeAreaKey(key as SafeAreaKey)}
+            />
+            <p className="field-hint">
+              {safeAreaSummary(
+                SAFE_AREA_CHOICES.find((choice) => choice.key === safeAreaKey)?.area ??
+                  SAFE_AREA_CHOICES[0].area,
+              )}
+              . Caption dan teks menjauh dari tepi itu; gambarnya tetap penuh.
+            </p>
           </div>
           <div className="field-row">
             <label className="field">

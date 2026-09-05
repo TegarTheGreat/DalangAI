@@ -177,12 +177,12 @@ export const CanvasEditor: React.FC<{ plan: ScenePlan }> = ({ plan }) => {
   // Di-memo karena ia jadi dependensi effect seret: objek baru tiap render
   // akan memasang ulang pendengar pointer di TENGAH seretan.
   const safe: SafeInsets = useMemo(() => {
-    const metrics = aspectMetrics(plan.meta.aspectRatio);
+    const metrics = aspectMetrics(plan.meta.aspectRatio, plan.meta.safeArea);
     return {
       x: metrics.marginX / metrics.width,
       y: metrics.marginTop / metrics.height,
     };
-  }, [plan.meta.aspectRatio]);
+  }, [plan.meta.aspectRatio, plan.meta.safeArea]);
 
   /**
    * Kotak diukur ulang saat isinya berubah — dan "berubah" di sini bukan cuma

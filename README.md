@@ -283,7 +283,17 @@ footage ramai, dan penekanan stabilo yang menyapu saat teks masuk. **Enam font
 variable ter-bundle** (OFL, dirender offline): Fraunces, Inter, Space Grotesk,
 Lora, Plus Jakarta Sans karya Tokotype, dan Anton.
 
-Rujukan: [ADR-0016](docs/decisions/0016-tipografi.md)
+- **Zona aman platform**: `meta.safeArea` mengosongkan tepi bingkai yang akan
+  ditimpa antarmuka platform tujuan — tepi bawah (judul, nama akun) dan tepi
+  kanan (rel tombol) pada video 9:16. Caption dan teks menjauh dari sana;
+  gambarnya tetap penuh. Angkanya fraksi yang kamu tentukan, BUKAN daftar nama
+  platform: repo ini tidak bisa memverifikasi ukuran antarmuka TikTok, Reels,
+  atau Shorts, dan angka tak terverifikasi yang dibekukan sebagai nama platform
+  akan menua diam-diam. Bawaannya nol, jadi plan yang sudah ada tidak bergeser
+  satu piksel pun — dibuktikan gerbang paritas byte, bukan diklaim.
+
+Rujukan: [ADR-0016](docs/decisions/0016-tipografi.md),
+[ADR-0034](docs/decisions/0034-zona-aman-platform.md)
 
 ### Suara
 
@@ -547,7 +557,7 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 
 | Gerbang | Yang dijaganya |
 |---|---|
-| 1201 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
+| 1211 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
 | Render smoke test | Render sungguhan di CI, bukan mock |
 | Gerbang paritas migrasi | Plan v1 (dimigrasikan) dan plan v2 dirender, wajib identik byte per byte — tiap sisi dirender dua kali sebagai kontrol, jadi render yang tidak deterministik tidak bisa terbaca sebagai cacat migrasi |
 | Gerbang tata letak | Geometri UI di 18 lebar layar (380-1920), editor dan lobi: kontrol yang saling menindih, tergunting, atau membuat halaman bisa digeser ke samping — diukur setelah animasi CSS benar-benar selesai, bukan setelah jeda yang ditebak |
@@ -603,6 +613,12 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   dan tidak ada sinkronisasi banyak sumber.
   [ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) menulis
   batasnya lengkap.
+- **Angka zona aman platform bukan spesifikasi platform.** Repo ini tidak
+  pernah mengukur antarmuka TikTok, Reels, atau Shorts; pilihan "Sedang" dan
+  "Longgar" di Studio adalah cadangan konservatif yang persentasenya
+  ditampilkan apa adanya. Berapa yang benar untuk platform tujuanmu adalah
+  pengetahuanmu; yang dijamin repo ini adalah tata letak benar-benar
+  menghormatinya.
 - **Kartu judul dan outro tidak bisa jadi salah satu potongan.** Kartu itu
   komposisi satu scene UTUH, bukan potongan gambar, jadi scene berklip banyak
   yang memuatnya ditolak validasi — beserta saran memisahkannya jadi scene

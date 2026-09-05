@@ -67,6 +67,42 @@
             }
           ]
         },
+        "safeArea": {
+          "default": {
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "type": "object",
+          "properties": {
+            "top": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.4
+            },
+            "bottom": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.4
+            },
+            "left": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.4
+            },
+            "right": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.4
+            }
+          },
+          "additionalProperties": false
+        },
         "tokens": {
           "type": "object",
           "properties": {

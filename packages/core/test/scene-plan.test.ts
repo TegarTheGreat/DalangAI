@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyPatch,
   DIMENSIONS,
   migrateScenePlan,
   parseScenePlan,
@@ -170,5 +171,62 @@ describe("scene-plan schema v0", () => {
     expect(DIMENSIONS["9:16"]).toEqual({ width: 1080, height: 1920 });
     expect(DIMENSIONS["16:9"]).toEqual({ width: 1920, height: 1080 });
     expect(DIMENSIONS["1:1"]).toEqual({ width: 1080, height: 1080 });
+  });
+});
+
+/**
+ * Zona aman platform (ADR-0034) — kontrak skemanya.
+ *
+ * Sifat yang paling penting dijaga di sini: BAWAANNYA NOL. Fitur tata letak
+ * yang menyala sendiri akan menggeser setiap plan yang sudah ada tanpa
+ * diminta, termasuk yang dijaga gerbang paritas byte.
+ */
+describe("meta.safeArea", () => {
+  const base = {
+    version: 2,
+    projectId: "p",
+    meta: { title: "T" },
+    scenes: [{ id: "sc-1", narration: "Satu.", clips: [{ id: "k1", type: "solid" }] }],
+  };
+
+  it("bawaannya nol di keempat sisi", () => {
+    const plan = parseScenePlan(base);
+    expect(plan.meta.safeArea).toEqual({ top: 0, bottom: 0, left: 0, right: 0 });
+  });
+
+  it("sisi yang tidak disebut tetap nol", () => {
+    const plan = parseScenePlan({
+      ...base,
+      meta: { title: "T", safeArea: { bottom: 0.2 } },
+    });
+    expect(plan.meta.safeArea).toEqual({ top: 0, bottom: 0.2, left: 0, right: 0 });
+  });
+
+  it("menolak fraksi di atas 0,4 — dua sisi berhadapan harus menyisakan bidang", () => {
+    expect(() =>
+      parseScenePlan({ ...base, meta: { title: "T", safeArea: { bottom: 0.5 } } }),
+    ).toThrow();
+  });
+
+  it("menolak fraksi negatif", () => {
+    expect(() =>
+      parseScenePlan({ ...base, meta: { title: "T", safeArea: { top: -0.1 } } }),
+    ).toThrow();
+  });
+
+  it("setMeta mengganti zona aman UTUH, bukan menggabung per sisi", () => {
+    // Empat sisi itu SATU keputusan ("video ini untuk platform apa"), jadi
+    // undo satu langkah harus mengembalikan keputusan itu utuh — bukan
+    // campuran dari dua keputusan berbeda.
+    const plan = parseScenePlan({
+      ...base,
+      meta: { title: "T", safeArea: { top: 0.1, bottom: 0.2, left: 0, right: 0.16 } },
+    });
+    const { plan: sesudah } = applyPatch(
+      plan,
+      [{ op: "setMeta", patch: { safeArea: { bottom: 0.05 } } }],
+      { origin: "user" },
+    );
+    expect(sesudah.meta.safeArea).toEqual({ top: 0, bottom: 0.05, left: 0, right: 0 });
   });
 });

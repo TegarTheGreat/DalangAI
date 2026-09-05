@@ -182,7 +182,7 @@ export const TutorialPreset: React.FC<{
 }> = ({ plan, debug }) => {
   ensureFontsLoaded();
   const theme = themeFromPlan(plan);
-  const metrics = aspectMetrics(plan.meta.aspectRatio);
+  const metrics = aspectMetrics(plan.meta.aspectRatio, plan.meta.safeArea);
   const layout = computeFrameLayout(plan);
   const steps = stepNumbers(plan);
 

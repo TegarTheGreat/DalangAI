@@ -645,6 +645,36 @@ export const designTokensSchema = z.strictObject({
 });
 export type DesignTokens = z.infer<typeof designTokensSchema>;
 
+/**
+ * Zona aman platform (ADR-0034) — bagian tepi bingkai yang TIDAK boleh dipakai
+ * teks karena akan ditimpa antarmuka platform tujuan.
+ *
+ * Angkanya FRAKSI dari sisi bingkai, bukan piksel: satu plan bisa dirender ke
+ * 9:16, 1:1, dan 16:9, dan "144 piksel" berarti bagian yang berbeda-beda di
+ * ketiganya. Fraksi tetap berarti hal yang sama.
+ *
+ * Kenapa fraksi bebas, bukan daftar nama platform. Kami tidak bisa memverifikasi
+ * ukuran UI TikTok, Reels, atau Shorts dari repo ini, dan angka yang tidak bisa
+ * diverifikasi lalu dibekukan sebagai "tiktok" akan menua diam-diam — pemakainya
+ * mengira sudah aman padahal platformnya sudah berubah. Yang bisa dijamin repo
+ * ini adalah aritmetikanya: sebutkan berapa yang harus dikosongkan, dan tata
+ * letak akan menghormatinya. Berapa angkanya adalah pengetahuan pemakainya.
+ *
+ * Batas 0,4 per sisi bukan selera: dua sisi berhadapan yang masing-masing 0,5
+ * tidak menyisakan bidang sama sekali, dan tata letak yang lebarnya nol adalah
+ * kegagalan yang muncul jauh dari sebabnya.
+ */
+export const safeAreaSchema = z.strictObject({
+  top: z.number().min(0).max(0.4).default(0),
+  bottom: z.number().min(0).max(0.4).default(0),
+  left: z.number().min(0).max(0.4).default(0),
+  right: z.number().min(0).max(0.4).default(0),
+});
+export type SafeArea = z.infer<typeof safeAreaSchema>;
+
+/** Tanpa zona aman — bawaan, dan bentuk yang dipakai saat plan tidak menyebutnya. */
+export const NO_SAFE_AREA: SafeArea = { top: 0, bottom: 0, left: 0, right: 0 };
+
 export const metaSchema = z.strictObject({
   title: z.string().min(1),
   aspectRatio: aspectRatioSchema.default("9:16"),
@@ -668,6 +698,12 @@ export const metaSchema = z.strictObject({
    * diukur (lihat "Batas yang dinyatakan" ADR-0026). `null` mematikannya.
    */
   loudnessTarget: z.number().min(-40).max(-5).nullable().default(-16),
+  /**
+   * Zona aman platform (ADR-0034). Bawaannya NOL di keempat sisi, dan itu
+   * disengaja: menyalakannya sendiri akan menggeser tata letak setiap plan yang
+   * sudah ada tanpa diminta — termasuk yang dijaga gerbang paritas byte.
+   */
+  safeArea: safeAreaSchema.default(NO_SAFE_AREA),
   tokens: designTokensSchema.optional(),
 });
 export type Meta = z.infer<typeof metaSchema>;

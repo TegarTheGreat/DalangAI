@@ -30,6 +30,7 @@ import {
   primaryClip,
   type Scene,
   type ScenePlan,
+  safeAreaSchema,
   scenePlanSchema,
   sceneSchema,
   sfxCueSchema,
@@ -152,6 +153,13 @@ export const metaUpdateSchema = z.strictObject({
   format: z.string().optional(),
   /** ADR-0026: sasaran kenyaringan klip (LUFS); null mematikan normalisasi. */
   loudnessTarget: z.number().min(-40).max(-5).nullable().optional(),
+  /**
+   * ADR-0034: zona aman platform. Diganti UTUH, bukan digabung per sisi —
+   * empat sisi itu satu keputusan ("video ini untuk platform apa"), dan
+   * penggabungan per sisi membuat undo satu langkah mengembalikan campuran
+   * dari dua keputusan berbeda.
+   */
+  safeArea: safeAreaSchema.optional(),
   tokens: designTokensSchema.nullable().optional(),
 });
 export type MetaUpdate = z.infer<typeof metaUpdateSchema>;

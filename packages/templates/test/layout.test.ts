@@ -109,3 +109,67 @@ describe("aspectMetrics", () => {
     },
   );
 });
+
+/**
+ * Zona aman platform (ADR-0034).
+ *
+ * Diuji sebagai ARITMETIKA, karena itu yang dijanjikan repo ini: berapa yang
+ * harus dikosongkan adalah pengetahuan pemakainya, tapi bahwa tata letak
+ * benar-benar menghormatinya adalah tanggung jawab kode ini.
+ */
+describe("aspectMetrics · zona aman platform", () => {
+  it("bawaannya tidak menggeser apa pun", () => {
+    // Sifat yang menjaga gerbang paritas byte tetap berarti: plan yang sudah
+    // ada tidak boleh berpindah satu piksel pun karena fitur ini lahir.
+    for (const aspect of ["9:16", "16:9", "1:1"] as AspectRatio[]) {
+      expect(aspectMetrics(aspect, { top: 0, bottom: 0, left: 0, right: 0 })).toEqual(
+        aspectMetrics(aspect),
+      );
+    }
+  });
+
+  it("caption naik keluar dari pita bawah yang dipesan", () => {
+    const polos = aspectMetrics("9:16");
+    const aman = aspectMetrics("9:16", { top: 0, bottom: 0.22, left: 0, right: 0 });
+    const pita = polos.height * 0.22;
+    expect(polos.captionBottom).toBeLessThan(pita);
+    expect(aman.captionBottom).toBeGreaterThanOrEqual(pita);
+  });
+
+  it("rel tombol di kanan mempersempit KEDUA sisi, jadi isinya tetap di tengah", () => {
+    const polos = aspectMetrics("9:16");
+    const aman = aspectMetrics("9:16", { top: 0, bottom: 0, left: 0, right: 0.16 });
+    const rel = polos.width * 0.16;
+    expect(aman.marginX).toBeGreaterThanOrEqual(rel);
+    // Lebar caption ikut menyempit; kalau tidak, teksnya tetap menembus rel
+    // dari samping meskipun marginnya sudah benar.
+    expect(aman.captionMaxWidth).toBeLessThanOrEqual(aman.width - aman.marginX * 2);
+    expect(aman.captionMaxWidth).toBeLessThan(polos.captionMaxWidth);
+  });
+
+  it("zona aman yang lebih sempit daripada margin desain tidak menguranginya", () => {
+    // Zona aman MENAMBAH kelonggaran. Kalau ia boleh mengurangi, menyalakannya
+    // dengan angka kecil justru membuat tata letak lebih berbahaya daripada
+    // mematikannya — kebalikan dari gunanya.
+    const polos = aspectMetrics("16:9");
+    const kecil = aspectMetrics("16:9", {
+      top: 0.001,
+      bottom: 0.001,
+      left: 0.001,
+      right: 0.001,
+    });
+    expect(kecil.marginX).toBe(polos.marginX);
+    expect(kecil.marginTop).toBe(polos.marginTop);
+    expect(kecil.captionBottom).toBe(polos.captionBottom);
+    expect(kecil.captionMaxWidth).toBe(polos.captionMaxWidth);
+  });
+
+  it("bidang yang tersisa tetap positif di batas paling ekstrem skema", () => {
+    // 0,4 per sisi adalah maksimum skema; dua sisi berhadapan menyisakan 20%.
+    for (const aspect of ["9:16", "16:9", "1:1"] as AspectRatio[]) {
+      const m = aspectMetrics(aspect, { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 });
+      expect(m.captionMaxWidth).toBeGreaterThan(0);
+      expect(m.captionBottom + m.marginTop).toBeLessThan(m.height);
+    }
+  });
+});
