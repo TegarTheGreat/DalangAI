@@ -269,6 +269,21 @@ potongan TERPILIH. Sebelum ini menaruh rekaman ke scene berklip banyak selalu
 mendarat di potongan pertama — dan yang menaruhnya baru sadar setelah melihat
 potongan yang salah berganti gambar.
 
+**Tool rekaman agent.** `ingestVideo`, `getTranscript`, `findMoments`,
+`cutByWords`, dan `analyzeImage` menerima `clipId`. Sebelum ini semuanya
+membaca potongan pertama diam-diam, dan `cutByWords` bahkan selalu GAGAL di
+scene berklip banyak: ia menulis angka ke `scene.duration`, yang ditolak skema
+(§2) — persis di satu-satunya jenis scene yang lahir dari memotong rekaman
+panjang, yaitu alasan ADR ini ada. Jalur berklip banyak menyetel titik masuk
+lalu menggeser tepi KELUAR lewat `trimClip` ripple: aritmetikanya sudah ada di
+core, batas ujung rekaman ikut dijaga di sana, dan inversnya membuat undo
+mengembalikan titik masuk sekaligus panjang potongan. Klip yang DISEBUT tapi
+tidak ada ditolak beserta daftar id yang tersedia, bukan jatuh diam-diam ke
+potongan pertama: memotong potongan yang salah jauh lebih sulit dilihat
+daripada galat. `locateUiElement` sengaja TETAP membaca potongan pertama —
+anotasi tutorial-01 milik scene (lihat Batas yang dinyatakan), jadi ia harus
+menunjuk screenshot yang sama dengan yang digambar preset itu.
+
 **Interop.** Ekspor: satu klip Dalang = satu klip OTIO/FCPXML, transisi di
 dalam scene ikut. Impor: potongan berurutan dari BERKAS yang sama jadi satu
 scene berklip banyak, bukan satu scene per potongan. Catatan "yang tidak ikut
@@ -296,6 +311,8 @@ Cacat yang ditemukan test dan gerbang selama fase ini:
 | pembacaan pipeline | tahap aset, tahap kenyaringan, dan `materializeCandidate` semuanya bersatuan SCENE: scene berklip banyak hanya bisa meresolusi potongan pertamanya |
 | audit permukaan lanjutan | lencana aset timeline, kritik gerak monoton, tab Audio, panel Sumber, rute Sumber, dan `recordingsInPlan` semuanya membaca potongan pertama saja — masing-masing menjawab dengan yakin tentang seluruh scene |
 | gerbang paritas migrasi di CI | gerbangnya menuduh "ada field yang tidak ikut pindah" untuk selisih byte apa pun, padahal kedua plan sudah terbukti identik setelah parse — selisihnya mustahil datang dari migrasi. Kini tiap sisi dirender dua kali sebagai kontrol, dan render yang tidak deterministik dilaporkan sebagai dirinya sendiri |
+| hitungan piksel gerbang paritas | render kontrol membuktikan sumbernya bukan migrasi, dan hitungan pikselnya memberi angkanya: 248 piksel (0,191% bidang), selisih kanal terbesar 2/255 — pembulatan rasterisasi, bukan gambar yang berganti. Kedua gerbang paritas kini memakai satu ambang bersama (`withinRasterNoise`), dan setiap toleransi dicetak beserta angkanya. Diuji mutasi: mengganti satu teks memberi 3060 piksel dengan selisih kanal 165/255 — tetap jatuh |
+| tes tool agent | `cutByWords` selalu gagal di scene berklip banyak; `ingestVideo`, `getTranscript`, `findMoments`, dan `analyzeImage` menyunting potongan pertama tanpa satu pun tanda |
 
 ## Rencana verifikasi
 

@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import {
   addMemoryEntry,
   allClips,
+  type Clip,
   clipAsset,
   critiquePlan,
   defaultPublishMetadata,
@@ -17,6 +18,7 @@ import {
   MAX_LAYERS,
   MAX_MEMORY_TEXT,
   MEMORY_KINDS,
+  type PatchOpInput,
   type ProxyMedia,
   PUBLISH_DESCRIPTION_MAX,
   PUBLISH_PRIVACIES,
@@ -28,6 +30,8 @@ import {
   primaryClipId,
   recipeFor,
   removeMemoryEntry,
+  type Scene,
+  type ScenePlan,
   type ScenePlanInput,
   scenePlanSchema,
   setClipAsset,
@@ -36,7 +40,7 @@ import {
   speechSpans,
   type Transcript,
   textInSpan,
-  transcriptForScene,
+  transcriptForClip,
   uniqueGraphicId,
   uniqueLayerId,
   uniqueSfxCueId,
@@ -251,6 +255,45 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
     return session.plan;
   };
 
+  /**
+   * Potongan yang disasar sebuah tool: yang disebut `clipId`, atau potongan
+   * PERTAMA bila tidak disebut (ADR-0033).
+   *
+   * Semua tool rekaman dulu membaca klip pertama diam-diam. Wawancara yang
+   * sudah dibelah jadi dua belas potongan cuma bisa disunting di potongan
+   * pertamanya, dan tidak ada satu pun pesan yang mengatakan begitu — persis
+   * kebalikan dari alasan ADR-0033 ada.
+   *
+   * Klip yang DISEBUT tapi tidak ada ditolak, bukan jatuh diam-diam ke klip
+   * pertama: memotong potongan yang salah adalah kerusakan yang jauh lebih
+   * sulit dilihat daripada galat, dan daftar id yang tersedia ikut dikirim
+   * supaya pemanggilnya bisa memperbaiki sendiri tanpa menebak.
+   */
+  const klipDi = (
+    plan: ScenePlan,
+    sceneId: string,
+    clipId?: string,
+  ): { scene: Scene; clip: Clip } | { error: string } => {
+    const scene = plan.scenes.find((candidate) => candidate.id === sceneId);
+    if (!scene) return { error: `Scene ${sceneId} tidak ada` };
+    if (clipId === undefined || clipId === "") {
+      return { scene, clip: primaryClip(scene) };
+    }
+    const clip = scene.clips.find((candidate) => candidate.id === clipId);
+    if (!clip) {
+      return {
+        error:
+          `Klip ${clipId} tidak ada di scene ${sceneId} — potongan yang ada: ` +
+          scene.clips.map((candidate) => candidate.id).join(", "),
+      };
+    }
+    return { scene, clip };
+  };
+
+  /** Deskripsi seragam untuk parameter clipId di tool rekaman. */
+  const CLIP_ID_DESC =
+    "Potongan yang disasar di scene berklip banyak (ADR-0033). Kosongkan untuk potongan pertama.";
+
   return {
     // ADR-0017: kritik-diri DELIBERAT. Catatan sutradara memang sudah
     // disuntikkan pasif ke konteks, tapi memanggilnya sebagai tool memaksa
@@ -350,20 +393,20 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
     // sebagai aset, lalu tiap scene memotongnya lewat visual.trimStartSec.
     ingestVideo: tool({
       description:
-        "Daftarkan file VIDEO lokal di folder proyek (mis. 'assets/podcast.mp4') sebagai aset scene, dan baca durasi + dimensinya. Dipakai untuk MENGKLIP rekaman panjang: panggil sekali per scene, lalu set clip.trimStartSec (detik) dan duration scene lewat applyPatch untuk memilih potongan. Aset ini ter-pin.",
+        "Daftarkan file VIDEO lokal di folder proyek (mis. 'assets/podcast.mp4') sebagai aset sebuah POTONGAN, dan baca durasi + dimensinya. Dipakai untuk MENGKLIP rekaman panjang: daftarkan sekali, lalu pilih potongannya lewat cutByWords (atau clip.trimStartSec + trimClip). Rekaman yang sama boleh didaftarkan ke beberapa potongan di satu scene — isi clipId untuk masing-masing. Aset ini ter-pin.",
       inputSchema: z.object({
         sceneId: z.string().min(1),
         file: z
           .string()
           .min(1)
           .describe("Path relatif terhadap folder plan, mis. 'assets/podcast.mp4'"),
+        clipId: z.string().min(1).optional().describe(CLIP_ID_DESC),
       }),
       execute: (input) =>
         run("ingestVideo", input, async () => {
           const plan = requirePlan();
-          if (!plan.scenes.some((scene) => scene.id === input.sceneId)) {
-            return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
-          }
+          const target = klipDi(plan, input.sceneId, input.clipId);
+          if ("error" in target) return { ok: false, error: target.error };
           const meta = await deps.videoMetadata(input.file);
           if (!meta) {
             return {
@@ -377,7 +420,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           const info = transcoder
             ? await transcoder.probe(join(session.paths.planDir, input.file))
             : null;
-          session.plan = setClipAsset(plan, primaryClipId(plan, input.sceneId), {
+          session.plan = setClipAsset(plan, target.clip.id, {
             file: input.file,
             kind: "video",
             source: "local",
@@ -392,12 +435,14 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             {
               op: "replaceAsset",
               sceneId: input.sceneId,
+              ...(input.clipId ? { clipId: input.clipId } : {}),
               assetId: input.file,
               pinned: true,
             },
             {
               op: "updateScene",
               id: input.sceneId,
+              ...(input.clipId ? { clipId: input.clipId } : {}),
               patch: { clip: { type: "image" } },
             },
           ]);
@@ -421,15 +466,13 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             session.persist();
             const row = outcome.results[0];
             catatanProxy = row ? `${row.status}: ${row.detail}` : "tidak diproses";
-            proxy = clipAsset(
-              outcome.plan,
-              primaryClipId(outcome.plan, input.sceneId),
-            )?.proxy;
+            proxy = clipAsset(outcome.plan, target.clip.id)?.proxy;
           }
 
           return {
             ok: true,
             file: input.file,
+            klip: target.clip.id,
             durasiDetik: Number(meta.durationSec.toFixed(2)),
             lebar: meta.width,
             tinggi: meta.height,
@@ -441,7 +484,9 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             catatanProxy,
             ringkasanPerubahan: summary,
             catatan:
-              "Pilih potongan lewat applyPatch: clip.trimStartSec = detik mulai, dan duration scene = panjang potongan.",
+              target.scene.clips.length > 1
+                ? `Pilih potongannya lewat cutByWords { sceneId, clipId: "${target.clip.id}", dariDetik, sampaiDetik } — di scene berklip banyak yang berubah durasi KLIP, bukan durasi scene.`
+                : "Pilih potongan lewat cutByWords, atau applyPatch: clip.trimStartSec = detik mulai dan duration scene = panjang potongan.",
           };
         }),
     }),
@@ -565,17 +610,20 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         "Baca transkrip rekaman sebuah scene sebagai teks berwaktu. Pakai ini SEBELUM memutuskan potongan: kamu yang menilai bagian mana yang menarik, tool ini hanya menyediakan kata beserta detiknya. Rekaman panjang dibaca per jendela lewat dariDetik/sampaiDetik.",
       inputSchema: z.object({
         sceneId: z.string().min(1),
+        clipId: z.string().min(1).optional().describe(CLIP_ID_DESC),
         dariDetik: z.number().min(0).optional(),
         sampaiDetik: z.number().min(0).optional(),
       }),
       execute: (input) =>
         run("getTranscript", input, async () => {
           const plan = requirePlan();
-          const transcript = transcriptForScene(plan, input.sceneId);
+          const target = klipDi(plan, input.sceneId, input.clipId);
+          if ("error" in target) return { ok: false, error: target.error };
+          const transcript = transcriptForClip(plan, target.clip.id);
           if (!transcript) {
             return {
               ok: false,
-              error: `Scene ${input.sceneId} belum punya transkrip — jalankan transcribeVideo dulu (atau scene ini memang bukan rekaman).`,
+              error: `Klip ${target.clip.id} (scene ${input.sceneId}) belum punya transkrip — jalankan transcribeVideo dulu (atau potongan ini memang bukan rekaman).`,
             };
           }
           const from = input.dariDetik ?? 0;
@@ -585,7 +633,8 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           );
           return {
             ok: true,
-            file: clipAsset(plan, primaryClipId(plan, input.sceneId))?.file,
+            file: clipAsset(plan, target.clip.id)?.file,
+            klip: target.clip.id,
             bahasa: transcript.language,
             durasiDetik: Number(transcript.durationSec.toFixed(1)),
             dariNarasi: transcript.fromNarration === true,
@@ -607,6 +656,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         "Cari FRASA di dalam transkrip rekaman dan dapatkan detik kemunculannya. Untuk menemukan potongan tertentu yang sudah kamu tahu kata-katanya (mis. 'harga emas'). Untuk menemukan kata pengisi dan pengulangan yang perlu dibuang, isi jenis='pengisi'.",
       inputSchema: z.object({
         sceneId: z.string().min(1),
+        clipId: z.string().min(1).optional().describe(CLIP_ID_DESC),
         frasa: z
           .string()
           .optional()
@@ -622,11 +672,13 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
       execute: (input) =>
         run("findMoments", input, async () => {
           const plan = requirePlan();
-          const transcript = transcriptForScene(plan, input.sceneId);
+          const target = klipDi(plan, input.sceneId, input.clipId);
+          if ("error" in target) return { ok: false, error: target.error };
+          const transcript = transcriptForClip(plan, target.clip.id);
           if (!transcript) {
             return {
               ok: false,
-              error: `Scene ${input.sceneId} belum punya transkrip — jalankan transcribeVideo dulu.`,
+              error: `Klip ${target.clip.id} (scene ${input.sceneId}) belum punya transkrip — jalankan transcribeVideo dulu.`,
             };
           }
           if ((input.jenis ?? "frasa") === "pengisi") {
@@ -672,17 +724,19 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     cutByWords: tool({
       description:
-        "Potong scene supaya menampilkan PERSIS rentang rekaman yang kamu pilih (dari transkrip). Menyetel clip.trimStartSec dan durasi scene sekaligus. Dapatkan detiknya dari getTranscript atau findMoments lebih dulu — jangan menebak.",
+        "Potong sebuah POTONGAN supaya menampilkan PERSIS rentang rekaman yang kamu pilih (dari transkrip). Menyetel titik masuk dan panjangnya sekaligus. Di scene berklip satu yang berubah durasi SCENE; di scene berklip banyak yang berubah durasi KLIP itu dan potongan sesudahnya bergeser (ripple). Dapatkan detiknya dari getTranscript atau findMoments lebih dulu — jangan menebak.",
       inputSchema: z.object({
         sceneId: z.string().min(1),
+        clipId: z.string().min(1).optional().describe(CLIP_ID_DESC),
         dariDetik: z.number().min(0),
         sampaiDetik: z.number().min(0),
       }),
       execute: (input) =>
         run("cutByWords", input, async () => {
           const plan = requirePlan();
-          const scene = plan.scenes.find((item) => item.id === input.sceneId);
-          if (!scene) return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
+          const target = klipDi(plan, input.sceneId, input.clipId);
+          if ("error" in target) return { ok: false, error: target.error };
+          const { scene, clip } = target;
           if (input.sampaiDetik <= input.dariDetik) {
             return {
               ok: false,
@@ -690,7 +744,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             };
           }
 
-          const asset = clipAsset(plan, primaryClipId(plan, input.sceneId));
+          const asset = clipAsset(plan, clip.id);
           const sourceDuration = asset?.durationSec;
           if (sourceDuration !== undefined && input.dariDetik >= sourceDuration) {
             return {
@@ -704,27 +758,62 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             sourceDuration === undefined
               ? input.sampaiDetik
               : Math.min(input.sampaiDetik, sourceDuration);
-          const speed = primaryClip(scene).speed > 0 ? primaryClip(scene).speed : 1;
+          const speed = clip.speed > 0 ? clip.speed : 1;
           const durationSec = Number(((end - input.dariDetik) / speed).toFixed(3));
 
-          const transcript = transcriptForScene(plan, input.sceneId) as
-            | Transcript
-            | undefined;
-          const { summary } = session.applyAgentPatch([
+          const transcript = transcriptForClip(plan, clip.id) as Transcript | undefined;
+
+          /**
+           * Dua jalur, karena "panjang potongan" disimpan di tempat yang
+           * berbeda tergantung jumlah klipnya (ADR-0033 §2).
+           *
+           * Scene berklip SATU: panjangnya ada di `scene.duration`, persis
+           * seperti sebelum ADR-0033 ada.
+           *
+           * Scene berklip BANYAK: `scene.duration` wajib "auto", jadi menulis
+           * angka ke sana ditolak skema — sebelum perbaikan ini tool ini
+           * memang selalu gagal di scene hasil belahannya sendiri, yaitu
+           * satu-satunya tempat ia paling dibutuhkan. Yang benar adalah
+           * menggeser tepi KELUAR klip lewat `trimClip` ripple: aritmetikanya
+           * sudah ada di core, batas ujung rekaman ikut dijaga di sana, dan
+           * inversnya (daftar klip sebelumnya) membuat undo tetap utuh.
+           */
+          const ops: PatchOpInput[] = [
             {
               op: "updateScene",
               id: input.sceneId,
-              patch: {
-                clip: { trimStartSec: input.dariDetik },
-                duration: durationSec,
-              },
+              ...(scene.clips.length > 1 ? { clipId: clip.id } : {}),
+              patch:
+                scene.clips.length > 1
+                  ? { clip: { trimStartSec: input.dariDetik } }
+                  : { clip: { trimStartSec: input.dariDetik }, duration: durationSec },
             },
-          ]);
+          ];
+          if (scene.clips.length > 1) {
+            // Titik masuk digeser lebih dulu (op di atas), jadi batas tepi
+            // keluar dihitung terhadap sisa rekaman SETELAH titik masuk baru —
+            // bukan terhadap yang lama.
+            const deltaSec = Number((durationSec - (clip.durationSec ?? 0)).toFixed(3));
+            if (Math.abs(deltaSec) >= 0.001) {
+              ops.push({
+                op: "trimClip",
+                sceneId: input.sceneId,
+                clipId: clip.id,
+                edge: "keluar",
+                mode: "ripple",
+                deltaSec,
+              });
+            }
+          }
+          const { summary } = session.applyAgentPatch(ops);
           return {
             ok: true,
             sceneId: input.sceneId,
+            klip: clip.id,
             mulaiDiRekamanDetik: input.dariDetik,
-            durasiSceneDetik: durationSec,
+            ...(scene.clips.length > 1
+              ? { durasiKlipDetik: durationSec }
+              : { durasiSceneDetik: durationSec }),
             ...(end !== input.sampaiDetik ? { dijepitKeAkhirRekaman: end } : {}),
             ...(transcript
               ? {
@@ -1950,9 +2039,10 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
 
     analyzeImage: tool({
       description:
-        "Analisis visual aset sebuah scene dengan model vision tier-volume (deskripsi/OCR/kecocokan dengan narasi). Untuk aset VIDEO, satu BINGKAI diambil dari potongan scene (detikKe dihitung dari trimStartSec; bawaan 0) — pakai untuk memeriksa apakah potongan benar-benar menunjukkan yang dibicarakan.",
+        "Analisis visual aset sebuah POTONGAN dengan model vision tier-volume (deskripsi/OCR/kecocokan dengan narasi). Untuk aset VIDEO, satu BINGKAI diambil dari potongan itu (detikKe dihitung dari trimStartSec-nya; bawaan 0) — pakai untuk memeriksa apakah potongan benar-benar menunjukkan yang dibicarakan.",
       inputSchema: z.object({
         sceneId: z.string(),
+        clipId: z.string().min(1).optional().describe(CLIP_ID_DESC),
         question: z.string().min(3),
         detikKe: z
           .number()
@@ -1965,9 +2055,13 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
       execute: (input) =>
         run("analyzeImage", input, async () => {
           const plan = requirePlan();
-          const asset = clipAsset(plan, primaryClipId(plan, input.sceneId));
+          const target = klipDi(plan, input.sceneId, input.clipId);
+          if ("error" in target) throw new Error(target.error);
+          const asset = clipAsset(plan, target.clip.id);
           if (!asset) {
-            throw new Error(`Scene ${input.sceneId} belum punya aset ter-resolve`);
+            throw new Error(
+              `Klip ${target.clip.id} (scene ${input.sceneId}) belum punya aset ter-resolve`,
+            );
           }
           if (asset.kind === "audio") {
             throw new Error("Aset audio tidak punya gambar untuk dianalisis");
@@ -1996,9 +2090,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             // ADR-0028: bingkai diambil lewat transkoder pada detik yang diminta
             // DI DALAM potongan — bukan dari awal rekaman satu jam.
             const transcoder = transcoderForFrame;
-            const scene = plan.scenes.find((candidate) => candidate.id === input.sceneId);
-            const atSec =
-              (scene ? primaryClip(scene).trimStartSec : 0) + (input.detikKe ?? 0);
+            const atSec = target.clip.trimStartSec + (input.detikKe ?? 0);
             const scratch = mkdtempSync(join(tmpdir(), "dalang-frame-"));
             try {
               const framePath = join(scratch, "frame.jpg");
@@ -2045,7 +2137,11 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             turn: session.turn,
             kind: "llm",
             name: `vision:${volume.key}`,
-            input: { sceneId: input.sceneId, question: input.question },
+            input: {
+              sceneId: input.sceneId,
+              clipId: target.clip.id,
+              question: input.question,
+            },
             output: { chars: result.text.length },
             costUsd: null,
           });

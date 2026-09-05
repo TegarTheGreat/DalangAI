@@ -266,7 +266,11 @@ export class ProjectSession {
       ).length;
       const flags = [
         scene.locked ? "TERKUNCI" : null,
-        primaryClip(scene).pinned ? "pinned" : null,
+        // "pinned" berarti SEMUA potongan dipilih tangan (ADR-0033). Membacanya
+        // dari klip pertama saja membuat scene yang dua dari tiga potongannya
+        // masih bebas diganti terbaca terkunci pilihan, dan agent berhenti
+        // mencarikan aset untuk yang sebenarnya masih menunggu.
+        scene.clips.every((clip) => clip.pinned) ? "pinned" : null,
         audio ? (audio.fallbackQuality ? "suara:fallback" : "suara:ok") : null,
         // Klip (ADR-0033). Tanpa ini agent tidak pernah tahu scene ini punya
         // beberapa potongan: ia akan menyunting potongan pertama saja karena
