@@ -22,7 +22,9 @@ import {
   designTokensSchema,
   getSceneIndex,
   graphicSchema,
+  languageCodeSchema,
   MAX_CLIPS,
+  MAX_DUB_LANGUAGES,
   MAX_LAYERS,
   type Meta,
   metaSchema,
@@ -157,6 +159,8 @@ export const metaUpdateSchema = z.strictObject({
   aspectRatio: aspectRatioSchema.optional(),
   targetDuration: z.union([z.literal("auto"), finitePositive]).optional(),
   language: z.string().optional(),
+  /** ADR-0040: judul per bahasa sulih; diganti UTUH seperti larik lain. */
+  dubTitles: z.record(languageCodeSchema, z.string()).optional(),
   stylePreset: z.string().optional(),
   /** ADR-0017: format konten yang memilih resep struktur. */
   format: z.string().optional(),
@@ -208,6 +212,30 @@ export const patchOpSchema = z.discriminatedUnion("op", [
      */
     clipId: z.string().optional(),
     patch: sceneUpdateSchema,
+  }),
+  /**
+   * Narasi sulih satu scene dalam satu bahasa (ADR-0040).
+   *
+   * Op sendiri, bukan field di `updateScene`, karena tiga alasan yang
+   * semuanya soal PEMAKAIANNYA: log patch-nya terbaca sebagai pekerjaan
+   * penerjemahan ("sulih sc-003 ke en") alih-alih tenggelam sebagai satu
+   * field di antara sepuluh field lain; `text: null` menghapus satu bahasa
+   * tanpa menuntut pemanggilnya menyusun ulang seluruh peta `dubs`; dan
+   * inversnya persis satu nilai, jadi undo penerjemahan tidak pernah ikut
+   * mengembalikan perubahan lain yang kebetulan satu patch.
+   */
+  z.strictObject({
+    op: z.literal("setDub"),
+    sceneId: z.string().min(1),
+    language: languageCodeSchema,
+    /**
+     * Menyasar satu TEKS LAYAR di scene ini alih-alih narasinya. Tanpa ini,
+     * yang disulih adalah narasi — jalur yang jauh lebih sering dipakai, jadi
+     * ia yang jadi bawaan.
+     */
+    textId: z.string().min(1).optional(),
+    /** `null` menghapus sulihan bahasa ini dari sasarannya. */
+    text: z.string().nullable(),
   }),
   z.strictObject({
     op: z.literal("reorderScenes"),
@@ -312,6 +340,10 @@ export type PatchErrorCode =
   | "CLIP_NOT_FOUND"
   | "CLIP_EXISTS"
   | "CLIP_REFUSED"
+  /** ADR-0040: batas jumlah bahasa sulih per proyek terlampaui. */
+  | "TOO_MANY_DUBS"
+  /** ADR-0040: `setDub` menyasar teks layar yang tidak ada di scene itu. */
+  | "TEXT_NOT_FOUND"
   | "PLAN_INVALID";
 
 export class PatchError extends Error {
@@ -524,6 +556,60 @@ const applyOne = (
         id: op.id,
         ...(op.clipId === undefined ? {} : { clipId: op.clipId }),
         patch: inversePatch as SceneUpdate,
+      };
+    }
+
+    case "setDub": {
+      const { scene } = requireScene(plan, op.sceneId, opIndex);
+      assertNotLockedForAgent(scene, origin, enforce, opIndex);
+      const sasaran =
+        op.textId === undefined
+          ? scene
+          : (() => {
+              const text = scene.texts.find((item) => item.id === op.textId);
+              if (!text) {
+                throw new PatchError(
+                  "TEXT_NOT_FOUND",
+                  `Teks "${op.textId}" tidak ada di scene ${op.sceneId}`,
+                  opIndex,
+                );
+              }
+              return text;
+            })();
+      const sebelum = sasaran.dubs[op.language];
+      if (op.text === null) {
+        delete sasaran.dubs[op.language];
+      } else {
+        // Batas jumlah bahasa dijaga di sini, bukan di skema: skema melihat
+        // satu scene, sedangkan batasnya milik PROYEK — dan bahasa ke-13
+        // yang lolos di satu scene lalu ditolak di scene berikutnya akan
+        // meninggalkan proyek yang separuh disulih.
+        if (sasaran.dubs[op.language] === undefined) {
+          const bahasa = new Set<string>();
+          for (const lain of plan.scenes) {
+            for (const kode of Object.keys(lain.dubs)) bahasa.add(kode);
+            for (const text of lain.texts) {
+              for (const kode of Object.keys(text.dubs)) bahasa.add(kode);
+            }
+          }
+          for (const kode of Object.keys(plan.meta.dubTitles)) bahasa.add(kode);
+          bahasa.add(op.language);
+          if (bahasa.size > MAX_DUB_LANGUAGES) {
+            throw new PatchError(
+              "TOO_MANY_DUBS",
+              `Paling banyak ${MAX_DUB_LANGUAGES} bahasa sulih per proyek`,
+              opIndex,
+            );
+          }
+        }
+        sasaran.dubs[op.language] = op.text;
+      }
+      return {
+        op: "setDub",
+        sceneId: op.sceneId,
+        language: op.language,
+        ...(op.textId === undefined ? {} : { textId: op.textId }),
+        text: sebelum ?? null,
       };
     }
 
@@ -851,6 +937,12 @@ const describeOp = (op: PatchOp): string => {
         .map(([key]) => key);
       const where = op.clipId === undefined ? "" : ` klip ${op.clipId}`;
       return `mengubah scene ${op.id}${where} (${fields.join(", ") || "tanpa field"})`;
+    }
+    case "setDub": {
+      const apa = op.textId === undefined ? "narasi" : `teks ${op.textId}`;
+      return op.text === null
+        ? `menghapus sulihan ${op.language} untuk ${apa} scene ${op.sceneId}`
+        : `menyulih ${apa} scene ${op.sceneId} ke ${op.language} (${op.text.trim().split(/\s+/).length} kata)`;
     }
     case "reorderScenes":
       return `mengurutkan ulang scene (${op.order.join(" → ")})`;

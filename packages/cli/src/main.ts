@@ -17,9 +17,12 @@ import {
   computeTimeline,
   countWords,
   critiquePlan,
+  DUB_DRIFT_LIMIT,
   defaultPublishMetadata,
   describeStrip,
   describeTemplate,
+  dubCoverage,
+  dubDrift,
   formatDirectorNotes,
   MEMORY_KIND_LABEL,
   MEMORY_KINDS,
@@ -29,6 +32,8 @@ import {
   PUBLISH_PRIVACY_LABEL,
   parseTemplatePack,
   planFromTemplate,
+  planInLanguage,
+  planLanguages,
   primaryClip,
   removeMemoryEntry,
   resolveSceneDurationSec,
@@ -48,6 +53,7 @@ import {
   readPlanFile,
   recordingsInPlan,
   runAsrStage,
+  runDubStage,
   runProxyStage,
   type SceneStageResult,
 } from "@dalang/pipeline";
@@ -119,6 +125,44 @@ program
 
 const profileOption = () =>
   new Option("--profile <profile>", "profil render").choices(["draft", "final"]);
+
+/**
+ * `--bahasa` (ADR-0040) — membaca plan dalam bahasa sulih.
+ *
+ * Satu opsi yang dipakai render, still, subtitle, dan publish, karena keempatnya
+ * menjawab pertanyaan yang sama: "video versi bahasa mana". Kalau tiap perintah
+ * menamainya sendiri, orang harus menghafal empat nama untuk satu gagasan.
+ */
+const bahasaOption = () =>
+  new Option(
+    "--bahasa <kode>",
+    "baca plan dalam bahasa sulih ini (ADR-0040); bawaannya bahasa utama proyek",
+  );
+
+/**
+ * Plan dalam bahasa yang diminta — atau galat yang MENYEBUTKAN pilihannya.
+ *
+ * Menolak bahasa yang tidak ada, bukan diam-diam jatuh ke bahasa utama:
+ * salah ketik kode bahasa lalu mendapat video bahasa Indonesia yang dikira
+ * bahasa Inggris adalah kesalahan yang baru ketahuan setelah diunggah.
+ */
+const dalamBahasa = (plan: ScenePlan, bahasa: string | undefined): ScenePlan => {
+  if (!bahasa || bahasa === plan.meta.language) return plan;
+  const ada = planLanguages(plan);
+  if (!ada.includes(bahasa)) {
+    throw new InvalidArgumentError(
+      `Proyek ini belum punya sulihan "${bahasa}". Yang ada: ${ada.join(", ")}`,
+    );
+  }
+  const cakupan = dubCoverage(plan, bahasa);
+  if (cakupan.diterjemahkan < cakupan.perlu) {
+    console.warn(
+      `  PERHATIAN: bahasa ${bahasa} baru disulih di ${cakupan.diterjemahkan} dari ` +
+        `${cakupan.perlu} scene bernarasi — sisanya akan tampil BISU.`,
+    );
+  }
+  return planInLanguage(plan, bahasa);
+};
 
 const parseSeconds = (value: string): number => {
   const seconds = Number(value);
@@ -266,9 +310,10 @@ const publishProgressPrinter = () => {
 program
   .command("validate")
   .argument("<proyek>", "folder proyek atau path plan.json")
+  .addOption(bahasaOption())
   .description("Validasi scene-plan terhadap skema terbaru dan tampilkan ringkasan")
-  .action((planPath: string) => {
-    const plan = loadPlan(planPathOf(planPath));
+  .action((planPath: string, options: { bahasa?: string }) => {
+    const plan = dalamBahasa(loadPlan(planPathOf(planPath)), options.bahasa);
     // Menyebut versinya, bukan "v0": plan versi lama DIMIGRASIKAN saat
     // dibaca (ADR-0033), jadi angka yang berguna adalah versi hasilnya.
     console.log(`Scene-plan valid (skema v${plan.version}).`);
@@ -302,6 +347,7 @@ program
       .default("png"),
   )
   .option("--no-cache", "jangan pakai bundle cache (selalu bundling ulang)")
+  .addOption(bahasaOption())
   .description("Render satu atau beberapa frame (PNG/JPEG) untuk cek visual")
   .action(
     async (
@@ -313,9 +359,11 @@ program
         profile: RenderProfile;
         format: "png" | "jpeg";
         cache: boolean;
+        bahasa?: string;
       },
     ) => {
       const absPlan = planPathOf(planPath);
+      dalamBahasa(loadPlan(absPlan), options.bahasa);
       const name = basename(dirname(absPlan));
       mkdirSync(resolve(options.outDir), { recursive: true });
       const times = options.time.length > 0 ? options.time : [1];
@@ -328,6 +376,7 @@ program
         profile: options.profile,
         imageFormat: options.format,
         disableBundleCache: !options.cache,
+        ...(options.bahasa ? { language: options.bahasa } : {}),
         outputLocationFor: (frame) =>
           join(resolve(options.outDir), `${name}-f${frame}.${extension}`),
         onProgress: progressPrinter(),
@@ -374,6 +423,7 @@ program
       .choices(["local", "lambda"])
       .default("local"),
   )
+  .addOption(bahasaOption())
   .description("Render scene-plan menjadi video (MP4 H.264 / WebM VP9 / MOV ProRes)")
   .action(
     async (
@@ -388,10 +438,14 @@ program
         cache: boolean;
         proxy?: boolean;
         target: "local" | "lambda";
+        bahasa?: string;
       },
     ) => {
       const absPlan = planPathOf(planPath);
-      const plan = loadPlan(absPlan);
+      // Plan ditukar DI SINI hanya untuk ringkasan dan pemeriksaannya; yang
+      // benar-benar merender adalah renderer, yang menerima `language` dan
+      // menukarnya sendiri di satu-satunya tempat plan masuk ke sana.
+      const plan = dalamBahasa(loadPlan(absPlan), options.bahasa);
       printPlanSummary(plan);
       if (options.proxy && options.profile === "final") {
         console.warn(
@@ -450,6 +504,7 @@ program
         profile: options.profile,
         settings: overrides,
         ...(options.proxy ? { useProxies: true } : {}),
+        ...(options.bahasa ? { language: options.bahasa } : {}),
         onProgress: progressPrinter(),
       });
       process.stdout.write("\n");
@@ -1067,50 +1122,199 @@ program
     "srt",
   )
   .option("-o, --out <berkas>", "tulis ke berkas ini (bawaan: di samping plan.json)")
+  .addOption(bahasaOption())
   .description(
     "Tulis berkas subtitle (.srt/.vtt) dari narasi dan transkrip — siap diunggah ke YouTube (ADR-0039)",
   )
-  .action((proyek: string, options: { format: SubtitleFormat; out?: string }) => {
-    const absPlan = planPathOf(proyek);
-    const plan = readPlanFile(absPlan);
-    const cues = buildSubtitleCues(plan);
-    const target = resolve(
-      options.out ??
-        join(
-          dirname(absPlan),
-          `${plan.projectId}.${plan.meta.language}.${options.format}`,
-        ),
-    );
-    mkdirSync(dirname(target), { recursive: true });
-    atomicWriteFile(target, options.format === "srt" ? toSrt(cues) : toVtt(cues));
+  .action(
+    (
+      proyek: string,
+      options: { format: SubtitleFormat; out?: string; bahasa?: string },
+    ) => {
+      const absPlan = planPathOf(proyek);
+      const plan = dalamBahasa(readPlanFile(absPlan), options.bahasa);
+      const cues = buildSubtitleCues(plan);
+      const target = resolve(
+        options.out ??
+          join(
+            dirname(absPlan),
+            `${plan.projectId}.${plan.meta.language}.${options.format}`,
+          ),
+      );
+      mkdirSync(dirname(target), { recursive: true });
+      atomicWriteFile(target, options.format === "srt" ? toSrt(cues) : toVtt(cues));
 
-    console.log(`Subtitle ditulis ke ${target}`);
-    if (cues.length === 0) {
-      // Berkas kosong DIKATAKAN, bukan dibiarkan terlihat seperti berhasil:
-      // yang mengunggahnya baru tahu kosong setelah videonya tayang.
+      console.log(`Subtitle ditulis ke ${target}`);
+      if (cues.length === 0) {
+        // Berkas kosong DIKATAKAN, bukan dibiarkan terlihat seperti berhasil:
+        // yang mengunggahnya baru tahu kosong setelah videonya tayang.
+        console.log(
+          "  PERHATIAN: tidak ada satu pun kartu — plan ini belum punya narasi maupun transkrip.",
+        );
+        return;
+      }
+      const akhir = cues[cues.length - 1]?.endMs ?? 0;
       console.log(
-        "  PERHATIAN: tidak ada satu pun kartu — plan ini belum punya narasi maupun transkrip.",
+        `  ${cues.length} kartu · sampai detik ${(akhir / 1000).toFixed(1)} · bahasa ${plan.meta.language}`,
       );
-      return;
-    }
-    const akhir = cues[cues.length - 1]?.endMs ?? 0;
-    console.log(
-      `  ${cues.length} kartu · sampai detik ${(akhir / 1000).toFixed(1)} · bahasa ${plan.meta.language}`,
-    );
-    // Waktunya diturunkan dari TTS kalau ada, ditaksir kalau belum — dan
-    // bedanya besar, jadi dikatakan.
-    const berTts = plan.scenes.filter(
-      (scene) =>
-        (plan.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) > 0,
-    ).length;
-    const bernarasi = plan.scenes.filter((scene) => scene.narration.trim() !== "").length;
-    if (berTts < bernarasi) {
-      console.log(
-        `  ${bernarasi - berTts} dari ${bernarasi} scene bernarasi waktunya masih DITAKSIR ` +
-          "(belum ada TTS). Jalankan `dalang generate` dulu untuk waktu yang tepat.",
-      );
-    }
-  });
+      // Waktunya diturunkan dari TTS kalau ada, ditaksir kalau belum — dan
+      // bedanya besar, jadi dikatakan.
+      const berTts = plan.scenes.filter(
+        (scene) =>
+          (plan.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) > 0,
+      ).length;
+      const bernarasi = plan.scenes.filter(
+        (scene) => scene.narration.trim() !== "",
+      ).length;
+      if (berTts < bernarasi) {
+        console.log(
+          `  ${bernarasi - berTts} dari ${bernarasi} scene bernarasi waktunya masih DITAKSIR ` +
+            "(belum ada TTS). Jalankan `dalang generate` dulu untuk waktu yang tepat.",
+        );
+      }
+    },
+  );
+
+/**
+ * Sulih suara (ADR-0040).
+ *
+ * Dua pekerjaan, satu perintah, karena keduanya menjawab pertanyaan yang sama
+ * ("bagaimana keadaan bahasa X di proyek ini"): tanpa `--suara` ia MELAPORKAN
+ * cakupan tiap bahasa, dengan `--suara` ia menjalankan TTS untuk satu bahasa.
+ *
+ * Yang TIDAK ada di sini: menerjemahkan. Terjemahan butuh model dan butuh
+ * kerajinan — panjang ucapan harus dijaga, bukan cuma maknanya — jadi tempatnya
+ * di agent (`translateNarration`) dan di panel Sulih Studio, bukan di sebuah
+ * flag yang diam-diam memanggil model berbayar.
+ */
+program
+  .command("sulih")
+  .argument("<proyek>", "folder proyek atau path plan.json")
+  .addOption(bahasaOption())
+  .option("--suara", "jalankan TTS untuk bahasa ini (butuh --bahasa)")
+  .option("--scene <id...>", "batasi ke scene tertentu")
+  .option("--force", "abaikan cache — sintesis ulang")
+  .description(
+    "Keadaan sulih suara per bahasa; dengan --suara menjalankan TTS untuk satu bahasa (ADR-0040)",
+  )
+  .action(
+    async (
+      proyek: string,
+      options: { bahasa?: string; suara?: boolean; scene?: string[]; force?: boolean },
+    ) => {
+      const absPlan = planPathOf(proyek);
+      const plan = readPlanFile(absPlan);
+      const bahasa = planLanguages(plan);
+
+      if (!options.suara) {
+        console.log(`${plan.meta.title} — ${bahasa.length} bahasa`);
+        const rows = bahasa.map((lang) => {
+          const c = dubCoverage(plan, lang);
+          const melar = dubDrift(plan, lang).filter(
+            (d) => d.rasio > DUB_DRIFT_LIMIT,
+          ).length;
+          return {
+            bahasa: lang === plan.meta.language ? `${lang} (utama)` : lang,
+            teks: `${c.diterjemahkan}/${c.perlu}`,
+            suara: `${c.bersuara}/${c.perlu}`,
+            // Durasi VIDEO, bukan jumlah durasi scene: transisi membuat scene
+            // bertumpuk, dan angka yang dibandingkan orang antar bahasa adalah
+            // panjang videonya.
+            "durasi video": `${(computeFrameLayout(planInLanguage(plan, lang)).totalFrames / FPS).toFixed(1)}s`,
+            "scene melar": melar > 0 ? String(melar) : "—",
+          };
+        });
+        console.table(rows);
+        if (bahasa.length === 1) {
+          console.log(
+            "\n  Belum ada bahasa sulih. Tambahkan lewat chat agent " +
+              '("terjemahkan ke Inggris") atau panel Sulih di Studio.',
+          );
+        }
+        return;
+      }
+
+      if (!options.bahasa) {
+        console.error(
+          "--suara butuh --bahasa <kode>. Bahasa yang ada: " + bahasa.join(", "),
+        );
+        process.exitCode = 1;
+        return;
+      }
+      if (options.bahasa === plan.meta.language) {
+        console.error(
+          `"${options.bahasa}" adalah bahasa utama proyek ini — pakai \`dalang generate\`.`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      if (!bahasa.includes(options.bahasa)) {
+        console.error(
+          `Proyek ini belum punya sulihan "${options.bahasa}". Yang ada: ${bahasa.join(", ")}`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+
+      const voice = plan.audio.dubVoices[options.bahasa] ?? plan.audio.voice;
+      if (!voice) {
+        console.error(
+          "Plan belum punya audio.voice — tidak ada yang bisa dipakai bicara.",
+        );
+        process.exitCode = 1;
+        return;
+      }
+      if (!plan.audio.dubVoices[options.bahasa]) {
+        // Dikatakan, bukan didiamkan: suara Indonesia yang membaca teks Inggris
+        // terdengar persis seperti itu, dan orang yang tidak diberi tahu akan
+        // mengira itu batas kualitas TTS-nya.
+        console.warn(
+          `  PERHATIAN: bahasa ${options.bahasa} belum punya suaranya sendiri, jadi memakai ` +
+            `suara bahasa utama (${voice.voiceId}). Setel audio.dubVoices.${options.bahasa} ` +
+            "untuk suara yang benar-benar berbahasa itu.",
+        );
+      }
+
+      const paths = projectPaths(absPlan);
+      const db = new PipelineDb(paths.dbPath);
+      try {
+        const outcome = await runDubStage({
+          paths,
+          plan,
+          language: options.bahasa,
+          providers: buildTtsChain({ provider: voice.provider }),
+          db,
+          ...(options.scene ? { sceneIds: options.scene } : {}),
+          force: options.force ?? false,
+          log: {
+            info: (message) => console.log(message),
+            warn: (message) => console.warn(message),
+          },
+        });
+        printStageResults(`Sulih ${options.bahasa}`, outcome.results);
+        if (outcome.belumDiterjemahkan.length > 0) {
+          console.log(
+            `  ${outcome.belumDiterjemahkan.length} scene belum punya teks sulihan ` +
+              `(${outcome.belumDiterjemahkan.join(", ")}) — akan tampil BISU sampai diterjemahkan.`,
+          );
+        }
+        if (outcome.plan !== plan) {
+          atomicWriteFile(absPlan, `${JSON.stringify(outcome.plan, null, 2)}\n`);
+          console.log(`\n  renderState ditulis ke ${absPlan}`);
+        }
+        const sesudah =
+          computeFrameLayout(planInLanguage(outcome.plan, options.bahasa)).totalFrames /
+          FPS;
+        const utama = computeFrameLayout(plan).totalFrames / FPS;
+        console.log(
+          `  durasi video ${options.bahasa}: ${sesudah.toFixed(1)}s ` +
+            `(bahasa utama ${utama.toFixed(1)}s)`,
+        );
+      } finally {
+        db.close();
+      }
+    },
+  );
 
 program
   .command("transcribe")

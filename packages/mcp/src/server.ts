@@ -194,11 +194,23 @@ export const createDalangMcpServer = (context: ToolContext): McpServer => {
       inputSchema: {
         proyek: proyekArg,
         format: z.enum(SUBTITLE_FORMATS).optional().describe("Bawaan: srt."),
+        bahasa: z
+          .string()
+          .min(2)
+          .max(16)
+          .optional()
+          .describe("Kode bahasa sulih (ADR-0040); kosong = bahasa utama proyek."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    async ({ proyek, format }) =>
-      guard(() => toolWriteSubtitle(context, { proyek, ...(format ? { format } : {}) })),
+    async ({ proyek, format, bahasa }) =>
+      guard(() =>
+        toolWriteSubtitle(context, {
+          proyek,
+          ...(format ? { format } : {}),
+          ...(bahasa ? { bahasa } : {}),
+        }),
+      ),
   );
 
   // Didaftarkan HANYA kalau portnya ada: klien yang melihat daftar tool akan

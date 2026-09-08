@@ -9,9 +9,12 @@ import {
 import {
   clipAsset,
   computeClipTimings,
+  dubCoverage,
   isRefusal,
   PatchError,
   patchOpSchema,
+  planInLanguage,
+  planLanguages,
   primaryClip,
   primaryClipId,
   resolveSceneDurationSec,
@@ -27,6 +30,7 @@ import {
   materializeCandidate,
   runAsrStage,
   runAssetStage,
+  runDubStage,
   runLoudnessStage,
   runTtsStage,
 } from "@dalang/pipeline";
@@ -90,6 +94,15 @@ const reviewBody = z.object({
 
 const subtitleBody = z.object({
   format: z.enum(SUBTITLE_FORMATS).default("srt"),
+  /** ADR-0040: subtitle untuk bahasa sulih; kosong = bahasa utama. */
+  bahasa: z.string().min(2).max(16).optional(),
+});
+
+/** ADR-0040: TTS untuk satu bahasa sulih. */
+const dubBody = z.object({
+  bahasa: z.string().min(2).max(16),
+  sceneIds: z.array(z.string().min(1)).optional(),
+  confirm: z.boolean().optional(),
 });
 const timelineExportBody = z.object({
   format: z.enum(["otio", "fcpxml"]).default("otio"),
@@ -334,6 +347,108 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
   });
 
+  /**
+   * TTS untuk satu BAHASA SULIH (ADR-0040).
+   *
+   * Rute sendiri, bukan flag di `/api/pipeline/tts`: gerbang biayanya dihitung
+   * dari teks sulihan (bukan narasi asli), dan hasilnya mendarat di lumbung
+   * yang berbeda. Menggabungkannya berarti satu rute yang separuh badannya
+   * bercabang di setiap langkah.
+   */
+  app.post("/api/pipeline/sulih", async (c) => {
+    const body = dubBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success)
+      return c.json({ error: "Body tidak valid: butuh { bahasa }" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const bahasa = body.data.bahasa;
+    if (bahasa === plan.meta.language) {
+      return c.json(
+        { error: `"${bahasa}" bahasa utama proyek ini — pakai /api/pipeline/tts` },
+        400,
+      );
+    }
+    if (!planLanguages(plan).includes(bahasa)) {
+      return c.json({ error: `Proyek ini belum punya sulihan "${bahasa}"` }, 400);
+    }
+    const voice = plan.audio.dubVoices[bahasa] ?? plan.audio.voice;
+    if (!voice) {
+      return c.json({ error: "audio.voice belum diset — atur suara dulu" }, 400);
+    }
+
+    const cakupan = dubCoverage(plan, bahasa);
+    const targets = plan.scenes.filter(
+      (scene) =>
+        (scene.dubs[bahasa] ?? "").trim() !== "" &&
+        (!body.data.sceneIds || body.data.sceneIds.includes(scene.id)),
+    );
+    const chars = targets.reduce(
+      (sum, scene) => sum + (scene.dubs[bahasa] ?? "").length,
+      0,
+    );
+    const estimatedUsd =
+      voice.provider === "elevenlabs" ? chars * ELEVENLABS_ESTIMATED_USD_PER_CHAR : 0;
+    const gates = ctx.guards.config;
+    if (
+      !body.data.confirm &&
+      (targets.length > gates.ttsSceneGate || estimatedUsd > gates.approvalGateUsd)
+    ) {
+      const payload: NeedsConfirmation = {
+        needsConfirmation: true,
+        detail: `Sulih suara ${bahasa}: ${targets.length} scene (${chars} karakter, ${voice.provider})`,
+        estimatedUsd: estimatedUsd > 0 ? Number(estimatedUsd.toFixed(4)) : null,
+      };
+      return c.json(payload, 428);
+    }
+
+    try {
+      const startedAt = Date.now();
+      const outcome = await store.runExclusive("tts", () =>
+        runDubStage({
+          paths: session.paths,
+          plan,
+          language: bahasa,
+          providers: deps.ttsChainFor(voice.provider),
+          db: session.db,
+          ...(body.data.sceneIds ? { sceneIds: body.data.sceneIds } : {}),
+          log: { info: () => {}, warn: () => {} },
+        }),
+      );
+      store.commitStage(plan, outcome.plan);
+      const costUsd = outcome.results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
+      logUiEvent(
+        "sulihVoiceover",
+        { bahasa, sceneIds: body.data.sceneIds ?? null },
+        { scenes: outcome.results.length },
+        costUsd,
+        Date.now() - startedAt,
+      );
+      store.notifyPlan("pipeline");
+      store.bus.emit({
+        type: "stage-results",
+        stage: "tts",
+        results: outcome.results.map((r) => ({
+          sceneId: r.sceneId,
+          status: r.status,
+          detail: r.detail,
+        })),
+      });
+      return c.json({
+        ok: true,
+        bahasa,
+        results: outcome.results,
+        belumDiterjemahkan: outcome.belumDiterjemahkan,
+        // Dikatakan, bukan didiamkan: suara bahasa utama yang membaca teks
+        // bahasa lain terdengar persis seperti itu.
+        suaraSendiri: plan.audio.dubVoices[bahasa] !== undefined,
+        cakupan,
+      });
+    } catch (error) {
+      if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
+      return c.json(errorPayload(error), 500);
+    }
+  });
+
   app.post("/api/pipeline/assets", async (c) => {
     const body = pipelineBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
@@ -486,24 +601,32 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     const plan = session.plan;
     if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
 
+    const bahasa = body.data.bahasa;
+    if (bahasa && !planLanguages(plan).includes(bahasa)) {
+      return c.json({ error: `Proyek ini belum punya sulihan "${bahasa}"` }, 400);
+    }
+    // Ditukar ke bahasanya DULU: seluruh perhitungan di bawah — kartu, waktu,
+    // hitungan "masih ditaksir" — lalu berjalan atas plan satu-bahasa biasa.
+    const dipakai = bahasa ? planInLanguage(plan, bahasa) : plan;
+
     const startedAt = Date.now();
     const format = body.data.format;
-    const cues = buildSubtitleCues(plan);
-    const name = `${plan.projectId}.${plan.meta.language}.${format}`;
+    const cues = buildSubtitleCues(dipakai);
+    const name = `${dipakai.projectId}.${dipakai.meta.language}.${format}`;
     const target = join(dirname(session.paths.planPath), name);
     atomicWriteFile(target, format === "srt" ? toSrt(cues) : toVtt(cues));
 
     // Scene bernarasi yang waktunya masih DITAKSIR dilaporkan: bedanya besar,
     // dan yang mengunggah berkas melenceng baru tahu setelah videonya tayang.
-    const bernarasi = plan.scenes.filter((scene) => scene.narration.trim() !== "");
+    const bernarasi = dipakai.scenes.filter((scene) => scene.narration.trim() !== "");
     const ditaksir = bernarasi.filter(
       (scene) =>
-        (plan.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) === 0,
+        (dipakai.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) === 0,
     ).length;
 
     logUiEvent(
       "subtitleExport",
-      { format },
+      { format, bahasa: bahasa ?? null },
       { berkas: name, kartu: cues.length },
       0,
       Date.now() - startedAt,
@@ -513,7 +636,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
       file: name,
       cues: cues.length,
       durationMs: cues[cues.length - 1]?.endMs ?? 0,
-      language: plan.meta.language,
+      language: dipakai.meta.language,
       estimated: ditaksir,
       narrated: bernarasi.length,
     });

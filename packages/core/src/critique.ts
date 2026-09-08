@@ -16,6 +16,13 @@ import {
   proseStatsOf,
 } from "./prose";
 import { clipAsset, primaryClip, type Scene, type ScenePlan } from "./scene-plan";
+import {
+  DUB_DRIFT_LIMIT,
+  dubCoverage,
+  dubDrift,
+  planLanguages,
+  untranslatedScreenText,
+} from "./sulih";
 
 /**
  * Kritik sutradara otomatis (ADR-0014): heuristik deterministik atas
@@ -195,6 +202,7 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   notes.push(...critiqueClipCamera(plan));
 
   notes.push(...critiqueFormat(plan, recipe));
+  notes.push(...critiqueSulih(plan));
   notes.push(...critiqueProse(plan, recipe));
   return notes;
 };
@@ -624,6 +632,69 @@ const critiqueSceneLevel = (
  * diisi selain "bebas" — memaksa struktur yang sesuai jenis konten, bukan
  * satu kerangka untuk semuanya.
  */
+/**
+ * Sulih suara (ADR-0040) — dua cacat yang cuma kelihatan saat bahasanya
+ * ditukar, dan keduanya tidak melanggar satu pun aturan skema.
+ */
+const critiqueSulih = (plan: ScenePlan): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
+  // Sulih suara (ADR-0040): dua cacat yang cuma kelihatan saat bahasanya
+  // ditukar, dan keduanya tidak melanggar skema apa pun.
+  for (const lang of planLanguages(plan).slice(1)) {
+    const cakupan = dubCoverage(plan, lang);
+    // 1. Sulihan SEPARUH. Videonya tetap jadi, tapi scene yang belum disulih
+    //    tampil BISU — dan penonton mendengar video yang tiba-tiba diam di
+    //    tengah, bukan pesan galat.
+    if (cakupan.diterjemahkan > 0 && cakupan.diterjemahkan < cakupan.perlu) {
+      notes.push({
+        code: "sulih-separuh",
+        level: "perhatian",
+        message:
+          `Bahasa ${lang} baru disulih di ${cakupan.diterjemahkan} dari ${cakupan.perlu} scene bernarasi. ` +
+          `Yang belum (${cakupan.belumDiterjemahkan.slice(0, 3).join(", ")}${cakupan.belumDiterjemahkan.length > 3 ? ", …" : ""}) ` +
+          "akan tampil BISU, bukan gagal — penonton mendengar video yang tiba-tiba diam.",
+      });
+    }
+
+    // 2. Teks LAYAR yang tertinggal. Narasinya bahasa Inggris, kartu judulnya
+    //    bahasa Indonesia — dan yang itu terlihat di setiap bingkai, bukan
+    //    cuma terdengar sekali.
+    const layar = untranslatedScreenText(plan, lang);
+    if (cakupan.diterjemahkan > 0 && layar.length > 0) {
+      notes.push({
+        code: "sulih-teks-layar",
+        level: "perhatian",
+        message:
+          `Narasi ${lang} sudah disulih, tapi ${layar.length} teks LAYAR belum: ` +
+          `${layar
+            .slice(0, 3)
+            .map((item) => item.where)
+            .join(", ")}${layar.length > 3 ? ", …" : ""}. ` +
+          "Penonton mendengar satu bahasa dan membaca bahasa lain di bingkai yang sama.",
+      });
+    }
+
+    // 3. Sulihan yang JAUH lebih panjang. Terjemahan yang melar memaksa scene
+    //    ikut melar, dan gambar yang sudah dipotong pas jadi menggantung.
+    for (const drift of dubDrift(plan, lang)) {
+      if (drift.rasio <= DUB_DRIFT_LIMIT) continue;
+      const persen = Math.round((drift.rasio - 1) * 100);
+      notes.push({
+        code: "sulih-kepanjangan",
+        level: "saran",
+        sceneId: drift.sceneId,
+        message:
+          `Sulihan ${lang} scene ${drift.sceneId} ${persen}% lebih panjang dari aslinya ` +
+          `(${drift.utamaSec.toFixed(1)} dtk -> ${drift.sulihSec.toFixed(1)} dtk, ` +
+          `${drift.terukur ? "diukur dari berkas TTS" : "ditaksir dari suku kata"}). ` +
+          "Padatkan kalimatnya; scene yang melar membuat gambarnya menggantung.",
+      });
+    }
+  }
+
+  return notes;
+};
+
 const critiqueFormat = (plan: ScenePlan, recipe: FormatRecipe): DirectorNote[] => {
   if (recipe.format === "bebas") return [];
   const notes: DirectorNote[] = [];

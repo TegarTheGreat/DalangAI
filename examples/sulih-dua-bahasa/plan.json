@@ -1,0 +1,156 @@
+{
+  "$schema": "../../packages/core/schema/scene-plan.v2.schema.json",
+  "version": 2,
+  "projectId": "sulih-dua-bahasa",
+  "meta": {
+    "title": "Satu Video, Dua Bahasa",
+    "dubTitles": {
+      "en": "One Video, Two Languages"
+    },
+    "aspectRatio": "9:16",
+    "language": "id",
+    "stylePreset": "documentary-01",
+    "format": "bebas"
+  },
+  "audio": {
+    "voice": {
+      "provider": "silence",
+      "voiceId": "id-demo",
+      "speed": 1
+    },
+    "dubVoices": {
+      "en": {
+        "provider": "silence",
+        "voiceId": "en-demo",
+        "speed": 1
+      }
+    },
+    "music": {
+      "assetId": "pustaka:tenang",
+      "volume": 0.14,
+      "ducking": true
+    }
+  },
+  "scenes": [
+    {
+      "id": "sc-judul",
+      "narration": "Satu video, dua bahasa \u2014 tanpa menyunting ulang gambarnya.",
+      "dubs": {
+        "en": "One video, two languages, without re-editing a single shot."
+      },
+      "clips": [
+        {
+          "id": "sc-judul-k1",
+          "type": "template-anim",
+          "variant": "title"
+        }
+      ],
+      "texts": [
+        {
+          "id": "tx-kicker",
+          "content": "Sulih suara",
+          "dubs": {
+            "en": "Dubbing"
+          },
+          "role": "kicker",
+          "position": "top",
+          "size": "s",
+          "uppercase": true,
+          "tracking": 0.18
+        }
+      ],
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 15
+      }
+    },
+    {
+      "id": "sc-durasi",
+      "narration": "Durasi tiap scene mengikuti narasinya, jadi versi bahasa lain boleh lebih pendek atau lebih panjang.",
+      "dubs": {
+        "en": "Each scene follows its own narration, so another language may run shorter or longer."
+      },
+      "clips": [
+        {
+          "id": "sc-durasi-k1",
+          "type": "solid",
+          "motion": "kenburns-in",
+          "variant": "rays"
+        }
+      ],
+      "transition": {
+        "type": "slide-up",
+        "durationFrames": 12
+      },
+      "texts": [
+        {
+          "id": "tx-hook",
+          "content": "Durasi ikut narasinya",
+          "dubs": {
+            "en": "Timing follows the words"
+          },
+          "role": "headline",
+          "position": "top",
+          "size": "m",
+          "emphasis": "underline"
+        }
+      ]
+    },
+    {
+      "id": "sc-teks",
+      "narration": "Teks di layar dan judul proyek ikut disulih; yang belum diterjemahkan tetap tampil apa adanya.",
+      "dubs": {
+        "en": "On-screen text and the project title are dubbed too; anything untranslated simply stays as it was."
+      },
+      "clips": [
+        {
+          "id": "sc-teks-k1",
+          "type": "solid",
+          "motion": "pan-right",
+          "variant": "topo"
+        }
+      ],
+      "texts": [
+        {
+          "id": "tx-catatan",
+          "content": "Teks layar ikut",
+          "dubs": {
+            "en": "Screen text follows"
+          },
+          "role": "subline",
+          "position": "center",
+          "size": "m",
+          "emphasis": "box"
+        }
+      ],
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 18
+      }
+    },
+    {
+      "id": "sc-outro",
+      "narration": "Berkas subtitle pun mengikuti jam bahasanya sendiri.",
+      "dubs": {
+        "en": "Subtitle files follow that language's own clock as well."
+      },
+      "clips": [
+        {
+          "id": "sc-outro-k1",
+          "type": "template-anim",
+          "variant": "outro"
+        }
+      ]
+    }
+  ],
+  "renderState": {
+    "narrationAudio": {},
+    "dubAudio": {},
+    "clipAssets": {},
+    "graphicAssets": {},
+    "layerAssets": {},
+    "sfxAssets": {},
+    "trackAssets": {},
+    "transcripts": {}
+  }
+}

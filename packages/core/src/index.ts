@@ -16,6 +16,7 @@ export * from "./proxy";
 export * from "./publish";
 export * from "./render-state";
 export * from "./scene-plan";
+export * from "./sulih";
 export * from "./syllables";
 export * from "./template";
 export * from "./templates-bawaan";

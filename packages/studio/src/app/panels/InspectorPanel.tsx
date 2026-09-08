@@ -44,6 +44,7 @@ import { KeyframeControls } from "./KeyframeControls";
 import { LapisanTab } from "./LayersTab";
 import { GrafisTab, SfxSection } from "./MediaLibrary";
 import { SourceSection } from "./SourcePanel";
+import { SulihTab } from "./SulihTab";
 import { TranscriptTab } from "./TranscriptTab";
 
 /**
@@ -64,7 +65,8 @@ type Tab =
   | "lapisan"
   | "audio"
   | "transisi"
-  | "anotasi";
+  | "anotasi"
+  | "sulih";
 
 const ANNOTATION_TYPES = ["zoom", "highlight", "arrow", "blur"] as const;
 const ANNOTATION_LABEL: Record<(typeof ANNOTATION_TYPES)[number], string> = {
@@ -1294,6 +1296,8 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                   {
                     id: `tx-${Date.now().toString(36)}`,
                     content: "Teks baru",
+                    // ADR-0040: teks baru belum punya sulihan apa pun.
+                    dubs: {},
                     role: "headline",
                     position: "center",
                     align: "center",
@@ -1653,6 +1657,7 @@ export const InspectorPanel: React.FC = () => {
                 ["audio", "Audio"],
                 ["transisi", "Transisi"],
                 ["anotasi", "Anotasi"],
+                ["sulih", "Sulih"],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -1696,6 +1701,7 @@ export const InspectorPanel: React.FC = () => {
             {tab === "anotasi" ? (
               <AnotasiTab scene={scene} stylePreset={plan.meta.stylePreset} />
             ) : null}
+            {tab === "sulih" ? <SulihTab plan={plan} scene={scene} /> : null}
           </div>
         </>
       ) : (

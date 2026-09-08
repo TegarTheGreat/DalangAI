@@ -31,6 +31,36 @@ export const setNarrationAudio = (
 };
 
 /**
+ * Berkas narasi hasil TTS untuk satu scene dalam BAHASA SULIH (ADR-0040).
+ *
+ * Lumbung terpisah dari `narrationAudio`, bukan kunci gabungan seperti
+ * `"en:sc-1"`: `planInLanguage` menukar seluruh peta satu bahasa masuk ke
+ * `narrationAudio`, dan peta yang sudah berbentuk benar bisa dipakai apa
+ * adanya. Kunci gabungan menuntut penguraian string di titik terpanas jalur
+ * render, dan pengurai string yang salah tanda baca akan membaca bahasa yang
+ * keliru tanpa satu pun galat.
+ */
+export const setDubAudio = (
+  plan: ScenePlan,
+  language: string,
+  sceneId: string,
+  audio: NarrationAudio,
+): ScenePlan => {
+  const next = structuredClone(plan);
+  const bahasa = next.renderState.dubAudio[language] ?? {};
+  bahasa[sceneId] = narrationAudioSchema.parse(audio);
+  next.renderState.dubAudio[language] = bahasa;
+  return next;
+};
+
+/** Membuang seluruh audio sulih satu bahasa — dipakai saat bahasanya dihapus. */
+export const clearDubAudio = (plan: ScenePlan, language: string): ScenePlan => {
+  const next = structuredClone(plan);
+  delete next.renderState.dubAudio[language];
+  return next;
+};
+
+/**
  * Berkas nyata untuk satu KLIP (ADR-0033). Dikunci id klip, bukan id scene:
  * satu scene boleh punya beberapa klip, dan klip kedua akan menimpa berkas
  * klip pertama kalau kuncinya scene.

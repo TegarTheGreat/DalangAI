@@ -31,6 +31,16 @@ export interface TtsStageOptions {
   /** Limit to these scene ids (partial runs, PRD §6.2 generateVoiceover). */
   sceneIds?: string[];
   force?: boolean;
+  /**
+   * Akhiran kunci ledger (ADR-0040) — dipakai tahap sulih suara.
+   *
+   * Tanpa ini, run TTS bahasa sulih memakai kunci `(projectId, sceneId,
+   * "tts")` yang SAMA dengan bahasa utama, jadi keduanya saling menimpa
+   * barisnya: bolak-balik antar bahasa berarti sintesis ulang setiap kali,
+   * dengan tagihan providernya. Bahasa utama sengaja TIDAK memakai akhiran,
+   * supaya ledger yang sudah ada tetap kena cache.
+   */
+  ledgerScope?: string;
   log?: StageLogger;
 }
 
@@ -46,9 +56,13 @@ export const runTtsStage = async ({
   db,
   sceneIds,
   force = false,
+  ledgerScope,
   log = consoleLogger,
 }: TtsStageOptions): Promise<TtsStageOutcome> => {
   const voice = plan.audio.voice;
+  /** Kunci baris ledger. Tanpa lingkup, bentuknya persis seperti sebelumnya. */
+  const ledgerKey = (sceneId: string) =>
+    ledgerScope === undefined ? sceneId : `${sceneId}@${ledgerScope}`;
   const results: SceneStageResult[] = [];
 
   const targetIds = sceneIds ? new Set(sceneIds) : null;
@@ -102,7 +116,7 @@ export const runTtsStage = async ({
       language: plan.meta.language,
     });
 
-    const existing = db.getRun(plan.projectId, scene.id, "tts");
+    const existing = db.getRun(plan.projectId, ledgerKey(scene.id), "tts");
     if (
       !force &&
       existing?.status === "done" &&
@@ -124,7 +138,7 @@ export const runTtsStage = async ({
       }
     }
 
-    db.startRun(plan.projectId, scene.id, "tts", inputHash);
+    db.startRun(plan.projectId, ledgerKey(scene.id), "tts", inputHash);
     const startedAt = Date.now();
     let succeeded = false;
     let lastError = "tidak ada provider yang dicoba";
@@ -151,7 +165,7 @@ export const runTtsStage = async ({
         current = setNarrationAudio(current, scene.id, entry);
 
         const durationMs = Date.now() - startedAt;
-        db.finishRun(plan.projectId, scene.id, "tts", {
+        db.finishRun(plan.projectId, ledgerKey(scene.id), "tts", {
           provider: provider.id,
           fallback,
           outputJson: JSON.stringify(entry),
@@ -183,7 +197,7 @@ export const runTtsStage = async ({
 
     if (!succeeded) {
       const durationMs = Date.now() - startedAt;
-      db.failRun(plan.projectId, scene.id, "tts", lastError, durationMs);
+      db.failRun(plan.projectId, ledgerKey(scene.id), "tts", lastError, durationMs);
       results.push({
         sceneId: scene.id,
         status: "error",

@@ -6,6 +6,8 @@ import {
   critiquePlan,
   type PatchOp,
   type PatchOpInput,
+  planInLanguage,
+  planLanguages,
   primaryClip,
   resolveSceneDurationSec,
   type ScenePlan,
@@ -326,16 +328,30 @@ export const toolExportTimeline = (
  */
 export const toolWriteSubtitle = (
   context: ToolContext,
-  { proyek, format = "srt" }: { proyek: string; format?: SubtitleFormat },
+  {
+    proyek,
+    format = "srt",
+    bahasa,
+  }: { proyek: string; format?: SubtitleFormat; bahasa?: string },
 ) => {
   const planPath = resolvePlanPath(context.workspace, proyek);
-  const plan: ScenePlan = readPlan(planPath);
+  const asli: ScenePlan = readPlan(planPath);
   if (context.workspace.readOnly) {
     return {
       ok: false as const,
       pesan: "Server hanya-baca: subtitle menulis berkas ke folder proyek.",
     };
   }
+  // Bahasa yang tidak ada DITOLAK, bukan diam-diam jatuh ke bahasa utama:
+  // agent lain yang salah ketik kode bahasa lalu menyerahkan berkas bahasa
+  // Indonesia sebagai "subtitle Inggris" tidak akan pernah tahu.
+  if (bahasa && !planLanguages(asli).includes(bahasa)) {
+    return {
+      ok: false as const,
+      pesan: `Proyek ini belum punya sulihan "${bahasa}". Yang ada: ${planLanguages(asli).join(", ")}`,
+    };
+  }
+  const plan = bahasa ? planInLanguage(asli, bahasa) : asli;
   const cues = buildSubtitleCues(plan);
   const name = `${plan.projectId}.${plan.meta.language}.${format}`;
   const target = join(dirname(planPath), name);

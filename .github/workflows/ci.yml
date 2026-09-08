@@ -77,6 +77,7 @@ jobs:
           pnpm dalang validate examples/borobudur-60s/plan.json
           pnpm dalang validate examples/klip-borobudur/plan.json
           pnpm dalang validate examples/klip-hook/plan.json
+          pnpm dalang validate examples/sulih-dua-bahasa/plan.json
 
       # Real still render through the full stack (bundle → Chromium → PNG):
       # the template-regression safety net (R-8 precursor). Uses the runner's
@@ -178,6 +179,42 @@ jobs:
         run: |
           pnpm --filter @dalang/renderer migrasi-paritas
           pnpm --filter @dalang/renderer migrasi-paritas examples/tutorial-studio/plan.json
+
+      # ADR-0040: sulih suara. Gerbang ini menjalankan JALUR PENUH atas contoh
+      # bersulihan: TTS bahasa sulih (provider silence, offline dan gratis),
+      # lalu pemeriksaan bahwa tiap bahasa jadi plan satu-bahasa yang utuh dan
+      # durasinya ikut narasinya, lalu satu bingkai benar-benar DIRENDER dalam
+      # bahasa itu. Yang terakhir yang tidak bisa dijamin tes mana pun: plan
+      # hasil tukar yang tidak bisa dirender tetap lolos setiap pemeriksaan
+      # struktur.
+      - name: Gerbang sulih suara (tukar bahasa, render bahasa itu)
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          # Sebelum TTS: teksnya saja. Ini keadaan proyek yang baru
+          # diterjemahkan, dan gerbangnya harus lulus di situ juga.
+          pnpm --filter @dalang/templates gate:sulih
+          # Sesudah TTS: berkas suaranya ada, dan durasinya datang dari
+          # berkas, bukan dari taksiran suku kata.
+          cp -r examples/sulih-dua-bahasa /tmp/sulih
+          pnpm dalang sulih /tmp/sulih --bahasa en --suara
+          pnpm --filter @dalang/templates gate:sulih /tmp/sulih/plan.json
+          pnpm dalang subtitle /tmp/sulih --bahasa en -o /tmp/sulih/en.srt
+          test -s /tmp/sulih/en.srt
+          grep -q "two languages" /tmp/sulih/en.srt
+          # Bingkai yang sama dirender DUA kali, sekali per bahasa. Detik 6,5
+          # jatuh di tengah caption scene kedua, jadi kedua PNG memuat teks
+          # yang berbeda — cara paling langsung membuktikan bahasanya sampai
+          # ke layar, bukan cuma ke JSON.
+          pnpm dalang still /tmp/sulih -t 6.5 -s 0.3 -o /tmp/sulih/id
+          pnpm dalang still /tmp/sulih -t 6.5 -s 0.3 -o /tmp/sulih/en --bahasa en
+          test -s /tmp/sulih/id/sulih-f195.png
+          test -s /tmp/sulih/en/sulih-f195.png
+          # Dua bingkai yang IDENTIK berarti bahasanya tidak sampai ke render.
+          if cmp -s /tmp/sulih/id/sulih-f195.png /tmp/sulih/en/sulih-f195.png; then
+            echo "GERBANG SULIH GAGAL: bingkai id dan en identik byte per byte" >&2
+            exit 1
+          fi
 
       # ADR-0039: berkas subtitle punya dua klaim yang tidak bisa dibuktikan tes
       # unit. Pertama, "berkasnya terbaca pemutar lain" — pembaca kita sendiri

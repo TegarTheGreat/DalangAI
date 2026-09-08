@@ -376,9 +376,24 @@ ditambahkan cuma satu modul penyusun dan tiga permukaan: `dalang subtitle`,
 tombol SRT/WebVTT di dialog Ekspor Studio, dan unggahan otomatis bersama video
 ke YouTube. Waktunya diambil dari tata letak RENDER, bukan jumlah durasi scene,
 karena transisi membuat scene bertumpuk dan selisihnya menumpuk tiap transisi.
-Batas yang paling penting: satu plan tetap SATU bahasa, jadi subtitle
-terjemahan — dan sulih suara yang mengikutinya — masih menunggu narasi per
-bahasa di dalam satu plan.
+**Batas "satu plan satu bahasa" itu sudah DICABUT** (ADR-0040). Satu
+scene-plan kini memuat narasi, teks layar, judul, dan suara per bahasa; sebuah
+fungsi — `planInLanguage` — menukarnya dan mengembalikan scene-plan biasa,
+sehingga seluruh jalur di hilir (durasi, tata letak, caption, subtitle,
+ducking, campuran, interop) bekerja apa adanya tanpa tahu soal sulih suara.
+
+Keputusan yang paling menentukan: **durasi ikut bahasanya**. Kalimat Inggris
+jarang sepanjang padanan Indonesianya, jadi video sulihannya boleh lebih pendek
+atau lebih panjang; alternatifnya adalah mempercepat ucapan supaya muat di
+gambar yang tetap, dan itu terdengar. Susunan scene-nya tidak berubah — yang
+belum diterjemahkan tampil BISU, bukan dibuang.
+
+Menerjemahkan sengaja jadi pekerjaan AGENT (`translateNarration`, sekali jalan
+untuk seluruh naskah supaya istilahnya konsisten dan panjang ucapannya
+terjaga), bukan sebuah flag CLI yang diam-diam memanggil model berbayar.
+Batasnya di "Batas yang dinyatakan" ADR-0040: musik/SFX/rekaman tidak ikut
+disulih, tiap bahasa jadi berkas video sendiri (bukan satu video bertrek audio
+banyak), dan mutu terjemahannya tidak diperiksa repo ini.
 
 **§10.4 sudah dikerjakan** (ADR-0038). Sebagian besar bahannya ternyata sudah
 ada — patch op ber-invers, satu penulis di server, siaran SSE bernomor revisi,
@@ -400,7 +415,7 @@ kursor bersama.
 | --- | --- |
 | 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
 | 10.2 | Marketplace preset/template — **paketnya sudah dikerjakan** (ADR-0037); tokonya sengaja tidak |
-| 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030), berikut berkas subtitle yang ikut naik (ADR-0039); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
+| 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030), berikut berkas subtitle yang ikut naik (ADR-0039) dan sulih suara banyak bahasa dalam satu plan (ADR-0040); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
 | 10.4 | Multi-user pada satu proyek — **sudah dikerjakan** (ADR-0038); tanpa akun dan tanpa penggabungan otomatis |
 
 ---

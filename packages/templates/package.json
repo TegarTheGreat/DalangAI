@@ -15,11 +15,12 @@
     "./subtitle": "./src/subtitle.ts"
   },
   "scripts": {
-    "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",
+    "gate:subtitle": "tsx scripts/subtitle-gate.mts",
+    "gate:sulih": "tsx scripts/sulih-gate.mts",
     "stage-demo": "node scripts/stage-demo.mjs",
+    "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p .",
-    "gate:subtitle": "tsx scripts/subtitle-gate.mts"
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@dalang/core": "workspace:*",

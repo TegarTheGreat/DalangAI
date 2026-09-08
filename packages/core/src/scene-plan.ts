@@ -305,9 +305,46 @@ export const tracksArraySchema = (allowed: readonly AnimatableProperty[]) =>
 export const tracksSchema = (allowed: readonly AnimatableProperty[]) =>
   tracksArraySchema(allowed).default([]);
 
+/**
+ * Kode bahasa sulih suara (ADR-0040).
+ *
+ * Bentuknya BCP-47 sederhana: "en", "en-US", "id", "jv". Divalidasi karena
+ * kode bahasa jadi bagian NAMA BERKAS (`proyek.en.srt`, `narasi-en-sc-1.mp3`)
+ * dan bagian kunci di `renderState` — kode sembarang berarti berkas dengan
+ * nama sembarang di folder orang, dan kunci yang tidak bisa dicocokkan lagi.
+ *
+ * Yang TIDAK diperiksa: apakah bahasanya benar-benar ada. Daftar bahasa yang
+ * dibekukan di dalam kode akan menua, dan menolak bahasa daerah yang tidak
+ * sempat masuk daftar adalah cara tercepat membuat fitur ini tidak terpakai
+ * di tempat ia paling berguna.
+ */
+export const LANGUAGE_CODE_RE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
+export const languageCodeSchema = z
+  .string()
+  .regex(LANGUAGE_CODE_RE, "kode bahasa harus seperti 'en', 'id', atau 'en-US'");
+
+/**
+ * Batas jumlah bahasa sulih per proyek.
+ *
+ * Bukan batas teknis: tiap bahasa berarti satu set narasi, satu set berkas
+ * TTS, dan satu render sendiri. Dua belas sudah jauh melewati apa yang bisa
+ * ditinjau seorang manusia sebelum diunggah, dan plan yang menyimpan lima
+ * puluh bahasa adalah plan yang tidak ada yang pernah mendengarkan semuanya.
+ */
+export const MAX_DUB_LANGUAGES = 12;
+
 export const textOverlaySchema = z.strictObject({
   id: z.string().min(1),
   content: z.string().min(1),
+  /**
+   * Isi teks ini dalam BAHASA LAIN (ADR-0040), dikunci kode bahasa.
+   *
+   * Bentuknya sama persis dengan `scene.dubs`, dan itu disengaja: "dubs"
+   * berarti satu hal di seluruh skema — benda ini dalam bahasa lain. Tanpa
+   * kolom ini, video sulihan akan terdengar bahasa Inggris tapi kartu
+   * judulnya tetap bahasa Indonesia, dan itu bukan video yang disulih.
+   */
+  dubs: z.record(languageCodeSchema, z.string()).default({}),
   role: textRoleSchema.default("headline"),
   position: textPositionSchema.default("center"),
   /** Perataan horizontal blok teks (ADR-0013). */
@@ -656,6 +693,18 @@ export const sceneSchema = z.strictObject({
   locked: z.boolean().default(false),
   narration: z.string().default(""),
   /**
+   * Narasi scene ini dalam BAHASA LAIN (ADR-0040), dikunci kode bahasa.
+   *
+   * `narration` tetap milik `meta.language`; yang di sini adalah sulihannya.
+   * Letaknya di dalam SCENE, bukan di satu blok terjemahan tingkat plan,
+   * karena dengan begitu ia ikut op yang sudah ada — `updateScene` yang
+   * membuang scene juga membuang sulihannya, undo mengembalikan keduanya, dan
+   * deteksi bentrok ADR-0038 yang berpetak scene sudah menutupinya tanpa
+   * aturan baru. Blok terjemahan terpisah akan jadi larik id yang harus
+   * dijaga sinkron dengan daftar scene, dan itu selalu menyimpang.
+   */
+  dubs: z.record(languageCodeSchema, z.string()).default({}),
+  /**
    * Potongan gambar scene, berurutan (ADR-0033). Minimal satu; `clips[0]`
    * adalah visual dasar yang dulu bernama `scene.visual`.
    */
@@ -733,6 +782,13 @@ export const metaSchema = z.strictObject({
   /** Seconds; "auto" = follow the narration. A number is a *target* for the agent, not a hard constraint. */
   targetDuration: z.union([z.literal("auto"), finitePositive]).default("auto"),
   language: z.string().default("id"),
+  /**
+   * Judul proyek dalam bahasa sulih (ADR-0040), dikunci kode bahasa.
+   *
+   * Preset menggambar `meta.title` di bilah atas, jadi judul yang tidak ikut
+   * disulih akan tampil di setiap bingkai video berbahasa lain.
+   */
+  dubTitles: z.record(languageCodeSchema, z.string()).default({}),
   /** References a curated Remotion template (PRD §8.3). */
   stylePreset: z.string().default("documentary-01"),
   /**
@@ -840,6 +896,16 @@ export type AudioTrack = z.infer<typeof audioTrackSchema>;
 
 export const audioSchema = z.strictObject({
   voice: voiceSchema.optional(),
+  /**
+   * Suara per bahasa sulih (ADR-0040), dikunci kode bahasa.
+   *
+   * Bahasa yang tidak punya entri di sini memakai `voice` apa adanya, dan itu
+   * bawaan yang JUJUR tapi jarang benar: suara Indonesia yang membaca teks
+   * Inggris terdengar seperti orang Indonesia membaca teks Inggris. Kolom ini
+   * yang membuat sulih suara jadi sulih suara, bukan sekadar teks lain yang
+   * dibacakan suara yang sama.
+   */
+  dubVoices: z.record(languageCodeSchema, voiceSchema).default({}),
   music: musicSchema.optional(),
   /** Efek suara bertambat scene (ADR-0018). */
   sfx: z.array(sfxCueSchema).max(24).default([]),
@@ -1011,6 +1077,16 @@ export type Transcript = z.infer<typeof transcriptSchema>;
 export const renderStateSchema = z.strictObject({
   narrationAudio: z.record(z.string(), narrationAudioSchema).default({}),
   /**
+   * Berkas narasi hasil TTS untuk BAHASA SULIH (ADR-0040): bahasa -> scene ->
+   * audio. Bentuknya sama persis dengan `narrationAudio`, termasuk kontrak
+   * word timestamp-nya, karena `planInLanguage` menukarnya masuk ke sana —
+   * seluruh jalur di hilir (durasi, tata letak, caption, subtitle, ducking,
+   * campuran) tidak pernah tahu ia sedang melihat sulihan.
+   */
+  dubAudio: z
+    .record(languageCodeSchema, z.record(z.string(), narrationAudioSchema))
+    .default({}),
+  /**
    * Berkas nyata untuk visual dasar, dikunci ID KLIP (ADR-0033) — bukan id
    * scene. Alasannya sama persis dengan `layerAssets`: satu scene boleh punya
    * beberapa klip, dan klip kedua akan menimpa berkas klip pertama kalau
@@ -1049,6 +1125,7 @@ export type RenderState = z.infer<typeof renderStateSchema>;
  */
 export const emptyRenderState = (): RenderState => ({
   narrationAudio: {},
+  dubAudio: {},
   clipAssets: {},
   graphicAssets: {},
   layerAssets: {},
@@ -1072,10 +1149,11 @@ export const scenePlanSchema = z
     // memakai objek APA ADANYA — default field di dalamnya TIDAK diterapkan,
     // jadi objek ini harus ditulis lengkap. Kali ini TypeScript menangkapnya
     // saat kompilasi karena `sfx` wajib setelah default.
-    audio: audioSchema.default({ sfx: [], tracks: [] }),
+    audio: audioSchema.default({ sfx: [], tracks: [], dubVoices: {} }),
     scenes: z.array(sceneSchema).min(1),
     renderState: renderStateSchema.default({
       narrationAudio: {},
+      dubAudio: {},
       clipAssets: {},
       graphicAssets: {},
       layerAssets: {},

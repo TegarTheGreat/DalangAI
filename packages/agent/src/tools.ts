@@ -8,18 +8,23 @@ import {
   clipAsset,
   critiquePlan,
   cutClipOps,
+  DUB_DRIFT_LIMIT,
   defaultPublishMetadata,
   describeTemplate,
+  dubCoverage,
+  dubDrift,
   findFillerSpans,
   findPhraseSpans,
   GRAPHIC_ANCHORS,
   GRAPHIC_ANIMS,
   idSlug,
+  isLanguageCode,
   LAYER_ENTRANCES,
   LAYER_SHAPES,
   MAX_LAYERS,
   MAX_MEMORY_TEXT,
   MEMORY_KINDS,
+  type PatchOpInput,
   type ProxyMedia,
   PUBLISH_DESCRIPTION_MAX,
   PUBLISH_PRIVACIES,
@@ -31,6 +36,7 @@ import {
   primaryClipId,
   recipeFor,
   removeMemoryEntry,
+  resolveSceneDurationSec,
   type Scene,
   type ScenePlan,
   type ScenePlanInput,
@@ -2136,6 +2142,198 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
                 ? `TIDAK terunggah: ${outcome.subtitleError} — berkasnya ada di ${subtitle.path}, bisa diunggah manual dari YouTube Studio`
                 : `ikut terunggah (${subtitle.language})`
               : "tidak ada",
+          };
+        }),
+    }),
+
+    /**
+     * Sulih suara (ADR-0040): menerjemahkan narasi SELURUH plan ke satu bahasa.
+     *
+     * Sekali jalan untuk semua scene, bukan satu panggilan per scene, karena
+     * terjemahan yang baik butuh melihat naskahnya utuh: istilah harus
+     * konsisten, dan panjang tiap kalimat harus dijaga terhadap tetangganya.
+     * Menerjemahkan scene demi scene menghasilkan sepuluh terjemahan yang
+     * masing-masing benar dan bersama-sama tidak nyambung.
+     */
+    translateNarration: tool({
+      description:
+        "Terjemahkan narasi seluruh scene ke satu bahasa sulih (ADR-0040) dan simpan sebagai patch (bisa di-undo). PANJANG UCAPAN dijaga mendekati aslinya — terjemahan yang jauh lebih panjang membuat scene melar dan gambarnya menggantung. Setelah ini, suaranya dibuat dengan generateVoiceover bahasa itu lewat `dalang sulih --suara` atau tombol di Studio. Sebutkan ke user kalau ada scene yang jauh melar.",
+      inputSchema: z.object({
+        bahasa: z
+          .string()
+          .min(2)
+          .max(16)
+          .describe("Kode bahasa tujuan, mis. en, jv, en-US"),
+        sceneIds: z
+          .array(z.string().min(1))
+          .optional()
+          .describe("Batasi ke scene tertentu; kosong = semua scene bernarasi"),
+        sertaTeksLayar: z
+          .boolean()
+          .optional()
+          .describe(
+            "Ikut menerjemahkan judul proyek dan teks di atas gambar; bawaannya YA",
+          ),
+      }),
+      execute: (input) =>
+        run("translateNarration", input, async () => {
+          const plan = requirePlan();
+          const volume = deps.volumeModel;
+          if (!volume) {
+            throw new Error(
+              "Model tier-volume tidak tersedia — set env/flag model volume",
+            );
+          }
+          const bahasa = input.bahasa.trim().toLowerCase();
+          if (!isLanguageCode(bahasa)) {
+            return {
+              ok: false,
+              pesan: `"${bahasa}" bukan kode bahasa yang sah (contoh: en, jv, en-US)`,
+            };
+          }
+          if (bahasa === plan.meta.language) {
+            return {
+              ok: false,
+              pesan: `"${bahasa}" bahasa utama proyek ini — tidak ada yang perlu disulih`,
+            };
+          }
+
+          const target = plan.scenes.filter(
+            (scene) =>
+              scene.narration.trim() !== "" &&
+              (!input.sceneIds || input.sceneIds.includes(scene.id)),
+          );
+          const teksLayar = input.sertaTeksLayar !== false;
+          if (target.length === 0 && !teksLayar) {
+            return { ok: false, pesan: "Tidak ada scene bernarasi yang cocok" };
+          }
+
+          // Naskahnya dikirim sebagai JSON berkunci id supaya jawabannya bisa
+          // dipetakan balik dengan pasti. Terjemahan yang dikembalikan sebagai
+          // prosa berurut akan salah pasang begitu satu baris hilang.
+          const sumber = {
+            ...(teksLayar ? { judul: plan.meta.title } : {}),
+            scenes: target.map((scene) => ({
+              id: scene.id,
+              narasi: scene.narration,
+              detikAsli: Number(resolveSceneDurationSec(scene, plan).toFixed(1)),
+              ...(teksLayar && scene.texts.length > 0
+                ? {
+                    teks: scene.texts.map((text) => ({
+                      id: text.id,
+                      isi: text.content,
+                    })),
+                  }
+                : {}),
+            })),
+          };
+
+          const result = await generateText({
+            model: volume.model,
+            system:
+              `Kamu penerjemah naskah video ke bahasa dengan kode "${bahasa}". Aturan:\n` +
+              "1. PANJANG UCAPAN dijaga: hasil terjemahan harus butuh waktu bicara yang " +
+              "kira-kira sama dengan aslinya. Lebih baik memadatkan makna daripada " +
+              "menambah kata — scene yang melar membuat gambarnya menggantung.\n" +
+              "2. Istilah konsisten di seluruh naskah.\n" +
+              "3. Nama tempat, orang, dan angka TIDAK diterjemahkan.\n" +
+              "4. Gaya bicara mengikuti aslinya (santai tetap santai, formal tetap formal).\n" +
+              "Jawab HANYA JSON dengan bentuk yang sama seperti masukannya: " +
+              '{"judul": "...", "scenes": [{"id": "...", "narasi": "...", "teks": [{"id": "...", "isi": "..."}]}]}. ' +
+              "Tanpa penjelasan, tanpa blok kode.",
+            prompt: JSON.stringify(sumber, null, 2),
+          });
+          guards.addLlmUsage(volume.info, result.totalUsage);
+
+          let parsed: {
+            judul?: string;
+            scenes?: Array<{
+              id?: string;
+              narasi?: string;
+              teks?: Array<{ id?: string; isi?: string }>;
+            }>;
+          };
+          try {
+            const bersih = result.text
+              .trim()
+              .replace(/^```(?:json)?/i, "")
+              .replace(/```$/, "")
+              .trim();
+            parsed = JSON.parse(bersih);
+          } catch {
+            // Dikatakan APA ADANYA, bukan dipaksa jadi patch separuh: plan
+            // yang tersulih setengah lebih buruk daripada yang belum sama
+            // sekali, karena separuhnya tampil BISU tanpa pesan apa pun.
+            return {
+              ok: false,
+              pesan: "Model tidak menjawab JSON yang bisa diurai — tidak ada yang diubah",
+              jawaban: result.text.slice(0, 400),
+            };
+          }
+
+          const ops: PatchOpInput[] = [];
+          const known = new Map(plan.scenes.map((scene) => [scene.id, scene]));
+          for (const item of parsed.scenes ?? []) {
+            const scene = item.id ? known.get(item.id) : undefined;
+            if (!scene || !item.narasi?.trim()) continue;
+            ops.push({
+              op: "setDub",
+              sceneId: scene.id,
+              language: bahasa,
+              text: item.narasi.trim(),
+            });
+            for (const text of item.teks ?? []) {
+              if (!text.id || !text.isi?.trim()) continue;
+              if (!scene.texts.some((existing) => existing.id === text.id)) continue;
+              ops.push({
+                op: "setDub",
+                sceneId: scene.id,
+                language: bahasa,
+                textId: text.id,
+                text: text.isi.trim(),
+              });
+            }
+          }
+          if (teksLayar && parsed.judul?.trim()) {
+            ops.push({
+              op: "setMeta",
+              patch: {
+                dubTitles: { ...plan.meta.dubTitles, [bahasa]: parsed.judul.trim() },
+              },
+            });
+          }
+          if (ops.length === 0) {
+            return { ok: false, pesan: "Model tidak mengembalikan satu pun terjemahan" };
+          }
+
+          const applied = session.applyAgentPatch(ops);
+          const sesudah = session.plan;
+          const melar = sesudah
+            ? dubDrift(sesudah, bahasa).filter((d) => d.rasio > DUB_DRIFT_LIMIT)
+            : [];
+          const cakupan = sesudah ? dubCoverage(sesudah, bahasa) : null;
+          return {
+            ok: true,
+            bahasa,
+            diterjemahkan: ops.filter((op) => op.op === "setDub").length,
+            ...(cakupan
+              ? { cakupan: `${cakupan.diterjemahkan}/${cakupan.perlu} scene bernarasi` }
+              : {}),
+            ringkasan: applied.summary,
+            // Angka, bukan kata sifat: yang melar harus bisa disebut ke user
+            // beserta scene-nya, supaya bisa dipadatkan.
+            ...(melar.length > 0
+              ? {
+                  melar: melar.map(
+                    (d) =>
+                      `${d.sceneId}: ${Math.round((d.rasio - 1) * 100)}% lebih panjang`,
+                  ),
+                }
+              : {}),
+            langkahBerikutnya:
+              "Buat suaranya: `dalang sulih <proyek> --bahasa " +
+              bahasa +
+              ' --suara`, atau tombol "Buat suara" di tab Sulih Studio.',
           };
         }),
     }),
