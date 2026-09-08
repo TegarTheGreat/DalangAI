@@ -86,13 +86,65 @@
           "type": "stock",
           "query": "temple relief panel carving",
           "assetId": "local/bg-relief",
-          "motion": "kenburns-in",
+          "motion": "none",
           "pinned": true,
           "durationSec": 2.6,
           "transition": {
             "type": "cross-fade",
             "durationFrames": 18
-          }
+          },
+          "tracks": [
+            {
+              "property": "zoom",
+              "points": [
+                {
+                  "at": 0,
+                  "value": 1,
+                  "easing": "linear"
+                },
+                {
+                  "at": 0.42,
+                  "value": 1,
+                  "easing": "settle"
+                },
+                {
+                  "at": 0.6,
+                  "value": 1.55,
+                  "easing": "linear"
+                },
+                {
+                  "at": 1,
+                  "value": 1.55,
+                  "easing": "linear"
+                }
+              ]
+            },
+            {
+              "property": "offsetX",
+              "points": [
+                {
+                  "at": 0,
+                  "value": 0,
+                  "easing": "linear"
+                },
+                {
+                  "at": 0.42,
+                  "value": 0,
+                  "easing": "settle"
+                },
+                {
+                  "at": 0.6,
+                  "value": -0.12,
+                  "easing": "linear"
+                },
+                {
+                  "at": 1,
+                  "value": -0.12,
+                  "easing": "linear"
+                }
+              ]
+            }
+          ]
         },
         {
           "id": "sc-batu-k3",

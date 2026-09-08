@@ -226,6 +226,28 @@ export interface WorkspacePayload {
   pinned: boolean;
 }
 
+/**
+ * Satu template di lobi (ADR-0037).
+ *
+ * Sengaja BUKAN paket utuhnya: lobi cuma perlu memilih, dan mengirim seluruh
+ * scene-plan tiap template membuat daftar yang isinya tiga template mengangkut
+ * tiga video utuh ke peramban.
+ */
+export interface TemplateCard {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  /** Ikut bersama Dalang, jadi tidak bisa dicopot. */
+  builtIn: boolean;
+  summary: string;
+  aspectRatio: string;
+  stylePreset: string;
+  format: string;
+  scenes: number;
+}
+
 export interface NewProjectRequest {
   title: string;
   aspectRatio: "16:9" | "9:16" | "1:1";
@@ -548,8 +570,20 @@ export type PlanUpdateReason =
   | "pick"
   | "external";
 
+/** Satu penyunting yang sedang membuka proyek ini (ADR-0038). */
+export interface EditorPresence {
+  id: string;
+  name: string;
+  /** Warna deterministik dari id — sama di semua layar. */
+  color: string;
+  /** Scene yang sedang dipilihnya, atau null. */
+  sceneId: string | null;
+}
+
 export type StudioEvent =
   | { type: "hello"; revision: number }
+  /** Siapa saja yang sedang membuka proyek ini (ADR-0038). */
+  | { type: "presence"; editors: EditorPresence[] }
   /** Proyek ditutup server (pindah proyek / kembali ke lobi) — tutup SSE. */
   | { type: "project-closed" }
   | { type: "plan-updated"; reason: PlanUpdateReason; revision: number }

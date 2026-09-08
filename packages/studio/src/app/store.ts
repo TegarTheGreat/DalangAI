@@ -1,6 +1,7 @@
 import type { Memory, MemoryKind, PatchOpInput } from "@dalang/core";
 import type {
   ChatTurnResultLite,
+  EditorPresence,
   ExportSettingsLite,
   NewProjectRequest,
   ProjectStatePayload,
@@ -12,6 +13,7 @@ import type {
   WorkspacePayload,
 } from "../shared/api-types";
 import { ApiError, api, ConfirmationRequired } from "./api";
+import { editorId } from "./editor-identity";
 
 /**
  * Store klien: satu sumber state untuk ketiga panel, disuplai snapshot
@@ -139,6 +141,20 @@ export interface StudioState {
   toast: string | null;
   /** Status SSE: false = terputus, EventSource sedang menyambung ulang. */
   connected: boolean;
+  /**
+   * Penyunting lain yang sedang membuka proyek ini (ADR-0038); diri sendiri
+   * TIDAK ikut. Bilah kehadiran yang menampilkan diri sendiri memakai tempat
+   * untuk mengatakan hal yang sudah diketahui pemiliknya.
+   */
+  editors: EditorPresence[];
+  /**
+   * Revisi plan terakhir yang DILIHAT panel ini.
+   *
+   * Dikirim bersama tiap patch sebagai dasar suntingan (ADR-0038). Dipisah
+   * dari `project.revision` karena yang dipakai server bukan "revisi terbaru"
+   * melainkan "revisi yang jadi dasar orang ini menyunting".
+   */
+  revision: number;
 }
 
 type Listener = () => void;
@@ -165,6 +181,8 @@ const emptyState: StudioState = {
   sourceUpload: null,
   toast: null,
   connected: true,
+  editors: [],
+  revision: 0,
 };
 
 export class StudioClient {
@@ -174,6 +192,8 @@ export class StudioClient {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private stopEvents: (() => void) | null = null;
+  /** Denyut kehadiran (ADR-0038); hidup hanya selama editor terbuka. */
+  private presenceTimer: ReturnType<typeof setInterval> | null = null;
 
   // -- plumbing --------------------------------------------------------------
 
@@ -241,12 +261,20 @@ export class StudioClient {
     );
     await this.refresh();
     this.set({ view: "editor" });
+    // Denyut lebih rapat daripada TTL kehadiran di server (70 dtk) supaya satu
+    // denyut yang hilang tidak membuat orangnya terlihat pergi.
+    this.presenceTimer ??= setInterval(() => {
+      void api.presence(this.state.selectedSceneId).catch(() => {});
+    }, 20_000);
+    void api.presence(this.state.selectedSceneId).catch(() => {});
   }
 
   /** Kembali ke lobi: sesi editor dilepas seluruhnya, bukan disembunyikan. */
   private leaveEditor(workspace: WorkspacePayload | null): void {
     this.stopEvents?.();
     this.stopEvents = null;
+    if (this.presenceTimer) clearInterval(this.presenceTimer);
+    this.presenceTimer = null;
     this.set({
       view: "lobby",
       project: null,
@@ -262,6 +290,7 @@ export class StudioClient {
       sources: null,
       sourceUpload: null,
       connected: true,
+      editors: [],
       switching: null,
       ...(workspace ? { workspace } : {}),
     });
@@ -343,6 +372,36 @@ export class StudioClient {
       });
       await this.enterEditor();
       this.toast(`Proyek "${project.title}" siap — folder ${project.id}`);
+      return true;
+    } catch (error) {
+      this.failure(error);
+      return false;
+    } finally {
+      this.set({ switching: null });
+    }
+  }
+
+  /**
+   * Proyek baru dari template (ADR-0037).
+   *
+   * Jalur yang SAMA dengan `createProject` sesudah servernya menjawab —
+   * masuk editor, satu toast — karena bagi orangnya hasilnya memang sama:
+   * proyek baru yang terbuka. Yang berbeda cuma dari mana isinya datang.
+   */
+  async createFromTemplate(templateId: string, judul: string): Promise<boolean> {
+    if (this.state.switching) return false;
+    this.set({ switching: "baru" });
+    try {
+      const { project, workspace } = await api.createFromTemplate(templateId, judul);
+      this.set({
+        workspace,
+        project: null,
+        selectedSceneId: null,
+        selectedClipId: null,
+        chat: [],
+      });
+      await this.enterEditor();
+      this.toast(`Proyek "${project.title}" siap dari template — folder ${project.id}`);
       return true;
     } catch (error) {
       this.failure(error);
@@ -633,12 +692,24 @@ export class StudioClient {
 
   stop(): void {
     this.stopEvents?.();
+    if (this.presenceTimer) clearInterval(this.presenceTimer);
+    this.presenceTimer = null;
   }
 
   private onEvent(event: StudioEvent): void {
     switch (event.type) {
+      case "hello":
+        this.set({ revision: event.revision });
+        break;
       case "plan-updated":
+        this.set({ revision: event.revision });
         this.scheduleRefresh();
+        break;
+      case "presence":
+        // Diri sendiri disaring DI SINI, bukan di server: server melayani
+        // banyak panel dan daftarnya sama untuk semuanya; yang tahu "mana
+        // aku" cuma panelnya sendiri.
+        this.set({ editors: event.editors.filter((item) => item.id !== editorId()) });
         break;
       case "busy": {
         const project = this.state.project;
@@ -787,6 +858,10 @@ export class StudioClient {
 
   selectScene(id: string | null): void {
     this.set({ selectedSceneId: id, selectedClipId: null });
+    // Kabar kehadiran menyusul, dan kegagalannya SENGAJA diabaikan (ADR-0038):
+    // memilih scene tidak boleh gagal cuma karena rekan kerja tidak bisa
+    // melihat kita memilihnya.
+    void api.presence(id).catch(() => {});
   }
 
   /** Pilih satu potongan di dalam scene terpilih; null = kembali ke yang pertama. */
@@ -796,11 +871,21 @@ export class StudioClient {
 
   async applyPatch(ops: PatchOpInput[], label?: string): Promise<boolean> {
     try {
-      const { summary } = await api.patch(ops);
+      const { summary, revision } = await api.patch(ops, this.state.revision);
+      this.set({ revision });
       this.toast(label ?? summary);
       await this.refresh();
       return true;
     } catch (error) {
+      // Bentrok (ADR-0038) BUKAN kegagalan biasa: pesannya sudah menjelaskan
+      // apa yang berubah dan siapa yang mengubahnya, dan yang paling
+      // dibutuhkan orangnya sekarang adalah MELIHAT keadaan terbaru — bukan
+      // membaca kata "gagal" di atas layar yang masih menampilkan versi lama.
+      if (error instanceof ApiError && error.status === 409) {
+        this.toast(error.message);
+        await this.refresh();
+        return false;
+      }
       this.failure(error);
       return false;
     }

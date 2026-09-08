@@ -14,6 +14,7 @@ import { registerChatRoutes } from "./chat";
 import type { ChatBridge, StudioContext, StudioDeps } from "./context";
 import { registerMedia } from "./media";
 import { registerMediaLibraryRoutes } from "./media-library";
+import { PresenceRegistry } from "./presence";
 import { registerPublishRoutes } from "./publish";
 import { registerJobRoutes, registerProjectRoutes } from "./routes";
 import { registerSourceRoutes } from "./sources";
@@ -38,6 +39,8 @@ export interface CreateStudioOptions {
   approvalTimeoutMs?: number;
   /** Memori preferensi lintas proyek (ADR-0029); kosong = agent tanpa memori. */
   memory?: MemoryStore;
+  /** Folder registri template (ADR-0037). */
+  templateDir?: string;
   /** Folder hasil `vite build` app — disajikan StudioHost, bukan app ini. */
   appDistDir?: string;
 }
@@ -83,11 +86,15 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
       : {}),
     ...(options.deps.volumeModel ? { volumeModel: options.deps.volumeModel } : {}),
     ...(options.memory ? { memory: options.memory } : {}),
+    // ADR-0037: registri template — sama seperti memori, milik rumah Dalang
+    // dan bukan folder proyek.
+    ...(options.templateDir ? { templateDir: options.templateDir } : {}),
     onToolActivity: (line) => bridge?.onActivity(line),
   };
 
   const context: StudioContext = {
     store,
+    presence: new PresenceRegistry(bus),
     deps: options.deps,
     guards,
     approvals,

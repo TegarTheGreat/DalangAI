@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { MiddlewareHandler } from "hono";
 
 /**
@@ -120,5 +121,62 @@ export const localOnlyGuard = (
     });
     if (decision.ok) return next();
     return c.json({ error: decision.reason ?? "Permintaan ditolak" }, 403);
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Kunci tautan untuk membuka ke jaringan lokal (ADR-0038)
+// ---------------------------------------------------------------------------
+
+/**
+ * Alamat soket yang berarti "mesin ini". Dipakai untuk membedakan pemakai
+ * lokal dari tamu jaringan — dan yang dipercaya di sini adalah ALAMAT SOKET,
+ * bukan header `Host`: header bisa ditulis siapa saja, alamat soket tidak.
+ */
+export const isLoopbackAddress = (address: string): boolean => {
+  const clean = address.replace(/^::ffff:/i, "");
+  return clean === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(clean);
+};
+
+/** Bandingkan dua rahasia tanpa membocorkan panjang kecocokannya lewat waktu. */
+const secretEquals = (a: string, b: string): boolean => {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+};
+
+/**
+ * Penjaga kunci tautan.
+ *
+ * Studio dibuka ke jaringan lokal hanya dengan `--lan`, dan saat itu ia
+ * mencetak URL yang memuat kunci acak. Tanpa penjaga ini, "buka ke jaringan"
+ * berarti siapa pun di kafe yang sama bisa menyunting proyek, memicu render
+ * berbayar, dan mengunggah ke YouTube. Dengan penjaga ini, yang bisa cuma
+ * orang yang diberi tautannya.
+ *
+ * Pemakai LOOPBACK dilewatkan tanpa kunci: membuka ke jaringan tidak boleh
+ * berarti pemiliknya sendiri harus menempelkan kunci di URL-nya.
+ *
+ * Ini BUKAN akun dan bukan izin per-orang. Yang punya tautan punya segalanya,
+ * dan mencabutnya berarti menjalankan ulang Studio (kunci baru). Itu batas
+ * yang dinyatakan, bukan yang disembunyikan.
+ */
+export const linkKeyGuard = (key: string): MiddlewareHandler => {
+  return async (c, next) => {
+    const env = c.env as
+      | { incoming?: { socket?: { remoteAddress?: string } } }
+      | undefined;
+    const remote = env?.incoming?.socket?.remoteAddress ?? "";
+    if (remote === "" || isLoopbackAddress(remote)) return next();
+    const supplied = c.req.header("x-dalang-key") ?? c.req.query("kunci") ?? "";
+    if (supplied !== "" && secretEquals(supplied, key)) return next();
+    return c.json(
+      {
+        error:
+          "Butuh kunci tautan. Buka Studio lewat URL lengkap yang dicetak `dalang studio --lan`.",
+      },
+      401,
+    );
   };
 };

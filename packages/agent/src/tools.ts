@@ -9,6 +9,7 @@ import {
   critiquePlan,
   cutClipOps,
   defaultPublishMetadata,
+  describeTemplate,
   findFillerSpans,
   findPhraseSpans,
   GRAPHIC_ANCHORS,
@@ -39,6 +40,7 @@ import {
   setSfxAsset,
   speechSpans,
   type Transcript,
+  templateLookOps,
   textInSpan,
   transcriptForClip,
   uniqueGraphicId,
@@ -74,6 +76,7 @@ import type { ResolvedModel } from "./models/resolve";
 import type { Guardrails } from "./runtime/guardrails";
 import type { MemoryStore } from "./runtime/memory-store";
 import type { ProjectSession } from "./runtime/session";
+import { findTemplate, listTemplates } from "./runtime/template-store";
 import {
   cropImage,
   locatePrompt,
@@ -186,6 +189,12 @@ export interface AgentDeps {
    * tidak tersedia beserta petunjuk tokennya — bukan pura-pura mengunggah.
    */
   publishTargets?: () => PublishTarget[];
+  /**
+   * Folder registri template (ADR-0037). Boleh kosong: kedua tool template
+   * lalu mengatakan registrinya tidak tersedia — bukan diam-diam memakai
+   * rumah Dalang milik siapa pun yang kebetulan menjalankan prosesnya.
+   */
+  templateDir?: string;
   onToolActivity?: (line: string) => void;
 }
 
@@ -386,6 +395,81 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             return { ok: false, pesan: `Tidak ada preferensi ber-id ${input.id}` };
           store.write(memory);
           return { ok: true, dihapus: removed.text, sisa: memory.entries.length };
+        }),
+    }),
+
+    // ADR-0037: template — kerangka + tampilan yang bisa dibagikan. Dua tool,
+    // bukan satu: melihat daftar tidak boleh mengubah apa pun, dan memakai
+    // tampilan orang lain adalah perubahan yang harus bisa dibatalkan.
+    listTemplates: tool({
+      description:
+        "Daftar template yang terpasang (bawaan Dalang + yang dipasang user). Panggil sebelum applyTemplateLook, atau saat user bertanya 'ada template apa'. Tidak mengubah apa pun.",
+      inputSchema: z.object({}),
+      execute: (input) =>
+        run("listTemplates", input, async () => {
+          const dir = deps.templateDir;
+          if (!dir) {
+            return {
+              ok: false,
+              pesan: "Registri template tidak tersedia di lingkungan ini",
+            };
+          }
+          const { templates, broken } = listTemplates(dir);
+          return {
+            ok: true,
+            jumlah: templates.length,
+            template: templates.map((item) => ({
+              id: item.pack.manifest.id,
+              nama: item.pack.manifest.name,
+              deskripsi: item.pack.manifest.description,
+              bawaan: item.builtIn,
+              ringkasan: describeTemplate(item.pack),
+            })),
+            // Berkas rusak DISEBUTKAN supaya agent bisa mengatakannya ke user
+            // alih-alih membiarkan template yang dicari hilang tanpa sebab.
+            rusak: broken.map((item) => `${item.file}: ${item.reason}`),
+          };
+        }),
+    }),
+
+    applyTemplateLook: tool({
+      description:
+        "Pakai TAMPILAN sebuah template di plan yang sudah ada: preset gaya, rasio, token warna & huruf, zona aman, format, dan gaya caption tiap scene. Narasi, potongan, aset, dan durasi TIDAK disentuh. Untuk memulai proyek BARU dari template, itu dilakukan user di lobi — bukan lewat tool ini. Lewat applyPatch biasa, jadi bisa di-undo.",
+      inputSchema: z.object({
+        templateId: z
+          .string()
+          .min(1)
+          .describe("id template dari listTemplates, mis. 'klip-tiga-detik'"),
+      }),
+      execute: (input) =>
+        run("applyTemplateLook", input, async () => {
+          const dir = deps.templateDir;
+          if (!dir) {
+            return {
+              ok: false,
+              pesan: "Registri template tidak tersedia di lingkungan ini",
+            };
+          }
+          const plan = requirePlan();
+          const item = findTemplate(dir, input.templateId);
+          if (!item) {
+            const { templates } = listTemplates(dir);
+            return {
+              ok: false,
+              pesan:
+                `Template "${input.templateId}" tidak ada — yang tersedia: ` +
+                templates.map((t) => t.pack.manifest.id).join(", "),
+            };
+          }
+          const ops = templateLookOps(item.pack, plan);
+          const { summary } = session.applyAgentPatch(ops);
+          return {
+            ok: true,
+            template: item.pack.manifest.name,
+            ringkasanPerubahan: summary,
+            catatan:
+              "Hanya tampilan yang berubah. Narasi, potongan, aset, dan durasi tetap.",
+          };
         }),
     }),
 

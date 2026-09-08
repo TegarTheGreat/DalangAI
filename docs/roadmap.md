@@ -279,8 +279,16 @@ Studio, terlihat sebagai berlian di timeline, dan diverifikasi dari PIKSEL
 render: teks ber-track mendarat di 0,2888 / 0,4295 / 0,5688 lebar bingkai
 (ramalan 0,290 / 0,430 / 0,570), sementara plan yang sama tanpa track diam di
 0,4988. Berlian di timeline kini bisa diseret dan digeser dari papan ketik
-(batas awalnya dicabut); yang tersisa: visual dasar scene belum bisa
-di-keyframe — selengkapnya di "Batas" ADR-0027.
+(batas awalnya dicabut). Batas terakhirnya — visual dasar scene belum bisa
+di-keyframe — dicabut ADR-0036: `clip.tracks` menganimasikan zum (1..3), geser
+X/Y, dan opasitas kamera scene, dengan satu aturan yang berbeda dari elemen
+lain dan disengaja begitu — begitu salah satu properti KAMERA punya track,
+preset `clip.motion` diabaikan seluruhnya, sebab "pan-left" adalah satu
+gerakan bernama, bukan tiga angka yang bisa diambil separuh. Dibuktikan di
+kedua jalur gambar (aset dan prosedural) lewat bingkai yang dirender CI, dan
+plan tanpa keyframe terbukti masih identik byte per byte. Yang tersisa:
+berlian klip belum ada di timeline, dan preset tutorial-01 tidak memakainya —
+selengkapnya di "Batas yang dinyatakan" ADR-0036.
 
 **§9.5 sudah dikerjakan** (ADR-0028; campuran akhir kini juga DIKOREKSI ke
 sasaran dengan penguatan rata — Keputusan 9 — dan proxy dibuat DI LATAR dengan
@@ -318,7 +326,7 @@ bukan speed ramp, bukan multicam; lapisan dan anotasi tetap milik scene).
 | --- | --- | --- |
 | 9.1 | Manipulasi langsung di kanvas: seret/ubah ukuran teks & grafis di preview | Selesai (ADR-0024; anotasi, penempelan ke elemen lain, dan pemilihan jamak menyusul) |
 | 9.2 | Multi-track video: overlay/PiP/B-roll sebagai lapisan | Selesai (ADR-0025) |
-| 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027) |
+| 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027; kamera visual dasar scene menyusul di ADR-0036) |
 | 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | Selesai (ADR-0026) |
 | 9.5 | Proxy + penanganan rekaman panjang | Selesai (ADR-0028) |
 | 9.6 | Beberapa klip dalam satu scene: belah, trim ripple/roll, buang, susun ulang | Selesai (ADR-0033) |
@@ -337,6 +345,21 @@ terlihat serta bisa dihapus di lobi Studio dan `dalang memori`. Batasnya di
 "Batas" ADR-0029: tidak belajar diam-diam, satu memori per rumah Dalang, tanpa
 sinkronisasi antar mesin.
 
+**§10.2 sudah dikerjakan SEPARUH — dan separuhnya yang lain sengaja tidak**
+(ADR-0037). Yang ada: template sebagai PAKET — scene-plan sah plus manifes,
+membawa kerangka dan tampilan, dengan satu aturan isi ("semua kecuali yang
+menunjuk berkas"), registri folder JSON di rumah Dalang, tiga template bawaan
+yang wajib lulus kaidah sutradara repo ini sendiri, dan empat permukaan yang
+berbagi satu registri: `dalang template` (daftar/ekspor/pasang/copot/pakai/
+mulai), lobi Studio, dan dua tool agent. "Pakai tampilan" keluar sebagai patch
+op, jadi bisa di-undo seperti perubahan lain.
+
+Yang TIDAK ada, dan tidak menunggu ditambal: tokonya. Indeks yang di-host,
+akun, pembayaran, moderasi, peringkat, pemasangan dari URL — semuanya
+keputusan produk dan komersial, dan etalase yang tidak terhubung ke apa pun
+cuma akan jadi halaman yang terlihat seperti fitur. Template berpindah sebagai
+BERKAS: disalin, dikirim, atau dimasukkan git.
+
 **§10.3 sudah dikerjakan untuk YouTube** (ADR-0030): port `PublishTarget`,
 unggahan resumable lewat YouTube Data API v3 dengan token milik user, tahap
 `publish` di ledger supaya berkas yang sama tidak naik dua kali, dan tiga
@@ -345,12 +368,28 @@ agent `publishVideo` — yang semuanya lewat konfirmasi dan bawaannya privat.
 Batasnya di "Batas" ADR-0030: belum pernah dijalankan terhadap YouTube
 sungguhan, token akses tanpa refresh, TikTok/Instagram belum.
 
+**§10.4 sudah dikerjakan** (ADR-0038). Sebagian besar bahannya ternyata sudah
+ada — patch op ber-invers, satu penulis di server, siaran SSE bernomor revisi,
+deteksi editan luar — dan yang kurang justru yang soal ORANG: identitas,
+deteksi bentrok, dan cara ikut. Ketiganya sekarang ada: tiap suntingan membawa
+revisi dasarnya dan ditolak kalau petaknya (sebesar SCENE) sudah berubah di
+tangan orang lain; bilah kehadiran menunjukkan siapa yang ada dan di scene
+mana; dan `dalang studio --lan` membuka ke jaringan lokal dengan URL berkunci
+yang menjaga baca maupun tulis. Tanpa `--lan`, tidak ada satu pun perilaku
+lama yang berubah.
+
+Batasnya di "Batas yang dinyatakan" ADR-0038, dan yang paling penting
+disengaja: bentrok DITOLAK, tidak pernah digabungkan otomatis. Penggabungan
+yang salah kehilangan pekerjaan tanpa suara, dan itu lebih buruk daripada
+penolakan yang jelas. Tidak ada akun, tidak ada izin per-orang, tidak ada
+kursor bersama.
+
 | # | Item |
 | --- | --- |
 | 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
-| 10.2 | Marketplace preset/template |
+| 10.2 | Marketplace preset/template — **paketnya sudah dikerjakan** (ADR-0037); tokonya sengaja tidak |
 | 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
-| 10.4 | Multi-user pada satu proyek |
+| 10.4 | Multi-user pada satu proyek — **sudah dikerjakan** (ADR-0038); tanpa akun dan tanpa penggabungan otomatis |
 
 ---
 

@@ -36,6 +36,7 @@ const LABEL: Record<AnimatableProperty, string> = {
   height: "Tinggi",
   rotate: "Putar",
   opacity: "Opasitas",
+  zoom: "Zum",
 };
 
 const EASING_LABEL: Record<KeyframeEasing, string> = {
@@ -50,7 +51,9 @@ const fmtValue = (property: AnimatableProperty, value: number): string =>
     ? `${Math.round(value)}°`
     : property === "opacity"
       ? `${Math.round(value * 100)}%`
-      : value.toFixed(3);
+      : property === "zoom"
+        ? `${value.toFixed(2)}x`
+        : value.toFixed(3);
 
 export const KeyframeControls: React.FC<{
   tracks: KeyframeTrack[];

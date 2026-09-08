@@ -1,7 +1,19 @@
 import { existsSync, readdirSync, statSync, watch } from "node:fs";
 import { basename, join } from "node:path";
 import type { ProjectSession } from "@dalang/agent";
-import { type PatchOpInput, rebaseRenderState, type ScenePlan } from "@dalang/core";
+import {
+  conflictMessage,
+  type Editor,
+  type PatchOpInput,
+  patchTouchKeys,
+  rebaseRenderState,
+  type ScenePlan,
+  TOUCH_AUDIO,
+  TOUCH_META,
+  TOUCH_STRUCTURE,
+  type TouchKey,
+  touchConflicts,
+} from "@dalang/core";
 import { publishedRecordFor } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR } from "@dalang/providers";
 import type {
@@ -27,6 +39,20 @@ import type { EventBus } from "./bus";
  *  - setiap perubahan disiarkan ke semua panel via EventBus,
  *  - edit manual file plan di luar UI terdeteksi (fs.watch + hash session).
  */
+
+/**
+ * Patch yang ditolak karena petaknya sudah berubah di tangan orang lain
+ * (ADR-0038). Dibedakan dari sibuk: sibuk berarti "coba lagi sebentar
+ * lagi", bentrok berarti "lihat dulu apa yang berubah".
+ */
+export class StudioConflictError extends Error {
+  readonly keys: string[];
+  constructor(keys: string[], message: string) {
+    super(message);
+    this.name = "StudioConflictError";
+    this.keys = keys;
+  }
+}
 
 export class StudioBusyError extends Error {
   constructor(current: string) {
@@ -57,9 +83,54 @@ export class StudioStore {
     return { mutation: this.mutation, render: this.render };
   }
 
-  notifyPlan(reason: PlanUpdateReason): void {
+  /**
+   * Riwayat petak yang disentuh tiap revisi (ADR-0038) — cincin pendek.
+   *
+   * Pendek dengan sengaja: klien yang tertinggal lebih dari 64 revisi bukan
+   * klien yang perlu digabungkan per-scene, melainkan klien yang harus memuat
+   * ulang. Cincin yang tumbuh selamanya cuma menahan memori demi menjawab
+   * pertanyaan yang tidak ada yang tanya.
+   */
+  private readonly touchLog: Array<{ revision: number; keys: TouchKey[]; by: string }> =
+    [];
+
+  notifyPlan(reason: PlanUpdateReason, touched?: TouchKey[], by?: string): void {
     this.revision += 1;
+    // Tanpa daftar petak, perubahan dianggap menyentuh SEGALANYA. Tahap
+    // pipeline, undo, dan editan luar memang bisa menyentuh apa saja, dan
+    // menganggapnya tidak menyentuh apa pun akan membuat bentrok yang nyata
+    // lolos tanpa suara.
+    this.touchLog.push({
+      revision: this.revision,
+      keys: touched ?? [TOUCH_STRUCTURE, TOUCH_META, TOUCH_AUDIO],
+      by: by ?? "Perubahan lain",
+    });
+    while (this.touchLog.length > 64) this.touchLog.shift();
     this.bus.emit({ type: "plan-updated", reason, revision: this.revision });
+  }
+
+  /**
+   * Petak yang berubah SEJAK sebuah revisi, atau `null` bila revisinya sudah
+   * terlalu tua untuk dijawab.
+   *
+   * `null` bukan "tidak ada yang berubah" — ia berarti "tidak bisa dijawab",
+   * dan pemanggilnya memperlakukannya sebagai bentrok. Menjawab "aman" untuk
+   * pertanyaan yang tidak bisa dijawab adalah cara paling halus kehilangan
+   * pekerjaan orang.
+   */
+  changesSince(baseRevision: number): { keys: TouchKey[]; by: string } | null {
+    if (baseRevision === this.revision) return { keys: [], by: "" };
+    if (baseRevision > this.revision) return null;
+    const oldest = this.touchLog[0]?.revision;
+    if (oldest === undefined || baseRevision < oldest - 1) return null;
+    const keys = new Set<TouchKey>();
+    let by = "Perubahan lain";
+    for (const entry of this.touchLog) {
+      if (entry.revision <= baseRevision) continue;
+      for (const key of entry.keys) keys.add(key);
+      by = entry.by;
+    }
+    return { keys: [...keys], by };
   }
 
   private notifyBusy(): void {
@@ -123,10 +194,37 @@ export class StudioStore {
   }
 
   /** Patch cepat (form inspector, lock, reorder) — ditolak saat job berjalan. */
-  applyUserPatch(ops: PatchOpInput[]): string {
+  /**
+   * Patch dari seorang PENYUNTING (ADR-0038).
+   *
+   * `baseRevision` opsional, dan opsionalnya penting: klien lama, CLI, dan
+   * server MCP tidak mengirimnya, dan mereka tetap harus bekerja persis
+   * seperti sebelumnya. Yang mengirimnya mendapat jaminan tambahan — patch-nya
+   * ditolak, bukan diterapkan, kalau petak yang disentuhnya sudah berubah di
+   * tangan orang lain.
+   */
+  applyUserPatch(
+    ops: PatchOpInput[],
+    context?: { baseRevision?: number; editor?: Editor },
+  ): string {
     if (this.mutation) throw new StudioBusyError(this.mutation);
+    const touched = patchTouchKeys(ops);
+    const base = context?.baseRevision;
+    if (base !== undefined) {
+      const since = this.changesSince(base);
+      if (!since) {
+        throw new StudioConflictError(
+          [],
+          "Proyek sudah berubah lebih jauh daripada yang bisa dibandingkan — muat ulang halamannya dulu.",
+        );
+      }
+      const bentrok = touchConflicts(touched, since.keys);
+      if (bentrok.length > 0) {
+        throw new StudioConflictError(bentrok, conflictMessage(bentrok, since.by));
+      }
+    }
     const { summary } = this.session.applyUserPatch(ops);
-    this.notifyPlan("patch-user");
+    this.notifyPlan("patch-user", touched, context?.editor?.name);
     return summary;
   }
 

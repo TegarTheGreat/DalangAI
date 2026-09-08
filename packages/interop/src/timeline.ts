@@ -538,7 +538,11 @@ export const buildEditTimeline = (
   const clips = allClips(plan).map(({ clip }) => clip);
   const countClips = (predicate: (clip: Clip) => boolean): number =>
     clips.filter(predicate).length;
-  const motion = countClips((clip) => clip.motion !== "none");
+  // Klip berkeyframe ikut dihitung meski `motion` masih "none" (ADR-0036):
+  // kamera yang diarahkan tangan justru gerak yang paling banyak dipikirkan
+  // orang, dan melaporkannya sebagai "tidak ada gerak" adalah persis meleset
+  // ke arah yang paling merugikan pembaca catatan ini.
+  const motion = countClips((clip) => clip.motion !== "none" || clip.tracks.length > 0);
   const filtered = countClips((clip) => (clip.filter?.preset ?? "none") !== "none");
   if (motion + filtered > 0) {
     const bagian = [

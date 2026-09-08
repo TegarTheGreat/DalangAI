@@ -500,6 +500,67 @@
                   "type": "string",
                   "minLength": 1
                 },
+                "tracks": {
+                  "default": [],
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "property": {
+                        "type": "string",
+                        "enum": [
+                          "offsetX",
+                          "offsetY",
+                          "size",
+                          "width",
+                          "height",
+                          "rotate",
+                          "opacity",
+                          "zoom"
+                        ]
+                      },
+                      "points": {
+                        "minItems": 2,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            "value": {
+                              "type": "number"
+                            },
+                            "easing": {
+                              "default": "settle",
+                              "type": "string",
+                              "enum": [
+                                "settle",
+                                "glide",
+                                "dolly",
+                                "linear"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "property",
+                      "points"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
                 "durationSec": {
                   "type": "number",
                   "exclusiveMinimum": 0
@@ -744,7 +805,8 @@
                           "width",
                           "height",
                           "rotate",
-                          "opacity"
+                          "opacity",
+                          "zoom"
                         ]
                       },
                       "points": {
@@ -980,7 +1042,8 @@
                           "width",
                           "height",
                           "rotate",
-                          "opacity"
+                          "opacity",
+                          "zoom"
                         ]
                       },
                       "points": {
@@ -1326,7 +1389,8 @@
                           "width",
                           "height",
                           "rotate",
-                          "opacity"
+                          "opacity",
+                          "zoom"
                         ]
                       },
                       "points": {

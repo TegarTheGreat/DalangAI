@@ -11,6 +11,7 @@ import type {
 } from "@dalang/pipeline";
 import type { ExportSettings, RenderVideoResult } from "@dalang/renderer";
 import type { ApprovalBroker } from "./approvals";
+import type { PresenceRegistry } from "./presence";
 import type { StudioStore } from "./store";
 
 /**
@@ -110,6 +111,8 @@ export interface ChatBridge {
 
 export interface StudioContext {
   store: StudioStore;
+  /** Siapa yang sedang membuka proyek ini (ADR-0038). */
+  presence: PresenceRegistry;
   deps: StudioDeps;
   guards: Guardrails;
   approvals: ApprovalBroker;

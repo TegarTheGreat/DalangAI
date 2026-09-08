@@ -246,8 +246,9 @@ berikutnya.
   dan lapisan ikut bertambah pintar setiap kali `visual` bertambah. Kotaknya
   jangkar plus geseran fraksional, jadi satu nilai tetap benar di 16:9, 9:16,
   dan 1:1.
-- **Keyframe properti**: `tracks` pada grafis, teks, dan lapisan
-  menganimasikan properti pada waktu yang dipilih, bukan yang tersedia.
+- **Keyframe properti**: `tracks` pada grafis, teks, lapisan, dan **visual
+  dasar scene** menganimasikan properti pada waktu yang dipilih, bukan yang
+  tersedia.
   Daftar propertinya tertutup dan rentang nilainya sama persis dengan properti
   statisnya, jadi keyframe tidak bisa membawa nilai yang akan ditolak skema.
   Waktunya fraksi jendela tampil, jadi scene yang dipanjangkan membawa serta
@@ -255,6 +256,12 @@ berikutnya.
 - Berlian keyframe di timeline **bisa diseret** atau digeser dengan papan
   ketik, menempel ke keyframe track lain pada lapisan yang sama, dan mendarat
   di atas keyframe lain ditolak alih-alih ditumpuk.
+- **Kamera klip diarahkan tangan**: zum, geser X/Y, dan opasitas visual dasar
+  punya keyframe sendiri, jadi gerak yang berubah di TENGAH potongan — menahan
+  dulu lalu menghentak masuk, mundur pelan dari detail ke seluruh bidang —
+  akhirnya bisa dinyatakan. Delapan preset `motion` tetap ada untuk yang tidak
+  butuh itu; begitu kameranya di-keyframe, presetnya mengalah seluruhnya
+  supaya tidak ada gerak yang separuh preset separuh tangan.
 - **Anotasi tutorial** (zoom, sorot, panah, blur) ikut bisa diseret dan diubah
   ukurannya di atas tangkapan layar.
 - **Perangkat sinematik lewat kontrak data**: filter per scene (6 preset plus
@@ -271,8 +278,58 @@ Rujukan: [ADR-0011](docs/decisions/0011-pengayaan-editor.md),
 [ADR-0024](docs/decisions/0024-manipulasi-langsung-di-kanvas.md),
 [ADR-0025](docs/decisions/0025-lapisan-video.md),
 [ADR-0027](docs/decisions/0027-keyframe-properti.md),
-[ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md)
+[ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md),
+[ADR-0036](docs/decisions/0036-keyframe-kamera-klip.md)
 </details>
+
+### Template yang bisa dibagikan
+
+Sebuah template adalah **scene-plan yang sah plus manifes** — bukan format
+kedua yang harus dikejar tiap kali plan bertambah kemampuan. Ia membawa
+kerangka scene DAN seluruh tampilannya, dan satu aturan menentukan isinya:
+semua ikut kecuali yang menunjuk berkas. Kata-kata berpindah; aset, musik
+unggahan, transkrip, dan proxy tidak, sebab di komputer orang lain semuanya
+cuma jadi tautan putus. Rujukan yang berkasnya ada di setiap pemasangan —
+ikon `iconify:`, bunyi dan musik `pustaka:` — ikut.
+
+Dua cara memakainya, dan keduanya berbeda: **mulai proyek baru** dari
+kerangkanya, atau **pinjam tampilannya saja** untuk video yang sudah kamu
+tulis sendiri — preset, rasio, token warna dan huruf, zona aman, gaya caption
+— tanpa menyentuh narasi, potongan, aset, maupun durasi. Yang kedua keluar
+sebagai patch op biasa, jadi bisa Ctrl+Z.
+
+Tiga template bawaan ikut terpasang (klip pendek, esai video, tutorial), dan
+ada test yang menuntut ketiganya lulus kaidah sutradara repo ini sendiri —
+template dipakai sebagai titik awal, jadi kesalahannya ikut disalin ke tiap
+proyek yang lahir darinya. Registrinya satu folder JSON di rumah Dalang, jadi
+template bisa disalin, dikirim, atau dimasukkan git.
+
+**Yang tidak ada: tokonya.** Tidak ada indeks yang di-host, akun, peringkat,
+atau pemasangan dari URL — template berpindah sebagai berkas.
+[ADR-0037](docs/decisions/0037-paket-template.md) menulis kenapa, dan batas
+lainnya.
+
+### Menyunting berdua
+
+Studio bisa dibuka ke jaringan lokal dengan `dalang studio --lan`. Ia mencetak
+URL lengkap berisi **kunci acak** untuk tiap alamat mesin ini, dan tanpa kunci
+itu tamu jaringan tidak bisa apa-apa — termasuk membaca. Tanpa `--lan` tidak
+ada yang berubah: Studio tetap hanya mendengar di loopback.
+
+Bentrok **ditolak, bukan digabungkan diam-diam**. Tiap suntingan membawa
+revisi yang jadi dasarnya, dan server menolaknya kalau petak yang disentuh —
+sebesar SCENE — sudah berubah di tangan orang lain. Yang ditolak mendapat
+kalimat yang menyebut siapa dan apa, lalu layarnya disegarkan. Dua orang di
+scene berbeda tidak saling menghalangi.
+
+Bilah kehadiran menunjukkan siapa yang sedang membuka proyek dan di scene
+mana; ia kosong saat kamu sendirian. Nama bisa diklik untuk diganti.
+
+**Yang tidak ada: akun dan izin per-orang.** Yang punya tautan punya
+segalanya, dan tidak ada penggabungan otomatis — dua orang yang menyunting
+scene yang sama harus bergantian.
+[ADR-0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) menulis kenapa,
+dan batas lainnya.
 
 ### Teks dan tipografi
 
@@ -504,6 +561,10 @@ pnpm dalang transcribe proyekku/     # transkripsi rekaman ke renderState
 pnpm dalang review proyekku/         # render frame kunci, nilai dengan model vision
 pnpm dalang log proyekku/            # garis waktu pipeline, agent, dan biaya
 pnpm dalang memori                   # preferensi lintas proyek
+pnpm dalang template daftar          # template terpasang (bawaan + milikmu)
+pnpm dalang template mulai klip-tiga-detik --out klipku --judul "Judulku"
+pnpm dalang template ekspor proyekku/ --id gaya-kanalku --nama "Gaya kanalku"
+pnpm dalang template pakai gaya-kanalku proyeklain/   # pinjam TAMPILANNYA saja
 
 # Menghasilkan berkas
 pnpm dalang render proyekku/ --profile draft
@@ -606,8 +667,25 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
 - **Agent tidak bisa mendengar isi rekaman.** Deteksi hening menunjukkan di
   mana memotong, bukan apa yang layak dipotong; untuk memilih momen ia
   diperintahkan meminta transkrip, bukan menebak.
-- **Visual dasar scene belum bisa di-keyframe**, dan **screen recording**
-  (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Screen recording** (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Menyunting berdua tidak punya akun.** Yang punya tautan `--lan` punya
+  segalanya: menyunting, merender, mengunggah. Bentrok ditolak dan tidak
+  pernah digabungkan otomatis, tidak ada kursor bersama, dan semuanya berbagi
+  satu proses di satu komputer — kalau komputer itu tidur, semua berhenti.
+  [ADR-0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) menulis
+  batasnya lengkap.
+- **Template tidak punya toko.** Tidak ada indeks yang di-host, akun,
+  peringkat, atau pemasangan dari URL; paket berpindah sebagai berkas. Ia juga
+  tidak bisa membawa cara MENGGAMBAR baru — preset Remotion tetap berupa
+  komponen di dalam repo — dan lobi belum menampilkan pratinjau gambar per
+  template. [ADR-0037](docs/decisions/0037-paket-template.md) menulis batasnya
+  lengkap.
+- **Kamera klip yang di-keyframe belum punya berlian di timeline**, dan preset
+  `tutorial-01` tidak memakainya sama sekali — panggung tangkapan layarnya
+  mengarahkan kamera dari anotasi. `dalang validate` mengatakannya alih-alih
+  membiarkan keyframe-nya hilang diam-diam.
+  [ADR-0036](docs/decisions/0036-keyframe-kamera-klip.md) menulis batasnya
+  lengkap.
 - **Klip di dalam scene belum bisa J/L cut, speed ramp, atau multicam.** Satu
   scene sekarang memang boleh memuat beberapa potongan berurutan yang bisa
   dibelah, digeser tepinya (ripple/roll), dibuang, dan disusun ulang — tapi
@@ -734,6 +812,9 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) | Beberapa klip dalam satu scene; skema v2 + migrasi pertama |
 | [0034](docs/decisions/0034-zona-aman-platform.md) | Zona aman platform: teks menjauh dari tepi yang ditimpa antarmuka |
 | [0035](docs/decisions/0035-preset-klip-01.md) | Preset `klip-01` untuk konten pendek vertikal |
+| [0036](docs/decisions/0036-keyframe-kamera-klip.md) | Kamera visual dasar scene bisa di-keyframe (zum, geser, opasitas) |
+| [0037](docs/decisions/0037-paket-template.md) | Template sebagai paket yang bisa dibagikan (kerangka + tampilan, tanpa berkas) |
+| [0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) | Beberapa orang pada satu proyek: bentrok per scene, kehadiran, kunci tautan |
 
 </details>
 

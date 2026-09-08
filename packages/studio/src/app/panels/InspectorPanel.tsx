@@ -2,6 +2,7 @@ import {
   type Annotation,
   CAPTION_POSITIONS,
   CAPTION_STYLES,
+  CLIP_ANIMATABLE,
   FILTER_PRESETS,
   MAX_TRANSITION_FRAMES,
   MIN_TRANSITION_FRAMES,
@@ -21,7 +22,7 @@ import {
   type VisualFilter,
   visualFilterSchema,
 } from "@dalang/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Segmented, Switch, useScrollFade } from "../components/controls";
 import {
   IconImage,
@@ -33,11 +34,13 @@ import {
   IconSearch,
   IconTrash,
 } from "../icons";
+import { clipProgress } from "../model/keyframe-window";
 import { clipMidFrame, planMeta, selectedClip } from "../model/plan-meta";
 import { playback } from "../playback";
 import { uiStore } from "../ui-state";
 import { studioClient, useStudio } from "../use-studio";
 import { AudioTab } from "./AudioTab";
+import { KeyframeControls } from "./KeyframeControls";
 import { LapisanTab } from "./LayersTab";
 import { GrafisTab, SfxSection } from "./MediaLibrary";
 import { SourceSection } from "./SourcePanel";
@@ -763,6 +766,8 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
   const { project, selectedClipId } = useStudio();
   const busy = project?.busy.mutation !== null;
   const uploadRef = useRef<HTMLInputElement>(null);
+  const plan = project?.plan ?? null;
+  const frame = useSyncExternalStore(playback.subscribe, playback.getFrame);
   /**
    * Potongan yang sedang disunting (ADR-0033).
    *
@@ -937,6 +942,45 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
             </button>
           ))}
         </div>
+        {plan ? (
+          <>
+            {/* Nilai pasangan track baru: NETRAL untuk zum dan geseran, karena
+                klip tidak punya "zum sekarang" — yang dipunyainya cuma nama
+                gerakan, dan titik pertamanya karena itu berangkat dari diam.
+                Opasitas beda: ia PUNYA nilai statis, yaitu `filter.opacity`
+                (ADR-0011), dan itulah yang diambil alih track-nya. */}
+            <KeyframeControls
+              tracks={clip.tracks}
+              allowed={CLIP_ANIMATABLE}
+              values={{
+                offsetX: 0,
+                offsetY: 0,
+                zoom: 1,
+                opacity: filter.opacity,
+              }}
+              progress={clipProgress(plan, scene.id, clip.id, frame)}
+              onChange={(tracks, label) =>
+                patch(
+                  [
+                    {
+                      op: "updateScene",
+                      id: scene.id,
+                      clipId: clip.id,
+                      patch: { clip: { tracks } },
+                    },
+                  ],
+                  label,
+                )
+              }
+            />
+            {clip.tracks.some((track) => track.property !== "opacity") ? (
+              <span className="meta-line wrap">
+                Keyframe zum/geser mengambil alih SELURUH jalur kamera — preset gerak di
+                atas tidak lagi berlaku untuk potongan ini.
+              </span>
+            ) : null}
+          </>
+        ) : null}
       </section>
 
       <section className="prop-group">

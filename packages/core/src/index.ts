@@ -1,5 +1,6 @@
 export * from "./canvas";
 export * from "./clips";
+export * from "./collab";
 export * from "./critique";
 export * from "./durations";
 export * from "./format-recipe";
@@ -16,4 +17,6 @@ export * from "./publish";
 export * from "./render-state";
 export * from "./scene-plan";
 export * from "./syllables";
+export * from "./template";
+export * from "./templates-bawaan";
 export * from "./transcript";

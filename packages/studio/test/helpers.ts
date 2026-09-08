@@ -159,6 +159,8 @@ export interface StudioOverrides {
   transcoder?: StudioDeps["transcoder"];
   /** Tujuan publikasi (ADR-0030); bawaannya kosong = mesin tanpa token. */
   publishTargets?: StudioDeps["publishTargets"];
+  /** Kunci tautan (ADR-0038); tanpa ini host berperilaku lokal seperti biasa. */
+  linkKey?: string;
   /** Panel Pengaturan (ADR-0032): berkas .env uji dan penguji kunci palsu. */
   settings?: {
     envPath?: string;
@@ -274,6 +276,10 @@ export const makeHost = (
     allowedHosts: ["studio.local"],
     // Memori preferensi (ADR-0029) di folder uji — jangan pernah rumah pengguna.
     memoryPath: join(workspaceRoot, ".memori-uji.json"),
+    // Registri template (ADR-0037), alasannya sama: tes tidak boleh membaca
+    // — apalagi menulis — template yang terpasang di komputer siapa pun.
+    templateDir: join(workspaceRoot, ".template-uji"),
+    ...(overrides?.linkKey ? { linkKey: overrides.linkKey } : {}),
     ...(planPath ? { planPath } : {}),
     // Panel Pengaturan (ADR-0032): tanpa ini bawaannya `.env` di cwd, yaitu
     // berkas sungguhan milik repo. Tes menulisnya, jadi selalu ke folder uji.
@@ -294,7 +300,10 @@ export const hostCall = (
     host.app.fetch(
       new Request(`http://studio.local${path}`, {
         ...init,
-        ...(init?.body ? { headers: { "content-type": "application/json" } } : {}),
+        headers: {
+          ...(init?.body ? { "content-type": "application/json" } : {}),
+          ...(init?.headers as Record<string, string> | undefined),
+        },
       }),
     ),
   );
@@ -323,7 +332,14 @@ export const call = (
     studio.app.fetch(
       new Request(`http://studio.local${path}`, {
         ...init,
-        ...(init?.body ? { headers: { "content-type": "application/json" } } : {}),
+        // Header pemanggil MENANG atas content-type bawaan (ADR-0038): tes
+        // yang mengirim identitas penyunting dulu kehilangannya di sini, dan
+        // yang terlihat cuma "rute menolak" — bukan "helper-nya membuang
+        // headernya".
+        headers: {
+          ...(init?.body ? { "content-type": "application/json" } : {}),
+          ...(init?.headers as Record<string, string> | undefined),
+        },
       }),
     ),
   );

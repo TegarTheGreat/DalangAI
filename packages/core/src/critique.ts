@@ -5,6 +5,7 @@ import {
   sumClipDurationsSec,
 } from "./durations";
 import { type FormatRecipe, isBodyScene, recipeFor } from "./format-recipe";
+import { panBeyondCover } from "./keyframes";
 import {
   HEDGING_ID,
   KLISE_ID,
@@ -70,7 +71,12 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   const assetClips = scenes.flatMap((scene) =>
     scene.clips.filter((clip) => ASSET_TYPES.has(clip.type)),
   );
-  if (assetClips.length >= 3) {
+  // Preset tutorial-01 dikecualikan (ADR-0036): panggung tangkapan layarnya
+  // mengarahkan kamera dari ANOTASI, bukan dari `clip.motion`, jadi menyuruh
+  // menyelang-nyeling gerak di situ menyuruh mengubah angka yang tidak akan
+  // dibaca siapa pun. Kaidah yang menyuruh melakukan hal yang tidak berefek
+  // adalah kaidah yang mengajari orang mengabaikan kaidah.
+  if (assetClips.length >= 3 && plan.meta.stylePreset !== "tutorial-01") {
     const motions = new Set(assetClips.map((clip) => clip.motion));
     if (motions.size === 1) {
       notes.push({
@@ -185,6 +191,9 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   // 13. Potongan gambar di dalam scene (ADR-0033).
   notes.push(...critiqueClips(plan));
 
+  // 14. Kamera keyframe visual dasar (ADR-0036).
+  notes.push(...critiqueClipCamera(plan));
+
   notes.push(...critiqueFormat(plan, recipe));
   notes.push(...critiqueProse(plan, recipe));
   return notes;
@@ -236,6 +245,79 @@ const critiqueClips = (plan: ScenePlan): DirectorNote[] => {
         `${(butuh - gambarSec).toFixed(1)} dtk. Panjangkan potongan terakhir, ` +
         "tambah satu potongan, atau potong kalimatnya — kalau memang disengaja, abaikan.",
     });
+  }
+  return notes;
+};
+
+/**
+ * Kamera keyframe visual dasar (ADR-0036): tiga hal yang tidak bisa dilihat
+ * dari JSON-nya sama sekali.
+ *
+ * PERTAMA, geseran yang melebihi bidang yang ditutup zum. Sebuah `offsetX:
+ * 0.3` terbaca sopan di plan dan menghasilkan sepertiga bingkai yang kosong
+ * di layar. Ini geometri, bukan selera — karena itu angkanya ikut disebutkan:
+ * yang membaca peringatan ini sedang mencari tahu berapa zum yang cukup.
+ *
+ * KEDUA, preset gerak yang masih tertulis padahal sudah tidak berlaku. Klip
+ * berkeyframe kamera mengabaikan `motion` seluruhnya; membiarkan "pan-left"
+ * duduk di sana membuat plan-nya berbohong tentang apa yang terjadi di layar.
+ *
+ * KETIGA, preset tutorial-01 tidak menuruti kamera klip sama sekali. Panggung
+ * tangkapan layarnya mengarahkan kameranya sendiri dari ANOTASI — zum ke
+ * langkah yang sedang disorot — dan dua kamera pada satu gambar tidak bisa
+ * dipilih salah satunya di tengah render. Keyframe yang dipasang di situ
+ * hilang tanpa satu pun jejak di gambar, jadi ini `perhatian`.
+ */
+const critiqueClipCamera = (plan: ScenePlan): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
+  const tutorial = plan.meta.stylePreset === "tutorial-01";
+  for (const scene of plan.scenes) {
+    for (const clip of scene.clips) {
+      if (clip.tracks.length === 0) continue;
+      if (tutorial) {
+        notes.push({
+          code: "keyframe-kamera-diabaikan-preset",
+          level: "perhatian",
+          sceneId: scene.id,
+          message:
+            `Klip ${clip.id} punya keyframe kamera, tapi preset tutorial-01 ` +
+            "mengarahkan kameranya dari anotasi (zum ke langkah yang disorot), " +
+            "jadi keyframe itu tidak akan terlihat. Pindahkan ke preset lain, " +
+            "atau capai geraknya lewat anotasi langkah.",
+        });
+        continue;
+      }
+      // Preset gerak yang tinggal di klip berkeyframe kamera tidak berlaku
+      // lagi (ADR-0036), dan plan yang menyimpannya membaca seolah keduanya
+      // dipakai. Yang membaca ulang bulan depan tidak punya cara tahu.
+      if (
+        clip.motion !== "none" &&
+        clip.tracks.some((track) => track.property !== "opacity")
+      ) {
+        notes.push({
+          code: "keyframe-menimpa-gerak-preset",
+          level: "saran",
+          sceneId: scene.id,
+          message:
+            `Klip ${clip.id} punya keyframe kamera SEKALIGUS motion "${clip.motion}"; ` +
+            'yang berlaku keyframe-nya. Set motion "none" supaya plan-nya ' +
+            "mengatakan yang sebenarnya terjadi.",
+        });
+      }
+
+      const over = panBeyondCover(clip.tracks);
+      if (over <= 0) continue;
+      notes.push({
+        code: "keyframe-pan-melebihi-zum",
+        level: "saran",
+        sceneId: scene.id,
+        message:
+          `Klip ${clip.id}: pan-nya ${Math.round(over * 100)}% bingkai lebih jauh ` +
+          "daripada yang ditutup zum, jadi ada tepi kosong di sisi seberangnya. " +
+          "Gambar ber-zum z cuma menjulur (z-1)/2 bingkai tiap sisi — naikkan zum, " +
+          "atau kecilkan geserannya.",
+      });
+    }
   }
   return notes;
 };

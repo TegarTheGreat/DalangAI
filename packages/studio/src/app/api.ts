@@ -10,6 +10,7 @@ import type {
   AddGraphicResponse,
   AddSfxResponse,
   ChatStreamEvent,
+  EditorPresence,
   IconSearchResponse,
   NewProjectRequest,
   PeaksResponse,
@@ -28,11 +29,13 @@ import type {
   StickerSearchResponse,
   StockSearchResponse,
   StudioEvent,
+  TemplateCard,
   UploadChunkResponse,
   UploadStatusResponse,
   WorkspacePayload,
   WorkspaceProjectLite,
 } from "../shared/api-types";
+import { editorId, editorName, linkKey, requestHeaders } from "./editor-identity";
 import {
   nextChunk,
   retryDelayMs,
@@ -69,9 +72,17 @@ export class ConfirmationRequired extends Error {
 }
 
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  // Identitas penyunting ikut di SETIAP permintaan (ADR-0038), bukan cuma di
+  // rute patch: yang perlu tahu siapa yang berbuat apa bukan hanya patch —
+  // render, unggah, dan tahap pipeline juga. Header, bukan badan, supaya tiap
+  // rute tidak perlu menambah field identitas pada bentuk badannya sendiri.
   const response = await fetch(path, {
-    headers: init?.body ? { "content-type": "application/json" } : {},
     ...init,
+    headers: {
+      ...(init?.body ? { "content-type": "application/json" } : {}),
+      ...requestHeaders(),
+      ...(init?.headers as Record<string, string> | undefined),
+    },
   });
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (response.status === 428) {
@@ -231,10 +242,31 @@ export const api = {
       body: "{}",
     }),
 
+  /** Kabar kehadiran: masih di sini, dan sedang di scene ini (ADR-0038). */
+  presence: (sceneId: string | null) =>
+    request<{ ok: true; editors: EditorPresence[] }>("/api/presence", {
+      method: "POST",
+      body: JSON.stringify({ sceneId }),
+    }),
+
   createProject: (input: NewProjectRequest) =>
     request<{ ok: true; project: WorkspaceProjectLite; workspace: WorkspacePayload }>(
       "/api/workspace/create",
       { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  /** Daftar template yang bisa dipakai — bawaan plus yang terpasang (ADR-0037). */
+  listTemplates: () =>
+    request<{
+      ok: true;
+      templates: TemplateCard[];
+      broken: { file: string; reason: string }[];
+    }>("/api/workspace/templates"),
+
+  createFromTemplate: (templateId: string, judul: string) =>
+    request<{ ok: true; project: WorkspaceProjectLite; workspace: WorkspacePayload }>(
+      "/api/workspace/from-template",
+      { method: "POST", body: JSON.stringify({ templateId, judul }) },
     ),
 
   importTimeline: (isi: string, judul?: string) =>
@@ -266,10 +298,19 @@ export const api = {
       { method: "POST", body: JSON.stringify({ id }) },
     ),
 
-  patch: (ops: PatchOpInput[]) =>
-    request<{ ok: true; summary: string }>("/api/patch", {
+  /**
+   * `baseRevision` = revisi yang dilihat penyunting saat ia menyunting
+   * (ADR-0038). Server menolak kalau petak yang disentuh sudah berubah di
+   * tangan orang lain — jadi "terakhir menang" berganti jadi "yang kalah
+   * diberi tahu".
+   */
+  patch: (ops: PatchOpInput[], baseRevision?: number) =>
+    request<{ ok: true; summary: string; revision: number }>("/api/patch", {
       method: "POST",
-      body: JSON.stringify({ ops }),
+      body: JSON.stringify({
+        ops,
+        ...(baseRevision === undefined ? {} : { baseRevision }),
+      }),
     }),
 
   undo: () =>
@@ -537,7 +578,16 @@ export const api = {
     onEvent: (event: StudioEvent) => void,
     onStatus?: (connected: boolean) => void,
   ): (() => void) => {
-    const source = new EventSource("/api/events");
+    // Identitas lewat query: EventSource tidak bisa mengirim header kustom
+    // sama sekali, dan tanpa identitas kehadiran (ADR-0038) tidak akan pernah
+    // tahu siapa yang sedang membuka proyek ini.
+    // EventSource tidak bisa mengirim header sama sekali, jadi identitas DAN
+    // kunci tautan keduanya lewat query di sini.
+    const kunci = linkKey();
+    const source = new EventSource(
+      `/api/events?editorId=${encodeURIComponent(editorId())}&editorName=${encodeURIComponent(editorName())}` +
+        (kunci ? `&kunci=${encodeURIComponent(kunci)}` : ""),
+    );
     source.onopen = () => onStatus?.(true);
     source.onerror = () => onStatus?.(false);
     const names: StudioEvent["type"][] = [
@@ -551,6 +601,7 @@ export const api = {
       // maupun unggahan (ADR-0030): EventSource hanya mendengar nama yang didaftar.
       "proxy-progress",
       "publish",
+      "presence",
     ];
     for (const name of names) {
       source.addEventListener(name, (message) => {

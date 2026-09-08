@@ -389,6 +389,60 @@ input[type="color"]::-webkit-color-swatch {
   gap: 4px;
   flex: 0 0 auto;
 }
+
+/* Kehadiran (ADR-0038): duduk di antara judul dan tombol, jadi ia terbaca
+   sebagai keterangan tentang PROYEK — bukan sebagai satu tombol lagi. */
+.presence-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Menyusut DULUAN saat bilah atas sempit: kehadiran adalah keterangan, dan
+     keterangan tidak boleh menggunting kendali. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  margin-right: 10px;
+}
+.presence-self {
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.presence-self:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+.presence-input {
+  width: 132px;
+  border: 1px solid var(--accent);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+}
+/* Inisial, bukan foto: Dalang tidak punya akun, jadi tidak punya wajah untuk
+   ditampilkan — dan lingkaran abu-abu berisi siluet orang adalah kebohongan
+   kecil tentang fitur yang tidak ada. */
+.presence-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: default;
+}
 .divider {
   width: 1px;
   height: 22px;
