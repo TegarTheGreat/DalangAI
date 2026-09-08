@@ -1,0 +1,191 @@
+{
+  "$schema": "../../packages/core/schema/scene-plan.v2.schema.json",
+  "version": 2,
+  "projectId": "demo-klip-hook",
+  "meta": {
+    "title": "Tiga Detik Pertama",
+    "aspectRatio": "9:16",
+    "language": "id",
+    "stylePreset": "klip-01",
+    "format": "klip",
+    "safeArea": {
+      "top": 0.07,
+      "bottom": 0.2,
+      "left": 0,
+      "right": 0.14
+    }
+  },
+  "audio": {
+    "music": {
+      "assetId": "pustaka:tenang",
+      "volume": 0.1,
+      "ducking": true
+    }
+  },
+  "scenes": [
+    {
+      "id": "sc-hook",
+      "locked": false,
+      "narration": "Penonton memutuskan dalam tiga detik. Bukan tiga puluh.",
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
+      "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 8
+      },
+      "texts": [
+        {
+          "id": "sc-hook-hook",
+          "content": "3 detik",
+          "role": "kicker",
+          "position": "top",
+          "align": "center",
+          "size": "l",
+          "emphasis": "box",
+          "anim": "rise",
+          "uppercase": true,
+          "tracking": 0.06,
+          "startFrac": 0,
+          "endFrac": 0.42
+        }
+      ],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-hook-k1",
+          "type": "solid",
+          "variant": "rays",
+          "motion": "kenburns-in",
+          "pinned": false,
+          "durationSec": 2.8
+        },
+        {
+          "id": "sc-hook-k2",
+          "type": "solid",
+          "variant": "grid",
+          "motion": "pan-right",
+          "pinned": false,
+          "durationSec": 2.2
+        }
+      ]
+    },
+    {
+      "id": "sc-sunyi",
+      "locked": false,
+      "narration": "Sebagian besar menonton tanpa suara, jadi kalimatnya harus berdiri sendirian.",
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
+      "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 22
+      },
+      "texts": [
+        {
+          "id": "sc-sunyi-hook",
+          "content": "Tanpa suara",
+          "role": "kicker",
+          "position": "top",
+          "align": "center",
+          "size": "l",
+          "emphasis": "box",
+          "anim": "rise",
+          "uppercase": true,
+          "tracking": 0.06,
+          "startFrac": 0,
+          "endFrac": 0.34
+        }
+      ],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-sunyi-k1",
+          "type": "solid",
+          "variant": "topo",
+          "motion": "kenburns-out",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "sc-terang",
+      "locked": false,
+      "narration": "Gambar yang diredupkan demi teks justru dilewati lebih dulu.",
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
+      "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 9
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-terang-k1",
+          "type": "solid",
+          "variant": "duotone",
+          "motion": "pan-left",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "sc-berat",
+      "locked": false,
+      "narration": "Jadi bobotnya ditaruh di hurufnya. Bukan di layarnya.",
+      "caption": {
+        "enabled": true,
+        "style": "inherit"
+      },
+      "duration": "auto",
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 18
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-berat-k1",
+          "type": "solid",
+          "variant": "rays",
+          "motion": "kenburns-in",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "sc-outro",
+      "locked": false,
+      "narration": "Terang, berat, cepat.",
+      "caption": {
+        "enabled": false,
+        "style": "inherit"
+      },
+      "duration": 2.5,
+      "transition": {
+        "type": "cross-fade",
+        "durationFrames": 10
+      },
+      "texts": [],
+      "annotations": [],
+      "clips": [
+        {
+          "id": "sc-outro-k1",
+          "type": "template-anim",
+          "variant": "outro",
+          "motion": "none",
+          "pinned": false
+        }
+      ]
+    }
+  ]
+}
