@@ -174,13 +174,13 @@ dijalankan terhadap layanan/binari sungguhan.
 > Membuka: memotong berdasarkan kata, buang jeda/filler, caption untuk
 > footage orang, agent yang memahami isi rekaman.
 
-| # | Item | Minta |
+| # | Item | Status · catatan |
 | --- | --- | --- |
-| 6.1 | Port `AsrProvider` + word timestamp + diarisasi opsional | Pola port yang sama dengan `TtsProvider` |
-| 6.2 | Rantai provider: lokal (whisper.cpp/WhisperX) → API (AssemblyAI/Deepgram/ElevenLabs Scribe) | Jalur offline wajib ada, seperti `silence` di TTS |
-| 6.3 | Transkrip masuk scene-plan (`renderState.transcripts`) + cache content-hash | Perubahan skema → butuh ADR |
-| 6.4 | Tool agent: `transcribeVideo`, `findMoments`, `cutByWords` | Patch op baru untuk trim berbasis kata |
-| 6.5 | UI: panel transkrip yang bisa diklik untuk seek dan dipotong | Panel baru |
+| 6.1 | Port `AsrProvider` + word timestamp + diarisasi opsional | Selesai (ADR-0021) · Pola port yang sama dengan `TtsProvider` |
+| 6.2 | Rantai provider: lokal (whisper.cpp/WhisperX) → API (AssemblyAI/Deepgram/ElevenLabs Scribe) | Selesai (ADR-0021) · Jalur offline wajib ada, seperti `silence` di TTS |
+| 6.3 | Transkrip masuk scene-plan (`renderState.transcripts`) + cache content-hash | Selesai (ADR-0021) · Perubahan skema → butuh ADR |
+| 6.4 | Tool agent: `transcribeVideo`, `findMoments`, `cutByWords` | Selesai (ADR-0021) · Patch op baru untuk trim berbasis kata |
+| 6.5 | UI: panel transkrip yang bisa diklik untuk seek dan dipotong | Selesai (ADR-0021) · Panel baru |
 
 **Kenapa duluan:** §3.1 memblokir §3.2, §3.6, dan sebagian besar nilai
 "editor" (bukan "generator"). Tanpa ini Dalang tidak pernah bisa mengedit
@@ -202,12 +202,12 @@ belum pernah dijalankan terhadap model sungguhan.
 
 > Membuka: kritik yang berdasar pada gambar nyata, bukan pada struktur JSON.
 
-| # | Item | Minta |
+| # | Item | Status · catatan |
 | --- | --- | --- |
-| 7.1 | Tool `reviewRender`: render still murah di beberapa titik → vision → temuan terstruktur | Sudah ada `renderPreview` + `analyzeImage` |
-| 7.2 | Loop revisi berbatas: temuan → patch → render ulang, dengan batas iterasi dan biaya | Guardrail baru (jangan sampai loop tak berujung) |
-| 7.3 | Gabungkan dengan `critiqueDraft`: kritik struktur + kritik gambar jadi satu laporan | — |
-| 7.4 | Suite eval agent: sekumpulan brief, penilaian otomatis + rubrik | Investasi nyata; tanpa ini §7.2 tidak bisa diukur |
+| 7.1 | Tool `reviewRender`: render still murah di beberapa titik → vision → temuan terstruktur | Selesai (ADR-0022) · Sudah ada `renderPreview` + `analyzeImage` |
+| 7.2 | Loop revisi berbatas: temuan → patch → render ulang, dengan batas iterasi dan biaya | Selesai (ADR-0022) · Guardrail baru (jangan sampai loop tak berujung) |
+| 7.3 | Gabungkan dengan `critiqueDraft`: kritik struktur + kritik gambar jadi satu laporan | Selesai (ADR-0022) · — |
+| 7.4 | Suite eval agent: sekumpulan brief, penilaian otomatis + rubrik | Selesai (ADR-0022) · Investasi nyata; tanpa ini §7.2 tidak bisa diukur |
 
 **Kenapa di sini:** ini yang mengubah "agent yang mengisi form" jadi "agent
 yang punya penilaian". Dan §7.4 harus ikut, kalau tidak kita cuma menebak
@@ -227,12 +227,12 @@ server MCP, delta renderState di tahap pipeline Studio).
 
 > Membuka: Dalang jadi bagian alur kerja profesional, bukan pulau.
 
-| # | Item | Minta |
+| # | Item | Status · catatan |
 | --- | --- | --- |
-| 8.1 | Ekspor OTIO dari scene-plan | Pemetaan scene → clip/track; efek tidak terpetakan penuh (batas OTIO) |
-| 8.2 | Ekspor FCPXML (lebih ekspresif untuk keyword/marker) | — |
-| 8.3 | Impor OTIO/FCPXML jadi scene-plan | Lebih sulit; boleh menyusul |
-| 8.4 | **Server MCP Dalang** — timeline sebagai tool untuk agent lain | Permukaan tool baru; guardrail harus ikut |
+| 8.1 | Ekspor OTIO dari scene-plan | Selesai (ADR-0023) · Pemetaan scene → clip/track; efek tidak terpetakan penuh (batas OTIO) |
+| 8.2 | Ekspor FCPXML (lebih ekspresif untuk keyword/marker) | Selesai (ADR-0023) · — |
+| 8.3 | Impor OTIO/FCPXML jadi scene-plan | Selesai (ADR-0023) · Lebih sulit; boleh menyusul |
+| 8.4 | **Server MCP Dalang** — timeline sebagai tool untuk agent lain | Selesai (ADR-0023) · Permukaan tool baru; guardrail harus ikut |
 
 **Kenapa penting:** §8.1–8.2 murah relatif nilainya, karena scene-plan sudah
 JSON terstruktur. §8.4 mengubah Dalang dari aplikasi jadi **kemampuan** yang
