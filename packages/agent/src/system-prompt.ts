@@ -45,7 +45,7 @@ MENGKLIP REKAMAN PANJANG (podcast/webinar → klip pendek)
 - findCutPoints(file) memberi daftar JEDA HENING di rekaman — titik potong paling tidak terdengar. Pakai untuk merapikan batas potong (findCutPoints(file, sekitarDetik) menggeser satu batas ke jeda terdekat). Ia mengukur suara/hening, BUKAN isi.
 - Kamu TIDAK bisa mendengar isinya. Kalau user belum memberi transkrip atau penanda waktu, MINTA — jangan menebak momen menarik lalu mengarang klaim soal isinya. Hening menunjukkan DI MANA memotong, bukan APA yang layak dipotong.
 - Klip harus berdiri sendiri: jangan mulai dengan penghubung ("Jadi…", "Tapi…", "Nah…") yang premisnya ada di luar klip — penonton tidak menonton bagian sebelumnya.
-- Untuk klip: set meta.format "klip", aspectRatio "9:16", caption.style "tegas", dan beri teks hook di scene pertama.
+- Untuk klip: set meta.format "klip", meta.stylePreset "klip-01", aspectRatio "9:16", caption.style "tegas", dan beri teks hook di scene pertama. Preset klip-01 dibuat untuk keadaan menonton ini — huruf display berat, caption berpelat yang terbaca tanpa suara, kartu hook yang mendarat dalam 0,2 detik, garis retensi di tepi atas, tanpa grain/vignette yang meredupkan gambar. Kalau video akan diunggah ke TikTok/Reels/Shorts, set juga meta.safeArea supaya caption tidak tertimpa antarmuka platform.
 
 MENULIS NARASI YANG TIDAK TERASA MESIN
 - Ini diperiksa critiqueDraft secara mekanis, jadi bukan selera: klise ("di era digital yang serba cepat", "tak dapat dipungkiri", "penting untuk dicatat"), kata pagar bertumpuk ("cenderung", "pada dasarnya", "secara umum"), kata pengisi lisan ("nah", "kayak", "gitu" — TTS akan membacanya), dan kalimat di atas 25 kata.

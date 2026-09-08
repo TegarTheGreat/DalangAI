@@ -49,6 +49,11 @@ const STYLE_PRESETS: ReadonlyArray<{ id: string; title: string; desc: string }> 
     title: "Tutorial",
     desc: "Panggung tangkapan layar, anotasi, sorot langkah. Cocok untuk panduan dan demo produk.",
   },
+  {
+    id: "klip-01",
+    title: "Klip pendek",
+    desc: "Tegak, huruf display berat, caption berpelat yang terbaca tanpa suara. Cocok untuk Reels, Shorts, TikTok.",
+  },
 ];
 
 const RATIO_HINT: Record<AspectRatio, string> = {

@@ -39,6 +39,7 @@ const RENDER_FILE = /\.(mp4|webm|mov)$/i;
 const PRESET_ACCENT: Record<string, string> = {
   "documentary-01": "#E4A64C",
   "tutorial-01": "#2E5FD7",
+  "klip-01": "#FF3D57",
 };
 const FALLBACK_ACCENT = "#8A93A6";
 

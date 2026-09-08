@@ -330,7 +330,31 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
  * preset gaya, warna aksen/dasar, dan font ter-bundle. Semua patch user
  * biasa: tercatat, bisa di-undo, terlihat agent.
  */
-const STYLE_PRESETS = ["documentary-01", "tutorial-01"] as const;
+const STYLE_PRESETS = ["documentary-01", "tutorial-01", "klip-01"] as const;
+
+/**
+ * Aksen dan warna dasar bawaan tiap preset — disalin dari `theme.ts`
+ * masing-masing. Dipakai saat plan belum punya design token sendiri,
+ * supaya pemilih warna membuka pada warna yang BENAR-BENAR terlihat di
+ * preview, bukan pada warna preset lain.
+ */
+/**
+ * Label preset di Segmented. Dinamai dari KEADAAN MENONTON yang dilayaninya,
+ * bukan dari nama internalnya: yang memilih di sini sedang memutuskan "video
+ * ini akan ditonton di mana", bukan "modul mana yang merender".
+ */
+const STYLE_PRESET_LABEL: Record<string, string> = {
+  "documentary-01": "Dokumenter (gelap)",
+  "tutorial-01": "Tutorial (terang)",
+  "klip-01": "Klip (tegak)",
+};
+
+const DEFAULT_PRESET_TOKENS = { accent: "#e4a64c", primary: "#0b0e17" };
+const PRESET_DEFAULT_TOKENS: Record<string, { accent: string; primary: string }> = {
+  "documentary-01": DEFAULT_PRESET_TOKENS,
+  "tutorial-01": { accent: "#2e5fd7", primary: "#f4f2ec" },
+  "klip-01": { accent: "#ff3d57", primary: "#07080c" },
+};
 
 /**
  * Pilihan zona aman (ADR-0034), dinamai dari APA YANG DILAKUKANNYA, bukan dari
@@ -406,12 +430,13 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
     setStylePreset(plan.meta.stylePreset);
     setSafeAreaKey(safeAreaKeyOf(plan.meta.safeArea));
     setFormat(plan.meta.format);
-    setAccent(
-      tokens.accent ?? (plan.meta.stylePreset === "tutorial-01" ? "#2e5fd7" : "#e4a64c"),
-    );
-    setPrimary(
-      tokens.primary ?? (plan.meta.stylePreset === "tutorial-01" ? "#f4f2ec" : "#0b0e17"),
-    );
+    // Preset tak dikenal (plan dari versi lain, atau diketik tangan) jatuh ke
+    // token dokumenter — sama seperti renderer, yang juga jatuh ke
+    // documentary-01 saat presetnya tidak ada.
+    const presetTokens =
+      PRESET_DEFAULT_TOKENS[plan.meta.stylePreset] ?? DEFAULT_PRESET_TOKENS;
+    setAccent(tokens.accent ?? presetTokens.accent);
+    setPrimary(tokens.primary ?? presetTokens.primary);
     setFontDisplay(tokens.fontDisplay ?? "");
     setFontBody(tokens.fontBody ?? "");
     const assetId = plan.audio.music?.assetId ?? "";
@@ -514,9 +539,7 @@ const StyleDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
                   ? (stylePreset as (typeof STYLE_PRESETS)[number])
                   : "documentary-01"
               }
-              label={(preset) =>
-                preset === "tutorial-01" ? "Tutorial (terang)" : "Dokumenter (gelap)"
-              }
+              label={(preset) => STYLE_PRESET_LABEL[preset] ?? preset}
               onChange={setStylePreset}
             />
           </div>

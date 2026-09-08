@@ -97,6 +97,7 @@ const isIconRef = (ref: string): boolean => ref.startsWith("iconify:");
 const PRESET_ACCENT: Record<string, string> = {
   "documentary-01": "#E4A64C",
   "tutorial-01": "#2E5FD7",
+  "klip-01": "#FF3D57",
 };
 
 const accentOf = (plan: ScenePlan): string =>
