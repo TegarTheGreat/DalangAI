@@ -71,7 +71,16 @@ const toRemotionCaptions = (
  * geseran yang sama akan membuat caption tertinggal sekian ratus milidetik dari
  * bibir orangnya.
  */
-const captionWords = (
+/**
+ * Kata-kata caption sebuah scene beserta waktunya — SATU sumber untuk caption
+ * yang dibakar ke gambar DAN untuk berkas subtitle (ADR-0039).
+ *
+ * Diekspor supaya penulis subtitle tidak menghitung ulang "kata apa, kapan".
+ * Dua perhitungan atas pertanyaan yang sama pasti menyimpang, dan yang
+ * menyimpang duluan adalah yang jarang dilihat — yaitu berkas subtitle,
+ * yang baru ketahuan salah setelah diunggah.
+ */
+export const sceneCaptionWords = (
   scene: Scene,
   plan: ScenePlan,
   sceneDurationFrames: number,
@@ -153,7 +162,7 @@ export const buildCaptionPages = ({
 }): CaptionPageModel[] => {
   if (!scene.caption.enabled) return [];
 
-  const { words, offsetMs } = captionWords(scene, plan, sceneDurationFrames, fps);
+  const { words, offsetMs } = sceneCaptionWords(scene, plan, sceneDurationFrames, fps);
   if (words.length === 0) return [];
 
   const { pages } = createTikTokStyleCaptions({

@@ -14,6 +14,12 @@ import { buildEditTimeline, otioToJson, toFcpxml } from "@dalang/interop";
 import { atomicWriteFile } from "@dalang/pipeline";
 import { templatesPublicDir } from "@dalang/templates/paths";
 import {
+  buildSubtitleCues,
+  type SubtitleFormat,
+  toSrt,
+  toVtt,
+} from "@dalang/templates/subtitle";
+import {
   displayPath,
   listProjects,
   readPlan,
@@ -308,6 +314,54 @@ export const toolExportTimeline = (
     // Laporan ini WAJIB ikut ke pemanggil. Agent yang mengira ekspornya utuh
     // akan meyakinkan penggunanya soal hal yang tidak benar.
     tidakIkut: timeline.notes.map((note) => note.detail),
+  };
+};
+
+/**
+ * Berkas subtitle (ADR-0039).
+ *
+ * Terpisah dari ekspor interop, dan alasannya sama dengan di CLI: ekspor
+ * membawa SUSUNAN garis waktu ke perkakas lain, sedangkan subtitle adalah
+ * berkas yang berjalan BERSAMA video jadi.
+ */
+export const toolWriteSubtitle = (
+  context: ToolContext,
+  { proyek, format = "srt" }: { proyek: string; format?: SubtitleFormat },
+) => {
+  const planPath = resolvePlanPath(context.workspace, proyek);
+  const plan: ScenePlan = readPlan(planPath);
+  if (context.workspace.readOnly) {
+    return {
+      ok: false as const,
+      pesan: "Server hanya-baca: subtitle menulis berkas ke folder proyek.",
+    };
+  }
+  const cues = buildSubtitleCues(plan);
+  const name = `${plan.projectId}.${plan.meta.language}.${format}`;
+  const target = join(dirname(planPath), name);
+  atomicWriteFile(target, format === "srt" ? toSrt(cues) : toVtt(cues));
+
+  // Waktu DITAKSIR dan waktu dari TTS bedanya besar; pemanggil harus bisa
+  // mengatakannya, bukan menyerahkan berkas melenceng diam-diam.
+  const bernarasi = plan.scenes.filter((scene) => scene.narration.trim() !== "");
+  const ditaksir = bernarasi.filter(
+    (scene) =>
+      (plan.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) === 0,
+  ).length;
+  return {
+    ok: true as const,
+    berkas: displayPath(context.workspace, target),
+    kartu: cues.length,
+    bahasa: plan.meta.language,
+    sampaiDetik: Number(((cues.at(-1)?.endMs ?? 0) / 1000).toFixed(1)),
+    ...(cues.length === 0
+      ? { catatan: "Plan ini belum punya narasi maupun transkrip — berkasnya kosong" }
+      : {}),
+    ...(ditaksir > 0
+      ? {
+          peringatan: `${ditaksir} dari ${bernarasi.length} scene bernarasi waktunya masih DITAKSIR (belum ada TTS) — waktunya belum tepat untuk diunggah`,
+        }
+      : {}),
   };
 };
 

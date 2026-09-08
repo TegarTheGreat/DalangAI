@@ -128,6 +128,18 @@ export type ReviewResult = {
   costUsd?: number;
 };
 
+/** Hasil penulisan berkas subtitle (ADR-0039). */
+export type SubtitleResult = {
+  ok: true;
+  file: string;
+  cues: number;
+  durationMs: number;
+  language: string;
+  /** Scene bernarasi yang waktunya masih ditaksir (belum ada TTS). */
+  estimated: number;
+  narrated: number;
+};
+
 /** Hasil ekspor garis waktu ke format interchange (ADR-0023). */
 export type TimelineExportResult = {
   ok: true;
@@ -340,6 +352,12 @@ export const api = {
     request<ReviewResult>("/api/review", {
       method: "POST",
       body: JSON.stringify({ maxFrames, ...(perhatian ? { perhatian } : {}) }),
+    }),
+
+  writeSubtitle: (format: "srt" | "vtt") =>
+    request<SubtitleResult>("/api/subtitle", {
+      method: "POST",
+      body: JSON.stringify({ format }),
     }),
 
   exportTimeline: (format: "otio" | "fcpxml") =>

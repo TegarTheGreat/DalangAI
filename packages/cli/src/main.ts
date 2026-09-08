@@ -79,6 +79,13 @@ import {
 } from "@dalang/renderer";
 import { slugify } from "@dalang/studio/server";
 import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
+import {
+  buildSubtitleCues,
+  SUBTITLE_FORMATS,
+  type SubtitleFormat,
+  toSrt,
+  toVtt,
+} from "@dalang/templates/subtitle";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
 import { buildLambdaTarget, readCloudConfig, registerCloudCommands } from "./cloud";
@@ -665,6 +672,10 @@ program
       .default("private"),
   )
   .option("--force", "unggah lagi walau berkas yang sama sudah pernah terunggah")
+  .option(
+    "--tanpa-subtitle",
+    "jangan ikut mengunggah berkas subtitle (bawaan: ikut, kalau plan punya narasi)",
+  )
   .option("--yes", "tanpa pertanyaan konfirmasi")
   .description(
     "Unggah berkas render ke YouTube (ADR-0030) — butuh YOUTUBE_ACCESS_TOKEN; bawaan privat, dan berkas yang sama tidak diunggah dua kali tanpa --force",
@@ -679,6 +690,7 @@ program
         tag?: string[];
         privasi: (typeof PUBLISH_PRIVACIES)[number];
         force?: boolean;
+        tanpaSubtitle?: boolean;
         yes?: boolean;
       },
     ) => {
@@ -706,6 +718,25 @@ program
         ...(options.tag ? { tags: options.tag } : {}),
         privacy: options.privasi,
       };
+      /**
+       * Subtitle ditulis SEGAR di sini, bukan diambil dari berkas yang
+       * kebetulan ada di folder (ADR-0039): berkas lama yang tertinggal dari
+       * naskah sebelumnya akan terunggah sebagai teks yang tidak cocok dengan
+       * suaranya — cacat yang cuma ketahuan oleh penonton yang menyalakan
+       * teksnya. Bawaannya IKUT karena subtitle selalu memperbaiki video, dan
+       * yang harus diingat orang bukan menyalakannya melainkan mematikannya.
+       */
+      let subtitle: { path: string; language: string; label?: string } | undefined;
+      if (!options.tanpaSubtitle) {
+        const cues = buildSubtitleCues(plan);
+        if (cues.length > 0) {
+          const subPath = join(paths.dalangDir, `subtitle.${plan.meta.language}.srt`);
+          mkdirSync(dirname(subPath), { recursive: true });
+          atomicWriteFile(subPath, toSrt(cues));
+          subtitle = { path: subPath, language: plan.meta.language };
+        }
+      }
+
       const sizeMb = (statSync(filePath).size / 1024 / 1024).toFixed(1);
       const firstLine = metadata.description.split("\n")[0] ?? "";
       console.log(
@@ -714,6 +745,7 @@ program
           `  judul    : ${metadata.title}\n` +
           `  privasi  : ${PUBLISH_PRIVACY_LABEL[metadata.privacy]}\n` +
           `  tag      : ${metadata.tags.join(", ") || "-"}\n` +
+          `  subtitle : ${subtitle ? `ikut (${subtitle.language})` : options.tanpaSubtitle ? "tidak (--tanpa-subtitle)" : "tidak ada — plan belum punya narasi"}\n` +
           `  deskripsi: ${firstLine.length > 90 ? `${firstLine.slice(0, 89)}…` : firstLine}`,
       );
 
@@ -750,6 +782,7 @@ program
           target,
           filePath,
           metadata,
+          ...(subtitle ? { subtitle } : {}),
           force: options.force ?? false,
           onProgress: publishProgressPrinter(),
         });
@@ -764,6 +797,17 @@ program
             ? `  sudah terunggah sebelumnya: ${outcome.record.url}`
             : `  terunggah: ${outcome.record.url} (${PUBLISH_PRIVACY_LABEL[outcome.record.privacy]})`,
         );
+        // Subtitle gagal BUKAN unggahan gagal: videonya sudah tayang, dan yang
+        // dibutuhkan orangnya adalah tahu berkas mana yang harus dinaikkan
+        // manual — bukan mengira ia harus mengunggah ulang videonya.
+        if (outcome.subtitleError) {
+          console.log(
+            `  PERHATIAN: videonya naik, tapi subtitle-nya tidak — ${outcome.subtitleError}\n` +
+              `  Unggah manual dari YouTube Studio: ${subtitle?.path ?? "-"}`,
+          );
+        } else if (subtitle) {
+          console.log(`  subtitle ikut terunggah (${subtitle.language})`);
+        }
       } finally {
         db.close();
       }
@@ -996,6 +1040,77 @@ program
       );
     },
   );
+
+/**
+ * Berkas subtitle (ADR-0039).
+ *
+ * Terpisah dari `dalang export`, dan itu disengaja: ekspor interop membawa
+ * SUSUNAN garis waktu ke perkakas penyuntingan lain, sedangkan subtitle adalah
+ * berkas yang berjalan BERSAMA video jadi. Menggabungkan keduanya di satu
+ * perintah akan membuat "ekspor" berarti dua hal yang dipakai di dua saat yang
+ * berbeda oleh dua orang yang berbeda.
+ */
+program
+  .command("subtitle")
+  .argument("<proyek>", "folder proyek atau path plan.json")
+  .option(
+    "--format <nama>",
+    `format berkas (${SUBTITLE_FORMATS.join(" | ")})`,
+    (value: string) => {
+      if (!(SUBTITLE_FORMATS as readonly string[]).includes(value)) {
+        throw new InvalidArgumentError(
+          `format harus salah satu dari: ${SUBTITLE_FORMATS.join(", ")}`,
+        );
+      }
+      return value as SubtitleFormat;
+    },
+    "srt",
+  )
+  .option("-o, --out <berkas>", "tulis ke berkas ini (bawaan: di samping plan.json)")
+  .description(
+    "Tulis berkas subtitle (.srt/.vtt) dari narasi dan transkrip — siap diunggah ke YouTube (ADR-0039)",
+  )
+  .action((proyek: string, options: { format: SubtitleFormat; out?: string }) => {
+    const absPlan = planPathOf(proyek);
+    const plan = readPlanFile(absPlan);
+    const cues = buildSubtitleCues(plan);
+    const target = resolve(
+      options.out ??
+        join(
+          dirname(absPlan),
+          `${plan.projectId}.${plan.meta.language}.${options.format}`,
+        ),
+    );
+    mkdirSync(dirname(target), { recursive: true });
+    atomicWriteFile(target, options.format === "srt" ? toSrt(cues) : toVtt(cues));
+
+    console.log(`Subtitle ditulis ke ${target}`);
+    if (cues.length === 0) {
+      // Berkas kosong DIKATAKAN, bukan dibiarkan terlihat seperti berhasil:
+      // yang mengunggahnya baru tahu kosong setelah videonya tayang.
+      console.log(
+        "  PERHATIAN: tidak ada satu pun kartu — plan ini belum punya narasi maupun transkrip.",
+      );
+      return;
+    }
+    const akhir = cues[cues.length - 1]?.endMs ?? 0;
+    console.log(
+      `  ${cues.length} kartu · sampai detik ${(akhir / 1000).toFixed(1)} · bahasa ${plan.meta.language}`,
+    );
+    // Waktunya diturunkan dari TTS kalau ada, ditaksir kalau belum — dan
+    // bedanya besar, jadi dikatakan.
+    const berTts = plan.scenes.filter(
+      (scene) =>
+        (plan.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) > 0,
+    ).length;
+    const bernarasi = plan.scenes.filter((scene) => scene.narration.trim() !== "").length;
+    if (berTts < bernarasi) {
+      console.log(
+        `  ${bernarasi - berTts} dari ${bernarasi} scene bernarasi waktunya masih DITAKSIR ` +
+          "(belum ada TTS). Jalankan `dalang generate` dulu untuk waktu yang tepat.",
+      );
+    }
+  });
 
 program
   .command("transcribe")

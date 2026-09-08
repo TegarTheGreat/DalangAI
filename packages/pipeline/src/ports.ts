@@ -320,6 +320,15 @@ export interface PublishRequest {
   tags: string[];
   privacy: "private" | "unlisted" | "public";
   language?: string;
+  /**
+   * Berkas subtitle yang ikut naik bersama videonya (ADR-0039).
+   *
+   * Opsional, dan kegagalannya TIDAK boleh menggagalkan unggahan videonya:
+   * video sudah tayang saat langkah ini dijalankan, dan melaporkan "gagal"
+   * atas unggahan yang sebenarnya berhasil akan membuat orang mengunggah
+   * ulang video yang sama.
+   */
+  subtitle?: { path: string; language: string; label?: string };
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
 }
@@ -330,6 +339,14 @@ export interface PublishResult {
   videoId: string;
   /** Tautan yang bisa dibuka orang. */
   url: string;
+  /** true = subtitle ikut terunggah; false/undefined = tidak diminta atau gagal. */
+  subtitleUploaded?: boolean;
+  /**
+   * Kenapa subtitle-nya gagal, kalau gagal. Videonya TETAP terunggah — jadi
+   * ini keterangan, bukan kegagalan, dan pemanggilnya menampilkannya sebagai
+   * "unggah subtitle-nya manual" alih-alih "unggahan gagal".
+   */
+  subtitleError?: string;
 }
 
 /**

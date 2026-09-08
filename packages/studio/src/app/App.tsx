@@ -11,7 +11,12 @@ import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useRef, useState } from "react";
 import type { BusyKind, ExportSettingsLite } from "../shared/api-types";
-import { api, type ReviewResult, type TimelineExportResult } from "./api";
+import {
+  api,
+  type ReviewResult,
+  type SubtitleResult,
+  type TimelineExportResult,
+} from "./api";
 import {
   RadioCard,
   Segmented,
@@ -171,12 +176,19 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const [timeline, setTimeline] = useState<TimelineExportResult | null>(null);
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [timelineBusy, setTimelineBusy] = useState<"otio" | "fcpxml" | null>(null);
+  // Subtitle juga berdiri sendiri, dan ALASANNYA berbeda dari interop: berkas
+  // ini berjalan BERSAMA video jadi, bukan menggantikannya.
+  const [subtitle, setSubtitle] = useState<SubtitleResult | null>(null);
+  const [subtitleError, setSubtitleError] = useState<string | null>(null);
+  const [subtitleBusy, setSubtitleBusy] = useState<"srt" | "vtt" | null>(null);
   useEscape(open, onClose);
 
   useEffect(() => {
     if (!open) {
       setTimeline(null);
       setTimelineError(null);
+      setSubtitle(null);
+      setSubtitleError(null);
     }
   }, [open]);
 
@@ -194,6 +206,19 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
       })
       .finally(() => setTimelineBusy(null));
   };
+  const writeSubtitle = (format: "srt" | "vtt") => {
+    setSubtitleBusy(format);
+    setSubtitleError(null);
+    setSubtitle(null);
+    api
+      .writeSubtitle(format)
+      .then(setSubtitle)
+      .catch((cause: unknown) => {
+        setSubtitleError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => setSubtitleBusy(null));
+  };
+
   const busy = project?.busy.render !== null;
   return (
     <div className="dialog-backdrop">
@@ -256,6 +281,71 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
           </div>
         </div>
         <p className="export-hint">{QUALITY_HINT[format][quality]}</p>
+
+        <div className="interop-block">
+          <span className="interop-label">Subtitle untuk diunggah</span>
+          <p className="interop-desc">
+            Berkas teks berwaktu, dari narasi dan transkrip yang sudah ada. Diunggah
+            bersama video ke YouTube supaya penonton bisa menyalakan teksnya sendiri —
+            berbeda dari caption yang dibakar ke gambar, yang tidak bisa dimatikan.
+          </p>
+          <div className="interop-actions">
+            <button
+              type="button"
+              disabled={subtitleBusy !== null}
+              onClick={() => writeSubtitle("srt")}
+            >
+              {subtitleBusy === "srt" ? <IconSpinner /> : null}
+              SRT
+            </button>
+            <button
+              type="button"
+              disabled={subtitleBusy !== null}
+              onClick={() => writeSubtitle("vtt")}
+            >
+              {subtitleBusy === "vtt" ? <IconSpinner /> : null}
+              WebVTT
+            </button>
+          </div>
+          {subtitleError ? (
+            <div className="notice-warn interop-notice">
+              <strong>Subtitle gagal</strong>
+              <p>{subtitleError}</p>
+            </div>
+          ) : null}
+          {subtitle ? (
+            <div className="interop-result">
+              <p className="interop-file">
+                {subtitle.file} · {subtitle.cues} kartu ·{" "}
+                {(subtitle.durationMs / 1000).toFixed(1)} detik · bahasa{" "}
+                {subtitle.language}
+              </p>
+              {subtitle.cues === 0 ? (
+                <div className="notice-warn interop-notice">
+                  <strong>Berkasnya kosong</strong>
+                  <p>
+                    Plan ini belum punya narasi maupun transkrip, jadi tidak ada yang bisa
+                    diberi waktu.
+                  </p>
+                </div>
+              ) : null}
+              {/* Waktu yang ditaksir dan waktu dari TTS bedanya besar, dan yang
+                  mengunggah berkas melenceng baru tahu setelah videonya tayang. */}
+              {subtitle.estimated > 0 ? (
+                <div className="notice-warn interop-notice">
+                  <strong>
+                    {subtitle.estimated} dari {subtitle.narrated} scene waktunya masih
+                    ditaksir
+                  </strong>
+                  <p>
+                    Jalankan Suara dulu supaya waktunya datang dari TTS, bukan dari
+                    perkiraan panjang kata.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         <div className="interop-block">
           <span className="interop-label">Bawa ke editor lain</span>

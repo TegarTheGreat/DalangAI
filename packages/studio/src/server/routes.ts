@@ -38,6 +38,12 @@ import {
   VIDEO_FORMATS,
 } from "@dalang/renderer";
 import { templatesPublicDir } from "@dalang/templates/paths";
+import {
+  buildSubtitleCues,
+  SUBTITLE_FORMATS,
+  toSrt,
+  toVtt,
+} from "@dalang/templates/subtitle";
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -82,6 +88,9 @@ const reviewBody = z.object({
   perhatian: z.string().optional(),
 });
 
+const subtitleBody = z.object({
+  format: z.enum(SUBTITLE_FORMATS).default("srt"),
+});
 const timelineExportBody = z.object({
   format: z.enum(["otio", "fcpxml"]).default("otio"),
 });
@@ -464,8 +473,52 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
   });
 
-  // ADR-0022: tinjauan render dari UI, bukan hanya lewat chat agent. Memakai
-  // fungsi bersama yang sama dengan tool agent dan perintah CLI.
+  /**
+   * Berkas subtitle (ADR-0039).
+   *
+   * Ditulis DI SAMPING plan.json, bukan dikirim balik sebagai unduhan:
+   * berkas subtitle dipakai bersama berkas render, dan keduanya harus mudah
+   * ditemukan di satu folder saat orang membuka pengunggah YouTube.
+   */
+  app.post("/api/subtitle", async (c) => {
+    const body = subtitleBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+
+    const startedAt = Date.now();
+    const format = body.data.format;
+    const cues = buildSubtitleCues(plan);
+    const name = `${plan.projectId}.${plan.meta.language}.${format}`;
+    const target = join(dirname(session.paths.planPath), name);
+    atomicWriteFile(target, format === "srt" ? toSrt(cues) : toVtt(cues));
+
+    // Scene bernarasi yang waktunya masih DITAKSIR dilaporkan: bedanya besar,
+    // dan yang mengunggah berkas melenceng baru tahu setelah videonya tayang.
+    const bernarasi = plan.scenes.filter((scene) => scene.narration.trim() !== "");
+    const ditaksir = bernarasi.filter(
+      (scene) =>
+        (plan.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) === 0,
+    ).length;
+
+    logUiEvent(
+      "subtitleExport",
+      { format },
+      { berkas: name, kartu: cues.length },
+      0,
+      Date.now() - startedAt,
+    );
+    return c.json({
+      ok: true,
+      file: name,
+      cues: cues.length,
+      durationMs: cues[cues.length - 1]?.endMs ?? 0,
+      language: plan.meta.language,
+      estimated: ditaksir,
+      narrated: bernarasi.length,
+    });
+  });
+
   /**
    * Ekspor garis waktu ke OTIO/FCPXML (ADR-0023).
    *
@@ -521,6 +574,8 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
   });
 
+  // ADR-0022: tinjauan render dari UI, bukan hanya lewat chat agent. Memakai
+  // fungsi bersama yang sama dengan tool agent dan perintah CLI.
   app.post("/api/review", async (c) => {
     const body = reviewBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);

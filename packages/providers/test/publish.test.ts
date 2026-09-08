@@ -130,6 +130,104 @@ describe("createYoutubePublisher", () => {
     ).toThrow(/256 KiB/);
   });
 
+  it("subtitle ikut naik SESUDAH videonya jadi, lewat captions.insert", async () => {
+    // `captions.insert` menuntut videoId, yang baru ada setelah unggahan
+    // videonya selesai — jadi urutannya bukan pilihan.
+    const file = videoFile(1000);
+    const srt = join(dir, "video.id.srt");
+    writeFileSync(srt, "1\n00:00:00,000 --> 00:00:02,000\nHalo dunia\n");
+    const urls: string[] = [];
+    let captionBody = "";
+    const fetchImpl = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      const target = String(url);
+      urls.push(target);
+      if (target.includes("/captions")) {
+        captionBody = String(init?.body ?? "");
+        return new Response("{}", { status: 200 });
+      }
+      if (init?.method === "POST") {
+        return new Response("", { status: 200, headers: { location: "https://up/1" } });
+      }
+      return new Response(JSON.stringify({ id: "vid-9" }), { status: 200 });
+    }) as typeof fetch;
+
+    const target = createYoutubePublisher({ accessToken: "t", fetchImpl });
+    const result = await target.publish({
+      filePath: file,
+      title: "Judul",
+      description: "",
+      tags: [],
+      privacy: "private",
+      subtitle: { path: srt, language: "id", label: "Bahasa Indonesia" },
+    });
+
+    expect(result.videoId).toBe("vid-9");
+    expect(result.subtitleUploaded).toBe(true);
+    // Subtitle DISUSULKAN, bukan didahulukan.
+    expect(urls[urls.length - 1]).toContain("/captions");
+    // Multipart-nya membawa videoId di snippet dan isi berkasnya utuh.
+    expect(captionBody).toContain('"videoId":"vid-9"');
+    expect(captionBody).toContain('"language":"id"');
+    expect(captionBody).toContain("Halo dunia");
+  });
+
+  it("subtitle yang gagal TIDAK menggagalkan unggahan videonya", async () => {
+    // Videonya sudah tayang saat langkah ini jalan. Melempar galat akan
+    // membuat orang mengunggah ulang video yang sama.
+    const file = videoFile(1000);
+    const srt = join(dir, "video.id.srt");
+    writeFileSync(srt, "1\n00:00:00,000 --> 00:00:02,000\nHalo\n");
+    const fetchImpl = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      const target = String(url);
+      if (target.includes("/captions")) return new Response("nope", { status: 403 });
+      if (init?.method === "POST") {
+        return new Response("", { status: 200, headers: { location: "https://up/1" } });
+      }
+      return new Response(JSON.stringify({ id: "vid-9" }), { status: 200 });
+    }) as typeof fetch;
+
+    const result = await createYoutubePublisher({
+      accessToken: "t",
+      fetchImpl,
+    }).publish({
+      filePath: file,
+      title: "Judul",
+      description: "",
+      tags: [],
+      privacy: "private",
+      subtitle: { path: srt, language: "id" },
+    });
+
+    expect(result.url).toBe("https://youtu.be/vid-9");
+    expect(result.subtitleUploaded).toBe(false);
+    expect(result.subtitleError).toContain("403");
+  });
+
+  it("berkas subtitle yang hilang dilaporkan, bukan diam-diam dilewati", async () => {
+    const file = videoFile(1000);
+    const fetchImpl = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url).includes("/captions")) return new Response("{}", { status: 200 });
+      if (init?.method === "POST") {
+        return new Response("", { status: 200, headers: { location: "https://up/1" } });
+      }
+      return new Response(JSON.stringify({ id: "vid-9" }), { status: 200 });
+    }) as typeof fetch;
+
+    const result = await createYoutubePublisher({
+      accessToken: "t",
+      fetchImpl,
+    }).publish({
+      filePath: file,
+      title: "Judul",
+      description: "",
+      tags: [],
+      privacy: "private",
+      subtitle: { path: join(dir, "tidak-ada.srt"), language: "id" },
+    });
+    expect(result.subtitleUploaded).toBe(false);
+    expect(result.subtitleError).toContain("tidak terbaca");
+  });
+
   it("registry: tanpa token tidak ada tujuan; dengan token ada YouTube", () => {
     expect(buildPublishTargets({ env: {} })).toEqual([]);
     expect(

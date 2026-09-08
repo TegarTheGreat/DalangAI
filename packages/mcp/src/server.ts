@@ -1,4 +1,5 @@
 import { patchOpSchema } from "@dalang/core";
+import { SUBTITLE_FORMATS } from "@dalang/templates/subtitle";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
@@ -11,6 +12,7 @@ import {
   toolListProjects,
   toolRenderStill,
   toolUndo,
+  toolWriteSubtitle,
 } from "./tools";
 import { WorkspaceError } from "./workspace";
 
@@ -179,6 +181,24 @@ export const createDalangMcpServer = (context: ToolContext): McpServer => {
     },
     async ({ proyek, format }) =>
       guard(() => toolExportTimeline(context, { proyek, ...(format ? { format } : {}) })),
+  );
+
+  server.registerTool(
+    "dalang_write_subtitle",
+    {
+      title: "Tulis berkas subtitle (.srt/.vtt)",
+      description:
+        "Menulis berkas subtitle dari narasi dan transkrip yang sudah ada, di samping plan.json — berkas teks yang diunggah BERSAMA video supaya penonton bisa menyalakan teksnya. " +
+        "Berbeda dari caption yang dibakar ke gambar dan tidak bisa dimatikan. Tidak mengubah plan. " +
+        "Bila jawabannya memuat 'peringatan', sampaikan apa adanya: waktu yang masih ditaksir belum tepat untuk diunggah.",
+      inputSchema: {
+        proyek: proyekArg,
+        format: z.enum(SUBTITLE_FORMATS).optional().describe("Bawaan: srt."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async ({ proyek, format }) =>
+      guard(() => toolWriteSubtitle(context, { proyek, ...(format ? { format } : {}) })),
   );
 
   // Didaftarkan HANYA kalau portnya ada: klien yang melihat daftar tool akan

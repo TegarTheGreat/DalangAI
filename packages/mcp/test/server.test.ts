@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -336,6 +337,38 @@ describe("server MCP Dalang", () => {
     expect(value.ok).toBe(true);
     expect(value.berkas).toBe("proyekku/timeline.otio");
     expect(value.tidakIkut.length).toBeGreaterThan(0);
+    await close();
+  });
+
+  it("subtitle ditulis di samping plan, dan waktu yang DITAKSIR diperingatkan", async () => {
+    // Agent lain yang menyerahkan berkas melenceng ke penggunanya tidak akan
+    // pernah tahu — kecuali jawabannya menyebutkan angkanya.
+    const { root, dir } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: false } });
+    const hasil = await callJson(client, "dalang_write_subtitle", { proyek: "proyekku" });
+    const value = hasil.value as {
+      ok: boolean;
+      berkas: string;
+      kartu: number;
+      peringatan?: string;
+    };
+    expect(value.ok).toBe(true);
+    expect(value.berkas).toBe("proyekku/uji-mcp.id.srt");
+    expect(value.kartu).toBeGreaterThan(0);
+    expect(readFileSync(join(dir, "uji-mcp.id.srt"), "utf8")).toContain(" --> ");
+    expect(String(value.peringatan)).toContain("DITAKSIR");
+    await close();
+  });
+
+  it("mode hanya-baca menolak menulis subtitle — ia menulis berkas ke folder proyek", async () => {
+    const { root, dir } = makeWorkspace();
+    const { client, close } = await connect({ workspace: { root, readOnly: true } });
+    const hasil = await callJson(client, "dalang_write_subtitle", {
+      proyek: "proyekku",
+      format: "vtt",
+    });
+    expect((hasil.value as { ok: boolean }).ok).toBe(false);
+    expect(existsSync(join(dir, "uji-mcp.id.vtt"))).toBe(false);
     await close();
   });
 

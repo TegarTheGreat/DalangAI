@@ -368,6 +368,18 @@ agent `publishVideo` — yang semuanya lewat konfirmasi dan bawaannya privat.
 Batasnya di "Batas" ADR-0030: belum pernah dijalankan terhadap YouTube
 sungguhan, token akses tanpa refresh, TikTok/Instagram belum.
 
+**Subtitle menyusul di ADR-0039**, dan tempatnya memang di sini: berkas
+`.srt`/`.vtt` adalah hal yang berjalan BERSAMA video jadi, bukan bagian dari
+gambarnya. Bahannya sudah lengkap di dalam plan sejak lama — narasi, word
+timestamp TTS, transkrip rekaman, dan tata letak bingkai — jadi yang
+ditambahkan cuma satu modul penyusun dan tiga permukaan: `dalang subtitle`,
+tombol SRT/WebVTT di dialog Ekspor Studio, dan unggahan otomatis bersama video
+ke YouTube. Waktunya diambil dari tata letak RENDER, bukan jumlah durasi scene,
+karena transisi membuat scene bertumpuk dan selisihnya menumpuk tiap transisi.
+Batas yang paling penting: satu plan tetap SATU bahasa, jadi subtitle
+terjemahan — dan sulih suara yang mengikutinya — masih menunggu narasi per
+bahasa di dalam satu plan.
+
 **§10.4 sudah dikerjakan** (ADR-0038). Sebagian besar bahannya ternyata sudah
 ada — patch op ber-invers, satu penulis di server, siaran SSE bernomor revisi,
 deteksi editan luar — dan yang kurang justru yang soal ORANG: identitas,
@@ -388,7 +400,7 @@ kursor bersama.
 | --- | --- |
 | 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
 | 10.2 | Marketplace preset/template — **paketnya sudah dikerjakan** (ADR-0037); tokonya sengaja tidak |
-| 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
+| 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030), berikut berkas subtitle yang ikut naik (ADR-0039); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
 | 10.4 | Multi-user pada satu proyek — **sudah dikerjakan** (ADR-0038); tanpa akun dan tanpa penggabungan otomatis |
 
 ---

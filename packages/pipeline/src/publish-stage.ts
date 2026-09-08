@@ -31,13 +31,23 @@ export interface PublishRenderOptions {
   /** Path absolut berkas render. */
   filePath: string;
   metadata: PublishMetadata;
+  /**
+   * Berkas subtitle yang ikut naik (ADR-0039). Kegagalannya TIDAK menggagalkan
+   * unggahan videonya — ia keluar sebagai `subtitleError` di hasilnya.
+   */
+  subtitle?: { path: string; language: string; label?: string };
   force?: boolean;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
 }
 
 export type PublishRenderOutcome =
-  | { status: "done" | "cached"; record: PublishedRecord }
+  | {
+      status: "done" | "cached";
+      record: PublishedRecord;
+      /** Kenapa subtitle-nya gagal, kalau diminta dan gagal. Video TETAP naik. */
+      subtitleError?: string;
+    }
   | { status: "error"; reason: string };
 
 /** Kunci ledger: path relatif plan — sama dengan tahap per-berkas lain. */
@@ -82,6 +92,7 @@ export const publishRender = async ({
   target,
   filePath,
   metadata,
+  subtitle,
   force = false,
   onProgress,
   signal,
@@ -120,6 +131,7 @@ export const publishRender = async ({
       tags: metadata.tags,
       privacy: metadata.privacy,
       ...(metadata.language ? { language: metadata.language } : {}),
+      ...(subtitle ? { subtitle } : {}),
       ...(onProgress ? { onProgress } : {}),
       ...(signal ? { signal } : {}),
     });
@@ -138,7 +150,11 @@ export const publishRender = async ({
       costUsd: 0,
       durationMs: Date.now() - startedAt,
     });
-    return { status: "done", record };
+    return {
+      status: "done",
+      record,
+      ...(result.subtitleError ? { subtitleError: result.subtitleError } : {}),
+    };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     db.failRun(projectId, key, "publish", reason, Date.now() - startedAt);

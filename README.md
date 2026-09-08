@@ -351,8 +351,24 @@ Lora, Plus Jakarta Sans karya Tokotype, dan Anton.
   digambar di kanvas Studio supaya yang menyunting melihat batasnya, bukan cuma
   akibatnya; gerbang interaksi mengukur ketiga pitanya lewat pointer sungguhan.
 
+- **Berkas subtitle `.srt` dan `.vtt`** yang berjalan BERSAMA video, bukan
+  dibakar ke dalamnya: penonton bisa mematikannya, YouTube bisa
+  menerjemahkannya, dan mesin pencari membacanya — tiga hal yang tidak bisa
+  dilakukan piksel. Waktunya diambil dari tata letak RENDER, jadi ia tidak
+  melenceng tiap kali ada transisi, dan sumbernya sama dengan caption layar:
+  word timestamp TTS kalau ada, transkrip rekaman kalau itu yang dipakai,
+  taksiran kalau belum. Pengelompokan kartunya berbeda dari caption layar dan
+  itu disengaja — kartu tiga kata yang berganti tiap 700 ms adalah kedipan,
+  bukan subtitle. Lima permukaan memakai satu fungsi yang sama: `dalang
+  subtitle`, tombol SRT/WebVTT di dialog Ekspor, tool agent `writeSubtitle`,
+  tool MCP `dalang_write_subtitle` untuk agent lain, dan ikut terunggah otomatis
+  bersama video ke YouTube. Gerbang CI membuktikan berkasnya terbaca pembaca
+  RUJUKAN (`webvtt-py`, bukan pembaca kami sendiri) dan tiap kartunya jatuh di
+  scene yang benar menurut renderer — bukan diklaim, diuji.
+
 Rujukan: [ADR-0016](docs/decisions/0016-tipografi.md),
-[ADR-0034](docs/decisions/0034-zona-aman-platform.md)
+[ADR-0034](docs/decisions/0034-zona-aman-platform.md),
+[ADR-0039](docs/decisions/0039-berkas-subtitle.md)
 
 ### Suara
 
@@ -499,18 +515,27 @@ per kombinasi.
   per potongan 8 MiB lewat YouTube Data API v3, dengan tiga pengaman karena
   unggahan tidak bisa diurungkan — selalu lewat konfirmasi, bawaan privat, dan
   ledger yang menolak mengunggah berkas yang sama dua kali tanpa `--force`.
+- **Subtitle ikut naik bersama videonya**, ditulis SEGAR saat itu juga —
+  bukan dipungut dari berkas yang kebetulan tertinggal di folder, karena teks
+  lama yang tidak cocok dengan suaranya cuma ketahuan oleh penonton yang
+  menyalakan teksnya. Subtitle gagal BUKAN publikasi gagal: videonya sudah
+  tayang, jadi yang dikatakan adalah "video naik, subtitle tidak, ini
+  berkasnya" — bukan galat yang membuat orang mengulang dan mendapat video
+  kedua di kanalnya.
 
 Rujukan: [ADR-0014](docs/decisions/0014-ekspor-kaya-craft-expert.md),
 [ADR-0019](docs/decisions/0019-render-cloud.md),
 [ADR-0023](docs/decisions/0023-keluar-dan-masuk.md),
-[ADR-0030](docs/decisions/0030-publikasi-langsung.md)
+[ADR-0030](docs/decisions/0030-publikasi-langsung.md),
+[ADR-0039](docs/decisions/0039-berkas-subtitle.md)
 </details>
 
 ### Dalang sebagai kemampuan agent lain
 
 `dalang mcp [akar]` menyajikan garis waktu ke agent mana pun yang bicara MCP:
 baca rencana, ubah lewat patch op tervalidasi, urungkan, kritik struktur,
-ekspor. Scene terkunci ditolak persis seperti untuk agent Dalang sendiri.
+ekspor, dan tulis berkas subtitle. Scene terkunci ditolak persis seperti untuk
+agent Dalang sendiri.
 
 **Tidak ada tool yang memanggil model atau membelanjakan uang.** Kliennya sudah
 agent; yang tidak dipunyainya adalah timeline. Render hanya kalau dijalankan
@@ -570,6 +595,8 @@ pnpm dalang template pakai gaya-kanalku proyeklain/   # pinjam TAMPILANNYA saja
 pnpm dalang render proyekku/ --profile draft
 pnpm dalang render proyekku/ --video-format webm --resolution 720 --quality terbaik
 pnpm dalang still  proyekku/ -t 8 -t 29 -t 44 -o out
+pnpm dalang subtitle proyekku/                    # .srt untuk diunggah bersama video
+pnpm dalang subtitle proyekku/ --format vtt       # .vtt untuk pemutar web
 pnpm dalang export proyekku/ --format otio        # ke Resolve, Premiere, Final Cut
 pnpm dalang import rough.otio -o proyekku/        # dari editor lain jadi kerangka
 pnpm dalang publish proyekku/ --privasi unlisted  # unggah render terbaru ke YouTube
@@ -620,13 +647,14 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 
 | Gerbang | Yang dijaganya |
 |---|---|
-| 1212 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
+| 1327 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
 | Render smoke test | Render sungguhan di CI, bukan mock |
 | Gerbang paritas migrasi | Plan v1 (dimigrasikan) dan plan v2 dirender, wajib identik byte per byte — tiap sisi dirender dua kali sebagai kontrol, jadi render yang tidak deterministik tidak bisa terbaca sebagai cacat migrasi |
 | Gerbang tata letak | Geometri UI di 18 lebar layar (380-1920), editor dan lobi: kontrol yang saling menindih, tergunting, atau membuat halaman bisa digeser ke samping — diukur setelah animasi CSS benar-benar selesai, bukan setelah jeda yang ditebak |
 | Gerbang interaksi | Seretan pointer dan papan ketik **sungguhan** lewat CDP, lalu plan **di server** yang diperiksa — seretan yang cuma menggeser kotak di layar tanpa patch adalah cacat yang tidak ditangkap unit test mana pun. Kotak diukur setelah animasi CSS selesai, jadi pointer tidak pernah mendarat di panel yang masih bergeser |
 | Gerbang paritas aset | Satu still dirender lewat dua jalur (bundel dan URL) dan wajib identik byte per byte; kalau berselisih, selisihnya dilaporkan sebagai hitungan piksel dan PNG-nya diunggah sebagai artefak CI |
 | Gerbang interop | Keluaran OTIO/FCPXML dibaca ulang dengan pustaka OpenTimelineIO dan adapter fcpx_xml resmi, atas plan apa adanya DAN varian berklip banyak |
+| Gerbang subtitle | Berkas .srt/.vtt dibaca pustaka `webvtt-py` — pembaca RUJUKAN, bukan pembaca kami sendiri — lalu tiap kartu dicocokkan ke scene asalnya lewat `activeSceneIndex` milik renderer, atas empat plan contoh. Subtitle yang melenceng tetap berkas yang sah dan lolos tiap tes format; cacatnya cuma terlihat oleh penonton yang menyalakan teksnya |
 | Eval self-check | Penilai yang rusak atau plan contoh yang melanggar kaidahnya sendiri membuat CI merah, tanpa kunci API dan tanpa biaya |
 
 Semua berjalan di CI GitHub Actions, tanpa kunci API dan tanpa jaringan
@@ -668,6 +696,12 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   mana memotong, bukan apa yang layak dipotong; untuk memilih momen ia
   diperintahkan meminta transkrip, bukan menebak.
 - **Screen recording** (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Satu plan tetap SATU bahasa.** `meta.language` tunggal berarti satu berkas
+  subtitle per proyek: tidak ada subtitle terjemahan, dan karena itu belum ada
+  sulih suara. Aturan pemotongan kartunya juga tebakan tipografis — 42 karakter
+  per baris adalah angka yang lazim untuk latin, bukan hukum alam; angkanya
+  diekspor sebagai konstanta supaya bisa diubah tanpa membongkar logikanya.
+  [ADR-0039](docs/decisions/0039-berkas-subtitle.md) menulis batasnya lengkap.
 - **Menyunting berdua tidak punya akun.** Yang punya tautan `--lan` punya
   segalanya: menyunting, merender, mengunggah. Bentrok ditolak dan tidak
   pernah digabungkan otomatis, tidak ada kursor bersama, dan semuanya berbagi
@@ -815,6 +849,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0036](docs/decisions/0036-keyframe-kamera-klip.md) | Kamera visual dasar scene bisa di-keyframe (zum, geser, opasitas) |
 | [0037](docs/decisions/0037-paket-template.md) | Template sebagai paket yang bisa dibagikan (kerangka + tampilan, tanpa berkas) |
 | [0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) | Beberapa orang pada satu proyek: bentrok per scene, kehadiran, kunci tautan |
+| [0039](docs/decisions/0039-berkas-subtitle.md) | Berkas subtitle .srt/.vtt dari data yang sudah ada, ikut terunggah ke YouTube |
 
 </details>
 

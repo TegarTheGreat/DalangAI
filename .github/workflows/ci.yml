@@ -179,6 +179,27 @@ jobs:
           pnpm --filter @dalang/renderer migrasi-paritas
           pnpm --filter @dalang/renderer migrasi-paritas examples/tutorial-studio/plan.json
 
+      # ADR-0039: berkas subtitle punya dua klaim yang tidak bisa dibuktikan tes
+      # unit. Pertama, "berkasnya terbaca pemutar lain" — pembaca kita sendiri
+      # cuma membuktikan dua berkas kita saling setuju, jadi gerbang ini memakai
+      # pustaka `webvtt-py` sebagai IMPLEMENTASI RUJUKAN. Kedua, dan ini yang
+      # paling mahal: "waktunya cocok dengan videonya". Teks yang melenceng
+      # tetap berupa berkas yang sah dan lolos setiap tes format; cacatnya cuma
+      # terlihat oleh penonton yang menyalakan teksnya. Jangkarnya
+      # `activeSceneIndex` milik renderer — tiap kartu harus jatuh di scene yang
+      # narasinya memuat teksnya.
+      - name: Gerbang subtitle (pembaca rujukan + jangkar bingkai)
+        timeout-minutes: 3
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check webvtt-py
+          pnpm --filter @dalang/templates gate:subtitle
+          # Contoh berklip banyak: di sini scene bertumpuk DI DALAM scene juga,
+          # jadi jalur waktunya berbeda dari plan berklip satu.
+          pnpm --filter @dalang/templates gate:subtitle examples/klip-borobudur/plan.json
+          # Preset lain, caption dari anotasi tutorial.
+          pnpm --filter @dalang/templates gate:subtitle examples/tutorial-studio/plan.json
+          pnpm --filter @dalang/templates gate:subtitle examples/klip-hook/plan.json
+
       - name: Asset URL parity gate
         timeout-minutes: 8
         run: |

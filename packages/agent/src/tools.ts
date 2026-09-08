@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   addMemoryEntry,
   allClips,
@@ -56,6 +56,7 @@ import type {
 } from "@dalang/pipeline";
 import {
   type AsrProvider,
+  atomicWriteFile,
   latestRenderFile,
   materializeCandidate,
   publishRender,
@@ -70,6 +71,12 @@ import {
 } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR, PUBLISH_SETUP_HINT } from "@dalang/providers";
 import type { RenderVideoResult } from "@dalang/renderer";
+import {
+  buildSubtitleCues,
+  SUBTITLE_FORMATS,
+  toSrt,
+  toVtt,
+} from "@dalang/templates/subtitle";
 import { generateText, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { ResolvedModel } from "./models/resolve";
@@ -1974,6 +1981,55 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         }),
     }),
 
+    // ADR-0039: berkas subtitle yang berjalan BERSAMA video. Tidak mengubah
+    // plan sama sekali, jadi tanpa gerbang persetujuan — yang dihasilkannya
+    // berkas teks di folder proyek, dan menulisnya ulang tidak merusak apa pun.
+    writeSubtitle: tool({
+      description:
+        "Tulis berkas subtitle (.srt atau .vtt) dari narasi dan transkrip yang sudah ada — berkas teks yang diunggah BERSAMA video supaya penonton bisa menyalakan teksnya. Berbeda dari caption yang dibakar ke gambar. Tidak mengubah plan. publishVideo sudah membawa subtitle sendiri, jadi tool ini untuk saat user meminta berkasnya saja.",
+      inputSchema: z.object({
+        format: z
+          .enum(SUBTITLE_FORMATS)
+          .default("srt")
+          .describe("srt (bawaan, untuk YouTube) | vtt (untuk pemutar web)"),
+      }),
+      execute: (input) =>
+        run("writeSubtitle", input, async () => {
+          const plan = requirePlan();
+          const cues = buildSubtitleCues(plan);
+          const name = `${plan.projectId}.${plan.meta.language}.${input.format}`;
+          const target = join(dirname(session.paths.planPath), name);
+          atomicWriteFile(target, input.format === "srt" ? toSrt(cues) : toVtt(cues));
+
+          // Waktu yang DITAKSIR dan waktu dari TTS bedanya besar; agent harus
+          // bisa mengatakannya, bukan menyerahkan berkas melenceng diam-diam.
+          const bernarasi = plan.scenes.filter((scene) => scene.narration.trim() !== "");
+          const ditaksir = bernarasi.filter(
+            (scene) =>
+              (plan.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) ===
+              0,
+          ).length;
+          return {
+            ok: true,
+            berkas: name,
+            kartu: cues.length,
+            bahasa: plan.meta.language,
+            sampaiDetik: Number(((cues.at(-1)?.endMs ?? 0) / 1000).toFixed(1)),
+            ...(cues.length === 0
+              ? {
+                  catatan:
+                    "Plan ini belum punya narasi maupun transkrip — berkasnya kosong",
+                }
+              : {}),
+            ...(ditaksir > 0
+              ? {
+                  peringatan: `${ditaksir} dari ${bernarasi.length} scene bernarasi waktunya masih DITAKSIR — jalankan generateVoiceover dulu supaya waktunya datang dari TTS`,
+                }
+              : {}),
+          };
+        }),
+    }),
+
     // ADR-0030: unggah berkas render ke tujuan publikasi. TIDAK BISA
     // DIURUNGKAN, jadi selalu lewat gerbang persetujuan, dan bawaannya privat.
     publishVideo: tool({
@@ -2000,6 +2056,12 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           .boolean()
           .optional()
           .describe("Unggah lagi walau berkas yang sama sudah pernah terunggah"),
+        tanpaSubtitle: z
+          .boolean()
+          .optional()
+          .describe(
+            "Jangan ikut mengunggah berkas subtitle; bawaannya IKUT kalau plan punya narasi",
+          ),
       }),
       execute: (input) =>
         run("publishVideo", input, async () => {
@@ -2031,6 +2093,24 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             detail: `Unggah ${name} ke ${target.label} sebagai ${PUBLISH_PRIVACY_LABEL[metadata.privacy]}: "${metadata.title}"`,
           });
           if (!approved) throw new Error("User belum menyetujui unggahan");
+
+          // Subtitle ditulis SEGAR (ADR-0039), bukan diambil dari berkas yang
+          // kebetulan tertinggal: teks lama yang tidak cocok dengan suaranya
+          // cuma ketahuan oleh penonton yang menyalakan teksnya.
+          let subtitle: { path: string; language: string } | undefined;
+          if (input.tanpaSubtitle !== true) {
+            const cues = buildSubtitleCues(plan);
+            if (cues.length > 0) {
+              const subPath = join(
+                session.paths.dalangDir,
+                `subtitle.${plan.meta.language}.srt`,
+              );
+              mkdirSync(dirname(subPath), { recursive: true });
+              atomicWriteFile(subPath, toSrt(cues));
+              subtitle = { path: subPath, language: plan.meta.language };
+            }
+          }
+
           const outcome = await publishRender({
             paths: session.paths,
             db: session.db,
@@ -2038,6 +2118,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             target,
             filePath,
             metadata,
+            ...(subtitle ? { subtitle } : {}),
             force: input.force ?? false,
           });
           if (outcome.status === "error") return { ok: false, pesan: outcome.reason };
@@ -2049,6 +2130,12 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
             videoId: outcome.record.videoId,
             privasi: outcome.record.privacy,
             dariCache: outcome.status === "cached",
+            // Subtitle gagal BUKAN unggahan gagal: videonya sudah tayang.
+            subtitle: subtitle
+              ? outcome.subtitleError
+                ? `TIDAK terunggah: ${outcome.subtitleError} — berkasnya ada di ${subtitle.path}, bisa diunggah manual dari YouTube Studio`
+                : `ikut terunggah (${subtitle.language})`
+              : "tidak ada",
           };
         }),
     }),
