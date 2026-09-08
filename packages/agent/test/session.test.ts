@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { PatchError } from "@dalang/core";
 import { afterEach, describe, expect, it } from "vitest";
-import { ProjectSession } from "../src/index";
+import { PRUNE_MARKER, ProjectSession } from "../src/index";
 import { basicPlan, tempProject } from "./helpers";
 
 let cleanups: Array<() => void> = [];
@@ -45,9 +45,13 @@ describe("ProjectSession", () => {
             id: "sc-001",
             locked: true,
             narration: "Terkunci.",
-            visual: { type: "solid" },
+            clips: [{ id: "sc-001-k1", type: "solid" }],
           },
-          { id: "sc-002", narration: "Bebas.", visual: { type: "solid" } },
+          {
+            id: "sc-002",
+            narration: "Bebas.",
+            clips: [{ id: "sc-002-k1", type: "solid" }],
+          },
         ],
       }),
     );
@@ -99,7 +103,7 @@ describe("ProjectSession", () => {
             id: "sc-001",
             locked: true,
             narration: "Scene terkunci user.",
-            visual: { type: "solid" },
+            clips: [{ id: "sc-001-k1", type: "solid" }],
           },
         ],
       }),
@@ -120,5 +124,55 @@ describe("ProjectSession", () => {
     const reopened = ProjectSession.open(planPath);
     cleanups.push(() => reopened.close());
     expect(reopened.history).toHaveLength(1);
+  });
+
+  it("riwayat panjang dipangkas AMAN: tanpa tool yatim di depan + penanda (ADR-0013)", () => {
+    const { session, planPath } = open(basicPlan());
+    // Dua pesan pembuka + 13 kelompok [user, assistant-toolcall, tool, assistant]
+    // = 54 pesan; potongan -40 jatuh TEPAT di pesan `tool` (kasus terburuk).
+    session.history.push(
+      { role: "user", content: "pembuka satu" },
+      { role: "user", content: "pembuka dua" },
+    );
+    for (let i = 0; i < 13; i++) {
+      session.history.push(
+        { role: "user", content: `pesan ${i}` },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: `c${i}`,
+              toolName: "getProjectState",
+              input: {},
+            },
+          ],
+        } as never,
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: `c${i}`,
+              toolName: "getProjectState",
+              output: { type: "text", value: "ok" },
+            },
+          ],
+        } as never,
+        { role: "assistant", content: `jawaban ${i}` },
+      );
+    }
+    session.persist();
+
+    expect(session.history.length).toBeLessThanOrEqual(41);
+    expect(session.history[0]?.content).toBe(PRUNE_MARKER);
+    expect(session.history[1]?.role).not.toBe("tool");
+
+    session.close();
+    cleanups.pop();
+    const reopened = ProjectSession.open(planPath);
+    cleanups.push(() => reopened.close());
+    expect(reopened.history[0]?.role).not.toBe("tool");
+    expect(reopened.history.length).toBeLessThanOrEqual(41);
   });
 });

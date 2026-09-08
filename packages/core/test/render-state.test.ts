@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   assignResolvedAsset,
   pruneRenderState,
+  setClipAsset,
   setNarrationAudio,
-  setResolvedAsset,
 } from "../src/index";
 import { makePlan } from "./fixtures";
 
@@ -29,15 +29,15 @@ describe("renderState helpers (pipeline write path)", () => {
     ).toThrow();
   });
 
-  it("setResolvedAsset stores license metadata", () => {
+  it("setClipAsset stores license metadata", () => {
     const plan = makePlan();
-    const next = setResolvedAsset(plan, "sc-002", {
+    const next = setClipAsset(plan, "sc-002-k1", {
       file: "assets/x.jpg",
       kind: "image",
       source: "pexels",
       license: "Pexels License",
     });
-    expect(next.renderState.resolvedAssets["sc-002"]?.license).toBe("Pexels License");
+    expect(next.renderState.clipAssets["sc-002-k1"]?.license).toBe("Pexels License");
   });
 
   it("assignResolvedAsset fills visual.assetId without pinning", () => {
@@ -49,16 +49,16 @@ describe("renderState helpers (pipeline write path)", () => {
       license: "Pexels License",
     });
     const scene = next.scenes[0]!;
-    expect(scene.visual.assetId).toBe("pexels:video:7");
-    expect(scene.visual.pinned).toBe(false);
-    expect(next.renderState.resolvedAssets["sc-001"]?.kind).toBe("video");
-    expect(plan.scenes[0]?.visual.assetId).toBeNull(); // immutably
+    expect(scene.clips[0]?.assetId).toBe("pexels:video:7");
+    expect(scene.clips[0]?.pinned).toBe(false);
+    expect(next.renderState.clipAssets["sc-001-k1"]?.kind).toBe("video");
+    expect(plan.scenes[0]?.clips[0]?.assetId).toBeNull(); // immutably
   });
 
   it("assignResolvedAsset refuses pinned scenes and unknown ids", () => {
     const plan = makePlan((input) => {
-      input.scenes[0]!.visual.pinned = true;
-      input.scenes[0]!.visual.assetId = "pilihan:user";
+      input.scenes[0]!.clips[0]!.pinned = true;
+      input.scenes[0]!.clips[0]!.assetId = "pilihan:user";
     });
     expect(() =>
       assignResolvedAsset(plan, "sc-001", "auto:1", {
@@ -82,13 +82,13 @@ describe("renderState helpers (pipeline write path)", () => {
       file: "a.mp3",
       durationSec: 1,
     });
-    plan = setResolvedAsset(plan, "sc-hantu", {
+    plan = setClipAsset(plan, "sc-hantu-k1", {
       file: "assets/x.jpg",
       kind: "image",
       source: "local",
     });
     const pruned = pruneRenderState(plan);
     expect(pruned.renderState.narrationAudio["sc-001"]).toBeDefined();
-    expect(pruned.renderState.resolvedAssets["sc-hantu"]).toBeUndefined();
+    expect(pruned.renderState.clipAssets["sc-hantu-k1"]).toBeUndefined();
   });
 });

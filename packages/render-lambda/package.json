@@ -1,0 +1,23 @@
+{
+  "name": "@dalang/render-lambda",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@dalang/core": "workspace:*",
+    "@dalang/renderer": "workspace:*",
+    "@remotion/lambda": "4.0.518",
+    "@dalang/templates": "workspace:*",
+    "@remotion/lambda-client": "4.0.518"
+  },
+  "devDependencies": {
+    "vitest": "4.1.11"
+  }
+}

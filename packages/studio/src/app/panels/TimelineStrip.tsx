@@ -1,0 +1,1262 @@
+import {
+  type AnimatableProperty,
+  clampTrimDelta,
+  computeClipTimings,
+  isRefusal,
+  MIN_SCENE_SEC,
+  type Music,
+  moveKeyframe,
+  resolveSceneDurationSec,
+  type Scene,
+  type ScenePlan,
+  snapKeyframeTime,
+  splitBounds,
+  substituteProxies,
+} from "@dalang/core";
+import { DalangVideo } from "@dalang/templates/video";
+import { Thumbnail } from "@remotion/player";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useScrollFade } from "../components/controls";
+import {
+  IconLock,
+  IconNextScene,
+  IconPause,
+  IconPlay,
+  IconPlus,
+  IconPrevScene,
+  IconSplit,
+  IconSplitScene,
+} from "../icons";
+import { type PlanMeta, planMeta } from "../model/plan-meta";
+import { deriveSceneStatus } from "../model/scene-status";
+import {
+  type ClipBox,
+  clipBoxes,
+  filmstripFrames,
+  frameToX,
+  rulerTicks,
+  timelineWidth,
+  xToFrame,
+} from "../model/timeline-scale";
+import { playback } from "../playback";
+import { studioClient, useStudio } from "../use-studio";
+import { FadeHandles } from "./FadeHandles";
+
+/**
+ * Timeline editor di dasar layar: ruler waktu yang bisa di-scrub, track
+ * video (klip filmstrip selebar durasi, drag untuk menyusun ulang), track
+ * suara (blok narasi per scene), playhead tersinkron dua arah dengan
+ * Player, dan transport play/pause + zoom.
+ */
+
+const MIN_ZOOM = 8;
+const MAX_ZOOM = 64;
+/** Selisih lajur vertikal antar track di bar lapisan (px): 7 px cukup untuk berlian 7 px. */
+const laneOffsetPx = (index: number, count: number): number =>
+  (index - (count - 1) / 2) * 7;
+/** Batas atas bingkai filmstrip per klip — penjaga biaya render thumbnail. */
+const MAX_FILMSTRIP_FRAMES = 40;
+
+/**
+ * Id untuk potongan baru: `<scene>-kN` dengan N pertama yang belum dipakai.
+ *
+ * Dihitung dari SELURUH plan, bukan dari jumlah klip scene-nya: id klip wajib
+ * unik se-plan (ADR-0033 §4), dan scene yang klipnya pernah dihapus akan
+ * mengulang nomor kalau yang dihitung cuma panjangnya.
+ */
+const nextClipId = (plan: ScenePlan, sceneId: string): string => {
+  const dipakai = new Set(plan.scenes.flatMap((s) => s.clips.map((clip) => clip.id)));
+  for (let n = 1; ; n += 1) {
+    const id = `${sceneId}-k${n}`;
+    if (!dipakai.has(id)) return id;
+  }
+};
+
+const formatTime = (frame: number, fps: number): string => {
+  const totalSec = frame / fps;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec - m * 60;
+  return `${m}:${s.toFixed(1).padStart(4, "0")}`;
+};
+
+const Clip: React.FC<{
+  plan: ScenePlan;
+  meta: PlanMeta;
+  scene: Scene;
+  index: number;
+  box: ClipBox;
+  clipHeight: number;
+  pxPerSec: number;
+  selected: boolean;
+  active: boolean;
+  dropSide: "before" | "after" | null;
+  onDragState: (sceneId: string | null) => void;
+  onDropHint: (sceneId: string, side: "before" | "after") => void;
+  onDrop: (targetId: string, side: "before" | "after") => void;
+}> = ({
+  plan,
+  meta,
+  scene,
+  index,
+  box,
+  clipHeight,
+  pxPerSec,
+  selected,
+  active,
+  dropSide,
+  onDragState,
+  onDropHint,
+  onDrop,
+}) => {
+  const { project } = useStudio();
+  // Trim (mekanika CapCut): seret tepi kanan = ubah durasi scene. Selama
+  // seretan hanya state lokal + label; patch dikirim saat lepas.
+  const [trimSec, setTrimSec] = useState<number | null>(null);
+  const trimFrom = useRef<{ x: number; sec: number } | null>(null);
+  /**
+   * Batas antar-klip yang sedang diseret (ADR-0033).
+   *
+   * `delta` hidup di sini selama jari bergerak dan baru jadi satu patch saat
+   * dilepas — satu langkah undo per seretan, bukan satu per piksel. Nilainya
+   * SUDAH dijepit `clampTrimDelta` dari core, jadi batasnya sama persis dengan
+   * yang dipakai op untuk menolak.
+   */
+  const [cutDrag, setCutDrag] = useState<{ clipId: string; delta: number } | null>(null);
+  const cutFrom = useRef<{ x: number; clipId: string } | null>(null);
+  const status = deriveSceneStatus(
+    plan,
+    scene,
+    project?.stageRuns ?? [],
+    project?.busy ?? { mutation: null, render: null },
+  );
+  const width = trimSec === null ? box.w : Math.max(56, Math.round(trimSec * pxPerSec));
+  const thumbW = Math.max(24, Math.round(clipHeight * (meta.width / meta.height)));
+  // Filmstrip menutupi SELURUH lebar klip. Batas 6 bingkai yang lama membuat
+  // klip pada zoom tinggi jadi sebagian besar hitam — persis pada zoom yang
+  // dipakai untuk kerja presisi. Batas atas tetap ada supaya klip yang sangat
+  // panjang tidak melahirkan ratusan Thumbnail sekaligus.
+  const count = Math.max(1, Math.min(MAX_FILMSTRIP_FRAMES, Math.ceil(width / thumbW)));
+  const frames = filmstripFrames(meta, index, count);
+  // ADR-0028: thumbnail juga dari proxy — tiap Thumbnail adalah satu dekoder
+  // video, dan empat puluh dekoder 4K sekaligus membekukan timeline.
+  const previewPlan = useMemo(() => substituteProxies(plan), [plan]);
+  const busy = project?.busy.mutation !== null;
+  const durSec = (meta.sceneFrames[index] ?? 1) / meta.fps;
+
+  const endTrim = () => {
+    const from = trimFrom.current;
+    const sec = trimSec;
+    trimFrom.current = null;
+    setTrimSec(null);
+    if (!from || sec === null || Math.abs(sec - from.sec) < 0.05) return;
+    const last = scene.clips.at(-1);
+    if (scene.clips.length > 1 && last) {
+      // Scene berklip banyak TIDAK punya durasi sendiri (ADR-0033 §2): yang
+      // memanjang adalah potongan terakhirnya, dan sisanya ikut lewat ripple.
+      // Mengirim `duration` di sini akan ditolak skema — dan penolakan itu
+      // muncul sebagai galat merah setelah seretan yang terlihat berhasil.
+      const delta = clampTrimDelta(
+        plan,
+        scene,
+        last.id,
+        "keluar",
+        "ripple",
+        sec - from.sec,
+      );
+      if (delta === 0) return;
+      void studioClient.applyPatch(
+        [
+          {
+            op: "trimClip",
+            sceneId: scene.id,
+            clipId: last.id,
+            edge: "keluar",
+            mode: "ripple",
+            deltaSec: delta,
+          },
+        ],
+        `Klip ${last.id} ${delta > 0 ? "+" : ""}${delta.toFixed(2)}s`,
+      );
+      return;
+    }
+    void studioClient.applyPatch(
+      [{ op: "updateScene", id: scene.id, patch: { duration: sec } }],
+      `Durasi ${scene.id} jadi ${sec.toFixed(1)}s`,
+    );
+  };
+
+  /**
+   * Batas potong di dalam kotak scene (ADR-0033).
+   *
+   * Yang diseret adalah TITIK POTONG, dan seretannya `roll`: kedua potongan
+   * bertukar durasi sehingga panjang scene tidak berubah. Itu bukan pilihan
+   * gaya — kalau batas dalam menggeser panjang scene, seluruh kotak sesudahnya
+   * ikut bergeser di bawah jari yang sedang menahan satu garis, dan yang
+   * terlihat adalah timeline yang melompat.
+   */
+  const clipCuts = computeClipTimings(scene, resolveSceneDurationSec(scene, plan)).slice(
+    0,
+    -1,
+  );
+
+  const endCut = () => {
+    const from = cutFrom.current;
+    const drag = cutDrag;
+    cutFrom.current = null;
+    setCutDrag(null);
+    if (!from || !drag || drag.delta === 0) return;
+    void studioClient.applyPatch(
+      [
+        {
+          op: "trimClip",
+          sceneId: scene.id,
+          clipId: drag.clipId,
+          edge: "keluar",
+          mode: "roll",
+          deltaSec: drag.delta,
+        },
+      ],
+      `Titik potong ${drag.clipId} ${drag.delta > 0 ? "+" : ""}${drag.delta.toFixed(2)}s`,
+    );
+  };
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag-n-drop klip timeline
+    <div
+      className={[
+        "clip",
+        selected ? "selected" : "",
+        active ? "active" : "",
+        trimSec !== null ? "trimming" : "",
+        dropSide ? `drop-${dropSide}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={{ left: box.x, width }}
+      draggable={!busy}
+      onDragStart={(event) => {
+        if (trimFrom.current) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", scene.id);
+        onDragState(scene.id);
+      }}
+      onDragEnd={() => onDragState(null)}
+      onDragOver={(event) => {
+        event.preventDefault();
+        const rect = event.currentTarget.getBoundingClientRect();
+        onDropHint(
+          scene.id,
+          event.clientX < rect.left + rect.width / 2 ? "before" : "after",
+        );
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        // ADR-0015: jatuhkan file gambar dari OS ke klip = unggah + pasang
+        // ter-pin ke scene itu; tanpa file, ini reorder klip biasa.
+        const file = event.dataTransfer.files?.[0];
+        if (file && /^image\/(png|jpe?g)$/.test(file.type)) {
+          const reader = new FileReader();
+          reader.onload = () =>
+            void studioClient.uploadAsset(scene.id, file.name, String(reader.result));
+          reader.readAsDataURL(file);
+          onDragState(null);
+          return;
+        }
+        const rect = event.currentTarget.getBoundingClientRect();
+        onDrop(scene.id, event.clientX < rect.left + rect.width / 2 ? "before" : "after");
+      }}
+    >
+      <button
+        type="button"
+        className="clip-hit"
+        onClick={() => {
+          studioClient.selectScene(scene.id);
+          // Ke frame pertama scene tampil utuh, bukan ke awal transisinya:
+          // di awal transisi yang terlihat (dan yang dianggap aktif oleh
+          // renderer) masih scene sebelumnya.
+          playback.requestSeek(meta.sceneSettledStarts[index] ?? 0);
+        }}
+        title={scene.narration || scene.id}
+      >
+        <span className="clip-film" style={{ height: clipHeight }}>
+          {frames.map((frame) => (
+            <span key={frame} className="clip-frame" style={{ width: thumbW }}>
+              <Thumbnail
+                component={DalangVideo}
+                inputProps={{ plan: previewPlan, debug: false }}
+                frameToDisplay={frame}
+                durationInFrames={meta.durationInFrames}
+                compositionWidth={meta.width}
+                compositionHeight={meta.height}
+                fps={meta.fps}
+                style={{ width: "100%", height: "100%" }}
+              />
+            </span>
+          ))}
+        </span>
+        <span className="clip-label">
+          <span className="clip-index">{index + 1}</span>
+          <span className="clip-id">{scene.id}</span>
+          {scene.locked ? (
+            <span className="clip-lock">
+              <IconLock />
+            </span>
+          ) : null}
+        </span>
+        <span className="clip-badges">
+          <span className={`tl-dot ${status.asset}`} title={`aset: ${status.asset}`} />
+        </span>
+        <span className="clip-active-bar" />
+      </button>
+      {/* Titik potong antar-klip: garis yang terlihat SELALU (potongan harus
+          bisa dilihat tanpa mengarahkan pointer ke mana pun) dan bisa diseret
+          untuk menggesernya. */}
+      {clipCuts.map((cut) => {
+        const dragging = cutDrag?.clipId === cut.id;
+        const atSec = cut.startSec + cut.durationSec + (dragging ? cutDrag.delta : 0);
+        const left = Math.round((atSec / Math.max(durSec, 0.001)) * width);
+        return (
+          <div
+            key={cut.id}
+            className={`clip-cut${dragging ? " dragging" : ""}`}
+            data-testid={`potong-${cut.id}`}
+            title={`Titik potong sesudah ${cut.id} — seret untuk menggesernya`}
+            style={{ left }}
+            onPointerDown={(event) => {
+              if (busy) return;
+              event.preventDefault();
+              event.stopPropagation();
+              cutFrom.current = { x: event.clientX, clipId: cut.id };
+              setCutDrag({ clipId: cut.id, delta: 0 });
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              const from = cutFrom.current;
+              if (!from) return;
+              // Dijepit oleh core, bukan oleh UI: batas yang dihitung dua kali
+              // adalah batas yang suatu saat berbeda (ADR-0033 §5).
+              setCutDrag({
+                clipId: from.clipId,
+                delta: clampTrimDelta(
+                  plan,
+                  scene,
+                  from.clipId,
+                  "keluar",
+                  "roll",
+                  (event.clientX - from.x) / pxPerSec,
+                ),
+              });
+            }}
+            onPointerUp={endCut}
+            onPointerCancel={() => {
+              cutFrom.current = null;
+              setCutDrag(null);
+            }}
+          />
+        );
+      })}
+      {cutDrag && cutDrag.delta !== 0 ? (
+        <span className="trim-label cut-label">
+          {cutDrag.delta > 0 ? "+" : ""}
+          {cutDrag.delta.toFixed(2)}s
+        </span>
+      ) : null}
+      {trimSec !== null ? (
+        <span className="trim-label">{trimSec.toFixed(1)}s</span>
+      ) : null}
+      <div
+        className="clip-trim"
+        data-testid={`trim-${scene.id}`}
+        onPointerDown={(event) => {
+          if (busy) return;
+          event.preventDefault();
+          event.stopPropagation();
+          trimFrom.current = { x: event.clientX, sec: durSec };
+          setTrimSec(Math.max(MIN_SCENE_SEC, Math.round(durSec * 10) / 10));
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const from = trimFrom.current;
+          if (!from) return;
+          const raw = from.sec + (event.clientX - from.x) / pxPerSec;
+          setTrimSec(Math.max(MIN_SCENE_SEC, Math.round(raw * 10) / 10));
+        }}
+        onPointerUp={endTrim}
+        onPointerCancel={() => {
+          trimFrom.current = null;
+          setTrimSec(null);
+        }}
+      />
+    </div>
+  );
+};
+
+/**
+ * Gulir timeline mengikuti playhead.
+ *
+ * Tanpa ini, memutar timeline yang di-zoom membuat playhead keluar dari
+ * pandangan dan penyunting kehilangan tempatnya — perilaku yang tidak ada di
+ * satu pun NLE. Digulir hanya saat playhead mendekati tepi, bukan tiap frame,
+ * supaya scroll manual pengguna tidak terus-menerus direbut kembali.
+ */
+const useFollowPlayhead = (
+  scrollRef: React.RefObject<HTMLDivElement | null>,
+  playheadX: number,
+  playing: boolean,
+  scrubbing: React.RefObject<boolean>,
+): void => {
+  useEffect(() => {
+    const box = scrollRef.current;
+    if (!box || scrubbing.current) return;
+    const margin = Math.min(160, box.clientWidth * 0.2);
+    const left = box.scrollLeft;
+    const right = left + box.clientWidth;
+    if (playheadX < left + margin) {
+      box.scrollTo({ left: Math.max(0, playheadX - margin), behavior: "auto" });
+    } else if (playheadX > right - margin) {
+      box.scrollTo({
+        left: playheadX - box.clientWidth + margin,
+        behavior: playing ? "auto" : "smooth",
+      });
+    }
+  }, [scrollRef, playheadX, playing, scrubbing]);
+};
+
+export const TimelineStrip: React.FC = () => {
+  const { project, selectedSceneId } = useStudio();
+  const plan = project?.plan ?? null;
+  const frame = useSyncExternalStore(playback.subscribe, playback.getFrame);
+  const playing = useSyncExternalStore(playback.subscribe, playback.getPlaying);
+  const [pxPerSec, setPxPerSec] = useState(24);
+  const [drag, setDrag] = useState<string | null>(null);
+  /**
+   * Berlian keyframe yang sedang diseret (mencabut batas ADR-0027). Posisi
+   * sementaranya hidup di sini; patch baru dikirim saat dilepas — satu patch
+   * per seretan, bukan per gerakan pointer.
+   */
+  const [kfDrag, setKfDrag] = useState<{
+    sceneId: string;
+    layerId: string;
+    property: AnimatableProperty;
+    fromAt: number;
+    at: number;
+    /** Keyframe track lain yang sedang ditempeli (garis bantu di bar). */
+    snappedTo: { property: AnimatableProperty; at: number } | null;
+  } | null>(null);
+  /**
+   * Berlian yang paling dekat ke pointer di bar lapisan — dinaikkan ke atas
+   * supaya berlian dua track yang berdekatan (atau bertumpuk pada waktu yang
+   * sama) tetap bisa ditangkap dari pusatnya sendiri, bukan yang kebetulan
+   * digambar belakangan.
+   */
+  const [kfNear, setKfNear] = useState<{
+    layerId: string;
+    property: AnimatableProperty;
+    at: number;
+  } | null>(null);
+  /**
+   * Berlian yang harus difokus ULANG setelah plan diperbarui. Berlian di-key
+   * dari waktunya, jadi menggesernya dari papan ketik membuat React memasang
+   * ulang elemennya dan fokus jatuh ke halaman — panah kedua lalu menggulir
+   * timeline, bukan menggeser berlian yang sama. Efek tanpa daftar dependensi:
+   * pencariannya satu querySelector dan hanya berjalan selagi ada yang ditunggu.
+   */
+  const focusAfter = useRef<{ key: string; at: number } | null>(null);
+  useEffect(() => {
+    const want = focusAfter.current;
+    if (!want) return;
+    const element = document.querySelector<HTMLElement>(
+      `[data-kf="${want.key}"][data-kf-at="${want.at}"]`,
+    );
+    if (!element) return;
+    focusAfter.current = null;
+    element.focus();
+  });
+  const [dropHint, setDropHint] = useState<{
+    id: string;
+    side: "before" | "after";
+  } | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  // Tepi gulir yang memudar: klip terakhir yang teriris rata di tepi terbaca
+  // seperti tampilan rusak, bukan seperti "masih ada lanjutannya".
+  const [scrollRef, scrollFade] = useScrollFade<HTMLDivElement>();
+  const scrubbing = useRef(false);
+
+  const meta = useMemo(() => (plan ? planMeta(plan) : null), [plan]);
+  const boxes = useMemo(() => (meta ? clipBoxes(meta, pxPerSec) : []), [meta, pxPerSec]);
+  // Dihitung sebelum early return karena hook di bawahnya tidak boleh
+  // dipanggil bersyarat.
+  const playheadX = meta ? frameToX(frame, meta, boxes) : 0;
+  useFollowPlayhead(scrollRef, playheadX, playing, scrubbing);
+
+  if (!plan || !meta) {
+    return (
+      <footer className="timeline-strip empty">
+        <div className="transport">
+          <span className="tl-hint">
+            Timeline muncul setelah scene-plan pertama dibuat lewat chat.
+          </span>
+        </div>
+      </footer>
+    );
+  }
+
+  const width = timelineWidth(boxes);
+  const ticks = rulerTicks(meta, boxes);
+  const busy = project?.busy.mutation !== null;
+
+  const scrubTo = (clientX: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    playback.requestSeek(xToFrame(clientX - rect.left, meta, boxes));
+  };
+
+  const reorder = (targetId: string, side: "before" | "after") => {
+    setDropHint(null);
+    const sourceId = drag;
+    setDrag(null);
+    if (!sourceId || sourceId === targetId) return;
+    const order = plan.scenes.map((scene) => scene.id).filter((id) => id !== sourceId);
+    const at = order.indexOf(targetId) + (side === "after" ? 1 : 0);
+    order.splice(at, 0, sourceId);
+    void studioClient.applyPatch([{ op: "reorderScenes", order }], "Urutan scene diubah");
+  };
+
+  // ADR-0015: target belah = scene di bawah playhead, dengan kedua bagian
+  // minimal 1 detik dan scene tidak terkunci.
+  const splitTarget = (() => {
+    for (let i = meta.sceneStarts.length - 1; i >= 0; i--) {
+      const start = meta.sceneStarts[i] ?? 0;
+      if (frame < start) continue;
+      const local = (frame - start) / meta.fps;
+      const total = (meta.sceneFrames[i] ?? 0) / meta.fps;
+      const scene = plan.scenes[i];
+      if (!scene || scene.locked || local < 1 || total - local < 1) return null;
+      return { sceneId: scene.id, atSec: Math.round(local * 10) / 10 };
+    }
+    return null;
+  })();
+
+  /**
+   * Target belah KLIP (ADR-0033): potongan di bawah playhead.
+   *
+   * Berbeda dari belah SCENE di atas — yang ini memotong GAMBAR tanpa
+   * menyentuh narasi, caption, atau transisi. Itulah pisau yang dicari orang
+   * saat menyunting rekaman; belah scene dipakai saat gagasannya yang berganti.
+   */
+  const splitClipTarget = (() => {
+    let index = 0;
+    for (let i = 0; i < meta.sceneStarts.length; i += 1) {
+      if (frame >= (meta.sceneStarts[i] ?? 0)) index = i;
+    }
+    const scene = plan.scenes[index];
+    if (!scene || scene.locked) return null;
+    const sceneSec = (meta.sceneFrames[index] ?? 0) / meta.fps;
+    const localSec = (frame - (meta.sceneStarts[index] ?? 0)) / meta.fps;
+    const timing = computeClipTimings(scene, sceneSec).find(
+      (candidate) =>
+        localSec >= candidate.startSec &&
+        localSec < candidate.startSec + candidate.durationSec,
+    );
+    if (!timing) return null;
+    const atSec = Math.round((localSec - timing.startSec) * 100) / 100;
+    const bounds = splitBounds(plan, scene, timing.id);
+    if (isRefusal(bounds) || atSec < bounds.minSec || atSec > bounds.maxSec) return null;
+    return { sceneId: scene.id, clipId: timing.id, atSec };
+  })();
+
+  /**
+   * Batas scene di kiri/kanan playhead. Navigasi antar-scene adalah kontrol
+   * transport baku di editor mana pun, dan datanya sudah ada — tanpa ini
+   * satu-satunya cara berpindah scene adalah menyeret playhead dengan mata.
+   * Batasnya frame scene tampil UTUH, bukan awal transisi: melompat ke awal
+   * transisi menampilkan (dan mengedit) scene sebelumnya.
+   */
+  const boundaries = meta.sceneSettledStarts;
+  const prevBoundary = (() => {
+    for (let i = boundaries.length - 1; i >= 0; i--) {
+      const start = boundaries[i] ?? 0;
+      // Ambang 2 frame: menekan "sebelumnya" tepat di awal scene harus
+      // melompat ke scene sebelumnya, bukan diam di tempat.
+      if (start < frame - 2) return start;
+    }
+    return frame > 0 ? 0 : null;
+  })();
+  const nextBoundary = boundaries.find((start) => start > frame + 2) ?? null;
+
+  const activeSceneIndex = (() => {
+    for (let i = boundaries.length - 1; i >= 0; i--) {
+      if (frame >= (boundaries[i] ?? 0)) return i;
+    }
+    return 0;
+  })();
+  const activeScene = plan.scenes[activeSceneIndex];
+
+  const addAtEnd = () => {
+    const id = `sc-${Date.now().toString(36)}`;
+    void studioClient.applyPatch(
+      [
+        {
+          op: "addScene",
+          afterId: plan.scenes.at(-1)?.id ?? null,
+          scene: { id, visual: { type: "stock", query: "" } } as never,
+        },
+      ],
+      `Scene ${id} ditambahkan`,
+    );
+  };
+
+  return (
+    <footer className="timeline-strip">
+      <div className="transport">
+        <button
+          type="button"
+          className="mini step-btn"
+          disabled={prevBoundary === null}
+          data-tip="Scene sebelumnya"
+          onClick={() => {
+            playback.requestPause();
+            if (prevBoundary !== null) playback.requestSeek(prevBoundary);
+          }}
+        >
+          <IconPrevScene />
+        </button>
+        <button
+          type="button"
+          className="transport-play"
+          onClick={() => playback.requestToggle()}
+          data-tip={playing ? "Jeda (Spasi)" : "Putar (Spasi)"}
+        >
+          {playing ? <IconPause /> : <IconPlay />}
+        </button>
+        <button
+          type="button"
+          className="mini step-btn"
+          disabled={nextBoundary === null}
+          data-tip="Scene berikutnya"
+          onClick={() => {
+            playback.requestPause();
+            if (nextBoundary !== null) playback.requestSeek(nextBoundary);
+          }}
+        >
+          <IconNextScene />
+        </button>
+        <span className="transport-time">
+          {formatTime(frame, meta.fps)}
+          <span className="transport-total">
+            {" "}
+            / {formatTime(meta.durationInFrames, meta.fps)}
+          </span>
+        </span>
+        <button
+          type="button"
+          className="mini split-btn"
+          data-testid="belah-klip"
+          disabled={busy || !splitClipTarget}
+          data-tip="Belah klip di playhead (gambar saja)"
+          onClick={() => {
+            if (!splitClipTarget) return;
+            void studioClient.applyPatch(
+              [
+                {
+                  op: "splitClip",
+                  sceneId: splitClipTarget.sceneId,
+                  clipId: splitClipTarget.clipId,
+                  atSec: splitClipTarget.atSec,
+                  newClipId: nextClipId(plan, splitClipTarget.sceneId),
+                },
+              ],
+              `Belah klip ${splitClipTarget.clipId} di ${splitClipTarget.atSec.toFixed(2)}s`,
+            );
+          }}
+        >
+          <IconSplit />
+        </button>
+        <button
+          type="button"
+          className="mini split-btn"
+          data-testid="belah-scene"
+          disabled={busy || !splitTarget}
+          data-tip="Belah scene di playhead (narasi ikut terbagi)"
+          onClick={() => {
+            if (splitTarget) {
+              void studioClient.splitScene(splitTarget.sceneId, splitTarget.atSec);
+            }
+          }}
+        >
+          <IconSplitScene />
+        </button>
+        <span className="transport-spacer" />
+        {/* Scene di bawah playhead. Bentangan tengah transport tadinya
+            ~1100px kekosongan di pita yang paling sering dilihat; yang
+            mengisinya harus keterangan yang memang dicari orang saat
+            menggeser playhead, bukan hiasan. */}
+        {activeScene ? (
+          <button
+            type="button"
+            className="transport-scene"
+            onClick={() => studioClient.selectScene(activeScene.id)}
+            data-tip="Pilih scene ini di panel Properti"
+          >
+            <span className="transport-scene-no">{activeSceneIndex + 1}</span>
+            <span className="transport-scene-id">{activeScene.id}</span>
+          </button>
+        ) : null}
+        <span className="transport-spacer" />
+        <div className="zoom-group">
+          <button
+            type="button"
+            className="mini"
+            onClick={() => setPxPerSec((z) => Math.max(MIN_ZOOM, z - 8))}
+            disabled={pxPerSec <= MIN_ZOOM}
+            data-tip="Perkecil timeline"
+          >
+            -
+          </button>
+          <input
+            type="range"
+            min={MIN_ZOOM}
+            max={MAX_ZOOM}
+            value={pxPerSec}
+            onChange={(event) => setPxPerSec(Number(event.target.value))}
+            title="Zoom timeline"
+          />
+          <button
+            type="button"
+            className="mini"
+            onClick={() => setPxPerSec((z) => Math.min(MAX_ZOOM, z + 8))}
+            disabled={pxPerSec >= MAX_ZOOM}
+            data-tip="Perbesar timeline"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div className="tl-body">
+        <div className="tl-gutter">
+          <span className="tl-gutter-ruler" />
+          <span className="tl-gutter-label">Video</span>
+          <span className="tl-gutter-label">Narasi</span>
+          <span className="tl-gutter-label" title="Musik latar & cue efek suara">
+            Musik
+          </span>
+        </div>
+        <div className={`tl-scroll ${scrollFade}`} ref={scrollRef}>
+          <div className="tl-canvas" ref={canvasRef} style={{ width: width + 80 }}>
+            <div
+              className="tl-ruler"
+              onPointerDown={(event) => {
+                scrubbing.current = true;
+                playback.requestPause();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                scrubTo(event.clientX);
+              }}
+              onPointerMove={(event) => {
+                if (scrubbing.current) scrubTo(event.clientX);
+              }}
+              onPointerUp={() => {
+                scrubbing.current = false;
+              }}
+            >
+              {ticks.map((tick) => (
+                <span
+                  key={tick.sec}
+                  className={tick.label ? "tick label" : "tick"}
+                  style={{ left: tick.x }}
+                >
+                  {tick.label ? <em>{tick.sec}s</em> : null}
+                </span>
+              ))}
+            </div>
+
+            {ticks
+              .filter((tick) => tick.label)
+              .map((tick) => (
+                <span
+                  key={`grid-${tick.sec}`}
+                  className="grid-line"
+                  style={{ left: tick.x }}
+                />
+              ))}
+
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: kontainer drop DnD klip */}
+            <div className="tl-track video" onDragLeave={() => setDropHint(null)}>
+              {plan.scenes.map((scene, index) => (
+                <Clip
+                  key={scene.id}
+                  plan={plan}
+                  meta={meta}
+                  scene={scene}
+                  index={index}
+                  box={boxes[index] as ClipBox}
+                  clipHeight={54}
+                  pxPerSec={pxPerSec}
+                  selected={scene.id === selectedSceneId}
+                  active={
+                    frame >= (meta.sceneStarts[index] ?? 0) &&
+                    playheadX >= (boxes[index]?.x ?? 0) &&
+                    playheadX <= (boxes[index]?.x ?? 0) + (boxes[index]?.w ?? 0)
+                  }
+                  dropSide={dropHint?.id === scene.id ? dropHint.side : null}
+                  onDragState={setDrag}
+                  onDropHint={(id, side) => setDropHint({ id, side })}
+                  onDrop={reorder}
+                />
+              ))}
+              <button
+                type="button"
+                className="clip-add"
+                style={{ left: width + 8 }}
+                onClick={addAtEnd}
+                disabled={busy}
+                data-tip="Tambah scene di akhir"
+              >
+                <IconPlus />
+              </button>
+            </div>
+
+            {/*
+              Track lapisan (ADR-0025) hanya muncul kalau ada lapisannya.
+              Baris kosong permanen di timeline mengajarkan mata untuk
+              melewatinya, dan baris yang dilewati sama saja dengan tidak ada.
+            */}
+            {plan.scenes.some((scene) => scene.layers.length > 0) ? (
+              <div className="tl-track layers">
+                {plan.scenes.flatMap((scene, index) => {
+                  const box = boxes[index] as ClipBox;
+                  return scene.layers.map((layer) => {
+                    const asset = plan.renderState.layerAssets[layer.id];
+                    const x = box.x + layer.startFrac * box.w;
+                    const w = Math.max(6, (layer.endFrac - layer.startFrac) * box.w);
+                    const laneCount = layer.tracks.length;
+                    const barFraction = (clientX: number, barRect: DOMRect): number =>
+                      Math.round(
+                        Math.min(
+                          1,
+                          Math.max(0, (clientX - barRect.left) / barRect.width),
+                        ) * 1000,
+                      ) / 1000;
+                    /**
+                     * Berlian TERDEKAT ke pointer (jarak ke pusatnya; lajur ikut
+                     * dihitung). Tangkapan diputuskan DI SINI saat menekan — bukan
+                     * oleh urutan gambar atau z-index hover: berlian dua track yang
+                     * berdekatan harus tertangkap dari pusatnya sendiri, dan hover
+                     * yang belum sempat ter-render tidak boleh mengubah hasilnya
+                     * (gerbang interaksi di CI menangkap persis kasus itu).
+                     */
+                    const nearestDiamond = (
+                      clientX: number,
+                      clientY: number,
+                      barRect: DOMRect,
+                    ): { property: AnimatableProperty; at: number; d: number } | null => {
+                      let best: {
+                        property: AnimatableProperty;
+                        at: number;
+                        d: number;
+                      } | null = null;
+                      for (const [trackIndex, track] of layer.tracks.entries()) {
+                        for (const point of track.points) {
+                          const cx = barRect.left + point.at * barRect.width;
+                          const cy =
+                            barRect.top +
+                            barRect.height / 2 +
+                            laneOffsetPx(trackIndex, laneCount);
+                          const d = Math.hypot(clientX - cx, clientY - cy);
+                          if (!best || d < best.d) {
+                            best = { property: track.property, at: point.at, d };
+                          }
+                        }
+                      }
+                      return best;
+                    };
+                    const commitKeyframe = (
+                      property: AnimatableProperty,
+                      fromAt: number,
+                      next: number,
+                    ): boolean => {
+                      if (Math.abs(next - fromAt) < 0.005) return false;
+                      const tracks = moveKeyframe(layer.tracks, property, fromAt, next);
+                      if (tracks === layer.tracks) return false;
+                      void studioClient.applyPatch(
+                        [
+                          {
+                            op: "updateScene",
+                            id: scene.id,
+                            patch: {
+                              layers: scene.layers.map((item) =>
+                                item.id === layer.id ? { ...item, tracks } : item,
+                              ),
+                            },
+                          },
+                        ],
+                        `Keyframe ${property} lapisan ${layer.id} ke ${Math.round(next * 100)}%`,
+                      );
+                      return true;
+                    };
+                    return (
+                      <div
+                        key={layer.id}
+                        className={asset ? "layer-bar" : "layer-bar kosong"}
+                        style={{ left: x, width: w }}
+                        onPointerDown={(event) => {
+                          if (busy || scene.locked) return;
+                          const barRect = event.currentTarget.getBoundingClientRect();
+                          if (barRect.width <= 0) return;
+                          const hit = nearestDiamond(
+                            event.clientX,
+                            event.clientY,
+                            barRect,
+                          );
+                          // Jauh dari berlian mana pun: biarkan tombol bar bekerja.
+                          if (!hit || hit.d > 12) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          setKfDrag({
+                            sceneId: scene.id,
+                            layerId: layer.id,
+                            property: hit.property,
+                            fromAt: hit.at,
+                            at: hit.at,
+                            snappedTo: null,
+                          });
+                        }}
+                        onPointerMove={(event) => {
+                          const barRect = event.currentTarget.getBoundingClientRect();
+                          if (barRect.width <= 0) return;
+                          if (kfDrag?.layerId === layer.id) {
+                            // Menempel ke keyframe track LAIN pada lapisan ini
+                            // (batas ADR-0027 dicabut); papan ketik tidak
+                            // menempel — langkahnya sudah eksplisit.
+                            const snap = snapKeyframeTime(
+                              layer.tracks,
+                              kfDrag.property,
+                              kfDrag.fromAt,
+                              barFraction(event.clientX, barRect),
+                            );
+                            setKfDrag((current) =>
+                              current
+                                ? { ...current, at: snap.at, snappedTo: snap.snappedTo }
+                                : current,
+                            );
+                            return;
+                          }
+                          if (kfDrag) return;
+                          const nearest = nearestDiamond(
+                            event.clientX,
+                            event.clientY,
+                            barRect,
+                          );
+                          const next =
+                            nearest && nearest.d <= 14
+                              ? {
+                                  layerId: layer.id,
+                                  property: nearest.property,
+                                  at: nearest.at,
+                                }
+                              : null;
+                          setKfNear((current) =>
+                            current?.layerId === next?.layerId &&
+                            current?.property === next?.property &&
+                            current?.at === next?.at
+                              ? current
+                              : next,
+                          );
+                        }}
+                        onPointerUp={(event) => {
+                          if (kfDrag?.layerId !== layer.id) return;
+                          const barRect = event.currentTarget.getBoundingClientRect();
+                          const { property, fromAt } = kfDrag;
+                          setKfDrag(null);
+                          if (barRect.width <= 0) return;
+                          commitKeyframe(
+                            property,
+                            fromAt,
+                            snapKeyframeTime(
+                              layer.tracks,
+                              property,
+                              fromAt,
+                              barFraction(event.clientX, barRect),
+                            ).at,
+                          );
+                        }}
+                        onPointerLeave={() =>
+                          setKfNear((current) =>
+                            current?.layerId === layer.id ? null : current,
+                          )
+                        }
+                      >
+                        <button
+                          type="button"
+                          className="layer-bar-hit"
+                          onClick={() => studioClient.selectScene(scene.id)}
+                          title={`Lapisan ${layer.id} di ${scene.id} · ${Math.round(
+                            layer.startFrac * 100,
+                          )}%–${Math.round(layer.endFrac * 100)}% durasi scene${
+                            asset ? "" : " · berkas belum ada, tidak akan muncul"
+                          }`}
+                        >
+                          <span className="layer-bar-label">{layer.id}</span>
+                        </button>
+                        {/* Berlian keyframe (ADR-0027): waktu adalah tempat
+                            keyframe hidup, jadi ia harus terlihat di garis
+                            waktu — dan bisa DISERET di sana (batas ADR-0027
+                            dicabut): pointer ditangani BAR-nya (berlian terdekat
+                            ke titik tekan yang diambil), posisi sementara di
+                            state, patch saat dilepas lewat moveKeyframe milik core.
+
+                            Berlian adalah SAUDARA tombol bar, bukan anaknya:
+                            HTML melarang unsur interaktif di dalam <button>,
+                            dan berlian yang bisa difokus (slider, dengan
+                            panah kiri/kanan) adalah unsur interaktif. */}
+                        {kfDrag?.layerId === layer.id && kfDrag.snappedTo ? (
+                          <span
+                            className="kf-snap-line"
+                            style={{ left: `${kfDrag.snappedTo.at * 100}%` }}
+                            title={`menempel ke keyframe ${kfDrag.snappedTo.property} @ ${Math.round(kfDrag.snappedTo.at * 100)}%`}
+                          />
+                        ) : null}
+                        {layer.tracks.flatMap((track, trackIndex) =>
+                          track.points.map((point) => {
+                            const dragging =
+                              kfDrag?.layerId === layer.id &&
+                              kfDrag.property === track.property &&
+                              Math.abs(kfDrag.fromAt - point.at) < 0.0005;
+                            const near =
+                              kfNear?.layerId === layer.id &&
+                              kfNear.property === track.property &&
+                              Math.abs(kfNear.at - point.at) < 0.0005;
+                            // Tiap track punya LAJUR sendiri di bar: berlian
+                            // dua track pada waktu yang sama tidak lagi
+                            // bertumpuk persis.
+                            const lane = laneOffsetPx(trackIndex, layer.tracks.length);
+                            const at = dragging ? (kfDrag?.at ?? point.at) : point.at;
+                            const kfKey = `${scene.id}/${layer.id}/${track.property}`;
+                            const commit = (next: number): boolean =>
+                              commitKeyframe(track.property, point.at, next);
+                            const percent = Math.round(at * 100);
+                            return (
+                              <span
+                                key={`${track.property}-${point.at}`}
+                                className={`kf-diamond${dragging ? " dragging" : ""}${near ? " near" : ""}`}
+                                style={{
+                                  left: `${at * 100}%`,
+                                  top: `calc(50% + ${lane}px)`,
+                                }}
+                                data-kf={kfKey}
+                                data-kf-at={point.at}
+                                role="slider"
+                                tabIndex={0}
+                                aria-label={`Keyframe ${track.property} lapisan ${layer.id}`}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={percent}
+                                aria-valuetext={`${percent}% durasi scene`}
+                                title={`${track.property} @ ${percent}% — seret, atau panah kiri/kanan (Shift: 5%)`}
+                                onKeyDown={(event) => {
+                                  if (busy || scene.locked) return;
+                                  const step = event.shiftKey ? 0.05 : 0.01;
+                                  const target =
+                                    event.key === "ArrowRight"
+                                      ? point.at + step
+                                      : event.key === "ArrowLeft"
+                                        ? point.at - step
+                                        : event.key === "Home"
+                                          ? 0
+                                          : event.key === "End"
+                                            ? 1
+                                            : null;
+                                  if (target === null) return;
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  const next =
+                                    Math.round(Math.min(1, Math.max(0, target)) * 1000) /
+                                    1000;
+                                  if (commit(next))
+                                    focusAfter.current = { key: kfKey, at: next };
+                                }}
+                              />
+                            );
+                          }),
+                        )}
+                      </div>
+                    );
+                  });
+                })}
+              </div>
+            ) : null}
+
+            <div className="tl-track audio">
+              {plan.scenes.map((scene, index) => {
+                const audio = plan.renderState.narrationAudio[scene.id];
+                const status = deriveSceneStatus(
+                  plan,
+                  scene,
+                  project?.stageRuns ?? [],
+                  project?.busy ?? { mutation: null, render: null },
+                );
+                if (scene.narration.trim() === "") return null;
+                const box = boxes[index] as ClipBox;
+                return (
+                  <button
+                    key={scene.id}
+                    type="button"
+                    className={`audio-block ${audio ? (audio.fallbackQuality ? "fallback" : "ok") : status.voice}`}
+                    style={{ left: box.x, width: box.w }}
+                    onClick={() => studioClient.selectScene(scene.id)}
+                    title={
+                      audio
+                        ? `Narasi ${audio.durationSec.toFixed(1)}s${audio.fallbackQuality ? " (fallback)" : ""}`
+                        : "Belum ada suara — jalankan Suara"
+                    }
+                  >
+                    <span className="audio-wave" aria-hidden />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/*
+              Track ketiga: musik latar (ADR-0014) dan cue efek suara
+              (ADR-0018). Keduanya sudah lama bisa dipasang, tetapi tidak
+              pernah terlihat di timeline — dan lapisan audio yang tak terlihat
+              tidak bisa ditakar oleh siapa pun.
+            */}
+            <div className="tl-track audio mix">
+              {plan.audio.music ? (
+                <div
+                  className="music-bar"
+                  style={{ left: 0, width }}
+                  title={`Musik: ${plan.audio.music.assetId} · volume ${Math.round(
+                    plan.audio.music.volume * 100,
+                  )}%${plan.audio.music.ducking ? " · ducking aktif" : ""} · fade ${plan.audio.music.fadeInSec.toFixed(1)}/${plan.audio.music.fadeOutSec.toFixed(1)} dtk`}
+                >
+                  <span className="music-label">
+                    {plan.audio.music.assetId.replace("pustaka:", "")}
+                  </span>
+                  {/* Amplop musik bisa diseret di sini (batas ADR-0026 dicabut):
+                      fade adalah keputusan WAKTU, dan waktu hidup di timeline. */}
+                  <FadeHandles
+                    fadeInSec={plan.audio.music.fadeInSec}
+                    fadeOutSec={plan.audio.music.fadeOutSec}
+                    spanSec={meta.totalSec}
+                    pxPerSec={pxPerSec}
+                    disabled={busy}
+                    name="musik"
+                    onCommit={(patch, label) =>
+                      void studioClient.applyPatch(
+                        [
+                          {
+                            op: "setAudio",
+                            patch: {
+                              music: { ...(plan.audio.music as Music), ...patch },
+                            },
+                          },
+                        ],
+                        label,
+                      )
+                    }
+                  />
+                </div>
+              ) : null}
+              {/* Trek audio tambahan (ADR-0026) di baris yang sama dengan
+                  musik: keduanya bunyi yang bukan narasi, dan memisahkannya ke
+                  baris keempat hanya menambah tinggi timeline tanpa menambah
+                  apa yang bisa dibaca. */}
+              {plan.audio.tracks.map((track) => {
+                const asset = plan.renderState.trackAssets[track.id];
+                const index = track.sceneId
+                  ? plan.scenes.findIndex((scene) => scene.id === track.sceneId)
+                  : -1;
+                if (track.sceneId && index < 0) return null;
+                const anchor = index >= 0 ? (boxes[index]?.x ?? 0) : 0;
+                const x = anchor + track.atSec * pxPerSec;
+                const w = asset?.durationSec
+                  ? Math.max(6, asset.durationSec * pxPerSec)
+                  : 24;
+                return (
+                  <div
+                    key={track.id}
+                    className={asset ? "track-bar" : "track-bar kosong"}
+                    style={{ left: x, width: w }}
+                  >
+                    <button
+                      type="button"
+                      className="layer-bar-hit"
+                      onClick={() =>
+                        track.sceneId
+                          ? studioClient.selectScene(track.sceneId)
+                          : undefined
+                      }
+                      title={`Trek ${track.id} · volume ${Math.round(
+                        track.audio.volume * 100,
+                      )}%${track.loop ? " · diulang" : ""} · fade ${track.audio.fadeInSec.toFixed(1)}/${track.audio.fadeOutSec.toFixed(1)} dtk${
+                        asset ? "" : " · berkas belum ada, tidak berbunyi"
+                      }`}
+                    >
+                      <span className="layer-bar-label">{track.id}</span>
+                    </button>
+                    {asset?.durationSec ? (
+                      <FadeHandles
+                        fadeInSec={track.audio.fadeInSec}
+                        fadeOutSec={track.audio.fadeOutSec}
+                        spanSec={asset.durationSec}
+                        pxPerSec={pxPerSec}
+                        disabled={busy}
+                        name={`trek ${track.id}`}
+                        onCommit={(patch, label) =>
+                          void studioClient.applyPatch(
+                            [
+                              {
+                                op: "setAudio",
+                                patch: {
+                                  tracks: plan.audio.tracks.map((item) =>
+                                    item.id === track.id
+                                      ? { ...item, audio: { ...item.audio, ...patch } }
+                                      : item,
+                                  ),
+                                },
+                              },
+                            ],
+                            label,
+                          )
+                        }
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+              {plan.audio.sfx.map((cue) => {
+                const index = plan.scenes.findIndex((scene) => scene.id === cue.sceneId);
+                if (index < 0) return null;
+                const box = boxes[index] as ClipBox;
+                const x = box.x + cue.atSec * pxPerSec;
+                return (
+                  <button
+                    key={cue.id}
+                    type="button"
+                    className="sfx-pin"
+                    style={{ left: x }}
+                    onClick={() => studioClient.selectScene(cue.sceneId)}
+                    title={`Efek suara ${cue.id} · +${cue.atSec.toFixed(1)}s dari awal ${cue.sceneId} · volume ${Math.round(cue.volume * 100)}%`}
+                  >
+                    <span className="sfx-pin-dot" />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="tl-playhead" style={{ left: playheadX }}>
+              <span className="tl-playhead-cap" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+};

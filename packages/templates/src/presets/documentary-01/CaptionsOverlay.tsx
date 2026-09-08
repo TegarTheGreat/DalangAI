@@ -1,15 +1,17 @@
 import type { Scene, ScenePlan } from "@dalang/core";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import {
   AbsoluteFill,
-  Easing,
   interpolate,
   Sequence,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { easeSettle } from "../../anim";
 import { buildCaptionPages, type CaptionPageModel } from "../../captions-model";
 import type { AspectMetrics } from "../../layout";
+import { TEXT_SIZE_FACTOR } from "../../text-overlay-model";
+import { captionStyleOf, captionStyleSpec, splitToken } from "../../type-style";
 import type { DocTheme } from "./theme";
 
 /**
@@ -19,26 +21,39 @@ import type { DocTheme } from "./theme";
 
 const CaptionPage: React.FC<{
   page: CaptionPageModel;
+  scene: Scene;
   metrics: AspectMetrics;
   theme: DocTheme;
-}> = ({ page, metrics, theme }) => {
+}> = ({ page, scene, metrics, theme }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sceneTimeMs = page.startMs + (frame / fps) * 1000;
+
+  // ADR-0016: gaya caption nyata (klasik/tegas/chip/halus) + ukuran & posisi.
+  const spec = captionStyleSpec(captionStyleOf(scene), {
+    ink: theme.ink,
+    inkSoft: "rgba(245, 240, 230, 0.66)",
+    accent: theme.accent,
+    onAccent: theme.bg,
+  });
+  const fontSize =
+    metrics.captionFontSize * spec.sizeFactor * TEXT_SIZE_FACTOR[scene.caption.size];
+  const placement =
+    scene.caption.position === "center"
+      ? { top: "50%", translateY: -50 }
+      : { bottom: metrics.captionBottom, translateY: 0 };
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
       <div
         style={{
           position: "absolute",
-          bottom: metrics.captionBottom,
+          ...("top" in placement ? { top: placement.top } : { bottom: placement.bottom }),
           left: "50%",
           width: metrics.captionMaxWidth,
           textAlign: "center",
           fontFamily: theme.fontBody,
-          fontWeight: 640,
-          fontSize: metrics.captionFontSize,
-          lineHeight: 1.28,
+          fontSize,
           color: theme.ink,
           whiteSpace: "pre-wrap",
           textShadow: [
@@ -47,33 +62,30 @@ const CaptionPage: React.FC<{
             "0 2px 6px rgba(0, 0, 0, 0.7)",
             "0 -1px 8px rgba(0, 0, 0, 0.4)",
           ].join(", "),
+          ...spec.block,
           opacity: interpolate(frame, [0, 5], [0, 1], {
             extrapolateRight: "clamp",
-            easing: Easing.bezier(0.16, 1, 0.3, 1),
+            easing: easeSettle,
           }),
-          translate: `-50% ${interpolate(frame, [0, 5], [10, 0], {
-            extrapolateRight: "clamp",
-            easing: Easing.bezier(0.16, 1, 0.3, 1),
-          })}px`,
+          translate: `-50% calc(${placement.translateY}% + ${interpolate(
+            frame,
+            [0, 5],
+            [10, 0],
+            { extrapolateRight: "clamp", easing: easeSettle },
+          ).toFixed(2)}px)`,
         }}
       >
         {page.tokens.map((token, tokenIndex) => {
           const started = token.fromMs <= sceneTimeMs;
           const active = started && token.toMs > sceneTimeMs;
+          const { lead, word } = splitToken(token.text);
           return (
-            <span
-              key={`${token.fromMs}-${tokenIndex}`}
-              style={{
-                color: active
-                  ? theme.accent
-                  : started
-                    ? theme.ink
-                    : "rgba(245, 240, 230, 0.66)",
-                fontWeight: active ? 760 : 640,
-              }}
-            >
-              {token.text}
-            </span>
+            <Fragment key={`${token.fromMs}-${tokenIndex}`}>
+              {lead}
+              <span style={spec.token(active ? "active" : started ? "past" : "future")}>
+                {word}
+              </span>
+            </Fragment>
           );
         })}
       </div>
@@ -107,7 +119,7 @@ export const CaptionsOverlay: React.FC<{
           layout="none"
           name={`caption-${index + 1}`}
         >
-          <CaptionPage page={page} metrics={metrics} theme={theme} />
+          <CaptionPage page={page} scene={scene} metrics={metrics} theme={theme} />
         </Sequence>
       ))}
     </AbsoluteFill>

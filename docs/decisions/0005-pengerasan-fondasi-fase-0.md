@@ -57,7 +57,8 @@ masing-masing punya pesan spesifik (bukan stack trace ENOENT).
 
 ### 5. Artefak JSON Schema untuk editor
 
-`packages/core/schema/scene-plan.v1.schema.json` digenerate dari sumber zod
+`packages/core/schema/scene-plan.v<N>.schema.json` digenerate dari sumber zod
+(`<N>` = `SCHEMA_VERSION`; berkasnya ikut berganti nama saat versi naik)
 (`pnpm schema:gen`, mode input: field ber-default menjadi opsional). Field
 `$schema` opsional ditambahkan ke skema (diabaikan runtime) supaya plan.json
 mendapat autocomplete/validasi di editor. Unit test menjaga artefak selalu

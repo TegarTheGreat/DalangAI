@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="dawn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#131A33"/>
+      <stop offset="0.4" stop-color="#3D3253"/>
+      <stop offset="0.66" stop-color="#A85F45"/>
+      <stop offset="0.85" stop-color="#E4A64C"/>
+      <stop offset="1" stop-color="#F2C878"/>
+    </linearGradient>
+    <radialGradient id="sun2" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFE9B0"/>
+      <stop offset="0.5" stop-color="#FFD483" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#FFD483" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stupaBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B2133"/>
+      <stop offset="1" stop-color="#140F1C"/>
+    </linearGradient>
+    <linearGradient id="cloudSea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8C88A" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#C87B3B" stop-opacity="0.25"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#dawn)"/>
+
+  <!-- glow + sun -->
+  <ellipse cx="540" cy="1245" rx="430" ry="380" fill="url(#sun2)"/>
+  <circle cx="540" cy="1245" r="108" fill="#FFE2A0"/>
+
+  <!-- cloud sea -->
+  <g fill="url(#cloudSea)">
+    <path d="M-60 1330 Q80 1280 220 1322 Q360 1272 500 1318 Q650 1270 790 1320 Q930 1276 1140 1326 L1140 1500 L-60 1500 Z"/>
+    <path d="M-60 1430 Q120 1380 300 1424 Q480 1376 660 1424 Q840 1380 1140 1430 L1140 1620 L-60 1620 Z" opacity="0.8"/>
+  </g>
+
+  <!-- distant peaks over the clouds -->
+  <path d="M40 1330 L170 1200 L300 1322 Z" fill="#2B2440" opacity="0.9"/>
+  <path d="M760 1315 L910 1160 L1060 1320 Z" fill="#2B2440" opacity="0.9"/>
+
+  <!-- small stupas mid -->
+  <g fill="#221A2E" opacity="0.95">
+    <g transform="translate(150 1520)">
+      <path d="M-90 120 q90 -150 180 0 Z"/>
+      <rect x="-14" y="-58" width="28" height="34"/>
+      <path d="M0 -96 l10 38 h-20 Z"/>
+    </g>
+    <g transform="translate(930 1560)">
+      <path d="M-80 110 q80 -134 160 0 Z"/>
+      <rect x="-12" y="-48" width="24" height="30"/>
+      <path d="M0 -82 l9 34 h-18 Z"/>
+    </g>
+  </g>
+
+  <!-- main foreground stupa -->
+  <g transform="translate(540 1590)">
+    <path d="M-330 330 Q-330 -60 0 -60 Q330 -60 330 330 Z" fill="url(#stupaBody)"/>
+    <!-- diamond perforations -->
+    <g fill="#E4A64C" opacity="0.85">
+      <path d="M0 20 l26 38 l-26 38 l-26 -38 Z"/>
+      <path d="M-120 60 l24 36 l-24 36 l-24 -36 Z"/>
+      <path d="M120 60 l24 36 l-24 36 l-24 -36 Z"/>
+      <path d="M-220 130 l22 32 l-22 32 l-22 -32 Z"/>
+      <path d="M220 130 l22 32 l-22 32 l-22 -32 Z"/>
+      <path d="M0 150 l24 36 l-24 36 l-24 -36 Z" opacity="0.65"/>
+      <path d="M-120 210 l20 30 l-20 30 l-20 -30 Z" opacity="0.5"/>
+      <path d="M120 210 l20 30 l-20 30 l-20 -30 Z" opacity="0.5"/>
+    </g>
+    <!-- crown -->
+    <rect x="-42" y="-118" width="84" height="42" fill="url(#stupaBody)"/>
+    <rect x="-28" y="-172" width="56" height="58" fill="url(#stupaBody)"/>
+    <path d="M0 -238 l16 66 h-32 Z" fill="url(#stupaBody)"/>
+    <!-- rim light -->
+    <path d="M-330 330 Q-330 -60 0 -60" fill="none" stroke="#F2C878" stroke-width="7" opacity="0.7"/>
+    <path d="M-28 -172 h56 M-42 -118 h84" stroke="#F2C878" stroke-width="5" opacity="0.6"/>
+  </g>
+
+  <!-- base terrace -->
+  <rect x="0" y="1860" width="1080" height="60" fill="#0F0C16"/>
+
+  <!-- birds -->
+  <g stroke="#241C33" stroke-width="6" fill="none" stroke-linecap="round">
+    <path d="M250 560 q20 -18 40 0 M290 560 q20 -18 40 0"/>
+    <path d="M820 480 q16 -14 32 0 M852 480 q16 -14 32 0"/>
+  </g>
+</svg>

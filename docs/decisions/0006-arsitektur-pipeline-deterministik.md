@@ -76,7 +76,7 @@ UI (Fase 3), dicatat di sini agar tidak jadi asumsi diam-diam.
 
 Fallback ke provider ke-2+ ATAU provider placeholder ⇒
 `narrationAudio.fallbackQuality: true` + peringatan konsol + kolom `suara`
-di `dalang validate` menampilkan `⚠ fallback`. Chain kosong / key hilang ⇒
+di `dalang validate` menampilkan `fallback`. Chain kosong / key hilang ⇒
 error per scene yang menyebut nama env var, exit code ≠ 0 — bukan diam.
 
 ## Bukti

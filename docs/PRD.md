@@ -179,7 +179,20 @@ reorderScenes(order[])
 setMeta(partial) / setAudio(partial)
 lockScene(id, bool)               // hanya dari UI/user, bukan agent
 replaceAsset(sceneId, assetRef)
+
+// Potongan gambar di dalam satu scene — ditambahkan ADR-0033
+setClips(sceneId, clips[], duration)
+splitClip(sceneId, clipId, atSec, newClipId)
+trimClip(sceneId, clipId, edge, mode, deltaSec)
+removeClip(sceneId, clipId)
+reorderClips(sceneId, order[])
 ```
+
+> Lima op klip di bawah garis ditambahkan [ADR-0033](decisions/0033-beberapa-klip-dalam-satu-scene.md);
+> `updateScene` sejak itu juga menerima `clipId`, dan payload `visual`-nya
+> bernama `clip`. Yang mengubah SUSUNAN potongan adalah op klip; yang mengubah
+> ISI satu potongan — termasuk transisi keluarnya ke potongan berikutnya — tetap
+> `updateScene`.
 
 Konsekuensi desain:
 
@@ -261,7 +274,7 @@ Tiga panel: **Chat (agent)** — **Preview (player)** — **Timeline/Inspector (
 ### 8.2 Interaksi Kunci
 
 - Klik scene di timeline → inspector menampilkan properti (narasi, visual, durasi, caption) yang bisa diedit langsung.
-- Tombol lock 🔒 per scene.
+- Tombol lock (gembok) per scene.
 - Setiap balasan agent yang mengubah plan menampilkan **diff ringkas** ("mengubah 2 scene, menambah 1") dengan tombol undo.
 - Kandidat aset dari `searchAssets` tampil sebagai grid thumbnail — user bisa memilih manual, pilihan itu tercatat sebagai patch user (dan asset ter-pin).
 - Indikator status pipeline per scene (pending / processing / done / fallback / error) di timeline.

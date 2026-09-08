@@ -12,13 +12,13 @@ import {
 describe("computeFrameLayout", () => {
   it("overlaps transitions and quantizes to frames", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
-        { id: "a", duration: 3, visual: { type: "solid" } },
-        { id: "b", duration: 4, visual: { type: "solid" } },
-        { id: "c", duration: 5, visual: { type: "solid" } },
+        { id: "a", duration: 3, clips: [{ id: "a-k1", type: "solid" }] },
+        { id: "b", duration: 4, clips: [{ id: "b-k1", type: "solid" }] },
+        { id: "c", duration: 5, clips: [{ id: "c-k1", type: "solid" }] },
       ],
     });
     const layout = computeFrameLayout(plan);
@@ -33,12 +33,12 @@ describe("computeFrameLayout", () => {
 
   it("clamps pathological short scenes so transitions always fit", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
-        { id: "a", duration: 0.2, visual: { type: "solid" } },
-        { id: "b", duration: 0.2, visual: { type: "solid" } },
+        { id: "a", duration: 0.2, clips: [{ id: "a-k1", type: "solid" }] },
+        { id: "b", duration: 0.2, clips: [{ id: "b-k1", type: "solid" }] },
       ],
     });
     const layout = computeFrameLayout(plan);
@@ -51,21 +51,27 @@ describe("computeFrameLayout", () => {
   it("demo plan timeline stays stable (guards accidental timing changes)", () => {
     const plan = parseScenePlan(demoPlan);
     const layout = computeFrameLayout(plan);
-    expect(layout.sceneFrames).toEqual([150, 241, 216, 216, 229, 216, 241, 135]);
-    expect(layout.totalFrames).toBe(1539);
-    expect(layout.totalFrames / FPS).toBeCloseTo(51.3, 1);
+    // ADR-0014: tempo transisi demo bervariasi (10-24 frame per batas).
+    // ADR-0017: angka bergeser naik saat estimasi durasi pindah dari jumlah
+    // KATA ke jumlah SUKU KATA. Nilai lama memuat tiga scene yang kebetulan
+    // sama persis (216, 216, 216) — tanda bahwa hitungan kata tidak bisa
+    // membedakan narasi yang panjang ucapannya berbeda. Nilai baru semuanya
+    // berbeda karena mengukur apa yang benar-benar diucapkan.
+    expect(layout.sceneFrames).toEqual([150, 244, 223, 286, 229, 255, 244, 135]);
+    expect(layout.totalFrames).toBe(1647);
+    expect(layout.totalFrames / FPS).toBeCloseTo(54.9, 1);
   });
 });
 
 describe("activeSceneIndex", () => {
   it("switches at the transition midpoint", () => {
     const plan = parseScenePlan({
-      version: 1,
+      version: 2,
       projectId: "p",
       meta: { title: "T" },
       scenes: [
-        { id: "a", duration: 3, visual: { type: "solid" } },
-        { id: "b", duration: 3, visual: { type: "solid" } },
+        { id: "a", duration: 3, clips: [{ id: "a-k1", type: "solid" }] },
+        { id: "b", duration: 3, clips: [{ id: "b-k1", type: "solid" }] },
       ],
     });
     const layout = computeFrameLayout(plan);
@@ -102,4 +108,68 @@ describe("aspectMetrics", () => {
       );
     },
   );
+});
+
+/**
+ * Zona aman platform (ADR-0034).
+ *
+ * Diuji sebagai ARITMETIKA, karena itu yang dijanjikan repo ini: berapa yang
+ * harus dikosongkan adalah pengetahuan pemakainya, tapi bahwa tata letak
+ * benar-benar menghormatinya adalah tanggung jawab kode ini.
+ */
+describe("aspectMetrics · zona aman platform", () => {
+  it("bawaannya tidak menggeser apa pun", () => {
+    // Sifat yang menjaga gerbang paritas byte tetap berarti: plan yang sudah
+    // ada tidak boleh berpindah satu piksel pun karena fitur ini lahir.
+    for (const aspect of ["9:16", "16:9", "1:1"] as AspectRatio[]) {
+      expect(aspectMetrics(aspect, { top: 0, bottom: 0, left: 0, right: 0 })).toEqual(
+        aspectMetrics(aspect),
+      );
+    }
+  });
+
+  it("caption naik keluar dari pita bawah yang dipesan", () => {
+    const polos = aspectMetrics("9:16");
+    const aman = aspectMetrics("9:16", { top: 0, bottom: 0.22, left: 0, right: 0 });
+    const pita = polos.height * 0.22;
+    expect(polos.captionBottom).toBeLessThan(pita);
+    expect(aman.captionBottom).toBeGreaterThanOrEqual(pita);
+  });
+
+  it("rel tombol di kanan mempersempit KEDUA sisi, jadi isinya tetap di tengah", () => {
+    const polos = aspectMetrics("9:16");
+    const aman = aspectMetrics("9:16", { top: 0, bottom: 0, left: 0, right: 0.16 });
+    const rel = polos.width * 0.16;
+    expect(aman.marginX).toBeGreaterThanOrEqual(rel);
+    // Lebar caption ikut menyempit; kalau tidak, teksnya tetap menembus rel
+    // dari samping meskipun marginnya sudah benar.
+    expect(aman.captionMaxWidth).toBeLessThanOrEqual(aman.width - aman.marginX * 2);
+    expect(aman.captionMaxWidth).toBeLessThan(polos.captionMaxWidth);
+  });
+
+  it("zona aman yang lebih sempit daripada margin desain tidak menguranginya", () => {
+    // Zona aman MENAMBAH kelonggaran. Kalau ia boleh mengurangi, menyalakannya
+    // dengan angka kecil justru membuat tata letak lebih berbahaya daripada
+    // mematikannya — kebalikan dari gunanya.
+    const polos = aspectMetrics("16:9");
+    const kecil = aspectMetrics("16:9", {
+      top: 0.001,
+      bottom: 0.001,
+      left: 0.001,
+      right: 0.001,
+    });
+    expect(kecil.marginX).toBe(polos.marginX);
+    expect(kecil.marginTop).toBe(polos.marginTop);
+    expect(kecil.captionBottom).toBe(polos.captionBottom);
+    expect(kecil.captionMaxWidth).toBe(polos.captionMaxWidth);
+  });
+
+  it("bidang yang tersisa tetap positif di batas paling ekstrem skema", () => {
+    // 0,4 per sisi adalah maksimum skema; dua sisi berhadapan menyisakan 20%.
+    for (const aspect of ["9:16", "16:9", "1:1"] as AspectRatio[]) {
+      const m = aspectMetrics(aspect, { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 });
+      expect(m.captionMaxWidth).toBeGreaterThan(0);
+      expect(m.captionBottom + m.marginTop).toBeLessThan(m.height);
+    }
+  });
 });

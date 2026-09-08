@@ -1,0 +1,26 @@
+{
+  "name": "@dalang/interop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interop timeline: scene-plan <-> OpenTimelineIO / FCPXML, with an honest report of what does not survive the trip",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p .",
+    "gate:interop": "tsx scripts/interop-gate.mts"
+  },
+  "dependencies": {
+    "@dalang/core": "workspace:*",
+    "@dalang/templates": "workspace:*",
+    "fast-xml-parser": "5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

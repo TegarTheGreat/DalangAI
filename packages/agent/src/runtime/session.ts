@@ -2,20 +2,26 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import {
   applyPatch,
+  clipAsset,
   computeTimeline,
   countWords,
+  critiquePlan,
+  formatDirectorNotes,
   PatchLog,
   type PatchOpInput,
   parseScenePlan,
+  primaryClip,
   resolveSceneDurationSec,
   type ScenePlan,
   type ScenePlanInput,
+  sceneAsset,
 } from "@dalang/core";
 import {
   atomicWriteFile,
   PipelineDb,
   type ProjectPaths,
   projectPaths,
+  type SfxCandidate,
   type StockCandidate,
   sha256Hex,
 } from "@dalang/pipeline";
@@ -33,6 +39,15 @@ import { AgentEventLog } from "./agent-log";
  */
 
 const HISTORY_LIMIT = 40;
+export const PRUNE_MARKER =
+  "[Sistem: riwayat lama dipangkas otomatis — panggil getProjectState bila butuh keadaan proyek terkini.]";
+
+/** Buang pesan `tool` yatim di kepala riwayat (hasil pemotongan lama). */
+const dropOrphanToolHead = (messages: ModelMessage[]): ModelMessage[] => {
+  let start = 0;
+  while (start < messages.length && messages[start]?.role === "tool") start += 1;
+  return start === 0 ? messages : messages.slice(start);
+};
 
 export class ProjectSession {
   readonly paths: ProjectPaths;
@@ -44,6 +59,15 @@ export class ProjectSession {
   turn = 0;
   /** Kandidat hasil searchAssets, per query — dipakai pickAsset. */
   readonly lastSearches = new Map<string, StockCandidate[]>();
+  /**
+   * Kandidat hasil searchSfx, per assetId — dipakai addSfx (ADR-0018).
+   *
+   * Dikunci per assetId, bukan per query, karena assetId Openverse adalah UUID
+   * yang TIDAK bisa dipakai sebagai kata pencarian: mencari ulang dengannya
+   * selalu nihil. Sebelum ada ingatan ini, addSfx hanya berhasil pada provider
+   * palsu yang menjawab apa pun — pada Openverse sungguhan ia selalu gagal.
+   */
+  readonly lastSfxCandidates = new Map<string, SfxCandidate>();
   private planDiskHash: string | null = null;
   /** Snapshot terakhir yang dipersist — plan hanya ditulis bila berubah. */
   private lastPersistedPlan: string | null = null;
@@ -97,12 +121,28 @@ export class ProjectSession {
   private loadHistory(): ModelMessage[] {
     try {
       if (existsSync(this.historyPath)) {
-        return JSON.parse(readFileSync(this.historyPath, "utf8")) as ModelMessage[];
+        const raw = JSON.parse(readFileSync(this.historyPath, "utf8")) as ModelMessage[];
+        return dropOrphanToolHead(raw);
       }
     } catch {
       // riwayat korup → mulai bersih
     }
     return [];
+  }
+
+  /**
+   * Pangkas riwayat melebihi HISTORY_LIMIT (keandalan konteks panjang):
+   * potongan tidak boleh menyisakan pesan `tool` yatim di depan (provider
+   * menolak tool-result tanpa tool-call-nya), dan pemangkasan ditandai satu
+   * pesan sistem agar model tahu konteks lama sudah tidak utuh.
+   */
+  pruneHistory(): void {
+    if (this.history.length <= HISTORY_LIMIT) return;
+    const pruned = dropOrphanToolHead(this.history.slice(-HISTORY_LIMIT));
+    if (pruned[0] !== undefined && pruned[0].content !== PRUNE_MARKER) {
+      pruned.unshift({ role: "user", content: PRUNE_MARKER });
+    }
+    this.history = pruned;
   }
 
   persist(): void {
@@ -115,7 +155,8 @@ export class ProjectSession {
       }
     }
     atomicWriteFile(this.patchLogPath, JSON.stringify(this.patchLog.toJSON()));
-    atomicWriteFile(this.historyPath, JSON.stringify(this.history.slice(-HISTORY_LIMIT)));
+    this.pruneHistory();
+    atomicWriteFile(this.historyPath, JSON.stringify(this.history));
   }
 
   private hashDisk(): string | null {
@@ -135,6 +176,18 @@ export class ProjectSession {
       throw new Error("Belum ada scene-plan — buat dulu lewat writeScenePlan");
     }
     const { plan, applied } = applyPatch(this.plan, ops, { origin: "agent" });
+    this.plan = plan;
+    this.patchLog.record(applied);
+    this.persist();
+    return { summary: applied.summary };
+  }
+
+  /** Terapkan patch USER (dari UI/Fase 3) — lock tidak menghalangi user. */
+  applyUserPatch(ops: PatchOpInput[]): { summary: string } {
+    if (!this.plan) {
+      throw new Error("Belum ada scene-plan — proyek masih kosong");
+    }
+    const { plan, applied } = applyPatch(this.plan, ops, { origin: "user" });
     this.plan = plan;
     this.patchLog.record(applied);
     this.persist();
@@ -207,30 +260,61 @@ export class ProjectSession {
     const { totalSec } = computeTimeline(plan);
     const lines = plan.scenes.map((scene, index) => {
       const audio = plan.renderState.narrationAudio[scene.id];
-      const asset = plan.renderState.resolvedAssets[scene.id];
+      const asset = sceneAsset(plan, scene);
+      const beraset = scene.clips.filter(
+        (clip) => clipAsset(plan, clip.id) !== undefined,
+      ).length;
       const flags = [
         scene.locked ? "TERKUNCI" : null,
-        scene.visual.pinned ? "pinned" : null,
+        // "pinned" berarti SEMUA potongan dipilih tangan (ADR-0033). Membacanya
+        // dari klip pertama saja membuat scene yang dua dari tiga potongannya
+        // masih bebas diganti terbaca terkunci pilihan, dan agent berhenti
+        // mencarikan aset untuk yang sebenarnya masih menunggu.
+        scene.clips.every((clip) => clip.pinned) ? "pinned" : null,
         audio ? (audio.fallbackQuality ? "suara:fallback" : "suara:ok") : null,
-        asset
-          ? `aset:${asset.kind}`
-          : scene.visual.type === "stock"
-            ? "aset:belum"
-            : null,
+        // Klip (ADR-0033). Tanpa ini agent tidak pernah tahu scene ini punya
+        // beberapa potongan: ia akan menyunting potongan pertama saja karena
+        // itu bawaan `updateScene` tanpa clipId, dan tidak akan pernah
+        // mencarikan aset untuk sisanya.
+        scene.clips.length > 1 ? `klip:${beraset}/${scene.clips.length} beraset` : null,
+        scene.clips.length > 1
+          ? null
+          : asset
+            ? `aset:${asset.kind}`
+            : primaryClip(scene).type === "stock"
+              ? "aset:belum"
+              : null,
+        // Lapisan (ADR-0025) ikut ke konteks: kalau tidak, agent tidak pernah
+        // tahu sisipan yang sudah ada dan akan menumpuknya sampai batas.
+        scene.layers.length > 0
+          ? `lapisan:${scene.layers
+              .map(
+                (layer) =>
+                  `${layer.id}${plan.renderState.layerAssets[layer.id] ? "" : "(aset:belum)"}`,
+              )
+              .join("+")}`
+          : null,
       ]
         .filter(Boolean)
         .join(", ");
       return (
-        `${index + 1}. ${scene.id} [${scene.visual.type}` +
-        `${scene.visual.variant ? `/${scene.visual.variant}` : ""}] ` +
+        `${index + 1}. ${scene.id} [${primaryClip(scene).type}` +
+        `${primaryClip(scene).variant ? `/${primaryClip(scene).variant}` : ""}] ` +
         `${countWords(scene.narration)} kata, ${resolveSceneDurationSec(scene, plan).toFixed(1)}s` +
         `${flags ? ` (${flags})` : ""} — "${scene.narration.slice(0, 70)}${scene.narration.length > 70 ? "…" : ""}"`
       );
     });
+    // Kritik sutradara (ADR-0014): heuristik anti-"generic" ikut disuntikkan
+    // supaya model memperbaiki kelemahan rencana tanpa harus diminta.
+    const notes = formatDirectorNotes(critiquePlan(plan)).slice(0, 5);
     return [
       `Judul: ${plan.meta.title} · ${plan.meta.aspectRatio} · preset ${plan.meta.stylePreset} · bahasa ${plan.meta.language}`,
-      `Voice: ${plan.audio.voice ? `${plan.audio.voice.provider}/${plan.audio.voice.voiceId}` : "(belum diset)"} · total ±${totalSec.toFixed(0)}s`,
+      `Voice: ${plan.audio.voice ? `${plan.audio.voice.provider}/${plan.audio.voice.voiceId}` : "(belum diset)"} · ` +
+        `Musik: ${plan.audio.music ? plan.audio.music.assetId : "(tanpa)"} · total ±${totalSec.toFixed(0)}s`,
       ...lines,
+      ...(notes.length > 0
+        ? [`Saran sutradara:\n${notes.map((n) => `- ${n}`).join("\n")}`]
+        : []),
       `Perubahan terakhir:\n${this.patchLog.summarize(5)}`,
     ].join("\n");
   }

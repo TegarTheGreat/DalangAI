@@ -1,8 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ScenePlanInput } from "@dalang/core";
-import type { StockCandidate, StockProvider, TtsProvider } from "@dalang/pipeline";
+import type {
+  AsrProvider,
+  StockCandidate,
+  StockProvider,
+  TtsProvider,
+} from "@dalang/pipeline";
 import type { RenderVideoResult } from "@dalang/renderer";
 import { MockLanguageModelV3 } from "ai/test";
 import type { ModelInfo } from "../src/models/registry";
@@ -16,7 +21,7 @@ import type { AgentDeps } from "../src/tools";
 // ---------------------------------------------------------------------------
 
 export const basicPlan = (overrides: Partial<ScenePlanInput> = {}): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "proj-agent-test",
   meta: { title: "Uji Agent" },
   audio: { voice: { provider: "silence", voiceId: "v", speed: 1 } },
@@ -24,12 +29,12 @@ export const basicPlan = (overrides: Partial<ScenePlanInput> = {}): ScenePlanInp
     {
       id: "sc-001",
       narration: "Kalimat pertama untuk agent.",
-      visual: { type: "stock", query: "candi jawa" },
+      clips: [{ id: "sc-001-k1", type: "stock", query: "candi jawa" }],
     },
     {
       id: "sc-002",
       narration: "Kalimat kedua yang sedikit lebih panjang.",
-      visual: { type: "solid" },
+      clips: [{ id: "sc-002-k1", type: "solid" }],
     },
   ],
   ...overrides,
@@ -124,6 +129,33 @@ export const resolvedScripted = (
 // Dependensi fake
 // ---------------------------------------------------------------------------
 
+/** Provider ASR palsu — offline supaya gerbang biaya tidak ikut terpicu. */
+export const fakeAsr = (
+  id = "asr-palsu",
+  options: { offline?: boolean } = {},
+): AsrProvider & { calls: string[] } => {
+  const provider: AsrProvider & { calls: string[] } = {
+    id,
+    label: `ASR palsu ${id}`,
+    offline: options.offline ?? true,
+    calls: [],
+    transcribe: async (request) => {
+      provider.calls.push(request.file);
+      return {
+        words: [
+          { word: "halo", startSec: 0, endSec: 0.5 },
+          { word: "dunia", startSec: 0.6, endSec: 1.2 },
+        ],
+        segments: [{ startSec: 0, endSec: 1.2, text: "halo dunia" }],
+        language: "id",
+        durationSec: 1.2,
+        costUsd: 0.02,
+      };
+    },
+  };
+  return provider;
+};
+
 export const fakeTts = (id = "tts-palsu"): TtsProvider & { calls: string[] } => {
   const provider = {
     id,
@@ -175,15 +207,21 @@ export const fakeStock = (
 };
 
 export const fakeRender = (): AgentDeps["renderVideo"] & {
-  calls: Array<{ profile: string; outputLocation: string }>;
+  calls: Array<{ profile: string; outputLocation: string; useProxies?: boolean }>;
 } => {
-  const calls: Array<{ profile: string; outputLocation: string }> = [];
+  const calls: Array<{ profile: string; outputLocation: string; useProxies?: boolean }> =
+    [];
   const fn = (async (options: {
     planPath: string;
     outputLocation: string;
     profile: "draft" | "final";
+    useProxies?: boolean;
   }): Promise<RenderVideoResult> => {
-    calls.push({ profile: options.profile, outputLocation: options.outputLocation });
+    calls.push({
+      profile: options.profile,
+      outputLocation: options.outputLocation,
+      ...(options.useProxies !== undefined ? { useProxies: options.useProxies } : {}),
+    });
     return {
       outputLocation: options.outputLocation,
       durationInFrames: 1500,
@@ -192,6 +230,7 @@ export const fakeRender = (): AgentDeps["renderVideo"] & {
       width: 540,
       height: 960,
       bundleFromCache: true,
+      settings: { format: "mp4", resolution: 540, quality: "cepat" },
     };
   }) as AgentDeps["renderVideo"] & { calls: typeof calls };
   fn.calls = calls;
@@ -214,6 +253,12 @@ export const approvalRecorder = (answer: boolean): ApprovalRecorder => {
   };
 };
 
+/** PNG 1x1 yang SAH — dibaca tool lalu dikirim sebagai gambar. */
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 export const makeDeps = (
   overrides: Partial<AgentDeps> & { approvalAnswer?: boolean } = {},
 ): {
@@ -227,8 +272,93 @@ export const makeDeps = (
     guards: overrides.guards ?? new Guardrails({}, approvals.approve),
     ttsChainFor: overrides.ttsChainFor ?? (() => [fakeTts()]),
     stockChain: overrides.stockChain ?? (() => [fakeStock()]),
+    stickerChain: overrides.stickerChain ?? (() => [fakeStock("giphy")]),
+    // ADR-0029: memori preferensi hanya bila tes menyuntikkannya.
+    ...(overrides.memory ? { memory: overrides.memory } : {}),
     renderVideo: overrides.renderVideo ?? render,
+    videoMetadata:
+      overrides.videoMetadata ??
+      (async (file) =>
+        file.endsWith(".mp4") ? { durationSec: 600, width: 1920, height: 1080 } : null),
+    // Rantai ASR bawaan KOSONG: itu keadaan mesin polos, dan yang paling
+    // sering. Tes yang membutuhkan transkripsi menyuntikkan rantainya sendiri.
+    asrChain: overrides.asrChain ?? (() => []),
+    // Render frame palsu: menulis PNG 1x1 yang SAH, bukan berkas kosong —
+    // tool membacanya lalu mengirimnya sebagai gambar, jadi berkas rusak akan
+    // menguji jalur yang salah.
+    renderStills:
+      overrides.renderStills ??
+      (async ({ frames, outDir }) => {
+        mkdirSync(outDir, { recursive: true });
+        return frames.map((frame) => {
+          const file = join(outDir, `frame-${frame}.png`);
+          writeFileSync(file, PNG_1X1);
+          return file;
+        });
+      }),
+    detectSilence:
+      overrides.detectSilence ??
+      (async (file) =>
+        file.endsWith(".mp4")
+          ? {
+              durationSec: 600,
+              silences: [
+                { startSec: 0, endSec: 0.8 },
+                { startSec: 64.2, endSec: 65.1 },
+                { startSec: 402, endSec: 402.6 },
+              ],
+              audible: [
+                { startSec: 0.8, endSec: 64.2 },
+                { startSec: 65.1, endSec: 402 },
+                { startSec: 402.6, endSec: 600 },
+              ],
+            }
+          : null),
+    iconProvider:
+      overrides.iconProvider ??
+      (() => ({
+        id: "iconify",
+        label: "Iconify",
+        search: async (query: string, limit: number) =>
+          Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
+            providerId: "iconify",
+            iconId: `mdi:${query}-${i}`,
+            setPrefix: "mdi",
+            setName: "Material Design Icons",
+            license: "Apache 2.0",
+            licenseSpdx: "Apache-2.0",
+            needsAttribution: true,
+            commercialSafe: true,
+          })),
+        fetchSvg: async () => '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+      })),
+    sfxChain:
+      overrides.sfxChain ??
+      (() => [
+        {
+          id: "openverse",
+          label: "Openverse",
+          search: async (query: string, limit: number) =>
+            Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
+              providerId: "openverse",
+              assetId: `openverse:${query}-${i}`,
+              title: `${query} ${i}`,
+              downloadUrl: `https://cdn.test/${query}-${i}.mp3`,
+              fileExt: "mp3",
+              durationSec: 1.2,
+              license: "cc0 1.0",
+              commercialSafe: true,
+            })),
+          download: async () => new Uint8Array([1, 2, 3]),
+        },
+      ]),
+    saveMedia:
+      overrides.saveMedia ??
+      (async ({ folder, name, fileExt }) => `assets/${folder}/${name}.${fileExt}`),
     volumeModel: overrides.volumeModel,
+    ...(overrides.transcoder ? { transcoder: overrides.transcoder } : {}),
+    // ADR-0030: tujuan publikasi hanya bila tes menyuntikkannya.
+    ...(overrides.publishTargets ? { publishTargets: overrides.publishTargets } : {}),
     onToolActivity: () => {},
   };
   return { deps, approvals, render };

@@ -25,7 +25,11 @@ describe("applyPatch — basic ops", () => {
       {
         op: "addScene",
         afterId: "sc-001",
-        scene: { id: "sc-new", narration: "Baru.", visual: { type: "solid" } },
+        scene: {
+          id: "sc-new",
+          narration: "Baru.",
+          clips: [{ id: "sc-new-k1", type: "solid" }],
+        },
       },
     ]);
     expect(next.scenes.map((scene) => scene.id)).toEqual([
@@ -45,7 +49,10 @@ describe("applyPatch — basic ops", () => {
       {
         op: "addScene",
         afterId: null,
-        scene: { id: "sc-intro", visual: { type: "template-anim", variant: "title" } },
+        scene: {
+          id: "sc-intro",
+          clips: [{ id: "sc-intro-k1", type: "template-anim", variant: "title" }],
+        },
       },
     ]);
     expect(next.scenes[0]?.id).toBe("sc-intro");
@@ -59,7 +66,7 @@ describe("applyPatch — basic ops", () => {
           {
             op: "addScene",
             afterId: null,
-            scene: { id: "sc-001", visual: { type: "solid" } },
+            scene: { id: "sc-001", clips: [{ id: "sc-001-k1", type: "solid" }] },
           },
         ]),
       "SCENE_EXISTS",
@@ -81,12 +88,12 @@ describe("applyPatch — basic ops", () => {
       {
         op: "updateScene",
         id: "sc-001",
-        patch: { visual: { motion: "kenburns-in", query: null } },
+        patch: { clip: { motion: "kenburns-in", query: null } },
       },
     ]);
-    expect(next.scenes[0]?.visual.motion).toBe("kenburns-in");
-    expect(next.scenes[0]?.visual.query).toBeUndefined();
-    expect(next.scenes[0]?.visual.type).toBe("stock"); // untouched
+    expect(next.scenes[0]?.clips[0]?.motion).toBe("kenburns-in");
+    expect(next.scenes[0]?.clips[0]?.query).toBeUndefined();
+    expect(next.scenes[0]?.clips[0]?.type).toBe("stock"); // untouched
   });
 
   it("rejects updateScene touching assetId (replaceAsset is the only path)", () => {
@@ -97,7 +104,7 @@ describe("applyPatch — basic ops", () => {
           {
             op: "updateScene",
             id: "sc-001",
-            patch: { visual: { assetId: "px-123" } } as never,
+            patch: { clip: { assetId: "px-123" } } as never,
           },
         ]),
       "INVALID_OP",
@@ -163,22 +170,22 @@ describe("applyPatch — basic ops", () => {
       [{ op: "replaceAsset", sceneId: "sc-001", assetId: "pexels-42" }],
       "user",
     );
-    expect(next.scenes[0]?.visual.assetId).toBe("pexels-42");
-    expect(next.scenes[0]?.visual.pinned).toBe(true);
+    expect(next.scenes[0]?.clips[0]?.assetId).toBe("pexels-42");
+    expect(next.scenes[0]?.clips[0]?.pinned).toBe(true);
   });
 
   it("replaceAsset with null clears asset and pin", () => {
     const plan = makePlan((input) => {
-      input.scenes[0]!.visual.assetId = "pexels-42";
-      input.scenes[0]!.visual.pinned = true;
+      input.scenes[0]!.clips[0]!.assetId = "pexels-42";
+      input.scenes[0]!.clips[0]!.pinned = true;
     });
     const { plan: next } = apply(
       plan,
       [{ op: "replaceAsset", sceneId: "sc-001", assetId: null }],
       "user",
     );
-    expect(next.scenes[0]?.visual.assetId).toBeNull();
-    expect(next.scenes[0]?.visual.pinned).toBe(false);
+    expect(next.scenes[0]?.clips[0]?.assetId).toBeNull();
+    expect(next.scenes[0]?.clips[0]?.pinned).toBe(false);
   });
 
   it("is atomic: a failing op in a batch leaves the plan untouched", () => {
@@ -287,7 +294,7 @@ describe("applyPatch — inverses", () => {
       {
         op: "addScene",
         afterId: "sc-002",
-        scene: { id: "sc-x", narration: "X", visual: { type: "solid" } },
+        scene: { id: "sc-x", narration: "X", clips: [{ id: "sc-x-k1", type: "solid" }] },
       },
     ]);
   });
@@ -306,7 +313,7 @@ describe("applyPatch — inverses", () => {
         patch: {
           narration: "Beda.",
           duration: 9,
-          visual: { motion: "pan-left", query: "new query", variant: "quote" },
+          clip: { motion: "pan-left", query: "new query", variant: "quote" },
           caption: { enabled: false },
         },
       },
@@ -337,7 +344,7 @@ describe("applyPatch — inverses", () => {
       {
         op: "addScene",
         afterId: "sc-001",
-        scene: { id: "sc-b", visual: { type: "solid" } },
+        scene: { id: "sc-b", clips: [{ id: "sc-b-k1", type: "solid" }] },
       },
       { op: "removeScene", id: "sc-003" },
       { op: "setMeta", patch: { language: "en" } },

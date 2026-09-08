@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 64" width="250" height="64" role="img" aria-label="Dalang AI">
+  <title>Dalang AI</title>
+  <!--
+    Dua rupa, terang dan gelap, supaya wordmark tetap terbaca di kedua latar
+    README GitHub. Marknya sama persis di keduanya: amber cukup kontras di
+    atas putih maupun hitam, jadi hanya warna hurufnya yang ditukar.
+
+    "AI" ditulis sebagai tspan, bukan text kedua berkoordinat tetap: lebar
+    "Dalang" berubah menurut font yang benar-benar tersedia di mesin pembaca,
+    dan versi pertama berkoordinat tetap menyisakan celah yang terlihat salah
+    begitu font cadangan yang dipakai.
+  -->
+  <g transform="translate(4 6) scale(1.083)" fill="#e8a33d" fill-rule="evenodd">
+    <path d="M20 2C22.6 8.5 26.2 13.2 30.2 17.4C34.6 22 37.2 26.4 36.8 30.8C36.4 35.4 34.4 40.6 31.4 44.6L8.6 44.6C5.6 40.6 3.6 35.4 3.2 30.8C2.8 26.4 5.4 22 9.8 17.4C13.8 13.2 17.4 8.5 20 2ZM16.4 22.6 27.2 29 16.4 35.4Z"/>
+  </g>
+  <text x="64" y="41" font-family="Fraunces, Georgia, 'Times New Roman', serif" font-size="34" font-weight="600" letter-spacing="-0.4" fill="#14161c">Dalang<tspan dx="9" fill="#e8a33d">AI</tspan></text>
+</svg>

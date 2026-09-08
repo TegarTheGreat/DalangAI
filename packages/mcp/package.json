@@ -1,0 +1,27 @@
+{
+  "name": "@dalang/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dalang as a capability: an MCP server exposing the scene-plan timeline as tools for any agent",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@dalang/core": "workspace:*",
+    "@dalang/interop": "workspace:*",
+    "@dalang/pipeline": "workspace:*",
+    "@dalang/templates": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

@@ -12,6 +12,19 @@ export type SceneStageStatus = "done" | "cached" | "skipped" | "error";
 
 export interface SceneStageResult {
   sceneId: string;
+  /**
+   * Diisi bila baris ini soal satu LAPISAN video di dalam scene (ADR-0025),
+   * bukan visual dasarnya. `sceneId` tetap id scene-nya supaya pemanggil yang
+   * mengelompokkan per scene tidak perlu tahu soal lapisan sama sekali.
+   */
+  layerId?: string;
+  /**
+   * Diisi bila scene ini punya LEBIH DARI SATU klip (ADR-0033), dan menyebut
+   * potongan mana baris ini. Sengaja kosong untuk scene berklip satu: di situ
+   * "klip" bukan gagasan yang perlu dibawa pembacanya, dan setiap permukaan
+   * lama tetap benar tanpa menyentuhnya.
+   */
+  clipId?: string;
   status: SceneStageStatus;
   /** Human-readable detail: provider label, skip reason, or error message. */
   detail: string;

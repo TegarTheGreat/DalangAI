@@ -29,8 +29,8 @@ describe("generatePlan (end-to-end, fake providers)", () => {
 
     const onDisk = JSON.parse(readFileSync(project.planPath, "utf8"));
     expect(onDisk.renderState.narrationAudio["sc-001"].file).toContain(".dalang/tts/");
-    expect(onDisk.renderState.resolvedAssets["sc-001"].source).toBe("s");
-    expect(onDisk.scenes[0].visual.assetId).toBe("s:video:42");
+    expect(onDisk.renderState.clipAssets["sc-001-k1"].source).toBe("s");
+    expect(onDisk.scenes[0].clips[0]?.assetId).toBe("s:video:42");
     // Creative fields untouched.
     expect(onDisk.scenes[0].narration).toBe("Kalimat pertama untuk diuji.");
   });

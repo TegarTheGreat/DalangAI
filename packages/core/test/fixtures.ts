@@ -1,7 +1,7 @@
 import { parseScenePlan, type ScenePlan, type ScenePlanInput } from "../src/index";
 
 export const basePlanInput = (): ScenePlanInput => ({
-  version: 1,
+  version: 2,
   projectId: "proj-test",
   meta: {
     title: "Sejarah Borobudur dalam 60 Detik",
@@ -15,17 +15,19 @@ export const basePlanInput = (): ScenePlanInput => ({
     {
       id: "sc-001",
       narration: "Borobudur dibangun pada abad ke-9.",
-      visual: { type: "stock", query: "borobudur temple aerial sunrise" },
+      clips: [
+        { id: "sc-001-k1", type: "stock", query: "borobudur temple aerial sunrise" },
+      ],
     },
     {
       id: "sc-002",
       narration: "Candi ini sempat terkubur abu vulkanik selama berabad-abad.",
-      visual: { type: "stock", query: "volcanic ash jungle" },
+      clips: [{ id: "sc-002-k1", type: "stock", query: "volcanic ash jungle" }],
     },
     {
       id: "sc-003",
       narration: "Kini Borobudur menjadi warisan dunia UNESCO.",
-      visual: { type: "solid" },
+      clips: [{ id: "sc-003-k1", type: "solid" }],
     },
   ],
 });
