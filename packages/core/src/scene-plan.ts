@@ -42,6 +42,13 @@ export const MOTIONS = [
   "pan-up",
   "pan-down",
   "drift",
+  // ADR-0041: gerak yang PUNYA aksen, bukan laju tetap.
+  /** Zum masuk cepat di awal lalu diam — untuk hook. */
+  "punch-in",
+  /** Miring pelan; memberi kesan tangan, bukan tripod. */
+  "tilt",
+  /** Diagonal: turun sambil bergeser kanan. */
+  "pan-diagonal",
 ] as const;
 export const motionSchema = z.enum(MOTIONS);
 export type Motion = z.infer<typeof motionSchema>;
@@ -74,7 +81,27 @@ export type Annotation = z.infer<typeof annotationSchema>;
 // Filter, transisi, dan teks overlay (ADR-0011 — Fase 3 pengayaan editor)
 // ---------------------------------------------------------------------------
 
-export const FILTER_PRESETS = ["none", "warm", "cool", "mono", "vivid", "film"] as const;
+/**
+ * Preset warna (ADR-0011, diperluas ADR-0041).
+ *
+ * Lima yang baru menutup nada yang tidak bisa disusun dari enam yang lama:
+ * `noir` (hitam-putih kontras keras, bukan `mono` yang lembut), `senja`
+ * (jingga sore), `malam` (biru dingin gelap), `pudar` (matte pucat ala
+ * arsip), dan `pastel` (lembut, terang, untuk konten ceria).
+ */
+export const FILTER_PRESETS = [
+  "none",
+  "warm",
+  "cool",
+  "mono",
+  "vivid",
+  "film",
+  "noir",
+  "senja",
+  "malam",
+  "pudar",
+  "pastel",
+] as const;
 export const filterPresetSchema = z.enum(FILTER_PRESETS);
 export type FilterPreset = z.infer<typeof filterPresetSchema>;
 
@@ -88,9 +115,42 @@ export const visualFilterSchema = z.strictObject({
   opacity: normalized01.default(1),
   /** Blur piksel pada basis 1080 (ADR-0015); 0 = tajam. */
   blur: z.number().min(0).max(20).default(0),
+  /**
+   * Vignette — gelap di tepi bingkai (ADR-0041). 0 = mati.
+   *
+   * BUKAN `filter` CSS: tidak ada fungsi filter yang menggelapkan tepi saja,
+   * jadi ini digambar sebagai lapisan gradien radial di atas gambarnya. Karena
+   * itu ia hidup di sini sebagai angka tersendiri, bukan sebagai preset —
+   * preset warna bisa dipakai bersamaan dengannya.
+   */
+  vignette: normalized01.default(0),
+  /**
+   * Butiran film (ADR-0041). 0 = bersih.
+   *
+   * Sama seperti vignette: digambar sebagai lapisan, karena tidak ada fungsi
+   * filter CSS yang menambah noise. Butirannya STATIS per render (pola SVG
+   * ber-seed tetap), bukan berkedip tiap bingkai — butiran yang berubah tiap
+   * bingkai terlihat seperti kompresi rusak, bukan seperti film.
+   */
+  grain: normalized01.default(0),
 });
 export type VisualFilter = z.infer<typeof visualFilterSchema>;
 
+/**
+ * Transisi keluar scene (ADR-0011, diperluas ADR-0041).
+ *
+ * Tiga yang baru sudah ada di `@remotion/transitions` — yang ditambahkan di
+ * sini bukan implementasinya melainkan KOSAKATA: sebelumnya plan tidak punya
+ * cara menyebutnya, jadi kemampuan yang sudah terpasang di dependensi tidak
+ * bisa dipakai siapa pun.
+ *
+ * Yang SENGAJA tidak masuk: `dissolve`, `zoom-blur`, `swap`, dan
+ * `linear-blur`. Keempatnya presentation berbasis SHADER yang menuntut
+ * HTML-in-Canvas, dan Chromium yang dipakai renderer ini menolaknya
+ * ("HTML in Canvas is not supported"). Ini diketahui dengan MERENDER, bukan
+ * dari tipenya — TypeScript menerima keempatnya tanpa keluhan. Menawarkan
+ * transisi yang menggagalkan render lebih buruk daripada tidak menawarkannya.
+ */
 export const TRANSITION_TYPES = [
   "cross-fade",
   "slide-left",
@@ -98,6 +158,11 @@ export const TRANSITION_TYPES = [
   "slide-up",
   "wipe-right",
   "wipe-down",
+  /** Sapuan radial seperti jarum jam. */
+  "clock-wipe",
+  /** Balik 3D — sumbu mengikuti arahnya. */
+  "flip-left",
+  "flip-up",
   "none",
 ] as const;
 export const transitionTypeSchema = z.enum(TRANSITION_TYPES);
@@ -137,7 +202,21 @@ export const textEmphasisSchema = z.enum(TEXT_EMPHASES);
 
 // ADR-0016: tipografi bergerak — animasi masuk per kata/karakter dan
 // kontrol rupa (warna, garis luar, kapital, kerapatan huruf).
-export const TEXT_ANIMS = ["fade", "pop", "rise", "typewriter"] as const;
+/**
+ * Animasi masuk teks (ADR-0016, diperluas ADR-0041).
+ *
+ * `blur-in` masuk dari kabur ke tajam — pintu masuk yang tenang untuk teks
+ * panjang, sementara `pop` dan `rise` selalu terasa energik. `slide-in`
+ * menggeser blok dari sisi, pintu masuk paling netral untuk kicker.
+ */
+export const TEXT_ANIMS = [
+  "fade",
+  "pop",
+  "rise",
+  "typewriter",
+  "blur-in",
+  "slide-in",
+] as const;
 export const textAnimSchema = z.enum(TEXT_ANIMS);
 /** Warna CSS heksadesimal (#rgb / #rrggbb); null = warna peran dari theme. */
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{3,8}$/);
@@ -480,7 +559,21 @@ export type Visual = z.infer<typeof visualSchema>;
  * templates menormalkan nilai tak dikenal ke "klasik" (pola yang sama dengan
  * visual.variant).
  */
-export const CAPTION_STYLES = ["klasik", "tegas", "chip", "halus"] as const;
+/**
+ * Gaya caption (ADR-0016, diperluas ADR-0041).
+ *
+ * `pita` menaruh teks di atas pita solid selebar teksnya — gaya berita yang
+ * terbaca di footage seramai apa pun. `karaoke` mewarnai kata yang sedang
+ * diucapkan alih-alih menampilkannya per halaman.
+ */
+export const CAPTION_STYLES = [
+  "klasik",
+  "tegas",
+  "chip",
+  "halus",
+  "pita",
+  "karaoke",
+] as const;
 export const CAPTION_POSITIONS = ["bottom", "center"] as const;
 export const captionPositionSchema = z.enum(CAPTION_POSITIONS);
 

@@ -25,6 +25,15 @@ export interface CaptionPalette {
   accent: string;
   /** Warna teks di atas chip aksen (kontras terhadap accent). */
   onAccent: string;
+  /**
+   * Latar PITA di belakang seluruh baris (ADR-0041).
+   *
+   * Terpisah dari `accent`: pita harus GELAP dan netral supaya teks di atasnya
+   * terbaca, sedangkan aksen adalah warna yang menarik perhatian. Memakai satu
+   * warna untuk keduanya memaksa memilih antara pita yang menyilaukan atau
+   * aksen yang tidak terlihat.
+   */
+  plate: string;
 }
 
 export interface CaptionStyleSpec {
@@ -64,12 +73,18 @@ export const strokeShadow = (px: number, color: string): string =>
       ].join(", ");
 
 /**
- * Empat gaya caption:
+ * Enam gaya caption:
  *  - klasik  : kata aktif berganti warna aksen (perilaku sejak Fase 0)
  *  - tegas   : KAPITAL tebal ber-garis-luar, kata aktif membesar (gaya klip
  *              media sosial yang padat energi)
  *  - chip    : kata aktif duduk di dalam kotak aksen
  *  - halus   : tanpa karaoke — satu warna tenang untuk konten formal
+ *  - pita    : SELURUH baris duduk di atas pita solid (ADR-0041) — gaya
+ *              berita yang tetap terbaca di footage seramai apa pun, karena
+ *              keterbacaannya tidak bergantung pada gambar di belakangnya
+ *  - karaoke : kata yang SUDAH lewat diwarnai aksen dan yang belum diredupkan
+ *              kuat — jejaknya terlihat, jadi penonton bisa mengejar kalimat
+ *              yang terlewat sekilas
  */
 export const captionStyleSpec = (
   style: CaptionStyle,
@@ -119,6 +134,45 @@ export const captionStyleSpec = (
         sizeFactor: 0.94,
         block: { fontWeight: 560, lineHeight: 1.4 },
         token: () => ({ color: palette.ink }),
+      };
+    case "pita":
+      return {
+        sizeFactor: 1.02,
+        block: {
+          fontWeight: 700,
+          lineHeight: 1.5,
+          // Pita menempel pada BARISNYA, bukan pada blok: baris kedua yang
+          // lebih pendek harus punya pita yang lebih pendek juga, kalau tidak
+          // bentuknya jadi kotak besar dengan ruang kosong di kanan.
+          display: "inline",
+          background: palette.plate,
+          boxDecorationBreak: "clone",
+          WebkitBoxDecorationBreak: "clone",
+          padding: "0.1em 0.34em",
+          borderRadius: "0.06em",
+          textShadow: "none",
+        },
+        token: (state) => ({
+          color: state === "active" ? palette.accent : palette.ink,
+          fontWeight: state === "active" ? 820 : 700,
+        }),
+      };
+    case "karaoke":
+      return {
+        sizeFactor: 1.06,
+        block: {
+          fontWeight: 720,
+          lineHeight: 1.3,
+          textShadow: strokeShadow(3, "rgba(0,0,0,0.8)"),
+        },
+        token: (state) => ({
+          // Yang SUDAH lewat tetap beraksen — itu bedanya dari klasik, yang
+          // mengembalikannya ke warna biasa. Jejak inilah yang membuat orang
+          // bisa mengejar kalimat yang terlewat sekilas.
+          color: state === "future" ? palette.inkSoft : palette.accent,
+          opacity: state === "future" ? 0.55 : 1,
+          fontWeight: state === "active" ? 860 : 720,
+        }),
       };
     case "klasik":
       return {
@@ -194,6 +248,24 @@ export const animPieceStyle = (
     case "typewriter":
       // Karakter muncul utuh saat gilirannya tiba (tanpa fade) — mesin ketik.
       return frame >= start ? {} : null;
+    case "blur-in":
+      // Kabur ke tajam (ADR-0041): pintu masuk yang TENANG untuk teks panjang,
+      // sementara pop dan rise selalu terasa energik. Blur dipatok 0 saat
+      // selesai — sisa 0,04px yang tertinggal membuat teks tidak pernah
+      // benar-benar tajam, dan itu terlihat pada judul besar.
+      return {
+        display: "inline-block",
+        whiteSpace: "pre",
+        opacity: t,
+        filter: t >= 1 ? "none" : `blur(${((1 - t) * 0.34).toFixed(3)}em)`,
+      };
+    case "slide-in":
+      return {
+        display: "inline-block",
+        whiteSpace: "pre",
+        opacity: t,
+        translate: `${((1 - t) * -0.6).toFixed(3)}em 0`,
+      };
     case "fade":
       return {};
   }

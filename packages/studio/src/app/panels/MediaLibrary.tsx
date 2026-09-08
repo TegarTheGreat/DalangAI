@@ -5,7 +5,8 @@ import type {
   Scene,
   ScenePlan,
 } from "@dalang/core";
-import { GRAPHIC_ANIMS } from "@dalang/core";
+import { GRAPHIC_ANIMS, uniqueSfxCueId } from "@dalang/core";
+import { BUNDLED_SFX, SFX_LIBRARY_PREFIX } from "@dalang/templates/sfx";
 import { useRef, useState, useSyncExternalStore } from "react";
 import type {
   IconCandidateLite,
@@ -642,6 +643,38 @@ export const SfxSection: React.FC<{ plan: ScenePlan; scene: Scene }> = ({
           ))}
         </ul>
       ) : null}
+      {/* Pustaka BAWAAN lebih dulu (ADR-0041): delapan bunyi yang ikut repo,
+          jadi ia satu-satunya jalur efek suara yang bekerja tanpa jaringan —
+          dan yang paling sering dipakai. Menaruhnya di bawah kolom pencarian
+          akan membuat orang mencari dulu sebelum tahu ia ada. */}
+      <p className="group-hint">Pustaka bawaan · CC0 · tanpa jaringan.</p>
+      <div className="chip-row">
+        {BUNDLED_SFX.map((sound) => (
+          <button
+            key={sound.id}
+            type="button"
+            className="chip"
+            title={`${sound.label} · ${sound.durationSec.toFixed(2)} dtk`}
+            onClick={() =>
+              setSfx(
+                [
+                  ...plan.audio.sfx,
+                  {
+                    id: uniqueSfxCueId(plan, `sfx-${scene.id}`),
+                    assetId: `${SFX_LIBRARY_PREFIX}${sound.id}`,
+                    sceneId: scene.id,
+                    atSec,
+                    volume: 0.6,
+                  },
+                ],
+                `Efek suara ${sound.id} di ${scene.id}`,
+              )
+            }
+          >
+            {sound.id}
+          </button>
+        ))}
+      </div>
       {/* Satu baris sumber; perilaku waktunya (ikut bergeser bila susunan
           scene berubah) dipindah ke tooltip kolom cari — ia keterangan
           perilaku, bukan sesuatu yang perlu dibaca setiap kali. */}

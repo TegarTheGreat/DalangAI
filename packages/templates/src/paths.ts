@@ -24,7 +24,10 @@ export const templatesPublicDir = join(templatesRoot, "public");
  * render tapi 404 di preview — fitur yang tampak jadi, padahal separuh mati,
  * dan tidak ada satu pun test yang bisa melihatnya.
  */
-export const SITE_ASSET_DIRS = ["fonts", "music"] as const;
+// `sfx` masuk di ADR-0041 bersama pustaka efek suara bawaan. Test
+// `site-assets` yang menangkap kelalaian mendaftarkannya — persis kelas cacat
+// yang melahirkan daftar ini.
+export const SITE_ASSET_DIRS = ["fonts", "music", "sfx"] as const;
 
 /**
  * Folder staging demo Studio di dalam `public/`. Sengaja BUKAN aset situs:

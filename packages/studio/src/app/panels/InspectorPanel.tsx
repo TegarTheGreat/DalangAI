@@ -83,6 +83,10 @@ const TRANSITION_LABEL: Record<TransitionType, string> = {
   "slide-up": "Geser naik",
   "wipe-right": "Sapu kanan",
   "wipe-down": "Sapu turun",
+  // ADR-0041
+  "clock-wipe": "Sapu jarum",
+  "flip-left": "Balik kiri",
+  "flip-up": "Balik naik",
   none: "Potong",
 };
 
@@ -93,6 +97,12 @@ const FILTER_LABEL: Record<string, string> = {
   mono: "Mono",
   vivid: "Vivid",
   film: "Film",
+  // ADR-0041
+  noir: "Noir",
+  senja: "Senja",
+  malam: "Malam",
+  pudar: "Pudar",
+  pastel: "Pastel",
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -127,12 +137,18 @@ const ANIM_LABEL: Record<string, string> = {
   pop: "Pop",
   rise: "Naik",
   typewriter: "Ketik",
+  // ADR-0041
+  "blur-in": "Kabur masuk",
+  "slide-in": "Geser masuk",
 };
 const CAPTION_STYLE_LABEL: Record<string, string> = {
   klasik: "Klasik",
   tegas: "Tegas",
   chip: "Chip",
   halus: "Halus",
+  // ADR-0041
+  pita: "Pita",
+  karaoke: "Karaoke",
 };
 const CAPTION_POSITION_LABEL: Record<string, string> = {
   bottom: "Bawah",
@@ -148,6 +164,10 @@ const MOTION_LABEL: Record<string, string> = {
   "pan-up": "Pan atas",
   "pan-down": "Pan bawah",
   drift: "Melayang",
+  // ADR-0041
+  "punch-in": "Zum hentak",
+  tilt: "Miring",
+  "pan-diagonal": "Pan diagonal",
 };
 
 /** Varian seni prosedural (ADR-0013) untuk scene solid/stock belum ter-resolve. */

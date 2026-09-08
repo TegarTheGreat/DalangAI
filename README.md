@@ -334,11 +334,18 @@ dan batas lainnya.
 ### Teks dan tipografi
 
 Caption karaoke tersinkron dari word timestamp asli TTS atau estimasi
-deterministik, dengan **empat gaya** (Klasik, Tegas, Chip, Halus), tipografi
-kinetik per kata atau per karakter, garis luar 0-8 piksel untuk keterbacaan di
-footage ramai, dan penekanan stabilo yang menyapu saat teks masuk. **Enam font
-variable ter-bundle** (OFL, dirender offline): Fraunces, Inter, Space Grotesk,
-Lora, Plus Jakarta Sans karya Tokotype, dan Anton.
+deterministik, dengan **enam gaya** (Klasik, Tegas, Chip, Halus, Pita,
+Karaoke), tipografi kinetik per kata atau per karakter, **enam animasi masuk**
+(Larut, Pop, Naik, Ketik, Kabur masuk, Geser masuk), garis luar 0-8 piksel
+untuk keterbacaan di footage ramai, dan penekanan stabilo yang menyapu saat
+teks masuk. **Sembilan font variable ter-bundle** (OFL, dirender offline):
+Fraunces, Inter, Space Grotesk, Lora, Plus Jakarta Sans karya Tokotype, Anton,
+Playfair Display, Manrope, dan JetBrains Mono.
+
+Gaya `Pita` menaruh seluruh baris di atas pita solid — keterbacaannya tidak
+bergantung pada gambar di belakangnya, jadi ia tetap terbaca di footage
+seramai apa pun. `Karaoke` menyisakan jejak: kata yang sudah lewat tetap
+beraksen, jadi penonton bisa mengejar kalimat yang terlewat sekilas.
 
 - **Zona aman platform**: `meta.safeArea` mengosongkan tepi bingkai yang akan
   ditimpa antarmuka platform tujuan — tepi bawah (judul, nama akun) dan tepi
@@ -369,6 +376,34 @@ Lora, Plus Jakarta Sans karya Tokotype, dan Anton.
 Rujukan: [ADR-0016](docs/decisions/0016-tipografi.md),
 [ADR-0034](docs/decisions/0034-zona-aman-platform.md),
 [ADR-0039](docs/decisions/0039-berkas-subtitle.md)
+
+### Warna, efek, gerak, dan transisi
+
+**Sebelas preset warna** (Asli, Hangat, Sejuk, Mono, Vivid, Film, Noir, Senja,
+Malam, Pudar, Pastel) plus kecerahan/kontras/saturasi/blur yang bisa disetel
+sendiri — semuanya fungsi `filter` CSS, jadi preview Player dan render final
+satu sumber kebenaran.
+
+**Dua efek yang bukan filter**: vignette dan butiran film. Tidak ada fungsi
+filter CSS yang menggelapkan tepi saja atau menambah noise, jadi keduanya
+digambar sebagai lapisan. Butirannya **statis** — pola ber-seed tetap, sama di
+tiap bingkai — karena butiran yang berubah tiap bingkai terlihat seperti
+kompresi rusak, bukan seperti film, dan ia menghancurkan efisiensi enkode.
+
+**Sebelas gerak kamera**, tiga di antaranya punya AKSEN alih-alih laju tetap:
+`punch-in` zum cepat lalu **diam** (berhentinya itu penekanannya), `tilt`
+memiringkan pelan untuk kesan tangan, `pan-diagonal` menggeser dua sumbu.
+
+**Sepuluh transisi** keluar scene, dengan tempo 6-24 bingkai yang bisa diatur
+per batas.
+
+Gerbang CI **mengukur** efeknya di bingkai sungguhan: vignette wajib
+menggelapkan sudut tanpa menambah tekstur, butiran wajib menambah tekstur
+tanpa menggelapkan sudut. Dua tuntutan yang saling menyilang — menukar
+implementasi keduanya membuat keempat pemeriksaan merah.
+
+Rujukan: [ADR-0011](docs/decisions/0011-filter-transisi-teks.md),
+[ADR-0041](docs/decisions/0041-pengayaan.md)
 
 ### Suara
 
@@ -492,6 +527,13 @@ Video dan foto stok dari **Pexels** dan **Pixabay**, GIF dan stiker dari
 **GIPHY** dan **Tenor**, ikon dari **Iconify** (237 set, tanpa kunci), efek
 suara dari **Openverse**. Setiap aset membawa metadata lisensinya, dan hak
 pakai dijaga tiga lapis.
+
+**Dua bed musik dan delapan efek suara ikut repo** (`pustaka:<id>`) — whoosh,
+pop, klik, ding, tap, swipe, impact, riser. Semuanya **disintesis** oleh skrip
+yang ikut di-commit, bukan diunduh, jadi lisensinya CC0 tanpa syarat dan
+tidak ada yang perlu dibaca satu per satu. Karena berkasnya ikut bundel
+komposisi, bunyi pustaka bekerja **tanpa jaringan sama sekali**: tidak ada
+yang diunduh, di-stage, atau dicatat di renderState.
 
 <details>
 <summary>Tiga lapis penjagaan hak pakai, dan yang sengaja tidak diintegrasikan</summary>
@@ -690,13 +732,14 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 
 | Gerbang | Yang dijaganya |
 |---|---|
-| 1373 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
+| 1394 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
 | Render smoke test | Render sungguhan di CI, bukan mock |
 | Gerbang paritas migrasi | Plan v1 (dimigrasikan) dan plan v2 dirender, wajib identik byte per byte — tiap sisi dirender dua kali sebagai kontrol, jadi render yang tidak deterministik tidak bisa terbaca sebagai cacat migrasi |
 | Gerbang tata letak | Geometri UI di 18 lebar layar (380-1920), editor dan lobi: kontrol yang saling menindih, tergunting, atau membuat halaman bisa digeser ke samping — diukur setelah animasi CSS benar-benar selesai, bukan setelah jeda yang ditebak |
 | Gerbang interaksi | Seretan pointer dan papan ketik **sungguhan** lewat CDP, lalu plan **di server** yang diperiksa — seretan yang cuma menggeser kotak di layar tanpa patch adalah cacat yang tidak ditangkap unit test mana pun. Kotak diukur setelah animasi CSS selesai, jadi pointer tidak pernah mendarat di panel yang masih bergeser |
 | Gerbang paritas aset | Satu still dirender lewat dua jalur (bundel dan URL) dan wajib identik byte per byte; kalau berselisih, selisihnya dilaporkan sebagai hitungan piksel dan PNG-nya diunggah sebagai artefak CI |
 | Gerbang interop | Keluaran OTIO/FCPXML dibaca ulang dengan pustaka OpenTimelineIO dan adapter fcpx_xml resmi, atas plan apa adanya DAN varian berklip banyak |
+| Gerbang pengayaan | Bingkai yang sama dirender tiga kali — polos, ber-vignette, berbutir — lalu DIUKUR: vignette wajib menggelapkan sudut tanpa menambah tekstur, butiran wajib menambah tekstur tanpa menggelapkan sudut. Efek yang tertukar implementasinya membuat keempat pemeriksaan merah |
 | Gerbang sulih suara | Contoh dua bahasa dijalankan JALUR PENUH: TTS bahasa sulih, lalu tuntutan bahwa tiap bahasa jadi plan satu-bahasa yang utuh, susunan scene-nya tidak berubah, dan durasinya benar-benar bergeser mengikuti narasinya. Terakhir satu bingkai dirender DUA kali dan wajib berbeda byte — dua PNG identik berarti bahasanya tidak sampai ke layar |
 | Gerbang subtitle | Berkas .srt/.vtt dibaca pustaka `webvtt-py` — pembaca RUJUKAN, bukan pembaca kami sendiri — lalu tiap kartu dicocokkan ke scene asalnya lewat `activeSceneIndex` milik renderer, atas empat plan contoh. Subtitle yang melenceng tetap berkas yang sah dan lolos tiap tes format; cacatnya cuma terlihat oleh penonton yang menyalakan teksnya |
 | Eval self-check | Penilai yang rusak atau plan contoh yang melanggar kaidahnya sendiri membuat CI merah, tanpa kunci API dan tanpa biaya |
@@ -900,6 +943,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) | Beberapa orang pada satu proyek: bentrok per scene, kehadiran, kunci tautan |
 | [0039](docs/decisions/0039-berkas-subtitle.md) | Berkas subtitle .srt/.vtt yang berjalan bersama video, ikut terunggah ke YouTube |
 | [0040](docs/decisions/0040-sulih-suara.md) | Sulih suara: satu plan banyak bahasa, durasi ikut narasinya |
+| [0041](docs/decisions/0041-pengayaan.md) | Pengayaan: 9 font, 11 preset warna, vignette/butiran, 10 transisi, 11 gerak, 8 bunyi bawaan |
 
 </details>
 

@@ -418,6 +418,21 @@ kursor bersama.
 | 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030), berikut berkas subtitle yang ikut naik (ADR-0039) dan sulih suara banyak bahasa dalam satu plan (ADR-0040); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
 | 10.4 | Multi-user pada satu proyek — **sudah dikerjakan** (ADR-0038); tanpa akun dan tanpa penggabungan otomatis |
 
+**Pengayaan pustaka** (ADR-0041) menutup satu lubang yang berbeda kelas dari
+sekadar "kurang banyak pilihan": efek suara sebelumnya HANYA bisa dari
+Openverse, jadi `audio.sfx` mati total tanpa jaringan sementara seluruh sisa
+Dalang dirancang berjalan offline. Delapan bunyi bawaan yang DISINTESIS —
+dengan pembangkitnya ikut di-commit, jadi bukan data yatim — menutupnya, dan
+lisensinya CC0 tanpa syarat karena lahir dari angka.
+
+Sisanya penambahan kosakata: 3 font (menutup celah monospace, serif kontras
+tinggi, dan sans hangat), 5 preset warna, 2 efek lapisan yang tidak bisa
+dinyatakan sebagai filter CSS (vignette dan butiran), 3 transisi, 3 gerak
+ber-aksen, 2 gaya caption, dan 2 animasi teks. Empat transisi shader di
+`@remotion/transitions` SENGAJA tidak masuk: Chromium renderer menolak
+HTML-in-Canvas yang mereka butuhkan, dan itu ketahuan dengan merender — bukan
+dari tipenya.
+
 ---
 
 ## 5. Risiko yang harus diputuskan, bukan didiamkan

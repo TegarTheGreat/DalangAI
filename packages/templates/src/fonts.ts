@@ -44,6 +44,24 @@ export const FONT_CHOICES = [
     /** Anton berkas STATIS satu bobot — bukan variable font. */
     weight: "400",
   },
+  // ADR-0041: tiga keluarga yang menutup celah nyata, bukan menambah pilihan
+  // demi jumlah. Yang ditanyakan sebelum menambah satu font: kalimat apa yang
+  // hari ini TIDAK BISA disusun dengan enam yang sudah ada.
+  {
+    family: "Playfair Display",
+    file: "fonts/PlayfairDisplay-var.ttf",
+    label: "Playfair Display (serif kontras tinggi, judul mewah)",
+  },
+  {
+    family: "Manrope",
+    file: "fonts/Manrope-var.ttf",
+    label: "Manrope (sans geometris hangat, badan teks ramah)",
+  },
+  {
+    family: "JetBrains Mono",
+    file: "fonts/JetBrainsMono-var.ttf",
+    label: "JetBrains Mono (monospace, kode dan terminal)",
+  },
 ] as const;
 
 let started = false;
@@ -53,7 +71,9 @@ export const ensureFontsLoaded = (): void => {
   if (started) return;
   started = true;
 
-  const handle = delayRender("Memuat font Dalang (6 keluarga ter-bundle)");
+  const handle = delayRender(
+    `Memuat font Dalang (${FONT_CHOICES.length} keluarga ter-bundle)`,
+  );
   Promise.all(
     FONT_CHOICES.map((choice) =>
       loadFont({

@@ -77,6 +77,7 @@ import {
 } from "@dalang/pipeline";
 import { ELEVENLABS_ESTIMATED_USD_PER_CHAR, PUBLISH_SETUP_HINT } from "@dalang/providers";
 import type { RenderVideoResult } from "@dalang/renderer";
+import { BUNDLED_SFX, resolveSfxFile, SFX_LIBRARY_PREFIX } from "@dalang/templates/sfx";
 import {
   buildSubtitleCues,
   SUBTITLE_FORMATS,
@@ -1350,7 +1351,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
     // ADR-0018: efek suara berlisensi terbuka.
     searchSfx: tool({
       description:
-        "Cari efek suara berlisensi terbuka (CC0/domain publik) di Openverse. Hasil SUDAH disaring hanya yang bebas dipakai komersial. Pakai untuk aksen: whoosh transisi, klik, deringan penanda.",
+        'Cari efek suara berlisensi terbuka (CC0/domain publik) di Openverse. Hasil SUDAH disaring hanya yang bebas dipakai komersial. COBA PUSTAKA BAWAAN DULU lewat addSfx dengan assetId "pustaka:<id>" (whoosh, pop, klik, ding, tap, swipe, impact, riser) — delapan bunyi itu ikut repo, jadi tanpa jaringan, tanpa unduhan, dan tanpa menunggu.',
       inputSchema: z.object({
         query: z.string().min(2),
         limit: z.number().int().min(1).max(12).default(8),
@@ -1388,7 +1389,12 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         "Pasang satu efek suara dari hasil searchSfx ke sebuah scene. Waktunya relatif terhadap AWAL SCENE, jadi bunyinya ikut bergeser bila susunan scene berubah.",
       inputSchema: z.object({
         sceneId: z.string().min(1),
-        assetId: z.string().min(1).describe("assetId dari hasil searchSfx"),
+        assetId: z
+          .string()
+          .min(1)
+          .describe(
+            'assetId dari hasil searchSfx, ATAU "pustaka:<id>" untuk bunyi bawaan (ADR-0041)',
+          ),
         atSec: z.number().min(0).default(0),
         volume: z.number().min(0).max(1).default(0.6),
       }),
@@ -1398,6 +1404,44 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           if (!plan.scenes.some((s) => s.id === input.sceneId)) {
             return { ok: false, error: `Scene ${input.sceneId} tidak ada` };
           }
+          // Bunyi PUSTAKA (ADR-0041) tidak lewat pencarian dan tidak diunduh:
+          // berkasnya ikut bundel komposisi, jadi cukup satu cue di plan.
+          const pustaka = resolveSfxFile(input.assetId);
+          if (input.assetId.startsWith(SFX_LIBRARY_PREFIX)) {
+            if (!pustaka) {
+              return {
+                ok: false,
+                error:
+                  `"${input.assetId}" tidak ada di pustaka bawaan. Yang ada: ` +
+                  BUNDLED_SFX.map((sfx) => `pustaka:${sfx.id}`).join(", "),
+              };
+            }
+            const cueId = uniqueSfxCueId(plan, `sfx-${input.sceneId}`);
+            const { summary } = session.applyAgentPatch([
+              {
+                op: "setAudio",
+                patch: {
+                  sfx: [
+                    ...plan.audio.sfx,
+                    {
+                      id: cueId,
+                      assetId: input.assetId,
+                      sceneId: input.sceneId,
+                      atSec: input.atSec,
+                      volume: input.volume,
+                    },
+                  ],
+                },
+              },
+            ]);
+            return {
+              ok: true,
+              cueId,
+              sumber: "pustaka bawaan (CC0, tanpa unduhan)",
+              ringkasan: summary,
+            };
+          }
+
           const candidate = session.lastSfxCandidates.get(input.assetId);
           if (!candidate) {
             return {

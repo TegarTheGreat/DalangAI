@@ -78,6 +78,7 @@ jobs:
           pnpm dalang validate examples/klip-borobudur/plan.json
           pnpm dalang validate examples/klip-hook/plan.json
           pnpm dalang validate examples/sulih-dua-bahasa/plan.json
+          pnpm dalang validate examples/pengayaan/plan.json
 
       # Real still render through the full stack (bundle → Chromium → PNG):
       # the template-regression safety net (R-8 precursor). Uses the runner's
@@ -179,6 +180,24 @@ jobs:
         run: |
           pnpm --filter @dalang/renderer migrasi-paritas
           pnpm --filter @dalang/renderer migrasi-paritas examples/tutorial-studio/plan.json
+
+      # ADR-0041: pengayaan. Preset warna, efek lapisan, transisi, gerak, gaya
+      # caption, dan animasi teks semuanya DATA yang lolos skema apa pun —
+      # nilai yang tidak terdaftar di peta CSS menghasilkan gambar yang
+      # terlihat persis seperti tanpa efek, tanpa galat dan tanpa tes merah.
+      # Gerbang ini MENGUKUR bingkainya: vignette wajib menggelapkan sudut
+      # relatif terhadap tengah, butiran wajib menaikkan beda piksel
+      # bertetangga, dan keduanya wajib melakukannya tanpa saling meniru.
+      - name: Gerbang pengayaan (efek diukur di bingkai, bukan diklaim)
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check pillow
+          pnpm dalang still examples/pengayaan/plan.json -t 2 8 14 -s 0.3 -o /tmp/kaya
+          test -s /tmp/kaya/pengayaan-f60.png
+          test -s /tmp/kaya/pengayaan-f240.png
+          test -s /tmp/kaya/pengayaan-f420.png
+          pnpm --filter @dalang/templates gate:pengayaan
 
       # ADR-0040: sulih suara. Gerbang ini menjalankan JALUR PENUH atas contoh
       # bersulihan: TTS bahasa sulih (provider silence, offline dan gratis),

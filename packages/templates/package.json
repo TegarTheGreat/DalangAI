@@ -12,9 +12,11 @@
     "./review-frames": "./src/review-frames.ts",
     "./fonts": "./src/fonts.ts",
     "./music": "./src/music.ts",
-    "./subtitle": "./src/subtitle.ts"
+    "./subtitle": "./src/subtitle.ts",
+    "./sfx": "./src/sfx.ts"
   },
   "scripts": {
+    "gate:pengayaan": "tsx scripts/pengayaan-gate.mts",
     "gate:subtitle": "tsx scripts/subtitle-gate.mts",
     "gate:sulih": "tsx scripts/sulih-gate.mts",
     "stage-demo": "node scripts/stage-demo.mjs",

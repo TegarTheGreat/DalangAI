@@ -61,6 +61,10 @@ const MOTION_LABEL: Record<Motion, string> = {
   "pan-up": "Geser atas",
   "pan-down": "Geser bawah",
   drift: "Melayang",
+  // ADR-0041
+  "punch-in": "Zum hentak",
+  tilt: "Miring",
+  "pan-diagonal": "Geser diagonal",
 };
 
 const layersPatch = (sceneId: string, layers: VideoLayer[]): PatchOpInput[] => [

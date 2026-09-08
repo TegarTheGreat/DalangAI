@@ -426,7 +426,10 @@
                     "pan-right",
                     "pan-up",
                     "pan-down",
-                    "drift"
+                    "drift",
+                    "punch-in",
+                    "tilt",
+                    "pan-diagonal"
                   ]
                 },
                 "pinned": {
@@ -448,7 +451,12 @@
                         "cool",
                         "mono",
                         "vivid",
-                        "film"
+                        "film",
+                        "noir",
+                        "senja",
+                        "malam",
+                        "pudar",
+                        "pastel"
                       ]
                     },
                     "brightness": {
@@ -480,6 +488,18 @@
                       "type": "number",
                       "minimum": 0,
                       "maximum": 20
+                    },
+                    "vignette": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "grain": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
                     }
                   },
                   "additionalProperties": false
@@ -632,6 +652,9 @@
                         "slide-up",
                         "wipe-right",
                         "wipe-down",
+                        "clock-wipe",
+                        "flip-left",
+                        "flip-up",
                         "none"
                       ]
                     },
@@ -719,6 +742,9 @@
                   "slide-up",
                   "wipe-right",
                   "wipe-down",
+                  "clock-wipe",
+                  "flip-left",
+                  "flip-up",
                   "none"
                 ]
               },
@@ -811,7 +837,9 @@
                     "fade",
                     "pop",
                     "rise",
-                    "typewriter"
+                    "typewriter",
+                    "blur-in",
+                    "slide-in"
                   ]
                 },
                 "color": {
@@ -1216,7 +1244,10 @@
                         "pan-right",
                         "pan-up",
                         "pan-down",
-                        "drift"
+                        "drift",
+                        "punch-in",
+                        "tilt",
+                        "pan-diagonal"
                       ]
                     },
                     "pinned": {
@@ -1235,7 +1266,12 @@
                             "cool",
                             "mono",
                             "vivid",
-                            "film"
+                            "film",
+                            "noir",
+                            "senja",
+                            "malam",
+                            "pudar",
+                            "pastel"
                           ]
                         },
                         "brightness": {
@@ -1267,6 +1303,18 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 20
+                        },
+                        "vignette": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "grain": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "additionalProperties": false

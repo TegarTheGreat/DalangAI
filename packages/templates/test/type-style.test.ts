@@ -14,6 +14,7 @@ const palette = {
   inkSoft: "#aaa",
   accent: "#e4a64c",
   onAccent: "#111",
+  plate: "rgba(10, 11, 16, 0.8)",
 };
 
 const sceneWithCaptionStyle = (style: string) =>

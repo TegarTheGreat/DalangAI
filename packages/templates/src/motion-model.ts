@@ -15,6 +15,15 @@ export interface MotionTransform {
   scale?: string;
   /** Nilai properti CSS `translate`, atau undefined. */
   translate?: string;
+  /**
+   * Nilai properti CSS `rotate` (ADR-0041), atau undefined.
+   *
+   * Properti terpisah, bukan digabung ke dalam satu string `transform`:
+   * `scale`/`translate`/`rotate` sebagai properti mandiri bisa dianimasikan
+   * dan ditimpa satu per satu, sedangkan satu string `transform` menuntut
+   * setiap penulisnya menyusun ulang seluruh rantainya.
+   */
+  rotate?: string;
   objectPosition: string;
 }
 
@@ -32,6 +41,8 @@ export const motionTransform = (
 ): MotionTransform => {
   let scale: number | undefined;
   let translate: string | undefined;
+  /** ADR-0041: hanya `tilt` yang memakainya; sisanya tetap tanpa rotasi. */
+  let rotate: string | undefined;
 
   switch (visual.motion) {
     case "kenburns-in":
@@ -63,6 +74,31 @@ export const motionTransform = (
       translate = `${(Math.cos(angle) * 1.2).toFixed(3)}% ${(Math.sin(angle) * 0.8).toFixed(3)}%`;
       break;
     }
+    // ADR-0041: tiga gerak yang PUNYA aksen, bukan laju tetap. Delapan yang
+    // lama semuanya bergerak rata dari awal ke akhir — enak untuk latar, tapi
+    // tidak satu pun bisa dipakai untuk menekan sebuah momen.
+    case "punch-in": {
+      // Zum cepat di 22% pertama lalu DIAM. Berhenti itu yang jadi
+      // penekanannya; gerak yang tidak pernah berhenti tidak menunjuk apa pun.
+      const t = Math.min(1, progress / 0.22);
+      // Ease-out kubik supaya berhentinya terasa mendarat, bukan terpotong.
+      const eased = 1 - (1 - t) ** 3;
+      scale = 1 + eased * 0.14;
+      break;
+    }
+    case "tilt": {
+      // Miring pelan: kesan kamera di tangan, bukan di tripod. Sudutnya kecil
+      // dengan sengaja — di atas satu derajat, tepi bingkai mulai terlihat
+      // sebagai kemiringan yang salah, bukan sebagai gerak.
+      scale = 1.09;
+      rotate = `${fmt(lerp(-0.55, 0.55, progress))}deg`;
+      translate = `0% ${fmt(lerp(0.6, -0.6, progress))}%`;
+      break;
+    }
+    case "pan-diagonal":
+      scale = 1.12;
+      translate = `${fmt(lerp(-2, 2, progress))}% ${fmt(lerp(-1.4, 1.4, progress))}%`;
+      break;
     case "none":
       break;
   }
@@ -73,12 +109,14 @@ export const motionTransform = (
     return {
       scale: `${fmt(-s)} ${fmt(s)}`,
       ...(translate ? { translate } : {}),
+      ...(rotate ? { rotate } : {}),
       objectPosition,
     };
   }
   return {
     ...(scale !== undefined ? { scale: fmt(scale) } : {}),
     ...(translate ? { translate } : {}),
+    ...(rotate ? { rotate } : {}),
     objectPosition,
   };
 };

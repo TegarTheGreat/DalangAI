@@ -48,6 +48,9 @@ const CaptionPage: React.FC<{
     inkSoft: theme.inkSoft,
     accent: theme.accent,
     onAccent: theme.onAccent,
+    // ADR-0041: pita gelap netral, bukan aksen — teks di atasnya harus
+    // terbaca, dan aksen gunanya menarik perhatian, bukan jadi latar.
+    plate: "rgba(8, 9, 14, 0.82)",
   });
   // Basis lebih besar daripada documentary-01: layar ponsel dipegang jauh
   // lebih dekat, tapi juga jauh lebih kecil, dan caption dibaca sambil
