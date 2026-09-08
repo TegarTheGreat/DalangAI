@@ -47,8 +47,9 @@ import type {
   StudioEvent,
 } from "../shared/api-types";
 import type { StudioContext } from "./context";
+import { editorOf } from "./presence";
 import { publishTargetsOf } from "./publish";
-import { StudioBusyError } from "./store";
+import { StudioBusyError, StudioConflictError } from "./store";
 
 /**
  * Rute state & job (di luar chat). Aksi mahal dari UI tidak lewat approval
@@ -57,7 +58,25 @@ import { StudioBusyError } from "./store";
  * biaya, UI menampilkan dialog, lalu mengirim ulang dengan `confirm: true`.
  */
 
-const patchBody = z.object({ ops: z.array(patchOpSchema).min(1) });
+const patchBody = z.object({
+  ops: z.array(patchOpSchema).min(1),
+  /** Revisi yang jadi dasar suntingan ini (ADR-0038); tanpa ini, tanpa jaminan. */
+  baseRevision: z.number().int().nonnegative().optional(),
+});
+const presenceBody = z.object({ sceneId: z.string().min(1).nullable().optional() });
+
+/**
+ * Identitas dari query string, untuk EventSource yang tidak bisa mengirim
+ * header kustom. Bentuknya divalidasi skema yang sama dengan jalur header.
+ */
+const editorFromQuery = (id?: string, name?: string) => {
+  if (!id || !name) return null;
+  const headers = new Headers({
+    "x-dalang-editor-id": id,
+    "x-dalang-editor-name": name,
+  });
+  return editorOf(headers);
+};
 const reviewBody = z.object({
   maxFrames: z.number().int().min(1).max(8).optional(),
   perhatian: z.string().optional(),
@@ -122,12 +141,45 @@ export const registerProjectRoutes = (app: Hono, ctx: StudioContext): void => {
       return c.json({ error: "Body tidak valid: butuh { ops: PatchOp[] }" }, 400);
     }
     try {
-      const summary = store.applyUserPatch(body.data.ops);
-      return c.json({ ok: true, summary });
+      // `baseRevision` dan identitas keduanya OPSIONAL (ADR-0038): CLI,
+      // server MCP, dan klien lama tidak mengirimnya, dan mereka tetap
+      // bekerja persis seperti sebelumnya.
+      const editor = editorOf(c.req.raw.headers);
+      const summary = store.applyUserPatch(body.data.ops, {
+        ...(body.data.baseRevision !== undefined
+          ? { baseRevision: body.data.baseRevision }
+          : {}),
+        ...(editor ? { editor } : {}),
+      });
+      return c.json({ ok: true, summary, revision: store.revision });
     } catch (error) {
+      // Bentrok dan sibuk sama-sama 409, tapi ARTINYA berbeda dan klien
+      // memperlakukannya berbeda: sibuk = coba lagi sebentar lagi, bentrok =
+      // lihat dulu apa yang berubah. `konflik` yang membedakannya.
+      if (error instanceof StudioConflictError) {
+        return c.json(
+          { ...errorPayload(error), konflik: error.keys, revision: store.revision },
+          409,
+        );
+      }
       if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
       return c.json(errorPayload(error), 400);
     }
+  });
+
+  /**
+   * Kabar kehadiran (ADR-0038): masih di sini, dan sedang di scene ini.
+   *
+   * Terpisah dari SSE karena arahnya berlawanan — SSE mengalir dari server ke
+   * klien, dan pilihan scene mengalir dari klien ke server. Dikirim saat
+   * pilihan berubah dan sebagai denyut berkala; keduanya jalur yang sama.
+   */
+  app.post("/api/presence", async (c) => {
+    const editor = editorOf(c.req.raw.headers);
+    if (!editor) return c.json({ error: "Butuh header identitas penyunting" }, 400);
+    const body = presenceBody.safeParse(await c.req.json().catch(() => null));
+    ctx.presence.touch(editor, body.success ? (body.data.sceneId ?? null) : null);
+    return c.json({ ok: true, editors: ctx.presence.list() });
   });
 
   app.post("/api/undo", (c) => {
@@ -150,10 +202,20 @@ export const registerProjectRoutes = (app: Hono, ctx: StudioContext): void => {
     streamSSE(c, async (stream) => {
       const send = (event: StudioEvent) =>
         stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
-      await send({ type: "hello", revision: store.revision });
+      // BERLANGGANAN DULU, baru menyapa. Badan streamSSE berjalan setelah
+      // responsnya dikembalikan, jadi tiap `await` sebelum `subscribe` adalah
+      // jendela tempat perubahan yang terjadi persis saat itu hilang tanpa
+      // jejak — panel yang baru dibuka lalu diam sampai perubahan berikutnya.
       const unsubscribe = store.bus.subscribe((event) => {
         void send(event);
       });
+      await send({ type: "hello", revision: store.revision });
+      // Identitas lewat query, bukan header: EventSource peramban tidak bisa
+      // mengirim header kustom sama sekali. Rute ini GET dan tidak mengubah
+      // apa pun kecuali daftar kehadiran, jadi tidak ada yang dilonggarkan.
+      const editor = editorFromQuery(c.req.query("editorId"), c.req.query("editorName"));
+      const leave = editor ? ctx.presence.join(editor) : null;
+      if (!editor) await send({ type: "presence", editors: ctx.presence.list() });
       const heartbeat = setInterval(() => {
         void stream.writeSSE({ event: "ping", data: "{}" });
       }, 25_000);
@@ -163,6 +225,7 @@ export const registerProjectRoutes = (app: Hono, ctx: StudioContext): void => {
       });
       clearInterval(heartbeat);
       unsubscribe();
+      leave?.();
     }),
   );
 };

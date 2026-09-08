@@ -368,12 +368,28 @@ agent `publishVideo` — yang semuanya lewat konfirmasi dan bawaannya privat.
 Batasnya di "Batas" ADR-0030: belum pernah dijalankan terhadap YouTube
 sungguhan, token akses tanpa refresh, TikTok/Instagram belum.
 
+**§10.4 sudah dikerjakan** (ADR-0038). Sebagian besar bahannya ternyata sudah
+ada — patch op ber-invers, satu penulis di server, siaran SSE bernomor revisi,
+deteksi editan luar — dan yang kurang justru yang soal ORANG: identitas,
+deteksi bentrok, dan cara ikut. Ketiganya sekarang ada: tiap suntingan membawa
+revisi dasarnya dan ditolak kalau petaknya (sebesar SCENE) sudah berubah di
+tangan orang lain; bilah kehadiran menunjukkan siapa yang ada dan di scene
+mana; dan `dalang studio --lan` membuka ke jaringan lokal dengan URL berkunci
+yang menjaga baca maupun tulis. Tanpa `--lan`, tidak ada satu pun perilaku
+lama yang berubah.
+
+Batasnya di "Batas yang dinyatakan" ADR-0038, dan yang paling penting
+disengaja: bentrok DITOLAK, tidak pernah digabungkan otomatis. Penggabungan
+yang salah kehilangan pekerjaan tanpa suara, dan itu lebih buruk daripada
+penolakan yang jelas. Tidak ada akun, tidak ada izin per-orang, tidak ada
+kursor bersama.
+
 | # | Item |
 | --- | --- |
 | 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
 | 10.2 | Marketplace preset/template — **paketnya sudah dikerjakan** (ADR-0037); tokonya sengaja tidak |
 | 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
-| 10.4 | Multi-user pada satu proyek |
+| 10.4 | Multi-user pada satu proyek — **sudah dikerjakan** (ADR-0038); tanpa akun dan tanpa penggabungan otomatis |
 
 ---
 

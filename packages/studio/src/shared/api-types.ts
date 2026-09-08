@@ -570,8 +570,20 @@ export type PlanUpdateReason =
   | "pick"
   | "external";
 
+/** Satu penyunting yang sedang membuka proyek ini (ADR-0038). */
+export interface EditorPresence {
+  id: string;
+  name: string;
+  /** Warna deterministik dari id — sama di semua layar. */
+  color: string;
+  /** Scene yang sedang dipilihnya, atau null. */
+  sceneId: string | null;
+}
+
 export type StudioEvent =
   | { type: "hello"; revision: number }
+  /** Siapa saja yang sedang membuka proyek ini (ADR-0038). */
+  | { type: "presence"; editors: EditorPresence[] }
   /** Proyek ditutup server (pindah proyek / kembali ke lobi) — tutup SSE. */
   | { type: "project-closed" }
   | { type: "plan-updated"; reason: PlanUpdateReason; revision: number }

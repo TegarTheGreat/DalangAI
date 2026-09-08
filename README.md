@@ -309,6 +309,28 @@ atau pemasangan dari URL — template berpindah sebagai berkas.
 [ADR-0037](docs/decisions/0037-paket-template.md) menulis kenapa, dan batas
 lainnya.
 
+### Menyunting berdua
+
+Studio bisa dibuka ke jaringan lokal dengan `dalang studio --lan`. Ia mencetak
+URL lengkap berisi **kunci acak** untuk tiap alamat mesin ini, dan tanpa kunci
+itu tamu jaringan tidak bisa apa-apa — termasuk membaca. Tanpa `--lan` tidak
+ada yang berubah: Studio tetap hanya mendengar di loopback.
+
+Bentrok **ditolak, bukan digabungkan diam-diam**. Tiap suntingan membawa
+revisi yang jadi dasarnya, dan server menolaknya kalau petak yang disentuh —
+sebesar SCENE — sudah berubah di tangan orang lain. Yang ditolak mendapat
+kalimat yang menyebut siapa dan apa, lalu layarnya disegarkan. Dua orang di
+scene berbeda tidak saling menghalangi.
+
+Bilah kehadiran menunjukkan siapa yang sedang membuka proyek dan di scene
+mana; ia kosong saat kamu sendirian. Nama bisa diklik untuk diganti.
+
+**Yang tidak ada: akun dan izin per-orang.** Yang punya tautan punya
+segalanya, dan tidak ada penggabungan otomatis — dua orang yang menyunting
+scene yang sama harus bergantian.
+[ADR-0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) menulis kenapa,
+dan batas lainnya.
+
 ### Teks dan tipografi
 
 Caption karaoke tersinkron dari word timestamp asli TTS atau estimasi
@@ -646,6 +668,12 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   mana memotong, bukan apa yang layak dipotong; untuk memilih momen ia
   diperintahkan meminta transkrip, bukan menebak.
 - **Screen recording** (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Menyunting berdua tidak punya akun.** Yang punya tautan `--lan` punya
+  segalanya: menyunting, merender, mengunggah. Bentrok ditolak dan tidak
+  pernah digabungkan otomatis, tidak ada kursor bersama, dan semuanya berbagi
+  satu proses di satu komputer — kalau komputer itu tidur, semua berhenti.
+  [ADR-0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) menulis
+  batasnya lengkap.
 - **Template tidak punya toko.** Tidak ada indeks yang di-host, akun,
   peringkat, atau pemasangan dari URL; paket berpindah sebagai berkas. Ia juga
   tidak bisa membawa cara MENGGAMBAR baru — preset Remotion tetap berupa
@@ -786,6 +814,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0035](docs/decisions/0035-preset-klip-01.md) | Preset `klip-01` untuk konten pendek vertikal |
 | [0036](docs/decisions/0036-keyframe-kamera-klip.md) | Kamera visual dasar scene bisa di-keyframe (zum, geser, opasitas) |
 | [0037](docs/decisions/0037-paket-template.md) | Template sebagai paket yang bisa dibagikan (kerangka + tampilan, tanpa berkas) |
+| [0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) | Beberapa orang pada satu proyek: bentrok per scene, kehadiran, kunci tautan |
 
 </details>
 

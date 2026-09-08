@@ -1,4 +1,6 @@
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import {
   defaultMemoryPath,
@@ -53,11 +55,15 @@ export const registerStudioCommand = (program: Command): void => {
     .option("-p, --port <n>", "port server", parsePort, 4646)
     .option("--model <key>", "model orkestrator (provider/model-id)")
     .option("--model-volume <key>", "model tier-volume (riset/vision)")
+    .option(
+      "--lan",
+      "buka ke jaringan lokal supaya orang lain bisa ikut menyunting (ADR-0038) — URL-nya memuat kunci acak",
+    )
     .description("Buka UI hybrid 3 panel: chat agent · preview · timeline (Fase 3)")
     .action(
       async (
         proyek: string,
-        options: { port: number; model?: string; modelVolume?: string },
+        options: { port: number; model?: string; modelVolume?: string; lan?: boolean },
       ) => {
         const entry = resolveEntry(proyek);
         const workspaceRoot =
@@ -91,8 +97,14 @@ export const registerStudioCommand = (program: Command): void => {
           }
         }
 
+        // Kunci tautan (ADR-0038): dibuat sekali per proses, dan HANYA saat
+        // dibuka ke jaringan. Tanpa --lan tidak ada kunci sama sekali, jadi
+        // pemakaian lokal tidak berubah satu langkah pun.
+        const linkKey = options.lan ? randomBytes(16).toString("base64url") : undefined;
         const studio = await startStudioServer({
           workspaceRoot,
+          ...(options.lan ? { hostname: "0.0.0.0" } : {}),
+          ...(linkKey ? { linkKey } : {}),
           // ADR-0029: memori preferensi milik orangnya — satu berkas di rumah Dalang.
           memoryPath: defaultMemoryPath(),
           ...(planPath ? { planPath } : {}),
@@ -133,6 +145,19 @@ export const registerStudioCommand = (program: Command): void => {
         });
 
         const hasApp = existsSync(join(studioAppDistDir, "index.html"));
+        // URL yang bisa DIBAGIKAN, bukan 0.0.0.0 yang tidak menunjuk apa pun
+        // dari komputer orang lain. Semua alamat IPv4 non-internal dicetak
+        // karena mesin dengan Wi-Fi plus Ethernet punya lebih dari satu, dan
+        // menebak satu yang benar bukan urusan kami.
+        const lanUrls = options.lan
+          ? Object.values(networkInterfaces())
+              .flat()
+              .filter((item) => item && item.family === "IPv4" && !item.internal)
+              .map(
+                (item) =>
+                  `http://${item?.address}:${studio.port}/?kunci=${linkKey ?? ""}`,
+              )
+          : [];
         console.log(
           `Dalang Studio · ${studio.url}\n` +
             (planPath ? `  proyek  : ${planPath}\n` : "") +
@@ -140,6 +165,18 @@ export const registerStudioCommand = (program: Command): void => {
             (orchestrator
               ? `  model   : ${orchestrator.key}${volumeModel ? ` · volume: ${volumeModel.key}` : ""} (registry: ${registry.source})\n`
               : `  PERHATIAN: chat nonaktif — ${chatDisabledReason}; panel manual tetap berfungsi\n`) +
+            (options.lan
+              ? "\n  TERBUKA KE JARINGAN LOKAL (ADR-0038)\n" +
+                "  Siapa pun yang punya tautan di bawah bisa menyunting proyek, memicu render\n" +
+                "  berbayar, dan mengunggah. Tidak ada akun dan tidak ada izin per-orang —\n" +
+                "  yang punya tautan punya semuanya. Bagikan hanya ke orang yang kamu percaya,\n" +
+                "  dan hentikan Studio untuk mencabutnya (jalan lagi = kunci baru).\n" +
+                lanUrls.map((url) => `  bagikan : ${url}\n`).join("") +
+                (lanUrls.length === 0
+                  ? "  (tidak ada alamat IPv4 non-internal — mesin ini tidak terlihat di jaringan)\n"
+                  : "") +
+                "\n"
+              : "") +
             (hasApp
               ? "  Buka URL di browser. Ctrl+C untuk berhenti.\n"
               : "  PERHATIAN: app UI belum ter-build — jalankan: pnpm --filter @dalang/studio build\n"),

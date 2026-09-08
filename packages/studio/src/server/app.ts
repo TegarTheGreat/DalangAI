@@ -14,6 +14,7 @@ import { registerChatRoutes } from "./chat";
 import type { ChatBridge, StudioContext, StudioDeps } from "./context";
 import { registerMedia } from "./media";
 import { registerMediaLibraryRoutes } from "./media-library";
+import { PresenceRegistry } from "./presence";
 import { registerPublishRoutes } from "./publish";
 import { registerJobRoutes, registerProjectRoutes } from "./routes";
 import { registerSourceRoutes } from "./sources";
@@ -93,6 +94,7 @@ export const createStudioApp = (options: CreateStudioOptions): Studio => {
 
   const context: StudioContext = {
     store,
+    presence: new PresenceRegistry(bus),
     deps: options.deps,
     guards,
     approvals,

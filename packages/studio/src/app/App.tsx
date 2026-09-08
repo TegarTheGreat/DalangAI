@@ -3,12 +3,13 @@ import {
   type AspectRatio,
   allRecipes,
   critiquePlan,
+  MAX_EDITOR_NAME,
   recipeFor,
   type SafeArea,
 } from "@dalang/core";
 import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BusyKind, ExportSettingsLite } from "../shared/api-types";
 import { api, type ReviewResult, type TimelineExportResult } from "./api";
 import {
@@ -18,6 +19,7 @@ import {
   useEscape,
   useScrollFade,
 } from "./components/controls";
+import { editorName, setEditorName } from "./editor-identity";
 import {
   IconChat,
   IconCheck,
@@ -912,6 +914,87 @@ const ReviewDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   );
 };
 
+/**
+ * Bilah kehadiran (ADR-0038, roadmap §10.4).
+ *
+ * Kosong saat sendirian, dan itu keputusan: menampilkan diri sendiri memakai
+ * tempat untuk mengatakan hal yang sudah diketahui pemiliknya, dan bilah yang
+ * SELALU ada berhenti diperhatikan justru saat isinya mulai berarti.
+ *
+ * Namanya bisa diklik untuk diganti. Nama bawaan sengaja terlihat sementara
+ * ("Penyunting 4f2a"), dan nama sementara yang tidak bisa diganti adalah nama
+ * sementara selamanya.
+ */
+const PresenceBar: React.FC = () => {
+  const { editors } = useStudio();
+  const [nama, setNama] = useState(editorName());
+  const [ubah, setUbah] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fokus lewat ref, bukan `autoFocus` — pola yang sama dengan dialog lain di
+  // Studio, dan satu-satunya yang tidak memindahkan fokus saat komponennya
+  // kebetulan dirender ulang karena alasan lain.
+  useEffect(() => {
+    if (ubah) requestAnimationFrame(() => inputRef.current?.select());
+  }, [ubah]);
+
+  // Sendirian: TIDAK ADA apa-apa. Bukan bilah kosong, bukan nama sendiri —
+  // keduanya memakai lebar bilah atas yang sudah diperebutkan judul, saklar
+  // rasio, dan tujuh tombol. Gerbang tata letak repo ini menangkapnya persis
+  // begitu: menambah nama sendiri di sini menggunting saklar rasio di 1680px.
+  if (editors.length === 0) return null;
+
+  return (
+    <div className="presence-bar">
+      {ubah ? (
+        <input
+          ref={inputRef}
+          className="presence-input"
+          value={nama}
+          maxLength={MAX_EDITOR_NAME}
+          onChange={(event) => setNama(event.target.value)}
+          onBlur={() => {
+            setNama(setEditorName(nama));
+            setUbah(false);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              setNama(editorName());
+              setUbah(false);
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="presence-self"
+          data-tip="Nama yang dilihat penyunting lain"
+          data-tip-bottom=""
+          onClick={() => setUbah(true)}
+        >
+          {nama}
+        </button>
+      )}
+      {editors.map((editor) => (
+        <span
+          key={editor.id}
+          className="presence-chip"
+          style={{ borderColor: editor.color, color: editor.color }}
+          data-tip={
+            editor.sceneId
+              ? `${editor.name} di ${editor.sceneId}`
+              : `${editor.name} — di sini`
+          }
+          data-tip-bottom=""
+        >
+          {editor.name.slice(0, 2).toUpperCase()}
+        </span>
+      ))}
+    </div>
+  );
+};
+
 const Header: React.FC = () => {
   const { project, connected } = useStudio();
   const { chatOpen, inspectorOpen } = useUi();
@@ -998,6 +1081,8 @@ const Header: React.FC = () => {
           </span>
         ) : null}
       </div>
+
+      <PresenceBar />
 
       <div className={`topbar-actions ${actionsFade}`} ref={actionsRef}>
         <button

@@ -1,5 +1,6 @@
 export * from "./canvas";
 export * from "./clips";
+export * from "./collab";
 export * from "./critique";
 export * from "./durations";
 export * from "./format-recipe";

@@ -23,7 +23,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { WorkspacePayload } from "../shared/api-types";
 import { type CreateStudioOptions, createStudioApp, type Studio } from "./app";
-import { localOnlyGuard } from "./guard";
+import { linkKeyGuard, localOnlyGuard } from "./guard";
 import { registerSettingsRoutes } from "./settings";
 import {
   createProject,
@@ -104,6 +104,11 @@ export interface StudioHostOptions
   /** Folder registri template (ADR-0037); tes menyuntikkan folder sementara. */
   templateDir?: string;
   /**
+   * Kunci tautan (ADR-0038). Diisi hanya saat Studio sengaja dibuka ke
+   * jaringan lokal; tanpa ini, perilakunya persis seperti sebelumnya.
+   */
+  linkKey?: string;
+  /**
    * Nama host tambahan yang boleh memerintah Studio (ADR-0031). Bawaannya
    * hanya loopback. Diisi bila server sengaja diikat ke alamat lain, mis.
    * supaya bisa dibuka dari tablet di jaringan yang sama.
@@ -143,6 +148,11 @@ export class StudioHost {
       "*",
       localOnlyGuard(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
     );
+    // Kunci tautan SESUDAH penjaga asal, dan juga di app LUAR (ADR-0038):
+    // tamu jaringan harus lolos keduanya, termasuk untuk GET — tanpa itu
+    // "membuka ke jaringan" berarti siapa pun sejaringan bisa MEMBACA
+    // proyeknya, bukan cuma tidak bisa mengubahnya.
+    if (options.linkKey) this.app.use("*", linkKeyGuard(options.linkKey));
     this.memory = fileMemoryStore(options.memoryPath ?? defaultMemoryPath());
     this.templateDir = options.templateDir ?? defaultTemplateDir();
     if (options.planPath) {
