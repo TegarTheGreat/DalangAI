@@ -76,6 +76,7 @@ jobs:
         run: |
           pnpm dalang validate examples/borobudur-60s/plan.json
           pnpm dalang validate examples/klip-borobudur/plan.json
+          pnpm dalang validate examples/klip-hook/plan.json
 
       # Real still render through the full stack (bundle → Chromium → PNG):
       # the template-regression safety net (R-8 precursor). Uses the runner's
@@ -106,6 +107,15 @@ jobs:
           test -s /tmp/smoke/klip-borobudur-f150.png
           test -s /tmp/smoke/klip-borobudur-f274.png
           test -s /tmp/smoke/klip-borobudur-f330.png
+          # ADR-0035: satu-satunya contoh berpreset klip-01. Tanpa langkah ini
+          # preset ketiga tidak pernah dirender gerbang mana pun, dan regresinya
+          # baru ketahuan kalau ada yang merender manual — yang tidak terjadi.
+          # Detik 0,7 memuat teks hook yang masih penuh; detik 8 memuat caption
+          # berpelat di tengah kalimat; detik 19 memuat chip outro.
+          pnpm dalang still examples/klip-hook/plan.json -t 0.7 8 19 -s 0.25 -o /tmp/smoke
+          test -s /tmp/smoke/klip-hook-f21.png
+          test -s /tmp/smoke/klip-hook-f240.png
+          test -s /tmp/smoke/klip-hook-f570.png
 
       # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)
       # ATAU dari URL (render cloud). Gerbang ini merender kedua jalur dan

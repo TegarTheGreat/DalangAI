@@ -627,6 +627,12 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   tersendiri. Ini ditegakkan, bukan disarankan: sebelum aturannya ada, plan
   seperti itu lolos, rendernya sukses, dan potongan sesudah kartunya hilang
   tanpa satu pun pesan.
+- **Preset klip-01 tidak merender anotasi.** Sorotan dan panah adalah milik
+  tutorial-01; plan berformat klip yang memuat anotasi akan kehilangan
+  anotasinya di gambar tanpa peringatan, meski Inspector Studio menyebutkan
+  preset aktifnya. Kartu hook-nya juga menampilkan `meta.title`, bukan teks
+  hook per scene — teks hook dirender sebagai teks overlay biasa.
+  [ADR-0035](docs/decisions/0035-preset-klip-01.md) menulis batasnya lengkap.
 - **Preset tutorial-01 menggambar potongannya, tapi anotasinya tetap milik
   scene.** Sorotan dan panah berjangkar pada satu screenshot; kalau potongan
   kedua menampilkan layar lain, anotasinya tidak ikut berpindah.
@@ -642,7 +648,7 @@ packages/
   providers/       adapter TTS, stock, ASR, ikon, efek suara, publikasi + katalog konfigurasi
   agent/           runtime agent: AI SDK v7, registry models.dev, tools, guardrails
   studio/          UI hybrid (Vite + React + Player) + server Hono/SSE single-writer
-  templates/       preset Remotion terkurasi (documentary-01, tutorial-01) + 6 font
+  templates/       preset Remotion terkurasi (documentary-01, tutorial-01, klip-01) + 6 font
   renderer/        RenderTarget lokal: staging, bundling, profil, pengukur kenyaringan
   render-lambda/   RenderTarget cloud (Remotion Lambda)
   interop/         pembaca dan penulis OpenTimelineIO dan FCPXML
@@ -726,6 +732,8 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0031](docs/decisions/0031-studio-hanya-menerima-perintah-dirinya-sendiri.md) | Studio hanya menerima perintah dari dirinya sendiri |
 | [0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md) | Konfigurasi yang bisa ditemukan tanpa membaca kode |
 | [0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) | Beberapa klip dalam satu scene; skema v2 + migrasi pertama |
+| [0034](docs/decisions/0034-zona-aman-platform.md) | Zona aman platform: teks menjauh dari tepi yang ditimpa antarmuka |
+| [0035](docs/decisions/0035-preset-klip-01.md) | Preset `klip-01` untuk konten pendek vertikal |
 
 </details>
 
