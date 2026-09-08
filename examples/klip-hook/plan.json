@@ -132,8 +132,40 @@
           "id": "sc-terang-k1",
           "type": "solid",
           "variant": "duotone",
-          "motion": "pan-left",
-          "pinned": false
+          "motion": "none",
+          "pinned": false,
+          "tracks": [
+            {
+              "property": "zoom",
+              "points": [
+                {
+                  "at": 0,
+                  "value": 1.6,
+                  "easing": "dolly"
+                },
+                {
+                  "at": 1,
+                  "value": 1.05,
+                  "easing": "linear"
+                }
+              ]
+            },
+            {
+              "property": "offsetY",
+              "points": [
+                {
+                  "at": 0,
+                  "value": 0.1,
+                  "easing": "dolly"
+                },
+                {
+                  "at": 1,
+                  "value": 0,
+                  "easing": "linear"
+                }
+              ]
+            }
+          ]
         }
       ]
     },

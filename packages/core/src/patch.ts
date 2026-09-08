@@ -14,6 +14,7 @@ import {
   annotationSchema,
   aspectRatioSchema,
   audioTrackSchema,
+  CLIP_ANIMATABLE,
   type Clip,
   captionPositionSchema,
   clipAudioSchema,
@@ -36,6 +37,7 @@ import {
   sfxCueSchema,
   textOverlaySchema,
   textSizeSchema,
+  tracksArraySchema,
   transitionSchema,
   videoLayerSchema,
   visualFilterSchema,
@@ -109,6 +111,13 @@ export const sceneUpdateSchema = z.strictObject({
        * adalah cara termudah kehilangan klip di ujungnya.
        */
       transition: transitionSchema.nullable().optional(),
+      /**
+       * Track keyframe kamera (ADR-0036) — MENGGANTIKAN seluruh daftar, sama
+       * seperti `texts` dan `graphics`. Track adalah kumpulan yang disunting
+       * utuh oleh `keyframes.ts`; patch yang menggabung per-properti akan
+       * membuat "hapus track terakhir" tidak bisa dinyatakan sama sekali.
+       */
+      tracks: tracksArraySchema(CLIP_ANIMATABLE).optional(),
     })
     .optional(),
   caption: z

@@ -279,8 +279,16 @@ Studio, terlihat sebagai berlian di timeline, dan diverifikasi dari PIKSEL
 render: teks ber-track mendarat di 0,2888 / 0,4295 / 0,5688 lebar bingkai
 (ramalan 0,290 / 0,430 / 0,570), sementara plan yang sama tanpa track diam di
 0,4988. Berlian di timeline kini bisa diseret dan digeser dari papan ketik
-(batas awalnya dicabut); yang tersisa: visual dasar scene belum bisa
-di-keyframe — selengkapnya di "Batas" ADR-0027.
+(batas awalnya dicabut). Batas terakhirnya — visual dasar scene belum bisa
+di-keyframe — dicabut ADR-0036: `clip.tracks` menganimasikan zum (1..3), geser
+X/Y, dan opasitas kamera scene, dengan satu aturan yang berbeda dari elemen
+lain dan disengaja begitu — begitu salah satu properti KAMERA punya track,
+preset `clip.motion` diabaikan seluruhnya, sebab "pan-left" adalah satu
+gerakan bernama, bukan tiga angka yang bisa diambil separuh. Dibuktikan di
+kedua jalur gambar (aset dan prosedural) lewat bingkai yang dirender CI, dan
+plan tanpa keyframe terbukti masih identik byte per byte. Yang tersisa:
+berlian klip belum ada di timeline, dan preset tutorial-01 tidak memakainya —
+selengkapnya di "Batas yang dinyatakan" ADR-0036.
 
 **§9.5 sudah dikerjakan** (ADR-0028; campuran akhir kini juga DIKOREKSI ke
 sasaran dengan penguatan rata — Keputusan 9 — dan proxy dibuat DI LATAR dengan
@@ -318,7 +326,7 @@ bukan speed ramp, bukan multicam; lapisan dan anotasi tetap milik scene).
 | --- | --- | --- |
 | 9.1 | Manipulasi langsung di kanvas: seret/ubah ukuran teks & grafis di preview | Selesai (ADR-0024; anotasi, penempelan ke elemen lain, dan pemilihan jamak menyusul) |
 | 9.2 | Multi-track video: overlay/PiP/B-roll sebagai lapisan | Selesai (ADR-0025) |
-| 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027) |
+| 9.3 | Keyframe sembarang untuk properti | Selesai (ADR-0027; kamera visual dasar scene menyusul di ADR-0036) |
 | 9.4 | Audio: volume/fade per klip, normalisasi EBU R128, track audio tambahan | Selesai (ADR-0026) |
 | 9.5 | Proxy + penanganan rekaman panjang | Selesai (ADR-0028) |
 | 9.6 | Beberapa klip dalam satu scene: belah, trim ripple/roll, buang, susun ulang | Selesai (ADR-0033) |

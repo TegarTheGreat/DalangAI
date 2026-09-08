@@ -193,3 +193,75 @@ export const snapKeyframeTime = (
   }
   return best ? { at: best.at, snappedTo: best } : { at: toAt, snappedTo: null };
 };
+
+// ---------------------------------------------------------------------------
+// Pembacaan track untuk KRITIK (ADR-0036)
+// ---------------------------------------------------------------------------
+
+/**
+ * Nilai sebuah track pada waktu `at`, dengan jam LINEAR.
+ *
+ * Interpolator sungguhannya hidup di `@dalang/templates` bersama kurva
+ * easing-nya, dan itu tempat yang benar: easing adalah bahasa gerak preset,
+ * bukan aturan skema. Yang dipakai di sini sengaja lebih sederhana, dan
+ * sederhananya cukup — easing hanya menata ULANG WAKTU di dalam satu segmen,
+ * tidak pernah menambah atau mengurangi nilai yang dilewatinya: antara dua
+ * titik, himpunan nilai yang ditempuh tetap [v0, v1] apa pun kurvanya, dan di
+ * titik-titiknya keduanya sama persis. Yang bisa berbeda cuma PASANGAN waktu
+ * antara dua track — dan itu sebabnya hasilnya dipakai sebagai saran, bukan
+ * penolakan.
+ */
+const linearTrackValue = (track: KeyframeTrack, at: number): number => {
+  const points = track.points;
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last) return 0;
+  if (at <= first.at) return first.value;
+  if (at >= last.at) return last.value;
+  for (let i = 1; i < points.length; i++) {
+    const from = points[i - 1];
+    const to = points[i];
+    if (!from || !to) break;
+    if (at <= to.at) {
+      const span = to.at - from.at;
+      if (span <= 0) return to.value;
+      return from.value + ((at - from.at) / span) * (to.value - from.value);
+    }
+  }
+  return last.value;
+};
+
+/**
+ * Seberapa jauh pan MELEWATI bidang yang ditutup zum, sebagai fraksi bingkai;
+ * 0 berarti gambar masih menutupi bingkai sepanjang klip.
+ *
+ * Gambar ber-zum `z` menjulur `(z - 1) / 2` bingkai di tiap sisi, jadi geseran
+ * yang lebih besar dari itu menarik tepi gambar masuk ke dalam bingkai dan
+ * meninggalkan bidang kosong di sisi lainnya. Ini satu-satunya jebakan
+ * geometris keyframe kamera, dan ia tidak terlihat sama sekali dari JSON-nya:
+ * `offsetX: 0.3` terbaca sopan sampai seseorang merendernya.
+ *
+ * Dicicipi di titik-titik keyframe KEDUA track sekaligus, plus kisi rapat di
+ * antaranya — bukan dibuktikan.
+ */
+export const panBeyondCover = (tracks: readonly KeyframeTrack[]): number => {
+  const pans = tracks.filter(
+    (track) => track.property === "offsetX" || track.property === "offsetY",
+  );
+  if (pans.length === 0) return 0;
+  const zoom = tracks.find((track) => track.property === "zoom");
+
+  const times = new Set<number>([0, 1]);
+  for (const track of tracks) for (const point of track.points) times.add(point.at);
+  for (let i = 1; i < 40; i++) times.add(i / 40);
+
+  let worst = 0;
+  for (const at of times) {
+    const room = ((zoom ? linearTrackValue(zoom, at) : 1) - 1) / 2;
+    for (const pan of pans) {
+      const over = Math.abs(linearTrackValue(pan, at)) - room;
+      if (over > worst) worst = over;
+    }
+  }
+  return Number(worst.toFixed(4));
+};

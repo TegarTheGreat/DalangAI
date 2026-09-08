@@ -7,7 +7,7 @@ tanpa suara.
 ```bash
 # dari root repo
 pnpm dalang validate examples/klip-hook/plan.json
-pnpm dalang still    examples/klip-hook/plan.json -t 0.7 2 8
+pnpm dalang still    examples/klip-hook/plan.json -t 0.7 2 8 13.9
 pnpm dalang render   examples/klip-hook/plan.json --profile draft
 ```
 
@@ -36,6 +36,7 @@ unduhan, tanpa menambah berkas biner ke repo.
 | Garis retensi di tepi atas | terlihat di semua bingkai, memanjang seiring waktu |
 | Beberapa klip dalam satu scene (ADR-0033) | `sc-hook`, dua potongan berurutan |
 | Chip outro | `sc-outro`, `template-anim` varian `outro` |
+| Kamera keyframe di latar PROSEDURAL (ADR-0036) | `sc-terang-k1.tracks`: tarik mundur pelan dari zum 1,6 ke 1,05 — jalur kode yang berbeda dari klip beraset, jadi ia butuh bingkainya sendiri di CI |
 
 ## Yang SENGAJA tidak ada di sini
 

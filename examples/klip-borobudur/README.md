@@ -7,7 +7,7 @@ keluar — yang berganti hanya gambarnya.
 ```bash
 # dari root repo
 pnpm dalang validate examples/klip-borobudur/plan.json
-pnpm dalang still    examples/klip-borobudur/plan.json -t 5 9.13 11
+pnpm dalang still    examples/klip-borobudur/plan.json -t 5 7.83 9.13 11
 pnpm dalang render   examples/klip-borobudur/plan.json --profile draft
 ```
 
@@ -28,8 +28,14 @@ alih klaim di README.
 | Potong keras sebagai bawaan di dalam scene (§6) | batas `sc-batu-k1` → `sc-batu-k2`, tanpa field `transition` |
 | Larut ANTAR KLIP, titik tengahnya tepat di potongan | `sc-batu-k2.transition`, cross-fade 18 bingkai |
 | Caption menyeberangi seluruh potongan | satu narasi untuk ketiganya; frame 225 jatuh di tengah kalimat |
-| Gerak kamera per potongan | `pan-right`, `kenburns-in`, `kenburns-out` |
+| Gerak kamera per potongan | `pan-right` di klip pertama, `kenburns-out` di klip ketiga |
+| Kamera KEYFRAME (ADR-0036) | `sc-batu-k2.tracks`: diam sampai 42% lalu menghentak masuk ke zum 1,55 sambil bergeser — gerak yang tidak punya nama di enum `motion` mana pun |
 | Aset dikunci per KLIP | `renderState.clipAssets` memakai id klip, bukan id scene |
+
+`sc-batu-k2.motion` sengaja "none": begitu kameranya di-keyframe, presetnya
+memang tidak berlaku lagi, dan `dalang validate` akan mengatakannya kalau
+namanya ditinggal di sana. Contoh yang menyimpan gerak yang sudah mati akan
+mengajarkan bahwa keduanya bisa dipakai bersama — dan tidak bisa.
 
 Transisi pada klip TERAKHIR sengaja tidak dipasang: batas itu milik scene, dan
 `clipFrameSpans` mengabaikannya. Contoh yang menyimpan field mati di sana akan

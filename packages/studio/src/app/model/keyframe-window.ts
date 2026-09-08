@@ -1,5 +1,5 @@
 import type { ScenePlan } from "@dalang/core";
-import { computeFrameLayout } from "@dalang/templates/layout";
+import { clipFrameSpans, computeFrameLayout } from "@dalang/templates/layout";
 
 /**
  * Posisi playhead sebagai fraksi jendela tampil sebuah elemen (ADR-0027).
@@ -32,4 +32,35 @@ export const windowProgress = (
   if (span <= 0) return null;
   if (frame < from || frame > to) return null;
   return Math.min(1, Math.max(0, (frame - from) / span));
+};
+
+/**
+ * Posisi playhead sebagai fraksi jendela sebuah KLIP (ADR-0036).
+ *
+ * Jendela klip bukan `startFrac`/`endFrac` melainkan petak yang dihitung
+ * `clipFrameSpans` — rumus yang sama dengan yang dipakai ClipStrip saat
+ * merender. Scene berklip satu jatuh ke petak tunggal 0..durasi scene, jadi
+ * jalurnya cuma satu untuk kedua keadaan.
+ */
+export const clipProgress = (
+  plan: ScenePlan,
+  sceneId: string,
+  clipId: string,
+  frame: number,
+): number | null => {
+  const index = plan.scenes.findIndex((scene) => scene.id === sceneId);
+  const scene = plan.scenes[index];
+  if (!scene) return null;
+  const layout = computeFrameLayout(plan);
+  const sceneStart = layout.sceneStarts[index] ?? 0;
+  const sceneFrames = layout.sceneFrames[index] ?? 0;
+  if (sceneFrames <= 0) return null;
+  const span = clipFrameSpans(scene, sceneFrames).find(
+    (candidate) => candidate.id === clipId,
+  );
+  if (!span || span.frames <= 1) return null;
+  const from = sceneStart + span.startFrame;
+  const local = frame - from;
+  if (local < 0 || local > span.frames - 1) return null;
+  return local / (span.frames - 1);
 };

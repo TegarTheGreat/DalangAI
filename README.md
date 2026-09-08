@@ -246,8 +246,9 @@ berikutnya.
   dan lapisan ikut bertambah pintar setiap kali `visual` bertambah. Kotaknya
   jangkar plus geseran fraksional, jadi satu nilai tetap benar di 16:9, 9:16,
   dan 1:1.
-- **Keyframe properti**: `tracks` pada grafis, teks, dan lapisan
-  menganimasikan properti pada waktu yang dipilih, bukan yang tersedia.
+- **Keyframe properti**: `tracks` pada grafis, teks, lapisan, dan **visual
+  dasar scene** menganimasikan properti pada waktu yang dipilih, bukan yang
+  tersedia.
   Daftar propertinya tertutup dan rentang nilainya sama persis dengan properti
   statisnya, jadi keyframe tidak bisa membawa nilai yang akan ditolak skema.
   Waktunya fraksi jendela tampil, jadi scene yang dipanjangkan membawa serta
@@ -255,6 +256,12 @@ berikutnya.
 - Berlian keyframe di timeline **bisa diseret** atau digeser dengan papan
   ketik, menempel ke keyframe track lain pada lapisan yang sama, dan mendarat
   di atas keyframe lain ditolak alih-alih ditumpuk.
+- **Kamera klip diarahkan tangan**: zum, geser X/Y, dan opasitas visual dasar
+  punya keyframe sendiri, jadi gerak yang berubah di TENGAH potongan — menahan
+  dulu lalu menghentak masuk, mundur pelan dari detail ke seluruh bidang —
+  akhirnya bisa dinyatakan. Delapan preset `motion` tetap ada untuk yang tidak
+  butuh itu; begitu kameranya di-keyframe, presetnya mengalah seluruhnya
+  supaya tidak ada gerak yang separuh preset separuh tangan.
 - **Anotasi tutorial** (zoom, sorot, panah, blur) ikut bisa diseret dan diubah
   ukurannya di atas tangkapan layar.
 - **Perangkat sinematik lewat kontrak data**: filter per scene (6 preset plus
@@ -271,7 +278,8 @@ Rujukan: [ADR-0011](docs/decisions/0011-pengayaan-editor.md),
 [ADR-0024](docs/decisions/0024-manipulasi-langsung-di-kanvas.md),
 [ADR-0025](docs/decisions/0025-lapisan-video.md),
 [ADR-0027](docs/decisions/0027-keyframe-properti.md),
-[ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md)
+[ADR-0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md),
+[ADR-0036](docs/decisions/0036-keyframe-kamera-klip.md)
 </details>
 
 ### Teks dan tipografi
@@ -606,8 +614,13 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
 - **Agent tidak bisa mendengar isi rekaman.** Deteksi hening menunjukkan di
   mana memotong, bukan apa yang layak dipotong; untuk memilih momen ia
   diperintahkan meminta transkrip, bukan menebak.
-- **Visual dasar scene belum bisa di-keyframe**, dan **screen recording**
-  (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Screen recording** (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Kamera klip yang di-keyframe belum punya berlian di timeline**, dan preset
+  `tutorial-01` tidak memakainya sama sekali — panggung tangkapan layarnya
+  mengarahkan kamera dari anotasi. `dalang validate` mengatakannya alih-alih
+  membiarkan keyframe-nya hilang diam-diam.
+  [ADR-0036](docs/decisions/0036-keyframe-kamera-klip.md) menulis batasnya
+  lengkap.
 - **Klip di dalam scene belum bisa J/L cut, speed ramp, atau multicam.** Satu
   scene sekarang memang boleh memuat beberapa potongan berurutan yang bisa
   dibelah, digeser tepinya (ripple/roll), dibuang, dan disusun ulang — tapi
@@ -734,6 +747,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0033](docs/decisions/0033-beberapa-klip-dalam-satu-scene.md) | Beberapa klip dalam satu scene; skema v2 + migrasi pertama |
 | [0034](docs/decisions/0034-zona-aman-platform.md) | Zona aman platform: teks menjauh dari tepi yang ditimpa antarmuka |
 | [0035](docs/decisions/0035-preset-klip-01.md) | Preset `klip-01` untuk konten pendek vertikal |
+| [0036](docs/decisions/0036-keyframe-kamera-klip.md) | Kamera visual dasar scene bisa di-keyframe (zum, geser, opasitas) |
 
 </details>
 

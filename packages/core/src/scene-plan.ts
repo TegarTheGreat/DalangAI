@@ -174,6 +174,8 @@ export const ANIMATABLE_PROPERTIES = [
   "height",
   "rotate",
   "opacity",
+  /** Perbesaran kamera visual dasar scene (ADR-0036). */
+  "zoom",
 ] as const;
 export type AnimatableProperty = (typeof ANIMATABLE_PROPERTIES)[number];
 
@@ -189,6 +191,15 @@ export const ANIMATABLE_RANGE: Record<AnimatableProperty, readonly [number, numb
   height: [0.08, 1],
   rotate: [-180, 180],
   opacity: [0, 1],
+  /**
+   * Batas bawah 1, bukan 0 (ADR-0036). Visual dasar scene di-crop `cover`:
+   * di bawah 1 gambarnya berhenti menutupi bingkai dan yang muncul di
+   * tepinya adalah warna latar preset — bukan efek yang diminta siapa pun,
+   * melainkan cacat yang kebetulan terlihat seperti efek. Batas atas 3
+   * karena di atas itu tidak ada lagi piksel yang tersisa untuk diperbesar:
+   * aset 1080 pada zum 3 menyisakan 360 piksel selebar bingkai.
+   */
+  zoom: [1, 3],
 };
 
 export const KEYFRAME_EASINGS = ["settle", "glide", "dolly", "linear"] as const;
@@ -274,13 +285,25 @@ export const refineTracks =
     });
   };
 
-/** Larik track untuk satu elemen, dengan daftar properti yang boleh. */
-export const tracksSchema = (allowed: readonly AnimatableProperty[]) =>
+/**
+ * Larik track untuk satu elemen, dengan daftar properti yang boleh — TANPA
+ * nilai bawaan.
+ *
+ * Dipisahkan dari `tracksSchema` karena bawaan `[]` berubah arti tergantung
+ * tempatnya. Di dalam elemen ia berarti "belum ada animasi"; di dalam PATCH
+ * yang field-nya opsional, zod tetap mengisi bawaan itu saat kuncinya tidak
+ * ditulis — sehingga `{ clip: { motion: "none" } }` diam-diam berarti "dan
+ * hapus semua keyframe". Yang opsional harus benar-benar boleh tidak ada.
+ */
+export const tracksArraySchema = (allowed: readonly AnimatableProperty[]) =>
   z
     .array(keyframeTrackSchema)
     .max(MAX_TRACKS_PER_ELEMENT)
-    .default([])
     .superRefine(refineTracks(allowed));
+
+/** Larik track sebuah elemen, kosong kalau tidak ditulis. */
+export const tracksSchema = (allowed: readonly AnimatableProperty[]) =>
+  tracksArraySchema(allowed).default([]);
 
 export const textOverlaySchema = z.strictObject({
   id: z.string().min(1),
@@ -546,8 +569,37 @@ export const MAX_CLIPS = 24;
  *
  * `clips[0]` ADALAH `visual` yang lama. Tidak ada `scene.visual` lagi.
  */
+/**
+ * Properti visual dasar scene yang boleh di-keyframe (ADR-0036).
+ *
+ * Tepat empat, dan `MAX_TRACKS_PER_ELEMENT` juga empat: seluruhnya bisa
+ * dianimasikan sekaligus tanpa memilih mana yang dikorbankan.
+ *
+ * `rotate` sengaja TIDAK ada. Bidang `cover` yang diputar tidak lagi menutupi
+ * bingkainya sendiri: pada 9:16, sepuluh derajat saja sudah menuntut zum
+ * sekitar 1,35 hanya supaya sudutnya tidak kosong. Memberi tuas yang hampir
+ * selalu menghasilkan sudut hitam bukan kelengkapan — itu jebakan yang
+ * dipasang sendiri.
+ */
+export const CLIP_ANIMATABLE = [
+  "offsetX",
+  "offsetY",
+  "zoom",
+  "opacity",
+] as const satisfies readonly AnimatableProperty[];
+
 export const clipSchema = visualSchema.extend({
   id: z.string().min(1),
+  /**
+   * Track keyframe kamera visual dasar (ADR-0036).
+   *
+   * Ada di `clipSchema`, BUKAN di `visualSchema`: media di dalam lapisan video
+   * memakai bentuk visual yang sama, dan lapisan sudah punya `tracks`-nya
+   * sendiri. Menaruhnya di `visualSchema` akan memberi satu lapisan dua daftar
+   * track — `layer.tracks` dan `layer.visual.tracks` — yang keduanya mengaku
+   * mengatur benda yang sama.
+   */
+  tracks: tracksSchema(CLIP_ANIMATABLE),
   /**
    * Panjang klip di linimasa, detik. DIABAIKAN saat scene hanya punya satu
    * klip — di situ klip mengisi seluruh scene dan durasi datang dari

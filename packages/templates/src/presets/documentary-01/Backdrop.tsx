@@ -8,11 +8,11 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { easeDolly, kf } from "../../anim";
+import { kf } from "../../anim";
 import { useAssetSrc } from "../../asset-src";
 import { isSilent } from "../../audio-model";
 import { filterToCss } from "../../filters";
-import { motionTransform } from "../../motion-model";
+import { clipCamera } from "../../motion-model";
 import type { DocTheme } from "./theme";
 
 /**
@@ -31,20 +31,25 @@ const AssetLayer: React.FC<{
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const assetSrc = useAssetSrc();
-  // Easing dolly (ADR-0014/0015): gerak kamera settle di awal/akhir; semua
-  // matematika transform hidup di motion-model (murni & diuji).
-  const progress = interpolate(frame, [0, Math.max(durationInFrames, 1)], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: easeDolly,
-  });
+  // Easing dolly (ADR-0014/0015) untuk preset gerak, keyframe untuk kamera
+  // yang diarahkan tangan (ADR-0036); seluruh matematikanya hidup di
+  // motion-model (murni & diuji), termasuk aturan mana yang menang.
+  const camera = clipCamera(clip, frame, durationInFrames);
   const style: React.CSSProperties = {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    ...motionTransform(clip, progress),
+    scale: camera.scale,
+    translate: camera.translate,
+    objectPosition: camera.objectPosition,
     // ADR-0011: filter/opacity scene diterapkan di lapisan media.
     ...filterToCss(clip.filter),
+    // SESUDAH filter, dan hanya kalau ada track-nya (ADR-0036). `filter.opacity`
+    // adalah opasitas STATIS visual dasar, jadi track opasitas mengambil alih
+    // seluruhnya — aturan yang sama dengan grafis dan lapisan. Urutan sebaliknya
+    // membuat satu klip berfilter transparan diam-diam menelan seluruh animasi
+    // opasitasnya.
+    ...(camera.opacity !== undefined ? { opacity: camera.opacity } : {}),
   };
 
   if (asset.kind === "video") {
@@ -140,8 +145,20 @@ export const ProceduralBackdrop: React.FC<{
   const by = 64 + seedA * 26;
   const art = variantArt(variantOf(clip), seedA, seedB, duotone, frame);
 
-  return (
-    <AbsoluteFill style={{ backgroundColor: theme.bg, ...filterToCss(clip.filter) }}>
+  /**
+   * Kamera keyframe (ADR-0036) untuk latar prosedural.
+   *
+   * Hanya bagian yang datang dari TRACK, tidak pernah preset `motion`: latar
+   * prosedural memang tidak pernah menuruti preset gerak — ia punya nafasnya
+   * sendiri — dan mulai menurutinya sekarang akan menggeser setiap latar
+   * prosedural di setiap plan yang sudah ada. Pembungkus kameranya pun hanya
+   * dipasang kalau memang ada keyframe kamera, jadi plan tanpa keyframe
+   * menghasilkan pohon DOM yang sama persis seperti sebelumnya.
+   */
+  const camera = clipCamera(clip, frame, durationInFrames);
+
+  const isi = (
+    <>
       <AbsoluteFill
         style={{
           scale: String(
@@ -197,6 +214,29 @@ export const ProceduralBackdrop: React.FC<{
           }
         />
       </svg>
+    </>
+  );
+
+  return (
+    <AbsoluteFill
+      style={{
+        backgroundColor: theme.bg,
+        ...filterToCss(clip.filter),
+        // Opasitas dipasang di AKAR, bukan di pembungkus kamera: akar ini
+        // memang berlatar `theme.bg` yang sama dengan yang di belakangnya,
+        // jadi yang memudar cuma seninya — persis yang dimaksud. Dan karena
+        // ia mendarat sesudah `filterToCss`, track opasitas mengambil alih
+        // `filter.opacity` dengan aturan yang sama seperti di jalur aset.
+        ...(camera.opacity !== undefined ? { opacity: camera.opacity } : {}),
+      }}
+    >
+      {camera.keyed ? (
+        <AbsoluteFill style={{ scale: camera.scale, translate: camera.translate }}>
+          {isi}
+        </AbsoluteFill>
+      ) : (
+        isi
+      )}
     </AbsoluteFill>
   );
 };

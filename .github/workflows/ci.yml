@@ -103,8 +103,12 @@ jobs:
           # jalur ClipStrip — potong keras dan TransitionSeries DI DALAM satu
           # scene — tidak pernah benar-benar dirender di CI. Detik 9,13 adalah
           # titik potong klip 2 ke klip 3, yaitu tengah larutnya.
-          pnpm dalang still examples/klip-borobudur/plan.json -t 5 9.13 11 -s 0.25 -o /tmp/smoke
+          # Detik 7,83 ada di TENGAH punch-in berkeyframe klip kedua (ADR-0036),
+          # yaitu satu-satunya bingkai CI yang membuktikan kamera keyframe
+          # benar-benar sampai ke layar lewat jalur ASET.
+          pnpm dalang still examples/klip-borobudur/plan.json -t 5 7.83 9.13 11 -s 0.25 -o /tmp/smoke
           test -s /tmp/smoke/klip-borobudur-f150.png
+          test -s /tmp/smoke/klip-borobudur-f235.png
           test -s /tmp/smoke/klip-borobudur-f274.png
           test -s /tmp/smoke/klip-borobudur-f330.png
           # ADR-0035: satu-satunya contoh berpreset klip-01. Tanpa langkah ini
@@ -112,9 +116,13 @@ jobs:
           # baru ketahuan kalau ada yang merender manual — yang tidak terjadi.
           # Detik 0,7 memuat teks hook yang masih penuh; detik 8 memuat caption
           # berpelat di tengah kalimat; detik 19 memuat chip outro.
-          pnpm dalang still examples/klip-hook/plan.json -t 0.7 8 19 -s 0.25 -o /tmp/smoke
+          # Detik 13,9 ada di ujung tarik-mundur berkeyframe scene ketiga
+          # (ADR-0036), lewat jalur PROSEDURAL — jalur yang berbeda dari klip
+          # beraset dan karena itu perlu bingkainya sendiri.
+          pnpm dalang still examples/klip-hook/plan.json -t 0.7 8 13.9 19 -s 0.25 -o /tmp/smoke
           test -s /tmp/smoke/klip-hook-f21.png
           test -s /tmp/smoke/klip-hook-f240.png
+          test -s /tmp/smoke/klip-hook-f417.png
           test -s /tmp/smoke/klip-hook-f570.png
 
       # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)
