@@ -274,6 +274,9 @@ export const makeHost = (
     allowedHosts: ["studio.local"],
     // Memori preferensi (ADR-0029) di folder uji — jangan pernah rumah pengguna.
     memoryPath: join(workspaceRoot, ".memori-uji.json"),
+    // Registri template (ADR-0037), alasannya sama: tes tidak boleh membaca
+    // — apalagi menulis — template yang terpasang di komputer siapa pun.
+    templateDir: join(workspaceRoot, ".template-uji"),
     ...(planPath ? { planPath } : {}),
     // Panel Pengaturan (ADR-0032): tanpa ini bawaannya `.env` di cwd, yaitu
     // berkas sungguhan milik repo. Tes menulisnya, jadi selalu ke folder uji.

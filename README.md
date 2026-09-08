@@ -282,6 +282,33 @@ Rujukan: [ADR-0011](docs/decisions/0011-pengayaan-editor.md),
 [ADR-0036](docs/decisions/0036-keyframe-kamera-klip.md)
 </details>
 
+### Template yang bisa dibagikan
+
+Sebuah template adalah **scene-plan yang sah plus manifes** — bukan format
+kedua yang harus dikejar tiap kali plan bertambah kemampuan. Ia membawa
+kerangka scene DAN seluruh tampilannya, dan satu aturan menentukan isinya:
+semua ikut kecuali yang menunjuk berkas. Kata-kata berpindah; aset, musik
+unggahan, transkrip, dan proxy tidak, sebab di komputer orang lain semuanya
+cuma jadi tautan putus. Rujukan yang berkasnya ada di setiap pemasangan —
+ikon `iconify:`, bunyi dan musik `pustaka:` — ikut.
+
+Dua cara memakainya, dan keduanya berbeda: **mulai proyek baru** dari
+kerangkanya, atau **pinjam tampilannya saja** untuk video yang sudah kamu
+tulis sendiri — preset, rasio, token warna dan huruf, zona aman, gaya caption
+— tanpa menyentuh narasi, potongan, aset, maupun durasi. Yang kedua keluar
+sebagai patch op biasa, jadi bisa Ctrl+Z.
+
+Tiga template bawaan ikut terpasang (klip pendek, esai video, tutorial), dan
+ada test yang menuntut ketiganya lulus kaidah sutradara repo ini sendiri —
+template dipakai sebagai titik awal, jadi kesalahannya ikut disalin ke tiap
+proyek yang lahir darinya. Registrinya satu folder JSON di rumah Dalang, jadi
+template bisa disalin, dikirim, atau dimasukkan git.
+
+**Yang tidak ada: tokonya.** Tidak ada indeks yang di-host, akun, peringkat,
+atau pemasangan dari URL — template berpindah sebagai berkas.
+[ADR-0037](docs/decisions/0037-paket-template.md) menulis kenapa, dan batas
+lainnya.
+
 ### Teks dan tipografi
 
 Caption karaoke tersinkron dari word timestamp asli TTS atau estimasi
@@ -512,6 +539,10 @@ pnpm dalang transcribe proyekku/     # transkripsi rekaman ke renderState
 pnpm dalang review proyekku/         # render frame kunci, nilai dengan model vision
 pnpm dalang log proyekku/            # garis waktu pipeline, agent, dan biaya
 pnpm dalang memori                   # preferensi lintas proyek
+pnpm dalang template daftar          # template terpasang (bawaan + milikmu)
+pnpm dalang template mulai klip-tiga-detik --out klipku --judul "Judulku"
+pnpm dalang template ekspor proyekku/ --id gaya-kanalku --nama "Gaya kanalku"
+pnpm dalang template pakai gaya-kanalku proyeklain/   # pinjam TAMPILANNYA saja
 
 # Menghasilkan berkas
 pnpm dalang render proyekku/ --profile draft
@@ -615,6 +646,12 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   mana memotong, bukan apa yang layak dipotong; untuk memilih momen ia
   diperintahkan meminta transkrip, bukan menebak.
 - **Screen recording** (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Template tidak punya toko.** Tidak ada indeks yang di-host, akun,
+  peringkat, atau pemasangan dari URL; paket berpindah sebagai berkas. Ia juga
+  tidak bisa membawa cara MENGGAMBAR baru — preset Remotion tetap berupa
+  komponen di dalam repo — dan lobi belum menampilkan pratinjau gambar per
+  template. [ADR-0037](docs/decisions/0037-paket-template.md) menulis batasnya
+  lengkap.
 - **Kamera klip yang di-keyframe belum punya berlian di timeline**, dan preset
   `tutorial-01` tidak memakainya sama sekali — panggung tangkapan layarnya
   mengarahkan kamera dari anotasi. `dalang validate` mengatakannya alih-alih
@@ -748,6 +785,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0034](docs/decisions/0034-zona-aman-platform.md) | Zona aman platform: teks menjauh dari tepi yang ditimpa antarmuka |
 | [0035](docs/decisions/0035-preset-klip-01.md) | Preset `klip-01` untuk konten pendek vertikal |
 | [0036](docs/decisions/0036-keyframe-kamera-klip.md) | Kamera visual dasar scene bisa di-keyframe (zum, geser, opasitas) |
+| [0037](docs/decisions/0037-paket-template.md) | Template sebagai paket yang bisa dibagikan (kerangka + tampilan, tanpa berkas) |
 
 </details>
 

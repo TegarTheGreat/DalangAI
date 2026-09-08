@@ -1038,6 +1038,25 @@ export const renderStateSchema = z.strictObject({
 });
 export type RenderState = z.infer<typeof renderStateSchema>;
 
+/**
+ * `renderState` yang benar-benar kosong.
+ *
+ * Ada sebagai fungsi karena bentuknya sudah ditulis lengkap di tiga tempat —
+ * gotcha `.default(obj)` zod menuntut begitu — dan tempat keempat yang lupa
+ * satu kunci akan lolos skema lalu meledak di pemakainya. Fungsi, bukan
+ * konstanta: pemanggilnya memasukkannya ke dalam plan yang lalu disunting,
+ * dan objek bersama yang tersunting adalah kebocoran keadaan antar plan.
+ */
+export const emptyRenderState = (): RenderState => ({
+  narrationAudio: {},
+  clipAssets: {},
+  graphicAssets: {},
+  layerAssets: {},
+  sfxAssets: {},
+  trackAssets: {},
+  transcripts: {},
+});
+
 // ---------------------------------------------------------------------------
 // Scene-plan root
 // ---------------------------------------------------------------------------

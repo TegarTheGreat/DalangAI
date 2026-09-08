@@ -9,10 +9,12 @@ import {
   memoryConflicts,
 } from "@dalang/core";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { WorkspaceProjectLite } from "../../shared/api-types";
+import type { TemplateCard, WorkspaceProjectLite } from "../../shared/api-types";
+import { api } from "../api";
 import { RadioCard, Segmented, useEscape } from "../components/controls";
 import {
   IconCheck,
+  IconClipboard,
   IconCopy,
   IconDownload,
   IconFilm,
@@ -473,6 +475,143 @@ const NewProjectDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   );
 };
 
+/**
+ * Mulai dari template (ADR-0037, roadmap §10.2).
+ *
+ * Dialognya SATU keputusan: template mana. Rasio, gaya, dan format tidak
+ * ditanyakan lagi karena template sudah membawanya — menanyakannya ulang
+ * berarti meminta orang memilih dua kali lalu menebak mana yang menang.
+ *
+ * Daftarnya diambil saat dialog dibuka, bukan sekali di awal lobi: template
+ * dipasang lewat `dalang template pasang` di terminal sebelah, dan daftar yang
+ * hanya diambil sekali akan terus menyembunyikan yang baru saja dipasang
+ * sampai Studio dimuat ulang.
+ */
+const TemplateDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
+  open,
+  onClose,
+}) => {
+  const { switching } = useStudio();
+  const [cards, setCards] = useState<TemplateCard[] | null>(null);
+  const [broken, setBroken] = useState<{ file: string; reason: string }[]>([]);
+  const [pilihan, setPilihan] = useState<string | null>(null);
+  const [judul, setJudul] = useState("");
+  const [galat, setGalat] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEscape(open, onClose);
+
+  useEffect(() => {
+    if (!open) return;
+    setJudul("");
+    setGalat(null);
+    setCards(null);
+    api
+      .listTemplates()
+      .then((res) => {
+        setCards(res.templates);
+        setBroken(res.broken);
+        setPilihan(res.templates[0]?.id ?? null);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      })
+      .catch((error: unknown) => setGalat((error as Error).message));
+  }, [open]);
+
+  if (!open) return null;
+
+  const submit = () => {
+    if (pilihan === null || judul.trim() === "" || switching) return;
+    void studioClient.createFromTemplate(pilihan, judul.trim()).then((ok) => {
+      if (ok) onClose();
+    });
+  };
+
+  return (
+    <div className="dialog-backdrop">
+      <button
+        type="button"
+        className="dialog-scrim"
+        aria-label="Tutup dialog"
+        tabIndex={-1}
+        onClick={onClose}
+      />
+      <div
+        className="dialog wide"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Mulai dari template"
+      >
+        <h3>Mulai dari template</h3>
+        <p>
+          Template membawa kerangka scene dan seluruh tampilannya. Yang tidak ikut adalah
+          berkas — aset, rekaman, dan musik unggahan tidak berpindah komputer.
+        </p>
+
+        <label className="field">
+          <span>Judul</span>
+          <input
+            ref={inputRef}
+            value={judul}
+            maxLength={120}
+            placeholder="Misal: Kenapa Harga Beras Naik"
+            onChange={(event) => setJudul(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submit();
+            }}
+          />
+        </label>
+
+        <div className="field">
+          <span>Template</span>
+          {cards === null ? (
+            <small className="field-hint">Memuat daftar template…</small>
+          ) : cards.length === 0 ? (
+            <small className="field-hint">
+              Belum ada template. Pasang lewat terminal: dalang template pasang
+              &lt;paket.json&gt;
+            </small>
+          ) : (
+            <div className="radio-grid">
+              {cards.map((card) => (
+                <RadioCard
+                  key={card.id}
+                  active={card.id === pilihan}
+                  title={card.name}
+                  desc={`${card.description} — ${card.summary}${card.builtIn ? "" : ` · dari ${card.author === "" ? "pemasangan lokal" : card.author}`}`}
+                  onSelect={() => setPilihan(card.id)}
+                />
+              ))}
+            </div>
+          )}
+          {/* Berkas rusak DISEBUTKAN: yang menaruhnya di registri berhak tahu
+              kenapa template-nya tidak muncul di daftar ini. */}
+          {broken.map((item) => (
+            <small key={item.file} className="field-hint danger">
+              {item.file}: {item.reason}
+            </small>
+          ))}
+        </div>
+
+        {galat ? <p className="dialog-error">{galat}</p> : null}
+
+        <div className="dialog-actions">
+          <button type="button" className="ghost" onClick={onClose}>
+            Batal
+          </button>
+          <button
+            type="button"
+            className="primary with-icon"
+            disabled={pilihan === null || judul.trim() === "" || switching !== null}
+            onClick={submit}
+          >
+            {switching ? <IconSpinner /> : <IconPlus />}
+            Buat &amp; buka
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 type SortKey = "terbaru" | "judul" | "durasi";
 
 /**
@@ -680,6 +819,7 @@ export const Lobby: React.FC = () => {
   const [sort, setSort] = useState<SortKey>("terbaru");
   const [newOpen, setNewOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const projects = workspace?.projects ?? [];
@@ -740,6 +880,15 @@ export const Lobby: React.FC = () => {
           >
             <IconDownload />
             Impor
+          </button>
+          <button
+            type="button"
+            className="with-icon lg"
+            onClick={() => setTemplateOpen(true)}
+            data-tip="Kerangka scene + tampilan yang sudah jadi"
+          >
+            <IconClipboard />
+            Dari template
           </button>
           <button
             type="button"
@@ -836,6 +985,7 @@ export const Lobby: React.FC = () => {
 
       <NewProjectDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <TemplateDialog open={templateOpen} onClose={() => setTemplateOpen(false)} />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );

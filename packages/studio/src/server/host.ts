@@ -1,10 +1,19 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { defaultMemoryPath, fileMemoryStore, type MemoryStore } from "@dalang/agent";
+import {
+  defaultMemoryPath,
+  defaultTemplateDir,
+  fileMemoryStore,
+  findTemplate,
+  listTemplates,
+  type MemoryStore,
+} from "@dalang/agent";
 import {
   addMemoryEntry,
+  describeTemplate,
   MAX_MEMORY_TEXT,
   MEMORY_KINDS,
+  planFromTemplate,
   removeMemoryEntry,
 } from "@dalang/core";
 import { fromFcpxml, fromOtio } from "@dalang/interop";
@@ -23,6 +32,7 @@ import {
   listProjects,
   projectIdOf,
   renameClosedProject,
+  slugify,
   trashProject,
   type WorkspaceProject,
 } from "./workspace";
@@ -53,6 +63,10 @@ const newProjectBody = z.object({
   format: z.string().min(1).max(32),
 });
 const idBody = z.object({ id: z.string().min(1) });
+const fromTemplateBody = z.object({
+  templateId: z.string().min(1).max(64),
+  judul: z.string().min(1).max(120),
+});
 const importBody = z.object({
   /** Isi berkas .otio (JSON) atau .fcpxml (XML), apa adanya. */
   isi: z.string().min(2).max(24_000_000),
@@ -87,6 +101,8 @@ export interface StudioHostOptions
    * Tes memberi path sementara supaya tidak menyentuh rumah pengguna.
    */
   memoryPath?: string;
+  /** Folder registri template (ADR-0037); tes menyuntikkan folder sementara. */
+  templateDir?: string;
   /**
    * Nama host tambahan yang boleh memerintah Studio (ADR-0031). Bawaannya
    * hanya loopback. Diisi bila server sengaja diikat ke alamat lain, mis.
@@ -111,6 +127,8 @@ export class StudioHost {
   readonly workspaceRoot: string;
   /** Memori preferensi lintas proyek — satu untuk seluruh lobi (ADR-0029). */
   readonly memory: MemoryStore;
+  /** Registri template terpasang — juga milik lobi, bukan proyek (ADR-0037). */
+  readonly templateDir: string;
   private studio: Studio | null = null;
   private readonly options: StudioHostOptions;
   private pinnedId: string | null = null;
@@ -126,6 +144,7 @@ export class StudioHost {
       localOnlyGuard(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
     );
     this.memory = fileMemoryStore(options.memoryPath ?? defaultMemoryPath());
+    this.templateDir = options.templateDir ?? defaultTemplateDir();
     if (options.planPath) {
       this.openPlan(options.planPath);
       this.pinnedId = projectIdOf(options.planPath);
@@ -159,7 +178,12 @@ export class StudioHost {
       settings: _drop5,
       ...rest
     } = this.options;
-    this.studio = createStudioApp({ ...rest, planPath, memory: this.memory });
+    this.studio = createStudioApp({
+      ...rest,
+      planPath,
+      memory: this.memory,
+      templateDir: this.templateDir,
+    });
   }
 
   /**
@@ -271,6 +295,62 @@ export class StudioHost {
       if (!removed) return c.json({ error: "Preferensi tidak ditemukan" }, 404);
       this.memory.write(memory);
       return c.json({ ok: true, removed, memory });
+    });
+
+    // -- template (ADR-0037, roadmap §10.2) ----------------------------------
+    // Milik lobi dengan alasan yang sama seperti memori: satu registri untuk
+    // semua proyek, karena template adalah barang milik ORANGNYA.
+    app.get("/api/workspace/templates", (c) => {
+      const { templates, broken } = listTemplates(this.templateDir);
+      return c.json({
+        ok: true,
+        // Berkas rusak ikut dikirim, bukan disaring diam-diam: lobi yang
+        // menampilkan tiga template padahal ada empat berkas menyembunyikan
+        // satu-satunya petunjuk kenapa yang keempat tidak muncul.
+        broken,
+        templates: templates.map((item) => ({
+          id: item.pack.manifest.id,
+          name: item.pack.manifest.name,
+          description: item.pack.manifest.description,
+          author: item.pack.manifest.author,
+          version: item.pack.manifest.version,
+          builtIn: item.builtIn,
+          summary: describeTemplate(item.pack),
+          aspectRatio: item.pack.plan.meta.aspectRatio,
+          stylePreset: item.pack.plan.meta.stylePreset,
+          format: item.pack.plan.meta.format,
+          scenes: item.pack.plan.scenes.length,
+        })),
+      });
+    });
+
+    app.post("/api/workspace/from-template", async (c) => {
+      const body = fromTemplateBody.safeParse(await c.req.json().catch(() => null));
+      if (!body.success) {
+        return c.json({ error: "Body tidak valid: butuh { templateId, judul }" }, 400);
+      }
+      try {
+        this.assertIdle();
+        const item = findTemplate(this.templateDir, body.data.templateId);
+        if (!item) return c.json({ error: "Template tidak ditemukan" }, 404);
+        const title = body.data.judul.trim();
+        const plan = planFromTemplate(item.pack, {
+          title,
+          // Slug yang sama dengan folder proyeknya; `createProjectFromPlan`
+          // yang memutuskan folder finalnya, dan ia menambah akhiran kalau
+          // slug itu sudah dipakai.
+          projectId: slugify(title),
+        });
+        const project = createProjectFromPlan(this.workspaceRoot, title, plan);
+        this.openPlan(project.planPath);
+        return c.json({
+          ok: true,
+          project: this.lite(project),
+          workspace: this.payload(),
+        });
+      } catch (error) {
+        return c.json(errorPayload(error), 400);
+      }
     });
 
     app.post("/api/workspace/create", async (c) => {

@@ -7,6 +7,7 @@ export * from "./runtime/agent-log";
 export * from "./runtime/guardrails";
 export * from "./runtime/memory-store";
 export * from "./runtime/session";
+export * from "./runtime/template-store";
 export * from "./system-prompt";
 export * from "./tools";
 export * from "./vision/review";

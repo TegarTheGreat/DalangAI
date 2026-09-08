@@ -226,6 +226,28 @@ export interface WorkspacePayload {
   pinned: boolean;
 }
 
+/**
+ * Satu template di lobi (ADR-0037).
+ *
+ * Sengaja BUKAN paket utuhnya: lobi cuma perlu memilih, dan mengirim seluruh
+ * scene-plan tiap template membuat daftar yang isinya tiga template mengangkut
+ * tiga video utuh ke peramban.
+ */
+export interface TemplateCard {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  /** Ikut bersama Dalang, jadi tidak bisa dicopot. */
+  builtIn: boolean;
+  summary: string;
+  aspectRatio: string;
+  stylePreset: string;
+  format: string;
+  scenes: number;
+}
+
 export interface NewProjectRequest {
   title: string;
   aspectRatio: "16:9" | "9:16" | "1:1";

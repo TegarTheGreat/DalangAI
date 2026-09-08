@@ -1,14 +1,25 @@
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { defaultMemoryPath, fileMemoryStore } from "@dalang/agent";
+import {
+  defaultMemoryPath,
+  defaultTemplateDir,
+  fileMemoryStore,
+  findTemplate,
+  installTemplate,
+  listTemplates,
+  removeTemplate,
+} from "@dalang/agent";
 import {
   addMemoryEntry,
+  applyPatch,
   clipAsset,
   computeTimeline,
   countWords,
   critiquePlan,
   defaultPublishMetadata,
+  describeStrip,
+  describeTemplate,
   formatDirectorNotes,
   MEMORY_KIND_LABEL,
   MEMORY_KINDS,
@@ -16,11 +27,15 @@ import {
   memoryContextLines,
   PUBLISH_PRIVACIES,
   PUBLISH_PRIVACY_LABEL,
+  parseTemplatePack,
+  planFromTemplate,
   primaryClip,
   removeMemoryEntry,
   resolveSceneDurationSec,
   type ScenePlan,
   sceneAsset,
+  templateFromPlan,
+  templateLookOps,
 } from "@dalang/core";
 import {
   atomicWriteFile,
@@ -62,6 +77,7 @@ import {
   type VideoFormat,
   type VideoResolution,
 } from "@dalang/renderer";
+import { slugify } from "@dalang/studio/server";
 import { computeFrameLayout, FPS, TRANSITION_FRAMES } from "@dalang/templates/layout";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
@@ -810,6 +826,176 @@ program
     }
     throw new Error(`Aksi tidak dikenal: ${aksi} (daftar | tambah | hapus)`);
   });
+
+/**
+ * Template (ADR-0037, roadmap §10.2).
+ *
+ * Satu perintah dengan aksi, bukan lima perintah puncak: kelimanya berbagi
+ * satu registri dan satu kosakata, dan memecahnya jadi `dalang template-list`,
+ * `dalang template-install`, … akan membuat `dalang --help` terbaca seperti
+ * daftar berkas alih-alih daftar hal yang bisa dilakukan.
+ */
+program
+  .command("template")
+  .argument("[aksi]", "daftar | ekspor | pasang | copot | pakai | mulai", "daftar")
+  .argument("[args...]", "argumen aksi — lihat contoh di bawah")
+  .option("--id <id>", "id template (ekspor): huruf kecil, angka, tanda hubung")
+  .option("--nama <nama>", "nama template (ekspor)")
+  .option("--deskripsi <teks>", "satu kalimat penjelas (ekspor)")
+  .option("--penulis <nama>", "nama pembuat (ekspor)")
+  .option("--versi <versi>", "versi bebas-baca, mis. 1.0 (ekspor)", "1.0")
+  .option("-o, --out <berkas>", "berkas keluaran (ekspor) atau folder (mulai)")
+  .option("--judul <judul>", "judul proyek baru (mulai)")
+  .description(
+    "Paket template: kerangka + tampilan yang bisa dibagikan (ADR-0037). daftar | ekspor <plan.json> --id --nama | pasang <paket.json> | copot <id> | pakai <id> <plan.json> | mulai <id> --out <folder> --judul",
+  )
+  .action(
+    (
+      aksi: string,
+      args: string[],
+      options: {
+        id?: string;
+        nama?: string;
+        deskripsi?: string;
+        penulis?: string;
+        versi: string;
+        out?: string;
+        judul?: string;
+      },
+    ) => {
+      const dir = defaultTemplateDir();
+
+      if (aksi === "daftar") {
+        const { templates, broken } = listTemplates(dir);
+        console.log(`  registri: ${dir}`);
+        for (const item of templates) {
+          const { id, name, version, author } = item.pack.manifest;
+          const asal = item.builtIn ? "bawaan" : "terpasang";
+          console.log(`  [${id}] ${name} — ${describeTemplate(item.pack)}`);
+          console.log(
+            `      ${asal} · v${version}${author === "" ? "" : ` · ${author}`}${
+              item.pack.manifest.description === ""
+                ? ""
+                : `\n      ${item.pack.manifest.description}`
+            }`,
+          );
+        }
+        // Berkas rusak DISEBUTKAN, bukan dilewati diam-diam: yang menaruhnya
+        // di situ berhak tahu kenapa template-nya tidak muncul.
+        for (const item of broken) {
+          console.warn(`  ! ${item.file}: ${item.reason}`);
+        }
+        return;
+      }
+
+      if (aksi === "ekspor") {
+        const planPath = args[0];
+        if (!planPath)
+          throw new Error("Sebutkan plan: dalang template ekspor <plan.json>");
+        if (!options.id || !options.nama) {
+          throw new Error("Ekspor butuh --id dan --nama");
+        }
+        const plan = readPlanFile(resolve(planPath));
+        const { pack, stripped } = templateFromPlan(plan, {
+          id: options.id,
+          name: options.nama,
+          description: options.deskripsi ?? "",
+          author: options.penulis ?? "",
+          version: options.versi,
+          createdAt: new Date().toISOString(),
+        });
+        const out = resolve(options.out ?? `${pack.manifest.id}.template.json`);
+        mkdirSync(dirname(out), { recursive: true });
+        atomicWriteFile(out, `${JSON.stringify(pack, null, 2)}\n`);
+        console.log(`  template ditulis: ${out}`);
+        console.log(`  ${describeTemplate(pack)}`);
+        // Yang dibuang dikatakan SEBELUM orang mengira paketnya lengkap.
+        const dropped = describeStrip(stripped);
+        if (dropped.length > 0) {
+          console.log("  Tidak ikut (menunjuk berkas yang tidak berpindah):");
+          for (const line of dropped) console.log(`    - ${line}`);
+        }
+        for (const note of formatDirectorNotes(
+          critiquePlan(
+            planFromTemplate(pack, { title: plan.meta.title, projectId: "cek" }),
+          ),
+        )) {
+          console.log(`  ${note}`);
+        }
+        return;
+      }
+
+      if (aksi === "pasang") {
+        const file = args[0];
+        if (!file)
+          throw new Error("Sebutkan berkas: dalang template pasang <paket.json>");
+        const pack = parseTemplatePack(JSON.parse(readFileSync(resolve(file), "utf8")));
+        const written = installTemplate(dir, pack);
+        console.log(`  terpasang: [${pack.manifest.id}] ${pack.manifest.name}`);
+        console.log(`  ${written}`);
+        return;
+      }
+
+      if (aksi === "copot") {
+        const id = args[0];
+        if (!id) throw new Error("Sebutkan id: dalang template copot <id>");
+        console.log(`  dicopot: ${removeTemplate(dir, id).removed}`);
+        return;
+      }
+
+      if (aksi === "pakai") {
+        const [id, planPath] = args;
+        if (!id || !planPath) {
+          throw new Error("Pakai: dalang template pakai <id> <plan.json>");
+        }
+        const item = findTemplate(dir, id);
+        if (!item)
+          throw new Error(`Template "${id}" tidak ada. Lihat: dalang template daftar`);
+        const target = resolve(planPath);
+        const plan = readPlanFile(target);
+        const ops = templateLookOps(item.pack, plan);
+        // Lewat applyPatch, bukan menulis plan baru: satu-satunya jalan
+        // mengubah kebenaran adalah patch op, dan itu yang membuatnya
+        // tercatat serta bisa dibalik seperti perubahan lain.
+        const result = applyPatch(plan, ops, { origin: "user" });
+        atomicWriteFile(target, `${JSON.stringify(result.plan, null, 2)}\n`);
+        console.log(`  tampilan "${item.pack.manifest.name}" dipakai di ${target}`);
+        console.log(
+          `  preset ${result.plan.meta.stylePreset} · ${result.plan.meta.aspectRatio} · format ${result.plan.meta.format}`,
+        );
+        console.log("  Narasi, potongan, aset, dan durasi tidak disentuh.");
+        return;
+      }
+
+      if (aksi === "mulai") {
+        const id = args[0];
+        if (!id)
+          throw new Error(
+            "Mulai: dalang template mulai <id> --out <folder> --judul <judul>",
+          );
+        const item = findTemplate(dir, id);
+        if (!item)
+          throw new Error(`Template "${id}" tidak ada. Lihat: dalang template daftar`);
+        const title = options.judul ?? item.pack.manifest.name;
+        const folder = resolve(options.out ?? slugify(title));
+        const target = join(folder, "plan.json");
+        if (existsSync(target)) {
+          throw new Error(`${target} sudah ada — pilih folder lain daripada menimpanya`);
+        }
+        mkdirSync(folder, { recursive: true });
+        const plan = planFromTemplate(item.pack, { title, projectId: slugify(title) });
+        atomicWriteFile(target, `${JSON.stringify(plan, null, 2)}\n`);
+        console.log(`  proyek baru: ${target}`);
+        console.log(`  dari template [${id}] ${item.pack.manifest.name}`);
+        console.log(`  Buka: dalang studio ${folder}`);
+        return;
+      }
+
+      throw new Error(
+        `Aksi tidak dikenal: ${aksi} (daftar | ekspor | pasang | copot | pakai | mulai)`,
+      );
+    },
+  );
 
 program
   .command("transcribe")

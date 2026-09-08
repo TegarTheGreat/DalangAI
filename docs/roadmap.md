@@ -345,6 +345,21 @@ terlihat serta bisa dihapus di lobi Studio dan `dalang memori`. Batasnya di
 "Batas" ADR-0029: tidak belajar diam-diam, satu memori per rumah Dalang, tanpa
 sinkronisasi antar mesin.
 
+**§10.2 sudah dikerjakan SEPARUH — dan separuhnya yang lain sengaja tidak**
+(ADR-0037). Yang ada: template sebagai PAKET — scene-plan sah plus manifes,
+membawa kerangka dan tampilan, dengan satu aturan isi ("semua kecuali yang
+menunjuk berkas"), registri folder JSON di rumah Dalang, tiga template bawaan
+yang wajib lulus kaidah sutradara repo ini sendiri, dan empat permukaan yang
+berbagi satu registri: `dalang template` (daftar/ekspor/pasang/copot/pakai/
+mulai), lobi Studio, dan dua tool agent. "Pakai tampilan" keluar sebagai patch
+op, jadi bisa di-undo seperti perubahan lain.
+
+Yang TIDAK ada, dan tidak menunggu ditambal: tokonya. Indeks yang di-host,
+akun, pembayaran, moderasi, peringkat, pemasangan dari URL — semuanya
+keputusan produk dan komersial, dan etalase yang tidak terhubung ke apa pun
+cuma akan jadi halaman yang terlihat seperti fitur. Template berpindah sebagai
+BERKAS: disalin, dikirim, atau dimasukkan git.
+
 **§10.3 sudah dikerjakan untuk YouTube** (ADR-0030): port `PublishTarget`,
 unggahan resumable lewat YouTube Data API v3 dengan token milik user, tahap
 `publish` di ledger supaya berkas yang sama tidak naik dua kali, dan tiga
@@ -356,7 +371,7 @@ sungguhan, token akses tanpa refresh, TikTok/Instagram belum.
 | # | Item |
 | --- | --- |
 | 10.1 | Memori preferensi lintas proyek — **sudah dikerjakan** (ADR-0029) |
-| 10.2 | Marketplace preset/template |
+| 10.2 | Marketplace preset/template — **paketnya sudah dikerjakan** (ADR-0037); tokonya sengaja tidak |
 | 10.3 | Publikasi langsung — **YouTube sudah dikerjakan** (ADR-0030); TikTok/Instagram belum. Zona aman platform (ADR-0034) sudah ada, jadi videonya bisa disiapkan untuk mereka meski unggahannya masih manual |
 | 10.4 | Multi-user pada satu proyek |
 

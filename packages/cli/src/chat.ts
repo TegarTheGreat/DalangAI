@@ -6,6 +6,7 @@ import {
   AgentEventLog,
   type ApprovalFn,
   defaultMemoryPath,
+  defaultTemplateDir,
   fileMemoryStore,
   Guardrails,
   loadModelRegistry,
@@ -181,6 +182,8 @@ export const registerChatCommand = (program: Command): void => {
           volumeModel,
           // ADR-0029: memori preferensi milik orangnya — satu berkas di rumah Dalang.
           memory: fileMemoryStore(defaultMemoryPath()),
+          // ADR-0037: registri template, juga di rumah Dalang.
+          templateDir: defaultTemplateDir(),
           // ADR-0030: tujuan publikasi — kosong tanpa token, dan tool-nya berkata begitu.
           publishTargets: () => buildPublishTargets(),
           onToolActivity: (line) => console.log(line),

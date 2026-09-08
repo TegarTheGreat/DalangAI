@@ -71,7 +71,12 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
   const assetClips = scenes.flatMap((scene) =>
     scene.clips.filter((clip) => ASSET_TYPES.has(clip.type)),
   );
-  if (assetClips.length >= 3) {
+  // Preset tutorial-01 dikecualikan (ADR-0036): panggung tangkapan layarnya
+  // mengarahkan kamera dari ANOTASI, bukan dari `clip.motion`, jadi menyuruh
+  // menyelang-nyeling gerak di situ menyuruh mengubah angka yang tidak akan
+  // dibaca siapa pun. Kaidah yang menyuruh melakukan hal yang tidak berefek
+  // adalah kaidah yang mengajari orang mengabaikan kaidah.
+  if (assetClips.length >= 3 && plan.meta.stylePreset !== "tutorial-01") {
     const motions = new Set(assetClips.map((clip) => clip.motion));
     if (motions.size === 1) {
       notes.push({

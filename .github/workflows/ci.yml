@@ -125,6 +125,26 @@ jobs:
           test -s /tmp/smoke/klip-hook-f417.png
           test -s /tmp/smoke/klip-hook-f570.png
 
+      # ADR-0037: template bawaan wajib benar-benar MENGHASILKAN VIDEO, bukan
+      # cuma lulus skema. Test unit sudah menjaga bentuk dan kaidah
+      # sutradaranya; yang tidak bisa dijaga test unit adalah "plan yang lahir
+      # dari template ini bisa dirender" — dan template yang tidak pernah
+      # dirender adalah template yang tidak terbukti berguna.
+      - name: Gerbang template (ketiga bawaan jadi proyek yang dirender)
+        env:
+          DALANG_HOME: /tmp/dalang-home
+        run: |
+          set -euo pipefail
+          pnpm dalang template daftar
+          for id in klip-tiga-detik esai-video tutorial-langkah; do
+            pnpm dalang template mulai "$id" --out "/tmp/tpl/$id" --judul "Uji $id"
+            pnpm dalang validate "/tmp/tpl/$id/plan.json"
+            pnpm dalang still "/tmp/tpl/$id/plan.json" -t 1 -s 0.25 -o "/tmp/tpl/$id"
+          done
+          test -s /tmp/tpl/klip-tiga-detik/klip-tiga-detik-f30.png
+          test -s /tmp/tpl/esai-video/esai-video-f30.png
+          test -s /tmp/tpl/tutorial-langkah/tutorial-langkah-f30.png
+
       # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)
       # ATAU dari URL (render cloud). Gerbang ini merender kedua jalur dan
       # menuntut hasilnya identik byte per byte. Satu pemanggil staticFile()

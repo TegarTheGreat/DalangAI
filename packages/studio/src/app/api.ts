@@ -28,6 +28,7 @@ import type {
   StickerSearchResponse,
   StockSearchResponse,
   StudioEvent,
+  TemplateCard,
   UploadChunkResponse,
   UploadStatusResponse,
   WorkspacePayload,
@@ -235,6 +236,20 @@ export const api = {
     request<{ ok: true; project: WorkspaceProjectLite; workspace: WorkspacePayload }>(
       "/api/workspace/create",
       { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  /** Daftar template yang bisa dipakai — bawaan plus yang terpasang (ADR-0037). */
+  listTemplates: () =>
+    request<{
+      ok: true;
+      templates: TemplateCard[];
+      broken: { file: string; reason: string }[];
+    }>("/api/workspace/templates"),
+
+  createFromTemplate: (templateId: string, judul: string) =>
+    request<{ ok: true; project: WorkspaceProjectLite; workspace: WorkspacePayload }>(
+      "/api/workspace/from-template",
+      { method: "POST", body: JSON.stringify({ templateId, judul }) },
     ),
 
   importTimeline: (isi: string, judul?: string) =>

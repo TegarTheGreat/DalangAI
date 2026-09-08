@@ -353,6 +353,36 @@ export class StudioClient {
   }
 
   /**
+   * Proyek baru dari template (ADR-0037).
+   *
+   * Jalur yang SAMA dengan `createProject` sesudah servernya menjawab —
+   * masuk editor, satu toast — karena bagi orangnya hasilnya memang sama:
+   * proyek baru yang terbuka. Yang berbeda cuma dari mana isinya datang.
+   */
+  async createFromTemplate(templateId: string, judul: string): Promise<boolean> {
+    if (this.state.switching) return false;
+    this.set({ switching: "baru" });
+    try {
+      const { project, workspace } = await api.createFromTemplate(templateId, judul);
+      this.set({
+        workspace,
+        project: null,
+        selectedSceneId: null,
+        selectedClipId: null,
+        chat: [],
+      });
+      await this.enterEditor();
+      this.toast(`Proyek "${project.title}" siap dari template — folder ${project.id}`);
+      return true;
+    } catch (error) {
+      this.failure(error);
+      return false;
+    } finally {
+      this.set({ switching: null });
+    }
+  }
+
+  /**
    * Impor berkas interchange jadi proyek baru (ADR-0023).
    *
    * Catatan impornya dikembalikan, bukan cuma di-toast: daftar "yang tidak
