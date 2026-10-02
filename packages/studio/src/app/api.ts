@@ -378,10 +378,10 @@ export const api = {
       body: JSON.stringify({ bahasa, confirm: true }),
     }),
 
-  exportTimeline: (format: "otio" | "fcpxml") =>
+  exportTimeline: (format: "otio" | "fcpxml", bahasa?: string) =>
     request<TimelineExportResult>("/api/timeline-export", {
       method: "POST",
-      body: JSON.stringify({ format }),
+      body: JSON.stringify({ format, ...(bahasa ? { bahasa } : {}) }),
     }),
 
   runTts: (sceneIds: string[] | undefined, confirm: boolean) =>

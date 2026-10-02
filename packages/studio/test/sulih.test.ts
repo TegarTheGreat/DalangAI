@@ -1,9 +1,10 @@
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { dubCoverage, planLanguages } from "@dalang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Studio } from "../src/server/index";
 import type { ProjectStatePayload } from "../src/shared/api-types";
-import { callJson, makeStudio, makeTempProject } from "./helpers";
+import { call, callJson, collectSse, makeStudio, makeTempProject } from "./helpers";
 
 /**
  * Sulih suara lewat Studio (ADR-0040).
@@ -137,5 +138,104 @@ describe("subtitle per bahasa (ADR-0039 + ADR-0040)", () => {
       bahasa: "jv",
     });
     expect(ditolak.status).toBe(400);
+  });
+});
+
+describe("render dalam bahasa sulih (ADR-0040)", () => {
+  const bootDenganIntip = () => {
+    const { dir, planPath } = makeTempProject();
+    const diminta: Array<{ outputLocation: string; language?: string }> = [];
+    const studio = makeStudio(planPath, {
+      onRender: (options) => {
+        diminta.push({
+          outputLocation: options.outputLocation,
+          ...(options.language ? { language: options.language } : {}),
+        });
+      },
+    });
+    cleanups.push(() => {
+      studio.close();
+      rmSync(dir, { recursive: true, force: true });
+    });
+    return { studio, diminta };
+  };
+
+  const tungguRenderSelesai = (studio: Studio) =>
+    call(studio, "/api/events").then((response) =>
+      collectSse(response, (list) =>
+        list.some(
+          (event) => event.event === "render" && JSON.parse(event.data).status === "done",
+        ),
+      ),
+    );
+
+  it("bahasa sulih sampai ke renderer dan berkasnya diberi akhiran bahasa", async () => {
+    const { studio, diminta } = bootDenganIntip();
+    await sulihkan(studio, "sc-batu", "A stone temple.");
+
+    const selesai = tungguRenderSelesai(studio);
+    const mulai = await post(studio, "/api/render", { profile: "draft", bahasa: "en" });
+    expect(mulai.status).toBe(202);
+    const peristiwa = (await selesai)
+      .filter((event) => event.event === "render")
+      .map((event) => JSON.parse(event.data));
+
+    expect(diminta).toHaveLength(1);
+    expect(diminta[0]?.language).toBe("en");
+    expect(diminta[0]?.outputLocation.endsWith("preview.en.mp4")).toBe(true);
+    expect(peristiwa.at(-1)).toMatchObject({
+      status: "done",
+      url: "/.dalang/renders/preview.en.mp4",
+    });
+  });
+
+  it("bahasa utama dirender seperti biasa: tanpa akhiran, tanpa language", async () => {
+    const { studio, diminta } = bootDenganIntip();
+    await sulihkan(studio, "sc-batu", "A stone temple.");
+
+    const selesai = tungguRenderSelesai(studio);
+    await post(studio, "/api/render", { profile: "draft", bahasa: "id" });
+    await selesai;
+
+    expect(diminta[0]?.language).toBeUndefined();
+    expect(diminta[0]?.outputLocation.endsWith("preview.mp4")).toBe(true);
+  });
+
+  it("bahasa yang belum ada ditolak 400 sebelum render apa pun dimulai", async () => {
+    const { studio, diminta } = bootDenganIntip();
+    const ditolak = await post<{ error: string }>(studio, "/api/render", {
+      profile: "draft",
+      bahasa: "jv",
+    });
+    expect(ditolak.status).toBe(400);
+    expect(ditolak.body.error).toContain("jv");
+    expect(diminta).toHaveLength(0);
+  });
+});
+
+describe("ekspor garis waktu per bahasa (ADR-0040)", () => {
+  it("bahasa sulih ditulis ke berkas bernama bahasanya, dari plan bahasa itu", async () => {
+    const { studio, dir } = boot();
+    await sulihkan(studio, "sc-batu", "A stone temple.");
+
+    const hasil = await post<{ nama: string; berkas: string }>(
+      studio,
+      "/api/timeline-export",
+      { format: "otio", bahasa: "en" },
+    );
+    expect(hasil.status).toBe(200);
+    expect(hasil.body.nama).toBe("timeline.en.otio");
+    expect(existsSync(join(dir, "timeline.en.otio"))).toBe(true);
+    expect(existsSync(join(dir, "timeline.otio"))).toBe(false);
+  });
+
+  it("bahasa yang belum ada ditolak 400, dan tidak ada berkas yang ditulis", async () => {
+    const { studio, dir } = boot();
+    const ditolak = await post<{ error: string }>(studio, "/api/timeline-export", {
+      format: "otio",
+      bahasa: "jv",
+    });
+    expect(ditolak.status).toBe(400);
+    expect(existsSync(join(dir, "timeline.jv.otio"))).toBe(false);
   });
 });

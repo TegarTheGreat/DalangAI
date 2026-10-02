@@ -149,6 +149,8 @@ export interface StudioOverrides {
   guardrails?: Parameters<typeof createStudioApp>[0]["guardrails"];
   renderDelayMs?: number;
   renderFail?: boolean;
+  /** Mengintip setiap permintaan render yang sampai ke renderVideo. */
+  onRender?: (options: Parameters<StudioDeps["renderVideo"]>[0]) => void;
   noOrchestrator?: boolean;
   /** Rantai ASR (ADR-0021); bawaannya kosong = mesin tanpa jalur transkripsi. */
   asrChain?: StudioDeps["asrChain"];
@@ -224,7 +226,9 @@ export const fakeDeps = (overrides?: StudioOverrides): StudioDeps => ({
           audible: [{ startSec: 0.8, endSec: 600 }],
         }
       : null,
-  renderVideo: async ({ outputLocation }) => {
+  renderVideo: async (options) => {
+    const { outputLocation } = options;
+    overrides?.onRender?.(options);
     if (overrides?.renderDelayMs) {
       await new Promise((resolve) => setTimeout(resolve, overrides.renderDelayMs));
     }

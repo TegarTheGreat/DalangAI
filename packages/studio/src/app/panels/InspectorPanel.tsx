@@ -1212,6 +1212,28 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           format={(v) => `${v}px`}
           onCommit={(blur) => commitFilter({ blur })}
         />
+        {/* ADR-0041: bukan preset warna, jadi berdiri sendiri dan bisa
+            dipasang bersama preset apa pun. */}
+        <SliderRow
+          label="Vinyet"
+          min={0}
+          max={1}
+          step={0.05}
+          neutral={0}
+          value={filter.vignette}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(vignette) => commitFilter({ vignette })}
+        />
+        <SliderRow
+          label="Butiran"
+          min={0}
+          max={1}
+          step={0.05}
+          neutral={0}
+          value={filter.grain}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(grain) => commitFilter({ grain })}
+        />
       </section>
     </>
   );

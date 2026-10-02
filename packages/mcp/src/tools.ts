@@ -9,6 +9,7 @@ import {
   planInLanguage,
   planLanguages,
   primaryClip,
+  renderFileNameFor,
   resolveSceneDurationSec,
   type ScenePlan,
 } from "@dalang/core";
@@ -18,6 +19,7 @@ import { templatesPublicDir } from "@dalang/templates/paths";
 import {
   buildSubtitleCues,
   type SubtitleFormat,
+  subtitleFileName,
   toSrt,
   toVtt,
 } from "@dalang/templates/subtitle";
@@ -286,24 +288,40 @@ export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 export const toolExportTimeline = (
   context: ToolContext,
-  { proyek, format = "otio" }: { proyek: string; format?: ExportFormat },
+  {
+    proyek,
+    format = "otio",
+    bahasa,
+  }: { proyek: string; format?: ExportFormat; bahasa?: string },
 ) => {
   const planPath = resolvePlanPath(context.workspace, proyek);
-  const plan: ScenePlan = readPlan(planPath);
-  const timeline = buildEditTimeline(plan, {
-    planPath,
-    siteAssetDir: templatesPublicDir,
-  });
-  const target = join(
-    dirname(planPath),
-    format === "otio" ? "timeline.otio" : "timeline.fcpxml",
-  );
+  const asli: ScenePlan = readPlan(planPath);
   if (context.workspace.readOnly) {
     return {
       ok: false as const,
       pesan: "Server hanya-baca: ekspor menulis berkas ke folder proyek.",
     };
   }
+  // Bahasa yang tidak ada DITOLAK, bukan jatuh diam-diam ke bahasa utama.
+  if (bahasa && !planLanguages(asli).includes(bahasa)) {
+    return {
+      ok: false as const,
+      pesan: `Proyek ini belum punya sulihan "${bahasa}". Yang ada: ${planLanguages(asli).join(", ")}`,
+    };
+  }
+  const plan = bahasa ? planInLanguage(asli, bahasa) : asli;
+  const timeline = buildEditTimeline(plan, {
+    planPath,
+    siteAssetDir: templatesPublicDir,
+  });
+  const target = join(
+    dirname(planPath),
+    renderFileNameFor(
+      format === "otio" ? "timeline.otio" : "timeline.fcpxml",
+      asli,
+      bahasa,
+    ),
+  );
   atomicWriteFile(target, format === "otio" ? otioToJson(timeline) : toFcpxml(timeline));
   return {
     ok: true as const,
@@ -353,7 +371,7 @@ export const toolWriteSubtitle = (
   }
   const plan = bahasa ? planInLanguage(asli, bahasa) : asli;
   const cues = buildSubtitleCues(plan);
-  const name = `${plan.projectId}.${plan.meta.language}.${format}`;
+  const name = subtitleFileName(plan, format);
   const target = join(dirname(planPath), name);
   atomicWriteFile(target, format === "srt" ? toSrt(cues) : toVtt(cues));
 

@@ -1,5 +1,5 @@
 import type { ScenePlan } from "@dalang/core";
-import { NARRATION_LEAD_IN_SEC } from "@dalang/core";
+import { NARRATION_LEAD_IN_SEC, safeFileSegment } from "@dalang/core";
 import { sceneCaptionWords } from "./captions-model";
 import { computeFrameLayout, FPS } from "./layout";
 
@@ -278,4 +278,18 @@ export const renderSubtitle = (plan: ScenePlan, format: SubtitleFormat): string 
 };
 
 /** Detik lead-in narasi, diekspor ulang supaya tes bisa menghitung harapannya. */
+/**
+ * Nama berkas subtitle di samping plan: `<proyek>.<bahasa>.<format>`.
+ *
+ * Disusun dari ruas yang sudah dibersihkan (`safeFileSegment`), karena
+ * `projectId` dan `meta.language` adalah string bebas di skema — tanpa
+ * pembersihan, `projectId` "../x" menulis di luar folder proyek.
+ */
+export const subtitleFileName = (plan: ScenePlan, format: SubtitleFormat): string =>
+  `${safeFileSegment(plan.projectId, "proyek")}.${safeFileSegment(plan.meta.language, "bahasa")}.${format}`;
+
+/** Nama berkas subtitle yang ikut diunggah bersama video, di `.dalang/`. */
+export const uploadSubtitleFileName = (plan: ScenePlan): string =>
+  `subtitle.${safeFileSegment(plan.meta.language, "bahasa")}.srt`;
+
 export { NARRATION_LEAD_IN_SEC };

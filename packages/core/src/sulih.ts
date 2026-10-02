@@ -256,3 +256,63 @@ export const dubDrift = (plan: ScenePlan, lang: string): DubDrift[] => {
  * menebak sendiri.
  */
 export const DUB_DRIFT_LIMIT = 1.25;
+
+/**
+ * Ruas nama berkas yang aman, dari nilai yang boleh berisi apa saja.
+ *
+ * `projectId` dan `meta.language` di skema adalah string bebas, dan keduanya
+ * ikut menyusun nama berkas subtitle dan render. Tanpa ini, `projectId`
+ * "../../sasaran/x" menulis berkas DI LUAR folder proyek: `join()` meratakan
+ * `..` dengan senang hati. Plan datang dari mana saja — templat, impor,
+ * keluaran model — jadi nama berkas tidak boleh percaya isinya.
+ *
+ * Hanya huruf, angka, `_` dan `-` yang lolos; sisanya (termasuk `.`, `/` dan
+ * `\`) jadi `-`. Titik sengaja dibuang: titik adalah pemisah ruas di nama
+ * berkas ini, dan `..` hanya bisa lahir dari titik.
+ */
+export const safeFileSegment = (value: string, fallback: string): string => {
+  const bersih = value
+    .normalize("NFKD")
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .slice(0, 80);
+  return bersih === "" ? fallback : bersih;
+};
+
+/**
+ * Menyisipkan bahasa ke nama berkas render: `final.mp4` -> `final.en.mp4`.
+ *
+ * Bahasa UTAMA tidak diberi sisipan. Berkas yang sudah ada di disk, ledger
+ * publikasi, dan semua skrip pengguna menamai render bahasa utama tanpa
+ * sisipan; mengubahnya hanya demi keseragaman akan memutus semuanya.
+ */
+export const renderFileNameFor = (
+  fileName: string,
+  plan: ScenePlan,
+  lang: string | undefined,
+): string => {
+  if (!lang || lang === plan.meta.language) return fileName;
+  const titik = fileName.lastIndexOf(".");
+  const ruas = safeFileSegment(lang, "bahasa");
+  return titik <= 0
+    ? `${fileName}.${ruas}`
+    : `${fileName.slice(0, titik)}.${ruas}${fileName.slice(titik)}`;
+};
+
+/**
+ * Bahasa sebuah berkas render, dibaca dari namanya: `final.en.mp4` -> "en".
+ *
+ * Kebalikan `renderFileNameFor`, dan SENGAJA ketat: hanya ruas tepat sebelum
+ * ekstensi, dan hanya bila itu bahasa yang benar-benar ada di plan. Nama
+ * seperti `v1.2.mp4` atau `klip.final.mp4` jadi bahasa utama, bukan bahasa
+ * karangan. Dipakai pengunggah supaya metadata dan subtitle yang menyertai
+ * video sesuai bahasa videonya — video berbahasa Inggris tidak boleh
+ * berangkat dengan judul dan teks Indonesia.
+ */
+export const renderFileLanguage = (fileName: string, plan: ScenePlan): string => {
+  const cocok = /\.([^./\\]+)\.(?:mp4|webm|mov)$/i.exec(fileName);
+  const calon = cocok?.[1];
+  if (calon && planLanguages(plan).includes(calon)) return calon;
+  return plan.meta.language;
+};

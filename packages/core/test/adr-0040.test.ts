@@ -12,7 +12,10 @@ import {
   parseScenePlan,
   planInLanguage,
   planLanguages,
+  renderFileLanguage,
+  renderFileNameFor,
   type ScenePlanInput,
+  safeFileSegment,
   untranslatedScreenText,
 } from "../src/index";
 
@@ -370,5 +373,54 @@ describe("teks LAYAR ikut disulih (ADR-0040)", () => {
         { origin: "user" },
       ),
     ).toThrow(/tidak ada di scene/);
+  });
+});
+
+describe("nama berkas: ruas aman dan bahasa di nama render", () => {
+  it("safeFileSegment membuang semua yang bisa keluar folder", () => {
+    for (const jahat of [
+      "../sasaran/x",
+      "..\\sasaran\\x",
+      "/etc/passwd",
+      "a/../../b",
+      "..",
+    ]) {
+      const bersih = safeFileSegment(jahat, "cadangan");
+      expect(bersih).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(bersih).not.toContain("..");
+      expect(bersih).not.toContain("/");
+      expect(bersih).not.toContain("\\");
+    }
+  });
+
+  it("nilai yang sudah aman tidak berubah, dan yang kosong jatuh ke cadangan", () => {
+    expect(safeFileSegment("proyek-uji_1", "x")).toBe("proyek-uji_1");
+    expect(safeFileSegment("pt-BR", "x")).toBe("pt-BR");
+    expect(safeFileSegment("", "cadangan")).toBe("cadangan");
+    expect(safeFileSegment("...", "cadangan")).toBe("cadangan");
+    expect(safeFileSegment("a".repeat(500), "x").length).toBeLessThanOrEqual(80);
+  });
+
+  it("render bahasa utama tidak diberi akhiran; bahasa lain disisipkan sebelum ekstensi", () => {
+    const p = parseScenePlan(plan() as unknown);
+    expect(renderFileNameFor("final.mp4", p, undefined)).toBe("final.mp4");
+    expect(renderFileNameFor("final.mp4", p, "id")).toBe("final.mp4");
+    expect(renderFileNameFor("final.mp4", p, "en")).toBe("final.en.mp4");
+    expect(renderFileNameFor("ekspor-mp4-1080p-seimbang.mp4", p, "en")).toBe(
+      "ekspor-mp4-1080p-seimbang.en.mp4",
+    );
+    // Bahasa ngawur tidak bisa menyelundupkan pemisah path ke nama berkas.
+    expect(renderFileNameFor("final.mp4", p, "../x")).not.toContain("/");
+  });
+
+  it("bahasa dibaca balik dari nama berkas, dan hanya bila bahasanya ada di plan", () => {
+    const p = parseScenePlan(plan() as unknown);
+    expect(renderFileLanguage("final.en.mp4", p)).toBe("en");
+    expect(renderFileLanguage("preview.en.webm", p)).toBe("en");
+    expect(renderFileLanguage("final.mp4", p)).toBe("id");
+    // Bukan bahasa di plan ini: jangan mengarang bahasa dari tebakan.
+    expect(renderFileLanguage("final.jv.mp4", p)).toBe("id");
+    expect(renderFileLanguage("v1.2.mp4", p)).toBe("id");
+    expect(renderFileLanguage("klip.final.mp4", p)).toBe("id");
   });
 });

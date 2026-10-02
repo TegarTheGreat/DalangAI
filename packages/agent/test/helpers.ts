@@ -207,20 +207,31 @@ export const fakeStock = (
 };
 
 export const fakeRender = (): AgentDeps["renderVideo"] & {
-  calls: Array<{ profile: string; outputLocation: string; useProxies?: boolean }>;
+  calls: Array<{
+    profile: string;
+    outputLocation: string;
+    useProxies?: boolean;
+    language?: string;
+  }>;
 } => {
-  const calls: Array<{ profile: string; outputLocation: string; useProxies?: boolean }> =
-    [];
+  const calls: Array<{
+    profile: string;
+    outputLocation: string;
+    useProxies?: boolean;
+    language?: string;
+  }> = [];
   const fn = (async (options: {
     planPath: string;
     outputLocation: string;
     profile: "draft" | "final";
     useProxies?: boolean;
+    language?: string;
   }): Promise<RenderVideoResult> => {
     calls.push({
       profile: options.profile,
       outputLocation: options.outputLocation,
       ...(options.useProxies !== undefined ? { useProxies: options.useProxies } : {}),
+      ...(options.language ? { language: options.language } : {}),
     });
     return {
       outputLocation: options.outputLocation,

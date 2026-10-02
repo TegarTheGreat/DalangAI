@@ -228,9 +228,11 @@ jobs:
           pnpm dalang still /tmp/sulih -t 6.5 -s 0.3 -o /tmp/sulih/id
           pnpm dalang still /tmp/sulih -t 6.5 -s 0.3 -o /tmp/sulih/en --bahasa en
           test -s /tmp/sulih/id/sulih-f195.png
-          test -s /tmp/sulih/en/sulih-f195.png
+          # Bahasa sulih ikut di nama berkas (ADR-0040), supaya dua render dari
+          # satu proyek tidak saling menimpa dan pengunggah bisa membaca bahasanya.
+          test -s /tmp/sulih/en/sulih-f195.en.png
           # Dua bingkai yang IDENTIK berarti bahasanya tidak sampai ke render.
-          if cmp -s /tmp/sulih/id/sulih-f195.png /tmp/sulih/en/sulih-f195.png; then
+          if cmp -s /tmp/sulih/id/sulih-f195.png /tmp/sulih/en/sulih-f195.en.png; then
             echo "GERBANG SULIH GAGAL: bingkai id dan en identik byte per byte" >&2
             exit 1
           fi

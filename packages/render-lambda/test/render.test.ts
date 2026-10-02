@@ -1,5 +1,5 @@
-import { rmSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { parseScenePlan } from "@dalang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { estimateLambdaCost } from "../src/cost";
@@ -273,5 +273,117 @@ describe("content-type", () => {
     expect(contentTypeFor("x.WAV")).toBe("audio/wav");
     expect(contentTypeFor("ikon.svg")).toBe("image/svg+xml");
     expect(contentTypeFor("tanpa-ekstensi")).toBe("application/octet-stream");
+  });
+});
+
+/**
+ * Sulih suara di Lambda (ADR-0040).
+ *
+ * Kegagalan yang dijaga di sini tidak punya pesan galat: `language` pernah
+ * diterima kontrak `RenderRequest` tanpa disentuh target ini, sehingga
+ * `--bahasa en --target lambda` diam-diam merender bahasa utama — dan
+ * tagihannya terbayar untuk video yang salah. Satu-satunya cara menangkapnya
+ * adalah memeriksa APA yang sampai ke Lambda, bukan apakah panggilannya
+ * berhasil.
+ */
+describe("render Lambda dalam bahasa sulih", () => {
+  const dubbedProject = () => {
+    const input = planWithAssets();
+    input.scenes[0] = {
+      ...input.scenes[0],
+      id: "sc-001",
+      narration: "Satu.",
+      dubs: {
+        en: "One, said slowly and at a considerably greater length than the original.",
+      },
+      clips: [{ id: "sc-001-k1", type: "image" }],
+      // "auto": durasi harus IKUT narasinya. Fixture dasar mematok 5 detik,
+      // dan durasi yang dipatok memang sama di semua bahasa — tes yang
+      // memakainya tidak akan pernah bisa melihat selisihnya.
+      duration: "auto",
+    } as never;
+    input.renderState = {
+      ...input.renderState,
+      narrationAudio: {
+        "sc-001": { file: "narasi/id-sc-001.wav", durationSec: 1 },
+      },
+      dubAudio: {
+        en: { "sc-001": { file: "narasi/en-sc-001.wav", durationSec: 90 } },
+      },
+    } as never;
+    const p = tempProject(input);
+    for (const file of ["narasi/id-sc-001.wav", "narasi/en-sc-001.wav"]) {
+      const abs = join(p.dir, file);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, `suara-${file}`);
+    }
+    cleanups.push(() => rmSync(p.dir, { recursive: true, force: true }));
+    return p;
+  };
+
+  it("yang dikirim ke komposisi adalah plan BAHASA ITU, bukan bahasa utama", async () => {
+    const { planPath } = dubbedProject();
+    const t = target();
+    await t.render.render({
+      planPath,
+      outputLocation: join(planPath, "..", "out.mp4"),
+      profile: "final",
+      language: "en",
+    });
+    const sent = t.lambda.starts[0]?.inputProps.plan as {
+      meta: { language: string };
+      scenes: Array<{ narration: string }>;
+    };
+    expect(sent.meta.language).toBe("en");
+    expect(sent.scenes[0]?.narration).toContain("said slowly");
+  });
+
+  it("yang DIUNGGAH adalah suara bahasa itu — bukan suara bahasa utama", async () => {
+    const { planPath } = dubbedProject();
+    const t = target();
+    await t.render.render({
+      planPath,
+      outputLocation: join(planPath, "..", "out.mp4"),
+      profile: "final",
+      language: "en",
+    });
+    const urls = t.lambda.starts[0]?.inputProps.assetUrls as Record<string, string>;
+    expect(Object.keys(urls)).toContain("narasi/en-sc-001.wav");
+    // Mengunggah suara yang salah = membayar S3 untuk berkas yang tidak
+    // dipakai, DAN memutar yang salah kalau komposisinya mencarinya.
+    expect(Object.keys(urls)).not.toContain("narasi/id-sc-001.wav");
+  });
+
+  it("tanpa language, perilakunya persis seperti sebelumnya (bahasa utama)", async () => {
+    const { planPath } = dubbedProject();
+    const t = target();
+    await t.render.render({
+      planPath,
+      outputLocation: join(planPath, "..", "out.mp4"),
+      profile: "final",
+    });
+    const sent = t.lambda.starts[0]?.inputProps.plan as { meta: { language: string } };
+    expect(sent.meta.language).toBe("id");
+    const urls = t.lambda.starts[0]?.inputProps.assetUrls as Record<string, string>;
+    expect(Object.keys(urls)).toContain("narasi/id-sc-001.wav");
+  });
+
+  it("estimasi biaya memakai DURASI bahasa itu", async () => {
+    // Gerbang anggaran yang menaksir dari durasi yang salah adalah gerbang
+    // yang salah — dan di sini selisihnya besar (1 dtk vs 6 dtk narasi).
+    const { planPath } = dubbedProject();
+    const t = target();
+    const utama = await t.render.estimateCost({
+      planPath,
+      outputLocation: "x.mp4",
+      profile: "final",
+    });
+    const sulih = await t.render.estimateCost({
+      planPath,
+      outputLocation: "x.mp4",
+      profile: "final",
+      language: "en",
+    });
+    expect(sulih.usd).not.toBe(utama.usd);
   });
 });

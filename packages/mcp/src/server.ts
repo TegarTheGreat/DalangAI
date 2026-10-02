@@ -176,11 +176,23 @@ export const createDalangMcpServer = (context: ToolContext): McpServer => {
       inputSchema: {
         proyek: proyekArg,
         format: z.enum(EXPORT_FORMATS).optional().describe("Bawaan: otio."),
+        bahasa: z
+          .string()
+          .min(2)
+          .max(16)
+          .optional()
+          .describe("Kode bahasa sulih (ADR-0040); kosong = bahasa utama proyek."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    async ({ proyek, format }) =>
-      guard(() => toolExportTimeline(context, { proyek, ...(format ? { format } : {}) })),
+    async ({ proyek, format, bahasa }) =>
+      guard(() =>
+        toolExportTimeline(context, {
+          proyek,
+          ...(format ? { format } : {}),
+          ...(bahasa ? { bahasa } : {}),
+        }),
+      ),
   );
 
   server.registerTool(

@@ -4,6 +4,7 @@ import { Img, interpolate, Sequence, useCurrentFrame, useVideoConfig } from "rem
 import { easeDolly } from "./anim";
 import { useAssetSrc } from "./asset-src";
 import { buildClipVolume, type DuckWindow, isSilent } from "./audio-model";
+import { ClipEffects } from "./ClipEffects";
 import { filterToCss } from "./filters";
 import type { GraphicFrame } from "./graphic-model";
 import { layerBoxStyle, layerMotion, layerWindow } from "./layer-model";
@@ -136,6 +137,10 @@ const LayerItem: React.FC<{
       ) : (
         <Img src={assetSrc(asset.file)} style={mediaStyle} />
       )}
+      {/* ADR-0041: vignette dan butiran digambar di DALAM kotak lapisan, yang
+          memotongnya mengikuti bentuk (persegi/bulat) — bukan di seluruh
+          bingkai, tempat ia akan menggelapkan sudut video bukan sudut sisipan. */}
+      <ClipEffects filter={layer.visual.filter} />
     </div>
   );
 };

@@ -473,9 +473,17 @@ ducking, campuran akhir, dan ekspor interop bekerja apa adanya.
 ```bash
 pnpm dalang sulih proyekku/                        # keadaan tiap bahasa
 pnpm dalang sulih proyekku/ --bahasa en --suara    # TTS untuk bahasa itu
-pnpm dalang render proyekku/ --bahasa en -o out/en.mp4
+pnpm dalang render proyekku/ --bahasa en              # out/proyekku-540p-cepat.en.mp4
 pnpm dalang subtitle proyekku/ --bahasa en
+pnpm dalang export proyekku/ --bahasa en              # timeline.en.otio untuk editor lain
 ```
+
+Bahasa ikut di **nama berkas** (`final.en.mp4`; bahasa utama tetap tanpa
+akhiran), jadi dua render dari satu proyek tidak saling menimpa. Pengunggah
+membaca bahasa videonya dari nama itu: mengunggah `final.en.mp4` membawa judul,
+deskripsi, dan subtitle berbahasa Inggris — bukan milik bahasa utama. Pilihan
+Bahasa di dialog Ekspor Studio berlaku untuk video, subtitle, dan garis waktu
+sekaligus.
 
 Gerbang CI merender bingkai yang sama **dua kali**, sekali per bahasa, dan
 menuntut kedua PNG-nya berbeda byte: dua bingkai identik berarti bahasanya
@@ -792,8 +800,19 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   lain. Tiap bahasa jadi satu berkas video sendiri, bukan satu video bertrek
   audio banyak seperti yang didukung YouTube. Label anotasi tutorial belum
   punya sulihan sama sekali, dan mutu terjemahannya tidak diperiksa repo ini —
-  yang dijaga hanya panjang ucapannya.
+  yang dijaga hanya panjang ucapannya. Terjemahan yang basi (naskah utama
+  disunting sesudah diterjemahkan) TIDAK ditandai; subtitle bahasa tanpa spasi
+  (CJK, Thai) belum dipatahkan dengan benar; pemain pratinjau Studio memutar
+  bahasa utama (versi lain hanya lewat render). Jalur TTS sulih, YouTube
+  `captions.insert`, dan model penerjemah belum pernah dipanggil terhadap
+  layanan sungguhan dari repo ini.
   [ADR-0040](docs/decisions/0040-sulih-suara.md) menulis batasnya lengkap.
+- **Satu advisori dependensi belum tertutup.** `pnpm audit --prod` melaporkan
+  satu temuan moderat pada `file-type` (loop tak berujung saat membaca berkas
+  ASF yang rusak), yang dibawa `jimp` untuk analisis gambar oleh agent;
+  menutupnya butuh lompatan major pada jimp. Temuan lain (undici, fast-uri,
+  ip-address, hono) sudah ditutup lewat `pnpm.overrides` ke versi tambalan
+  dalam major yang sama.
 - **Menyunting berdua tidak punya akun.** Yang punya tautan `--lan` punya
   segalanya: menyunting, merender, mengunggah. Bentrok ditolak dan tidak
   pernah digabungkan otomatis, tidak ada kursor bersama, dan semuanya berbagi

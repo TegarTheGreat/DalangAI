@@ -12,7 +12,10 @@
  *  - vignette wajib menggelapkan SUDUT relatif terhadap tengah, tanpa
  *    menambah tekstur;
  *  - butiran wajib menaikkan beda piksel BERTETANGGA, tanpa menggelapkan
- *    sudut.
+ *    sudut;
+ *  - vignette pada LAPISAN VIDEO wajib menggelapkan sudut KOTAK lapisan itu
+ *    — bukan sudut bingkai. Sisipan adalah tempat efek ini paling mudah
+ *    dilewatkan: ia jalur render yang berbeda dari visual dasar.
  *
  * Dua tuntutan itu sengaja saling menyilang: efek yang tertukar
  * implementasinya akan lulus salah satunya dan gagal yang lain.
@@ -25,12 +28,54 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync } from "node:zlib";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const out = mkdtempSync(join(tmpdir(), "dalang-pengayaan-"));
 
+/** PNG abu-abu rata 64x64 — murni zlib, tanpa pustaka gambar. */
+const pngAbuAbu = (nilai: number): Buffer => {
+  const ukuran = 64;
+  const baris = Buffer.concat([Buffer.from([0]), Buffer.alloc(ukuran, nilai)]);
+  const mentah = Buffer.concat(Array.from({ length: ukuran }, () => baris));
+  const crcTabel = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (data: Buffer): number => {
+    let c = 0xffffffff;
+    for (const byte of data) c = (crcTabel[(c ^ byte) & 0xff] as number) ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const potongan = (tipe: string, isi: Buffer): Buffer => {
+    const panjang = Buffer.alloc(4);
+    panjang.writeUInt32BE(isi.length);
+    const badan = Buffer.concat([Buffer.from(tipe, "ascii"), isi]);
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc(badan));
+    return Buffer.concat([panjang, badan, sum]);
+  };
+  const kepala = Buffer.alloc(13);
+  kepala.writeUInt32BE(ukuran, 0);
+  kepala.writeUInt32BE(ukuran, 4);
+  kepala[8] = 8; // kedalaman bit
+  kepala[9] = 0; // abu-abu
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    potongan("IHDR", kepala),
+    potongan("IDAT", deflateSync(mentah)),
+    potongan("IEND", Buffer.alloc(0)),
+  ]);
+};
+
 /** Plan satu scene, hanya efeknya yang berbeda. */
-const planFor = (id: string, vignette: number, grain: number) => ({
+const planFor = (
+  id: string,
+  vignette: number,
+  grain: number,
+  lapisan: { vignette: number } | null = null,
+) => ({
   version: 2,
   projectId: id,
   meta: {
@@ -55,6 +100,27 @@ const planFor = (id: string, vignette: number, grain: number) => ({
           filter: { preset: "none", vignette, grain },
         },
       ],
+      // Kotak lapisan: 70% lebar x 40% tinggi, di tengah — gerbang mengukur
+      // sudut KOTAK itu, jadi angkanya harus sama dengan yang dipakai probe.
+      ...(lapisan
+        ? {
+            layers: [
+              {
+                id: "lap-1",
+                visual: {
+                  type: "image",
+                  assetId: "lap",
+                  filter: { preset: "none", vignette: lapisan.vignette, grain: 0 },
+                },
+                anchor: "tengah",
+                width: 0.7,
+                height: 0.4,
+                radius: 0,
+                entrance: "diam",
+              },
+            ],
+          }
+        : {}),
     },
   ],
   renderState: {
@@ -62,7 +128,9 @@ const planFor = (id: string, vignette: number, grain: number) => ({
     dubAudio: {},
     clipAssets: {},
     graphicAssets: {},
-    layerAssets: {},
+    layerAssets: lapisan
+      ? { "lap-1": { file: "assets/lap.png", kind: "image", source: "local" } }
+      : {},
     sfxAssets: {},
     trackAssets: {},
     transcripts: {},
@@ -70,9 +138,11 @@ const planFor = (id: string, vignette: number, grain: number) => ({
 });
 
 const VARIAN = [
-  { id: "polos", vignette: 0, grain: 0 },
-  { id: "vignette", vignette: 0.7, grain: 0 },
-  { id: "grain", vignette: 0, grain: 0.8 },
+  { id: "polos", vignette: 0, grain: 0, lapisan: null },
+  { id: "vignette", vignette: 0.7, grain: 0, lapisan: null },
+  { id: "grain", vignette: 0, grain: 0.8, lapisan: null },
+  { id: "lapisan-polos", vignette: 0, grain: 0, lapisan: { vignette: 0 } },
+  { id: "lapisan-vignette", vignette: 0, grain: 0, lapisan: { vignette: 0.9 } },
 ] as const;
 
 for (const varian of VARIAN) {
@@ -80,8 +150,12 @@ for (const varian of VARIAN) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, "plan.json"),
-    `${JSON.stringify(planFor(varian.id, varian.vignette, varian.grain), null, 2)}\n`,
+    `${JSON.stringify(planFor(varian.id, varian.vignette, varian.grain, varian.lapisan), null, 2)}\n`,
   );
+  if (varian.lapisan) {
+    mkdirSync(join(dir, "assets"), { recursive: true });
+    writeFileSync(join(dir, "assets", "lap.png"), pngAbuAbu(128));
+  }
   execFileSync(
     "pnpm",
     ["dalang", "still", join(dir, "plan.json"), "-t", "1.5", "-s", "0.5", "-o", dir],
@@ -107,7 +181,15 @@ def ukur(path):
     ty = range(h//2 - h//16, h//2 + h//16)
     tx = range(w//2 - w//16, w//2 + w//16)
     tengah = sum(d[y*w+x] for y in ty for x in tx) / (len(list(ty)) * len(list(tx)))
-    return {"tekstur": tekstur, "rasioSudut": sudut / max(tengah, 0.01)}
+    # Kotak lapisan (70% x 40%, di tengah): sudut kotak vs tengah kotak.
+    kx0, kx1 = int(w * 0.15), int(w * 0.85)
+    ky0, ky1 = int(h * 0.30), int(h * 0.70)
+    kw, kh = kx1 - kx0, ky1 - ky0
+    px, py = max(kw // 12, 2), max(kh // 12, 2)
+    ks = [d[y*w+x] for y in range(ky0 + 2, ky0 + 2 + py) for x in range(kx0 + 2, kx0 + 2 + px)]
+    kc = [d[y*w+x] for y in range(ky0 + kh//2 - py//2, ky0 + kh//2 + py//2) for x in range(kx0 + kw//2 - px//2, kx0 + kw//2 + px//2)]
+    rasio_kotak = (sum(ks) / len(ks)) / max(sum(kc) / len(kc), 0.01)
+    return {"tekstur": tekstur, "rasioSudut": sudut / max(tengah, 0.01), "rasioKotak": rasio_kotak}
 
 hasil = {}
 for nama in sys.argv[1:]:
@@ -120,7 +202,10 @@ for nama in sys.argv[1:]:
 print(json.dumps(hasil))
 `;
 
-let ukur: Record<string, { tekstur: number; rasioSudut: number } | null>;
+let ukur: Record<
+  string,
+  { tekstur: number; rasioSudut: number; rasioKotak: number } | null
+>;
 try {
   const raw = execFileSync(
     "python3",
@@ -150,7 +235,7 @@ console.log("Gerbang pengayaan — ukuran bingkai:");
 for (const [nama, nilai] of Object.entries(ukur)) {
   if (!nilai) continue;
   console.log(
-    `  ${nama.padEnd(9)} tekstur=${nilai.tekstur.toFixed(3)} rasioSudut=${nilai.rasioSudut.toFixed(3)}`,
+    `  ${nama.padEnd(17)} tekstur=${nilai.tekstur.toFixed(3)} rasioSudut=${nilai.rasioSudut.toFixed(3)} rasioKotak=${nilai.rasioKotak.toFixed(3)}`,
   );
 }
 
@@ -178,6 +263,25 @@ if (grain.rasioSudut < polos.rasioSudut - 0.06) {
   );
 }
 
+// --- Vignette pada LAPISAN: sudut KOTAK lapisan menggelap, dan hanya di sana ---
+const lapPolos = ukur["lapisan-polos"];
+const lapVignette = ukur["lapisan-vignette"];
+if (!lapPolos || !lapVignette) {
+  problems.push("bingkai dengan lapisan video tidak ter-render");
+} else {
+  if (lapVignette.rasioKotak >= lapPolos.rasioKotak - 0.05) {
+    problems.push(
+      `vignette pada lapisan tidak menggelapkan sudut kotaknya (rasio ${lapVignette.rasioKotak.toFixed(3)} vs polos ${lapPolos.rasioKotak.toFixed(3)}) — ClipEffects tidak terpasang di LayersOverlay`,
+    );
+  }
+  // Vignette lapisan TIDAK boleh bocor ke sudut bingkai.
+  if (lapVignette.rasioSudut < lapPolos.rasioSudut - 0.05) {
+    problems.push(
+      `vignette lapisan menggelapkan sudut BINGKAI (rasio ${lapVignette.rasioSudut.toFixed(3)} vs polos ${lapPolos.rasioSudut.toFixed(3)}) — seharusnya terkurung di kotak lapisan`,
+    );
+  }
+}
+
 if (problems.length > 0) {
   console.error("\nGERBANG PENGAYAAN GAGAL:");
   for (const problem of problems) console.error(`  - ${problem}`);
@@ -185,5 +289,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  "\nLulus: vignette menggelapkan tepi tanpa menambah tekstur, butiran menambah tekstur tanpa menggelapkan tepi.",
+  "\nLulus: vignette menggelapkan tepi tanpa menambah tekstur, butiran menambah tekstur tanpa menggelapkan tepi, dan vignette lapisan terkurung di kotak lapisannya.",
 );

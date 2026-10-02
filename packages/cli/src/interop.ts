@@ -1,6 +1,11 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import { parseScenePlan } from "@dalang/core";
+import {
+  parseScenePlan,
+  planInLanguage,
+  planLanguages,
+  renderFileNameFor,
+} from "@dalang/core";
 import {
   buildEditTimeline,
   formatInteropNotes,
@@ -44,43 +49,64 @@ export const registerInteropCommands = (program: Command): void => {
       "otio",
     )
     .option("-o, --out <berkas>", "tulis ke berkas ini (bawaan: di samping plan.json)")
+    .option(
+      "--bahasa <kode>",
+      "ekspor garis waktu dalam bahasa sulih ini (ADR-0040); bawaannya bahasa utama",
+    )
     .description(
       "Ekspor garis waktu ke OpenTimelineIO atau FCPXML untuk difinishing di Resolve/Premiere/Final Cut (ADR-0023)",
     )
-    .action((proyek: string, options: { format: InteropFormat; out?: string }) => {
-      const absPlan = planPathOf(proyek);
-      const plan = readPlanFile(absPlan);
-      const timeline = buildEditTimeline(plan, {
-        planPath: absPlan,
-        // Musik pustaka hidup di public/ paket templates, bukan di folder
-        // proyek — tanpa ini ia dilaporkan hilang padahal berkasnya ada.
-        siteAssetDir: templatesPublicDir,
-      });
+    .action(
+      (
+        proyek: string,
+        options: { format: InteropFormat; out?: string; bahasa?: string },
+      ) => {
+        const absPlan = planPathOf(proyek);
+        const asli = readPlanFile(absPlan);
+        // Bahasa yang tidak ada DITOLAK, bukan jatuh diam-diam ke bahasa utama.
+        if (options.bahasa && !planLanguages(asli).includes(options.bahasa)) {
+          throw new Error(
+            `Proyek ini belum punya sulihan "${options.bahasa}". Yang ada: ${planLanguages(asli).join(", ")}`,
+          );
+        }
+        const plan = options.bahasa ? planInLanguage(asli, options.bahasa) : asli;
+        const timeline = buildEditTimeline(plan, {
+          planPath: absPlan,
+          // Musik pustaka hidup di public/ paket templates, bukan di folder
+          // proyek — tanpa ini ia dilaporkan hilang padahal berkasnya ada.
+          siteAssetDir: templatesPublicDir,
+        });
 
-      const target =
-        options.out ??
-        join(
-          dirname(absPlan),
-          `${basename(absPlan, extname(absPlan))}${EXTENSION[options.format]}`,
+        const target =
+          options.out ??
+          join(
+            dirname(absPlan),
+            renderFileNameFor(
+              `${basename(absPlan, extname(absPlan))}${EXTENSION[options.format]}`,
+              asli,
+              options.bahasa,
+            ),
+          );
+        const body =
+          options.format === "otio" ? otioToJson(timeline) : toFcpxml(timeline);
+        mkdirSync(dirname(resolve(target)), { recursive: true });
+        atomicWriteFile(resolve(target), body);
+
+        const clips = timeline.tracks.reduce(
+          (sum, track) => sum + track.items.filter((item) => item.kind === "clip").length,
+          0,
         );
-      const body = options.format === "otio" ? otioToJson(timeline) : toFcpxml(timeline);
-      mkdirSync(dirname(resolve(target)), { recursive: true });
-      atomicWriteFile(resolve(target), body);
-
-      const clips = timeline.tracks.reduce(
-        (sum, track) => sum + track.items.filter((item) => item.kind === "clip").length,
-        0,
-      );
-      console.log(`${options.format.toUpperCase()} ditulis ke ${resolve(target)}`);
-      console.log(
-        `  ${timeline.tracks.length} trek · ${clips} klip · ${(timeline.totalFrames / timeline.fps).toFixed(1)} detik @ ${timeline.fps}fps`,
-      );
-      console.log("\nYang TIDAK ikut menyeberang:");
-      for (const line of formatInteropNotes(timeline.notes)) console.log(line);
-      console.log(
-        "\n  Aset dirujuk lewat path absolut. Kalau proyeknya dipindah, tautannya perlu disambungkan ulang di editor tujuan.",
-      );
-    });
+        console.log(`${options.format.toUpperCase()} ditulis ke ${resolve(target)}`);
+        console.log(
+          `  ${timeline.tracks.length} trek · ${clips} klip · ${(timeline.totalFrames / timeline.fps).toFixed(1)} detik @ ${timeline.fps}fps`,
+        );
+        console.log("\nYang TIDAK ikut menyeberang:");
+        for (const line of formatInteropNotes(timeline.notes)) console.log(line);
+        console.log(
+          "\n  Aset dirujuk lewat path absolut. Kalau proyeknya dipindah, tautannya perlu disambungkan ulang di editor tujuan.",
+        );
+      },
+    );
 
   program
     .command("import")

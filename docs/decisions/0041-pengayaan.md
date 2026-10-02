@@ -172,7 +172,13 @@ Studio. Tes itu memang ditulis untuk kelas cacat itu, dan ia bekerja.
 - **Transisi shader tidak tersedia**, dan tidak akan sampai renderer memakai
   Chrome 148+ dengan HTML-in-Canvas menyala. Empat transisi paling sinematik
   di `@remotion/transitions` ada di balik pintu itu.
-- **Vignette dan butiran hanya berlaku pada visual dasar dan lapisan video.**
+- **Vignette dan butiran berlaku pada visual dasar dan lapisan video.** Pada
+  lapisan, efeknya digambar DI DALAM kotak lapisan (terpotong mengikuti bentuk
+  persegi/bulat), dan gerbang `gate:pengayaan` mengukurnya di sudut kotak itu —
+  ia pernah tidak terpasang di jalur lapisan sama sekali, dan hanya ketahuan
+  saat audit. Preset `klip-01` memakai Backdrop yang sama dengan documentary-01,
+  jadi vignette yang diminta eksplisit juga tampil di sana walau tema bawaannya
+  sengaja tanpa vignette.
   Preset `tutorial-01` tidak memakai `clip.filter` sama sekali — panggung
   tangkapan layarnya digambar dengan cara lain — jadi efek ini tidak
   menyentuhnya.

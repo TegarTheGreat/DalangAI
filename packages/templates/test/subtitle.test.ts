@@ -4,9 +4,11 @@ import {
   buildSubtitleCues,
   SUBTITLE_MAX_CHARS_PER_LINE,
   SUBTITLE_MIN_MS,
+  subtitleFileName,
   timestamp,
   toSrt,
   toVtt,
+  uploadSubtitleFileName,
   wrapSubtitleText,
 } from "../src/subtitle";
 
@@ -221,5 +223,30 @@ describe("format berkas", () => {
   it("berkas kosong tetap berkas yang sah", () => {
     expect(toSrt([])).toBe("");
     expect(toVtt([])).toBe("WEBVTT\n\n");
+  });
+});
+
+describe("nama berkas subtitle", () => {
+  it("projectId dan bahasa yang jahat tidak bisa keluar dari folder proyek", () => {
+    const jahat = plan((input) => {
+      input.projectId = "../../sasaran/DITIMPA";
+      input.meta = { ...input.meta, language: "../../etc/x" };
+    });
+    for (const nama of [
+      subtitleFileName(jahat, "srt"),
+      subtitleFileName(jahat, "vtt"),
+      uploadSubtitleFileName(jahat),
+    ]) {
+      expect(nama).not.toContain("/");
+      expect(nama).not.toContain("\\");
+      expect(nama).not.toContain("..");
+      expect(nama).toMatch(/^[A-Za-z0-9_.-]+$/);
+    }
+  });
+
+  it("plan wajar menghasilkan nama yang sama seperti sebelumnya", () => {
+    expect(subtitleFileName(plan(), "srt")).toBe("uji-subtitle.id.srt");
+    expect(subtitleFileName(plan(), "vtt")).toBe("uji-subtitle.id.vtt");
+    expect(uploadSubtitleFileName(plan())).toBe("subtitle.id.srt");
   });
 });

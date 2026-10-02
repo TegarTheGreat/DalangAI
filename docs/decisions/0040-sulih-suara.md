@@ -152,6 +152,42 @@ Jawaban model yang tidak bisa diurai TIDAK menghasilkan patch apa pun. Plan
 yang tersulih separuh lebih buruk daripada yang belum sama sekali: separuhnya
 tampil BISU tanpa satu pun pesan.
 
+### 9. Bahasa ikut di NAMA berkas, dan pengunggah membacanya dari sana
+
+Render bahasa utama tetap `final.mp4`, `preview.mp4`, dan seterusnya — berkas
+yang sudah ada di disk, ledger publikasi, dan skrip orang menamainya begitu.
+Render bahasa lain menyisipkan kode bahasa sebelum ekstensi: `final.en.mp4`,
+`preview.en.mp4`, `ekspor-mp4-1080p-seimbang.en.mp4`. Perintah `still` memakai
+pola yang sama (`proyek-f195.en.png`), dan `dalang render` tanpa `-o` juga.
+
+Pengunggah (CLI `publish`, Studio, tool agent `publishVideo`) membaca bahasa
+videonya dari nama itu: `renderFileLanguage` hanya menerima ruas tepat
+sebelum ekstensi DAN hanya bila itu bahasa yang benar-benar ada di plan.
+`v1.2.mp4` atau `klip.final.mp4` jadi bahasa utama, bukan bahasa karangan.
+Judul, deskripsi, tag, dan berkas subtitle yang menyertai unggahan lalu
+diturunkan dari plan dalam bahasa itu (`planInLanguage`), bukan dari plan
+bahasa utama.
+
+Alasannya satu kegagalan yang pernah ditemukan saat audit: tanpa ini, video
+berbahasa Inggris berangkat ke YouTube dengan judul, deskripsi, dan subtitle
+berbahasa Indonesia — sah di mata penyedia, dan tidak ada galat apa pun. Cacat
+itu hanya terlihat oleh penonton.
+
+Titik masuk plan ke renderer ada TIGA, dan hanya satu yang awalnya menukar
+bahasa: renderer lokal, target Lambda, dan perhitungan estimasi biayanya.
+Target Lambda (`@dalang/render-lambda`) membaca `plan.json` sendiri dan
+mengabaikan `language` tanpa satu pun galat — `dalang render --target lambda
+--bahasa en` merender video bahasa utama dan menamainya sulih. Ditemukan saat
+audit, ditutup dengan `planInLanguage` di kedua jalurnya, dan dijaga tes yang
+memeriksa plan yang dikirim ke komposisi, aset yang diunggah (berkas audio
+bahasa itu, bukan bahasa utama), dan estimasi biaya yang ikut bahasanya.
+
+Nama berkas turunan plan (`<projectId>.<bahasa>.srt`, `subtitle.<bahasa>.srt`)
+disusun dari ruas yang dibersihkan (`safeFileSegment`): `projectId` dan
+`meta.language` adalah string bebas di skema, dan sebelumnya `projectId`
+"../../x" menulis berkas di luar folder proyek. Hanya huruf, angka, `_`, dan
+`-` yang lolos.
+
 ## Konsekuensi
 
 **Yang didapat.** Satu proyek menerbitkan video dalam banyak bahasa, dengan
@@ -193,8 +229,26 @@ merah.
 - **Anotasi tutorial (ADR-0020) belum punya `dubs`.** Label anotasi tetap
   bahasa aslinya di video sulihan. Preset `tutorial-01` karena itu belum
   sepenuhnya bisa disulih.
-- **Nama berkas render tidak menyebut bahasanya.** Merender dua bahasa ke
-  folder keluaran bawaan yang sama akan menimpa berkasnya; pakai `-o`.
+- **Terjemahan yang basi tidak ditandai.** Mengubah narasi bahasa utama
+  SETELAH diterjemahkan tidak membuat sulihannya ditandai usang: `dubs[en]`
+  tetap berisi terjemahan naskah lama dan video bahasa Inggris terbit dengan
+  isi yang sudah tidak sama dengan versi bahasa utamanya. Aturan kritik
+  `sulih-separuh` hanya menangkap sulihan yang HILANG, bukan yang usang.
+  Setelah menyunting narasi, terjemahkan ulang.
+- **Subtitle sulih yang berbahasa CJK belum dipatahkan dengan benar.**
+  Pematah baris subtitle memotong di spasi; bahasa tanpa spasi antar kata
+  (Mandarin, Jepang, Thai) akan jadi satu baris panjang. Tidak ada gerbang
+  yang mengukurnya.
+- **Pemain pratinjau Studio memutar bahasa utama.** Tab Sulih mengelola teks
+  dan suaranya, tetapi memutar VERSI bahasa lain hanya lewat render
+  (`--bahasa`, atau pilihan Bahasa di dialog Ekspor), bukan di Player.
+- **Ekspor interop (OTIO/FCPXML) hanya membawa bahasa utama.** Garis waktu
+  yang dibawa ke editor lain tidak punya trek sulihan.
+- **Belum pernah dijalankan terhadap layanan sungguhan.** TTS sulih
+  teruji dengan provider offline dan tiruan; ElevenLabs, YouTube
+  (`captions.insert`), dan model penerjemah tidak pernah dipanggil dari repo
+  ini, jadi bentuk responsnya adalah apa yang dokumentasi mereka katakan,
+  bukan apa yang teramati.
 
 ## Alternatif yang ditolak
 

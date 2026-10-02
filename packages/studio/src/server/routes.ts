@@ -17,6 +17,7 @@ import {
   planLanguages,
   primaryClip,
   primaryClipId,
+  renderFileNameFor,
   resolveSceneDurationSec,
   setClipAsset,
   speechSpans,
@@ -45,6 +46,7 @@ import { templatesPublicDir } from "@dalang/templates/paths";
 import {
   buildSubtitleCues,
   SUBTITLE_FORMATS,
+  subtitleFileName,
   toSrt,
   toVtt,
 } from "@dalang/templates/subtitle";
@@ -106,6 +108,8 @@ const dubBody = z.object({
 });
 const timelineExportBody = z.object({
   format: z.enum(["otio", "fcpxml"]).default("otio"),
+  /** Bahasa sulih yang diekspor (ADR-0040); kosong = bahasa utama. */
+  bahasa: z.string().min(2).max(16).optional(),
 });
 
 const transcribeBody = z.object({
@@ -122,6 +126,8 @@ const renderBody = z.object({
   format: z.enum(VIDEO_FORMATS).optional(),
   resolution: z.union([z.literal(540), z.literal(720), z.literal(1080)]).optional(),
   quality: z.enum(ENCODE_QUALITIES).optional(),
+  /** Bahasa sulih yang dirender (ADR-0040); kosong = bahasa utama. */
+  bahasa: z.string().min(2).max(16).optional(),
   confirm: z.boolean().optional(),
 });
 const pickBody = z.object({
@@ -612,7 +618,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     const startedAt = Date.now();
     const format = body.data.format;
     const cues = buildSubtitleCues(dipakai);
-    const name = `${dipakai.projectId}.${dipakai.meta.language}.${format}`;
+    const name = subtitleFileName(dipakai, format);
     const target = join(dirname(session.paths.planPath), name);
     atomicWriteFile(target, format === "srt" ? toSrt(cues) : toVtt(cues));
 
@@ -653,8 +659,15 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
   app.post("/api/timeline-export", async (c) => {
     const body = timelineExportBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
-    const plan = session.plan;
-    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const asli = session.plan;
+    if (!asli) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const bahasa = body.data.bahasa;
+    if (bahasa && !planLanguages(asli).includes(bahasa)) {
+      return c.json({ error: `Proyek ini belum punya sulihan "${bahasa}"` }, 400);
+    }
+    // Ditukar ke bahasanya DULU: garis waktu yang dibawa ke editor lain lalu
+    // memuat narasi dan berkas suara bahasa itu, bukan bahasa utama.
+    const plan = bahasa ? planInLanguage(asli, bahasa) : asli;
 
     try {
       const startedAt = Date.now();
@@ -663,7 +676,11 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         siteAssetDir: templatesPublicDir,
       });
       const format = body.data.format;
-      const name = format === "otio" ? "timeline.otio" : "timeline.fcpxml";
+      const name = renderFileNameFor(
+        format === "otio" ? "timeline.otio" : "timeline.fcpxml",
+        asli,
+        bahasa,
+      );
       const target = join(dirname(session.paths.planPath), name);
       atomicWriteFile(
         target,
@@ -778,6 +795,21 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
     if (!session.plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
 
+    // Bahasa yang tidak ada DITOLAK, bukan jatuh diam-diam ke bahasa utama:
+    // video Indonesia yang dikira Inggris baru ketahuan setelah diunggah.
+    const bahasa =
+      body.data.bahasa && body.data.bahasa !== session.plan.meta.language
+        ? body.data.bahasa
+        : undefined;
+    if (bahasa && !planLanguages(session.plan).includes(bahasa)) {
+      return c.json(
+        {
+          error: `Proyek ini belum punya sulihan "${bahasa}". Yang ada: ${planLanguages(session.plan).join(", ")}`,
+        },
+        400,
+      );
+    }
+
     // ADR-0014: profil = makro default; pengaturan eksplisit menimpanya.
     const { format, resolution, quality } = body.data;
     const explicit =
@@ -787,7 +819,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
       profile,
       explicit ? { format, resolution, quality } : undefined,
     );
-    const label = `${settings.format} ${settings.resolution}p ${settings.quality}`;
+    const label = `${settings.format} ${settings.resolution}p ${settings.quality}${bahasa ? ` · ${bahasa}` : ""}`;
 
     // Konfirmasi utk pekerjaan berat (menit-menit CPU), pola 428 yang sama.
     const heavy =
@@ -810,11 +842,17 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
 
     session.persist();
-    const fileName = explicit
-      ? `ekspor-${settings.format}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`
-      : profile === "final"
-        ? "final.mp4"
-        : "preview.mp4";
+    // Bahasa ikut di nama berkas (ADR-0040): render bahasa lain tidak menimpa
+    // render bahasa utama, dan pengunggah membaca bahasa videonya dari sini.
+    const fileName = renderFileNameFor(
+      explicit
+        ? `ekspor-${settings.format}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`
+        : profile === "final"
+          ? "final.mp4"
+          : "preview.mp4",
+      session.plan,
+      bahasa,
+    );
     const outputLocation = join(session.paths.dalangDir, "renders", fileName);
     store.bus.emit({ type: "render", status: "started", label });
     const startedAt = Date.now();
@@ -828,6 +866,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         ...(explicit ? { settings: { format, resolution, quality } } : {}),
         // ADR-0028: draf dari proxy; ekspor final/eksplisit dari berkas asli.
         useProxies: profile === "draft" && !explicit,
+        ...(bahasa ? { language: bahasa } : {}),
       })
       .then((result) => {
         logUiEvent(

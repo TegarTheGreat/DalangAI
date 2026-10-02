@@ -135,3 +135,86 @@ describe("publishVideo membawa subtitle (ADR-0039)", () => {
     expect(target.calls[0]?.subtitle).toBeUndefined();
   });
 });
+
+describe("nama berkas subtitle dari plan yang tidak dipercaya", () => {
+  it("projectId berisi ../ tidak membuat berkas di luar folder proyek", async () => {
+    const project = tempProject(basicPlan({ projectId: "../sasaran/DITIMPA" }));
+    cleanups.push(project.cleanup);
+    const { deps } = makeDeps({});
+    const tools = buildAgentTools(project.session, deps);
+    const out = await exec(tools, "writeSubtitle", { format: "srt" });
+
+    expect(out.ok).toBe(true);
+    expect(String(out.berkas)).not.toContain("/");
+    expect(existsSync(join(project.dir, String(out.berkas)))).toBe(true);
+    // Folder induk tidak boleh kejatuhan berkas apa pun.
+    expect(existsSync(join(project.dir, "..", "sasaran"))).toBe(false);
+  });
+});
+
+describe("render dan unggah dalam bahasa sulih (ADR-0040)", () => {
+  const sulih = () =>
+    basicPlan({
+      meta: { title: "Uji Agent", dubTitles: { en: "Agent Test" } },
+      scenes: [
+        {
+          id: "sc-001",
+          narration: "Kalimat pertama untuk agent.",
+          dubs: { en: "The first sentence for the agent." },
+          clips: [{ id: "sc-001-k1", type: "solid" }],
+        },
+      ],
+    });
+
+  it("renderPreview dengan bahasa meneruskannya dan memberi akhiran pada berkas", async () => {
+    const project = tempProject(sulih());
+    cleanups.push(project.cleanup);
+    const { deps, render } = makeDeps({});
+    const tools = buildAgentTools(project.session, deps);
+    const out = await exec(tools, "renderPreview", { bahasa: "en" });
+
+    expect(out.ok).toBe(true);
+    expect(render.calls[0]?.language).toBe("en");
+    expect(render.calls[0]?.outputLocation.endsWith("preview.en.mp4")).toBe(true);
+  });
+
+  it("bahasa yang belum ada ditolak dengan daftar pilihannya", async () => {
+    const project = tempProject(sulih());
+    cleanups.push(project.cleanup);
+    const { deps, render } = makeDeps({});
+    const tools = buildAgentTools(project.session, deps);
+    const out = await exec(tools, "renderPreview", { bahasa: "jv" });
+
+    expect(out.ok).toBe(false);
+    expect(String(out.error)).toContain("jv");
+    expect(String(out.error)).toContain("id, en");
+    expect(render.calls).toHaveLength(0);
+  });
+
+  it("publishVideo membaca bahasa dari nama berkas: judul, deskripsi, dan subtitle bahasa itu", async () => {
+    const project = tempProject(sulih());
+    cleanups.push(project.cleanup);
+    const target = fakeTarget();
+    const { deps } = makeDeps({ publishTargets: () => [target] });
+    const tools = buildAgentTools(project.session, deps);
+    writeRender(project.dir, "final.en.mp4");
+
+    const out = await exec(tools, "publishVideo", {
+      file: "final.en.mp4",
+      privasi: "private",
+    });
+    expect(out.ok).toBe(true);
+
+    const request = target.calls[0];
+    if (!request) throw new Error("tujuan tidak pernah dipanggil");
+    expect(request.title).toBe("Agent Test");
+    expect(request.language).toBe("en");
+    expect(request.description).toContain("The first sentence");
+    expect(request.description).not.toContain("Kalimat pertama");
+    expect(request.subtitle?.language).toBe("en");
+    expect(request.subtitle?.path.endsWith("subtitle.en.srt")).toBe(true);
+    expect(readFileSync(request.subtitle?.path ?? "", "utf8")).toContain(
+      "first sentence",
+    );
+  });
+});

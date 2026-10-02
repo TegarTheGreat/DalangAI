@@ -4,6 +4,7 @@ import {
   allRecipes,
   critiquePlan,
   MAX_EDITOR_NAME,
+  planLanguages,
   recipeFor,
   type SafeArea,
 } from "@dalang/core";
@@ -171,6 +172,11 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const [format, setFormat] = useState<ExportSettingsLite["format"]>("mp4");
   const [resolution, setResolution] = useState<ExportSettingsLite["resolution"]>(1080);
   const [quality, setQuality] = useState<ExportSettingsLite["quality"]>("seimbang");
+  // Bahasa yang dirender DAN yang diberi subtitle (ADR-0040): satu pilihan
+  // untuk keduanya, supaya video berbahasa Inggris tidak bisa berangkat
+  // bersama subtitle Indonesia hanya karena dua pilihan yang terpisah lupa
+  // disamakan.
+  const [bahasaDipilih, setBahasaDipilih] = useState<string | null>(null);
   // Ekspor garis waktu berdiri sendiri di dialog ini: bukan render, tidak
   // memakai setelan di atasnya, dan hasilnya berkas teks — bukan video.
   const [timeline, setTimeline] = useState<TimelineExportResult | null>(null);
@@ -189,17 +195,26 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
       setTimelineError(null);
       setSubtitle(null);
       setSubtitleError(null);
+      setBahasaDipilih(null);
     }
   }, [open]);
 
   if (!open) return null;
+
+  const bahasaTersedia = project?.plan ? planLanguages(project.plan) : [];
+  const bahasaUtama = project?.plan?.meta.language ?? "";
+  // Pilihan yang sudah tidak ada di plan (sulihannya dihapus saat dialog
+  // terbuka) jatuh ke bahasa utama, bukan ke render yang pasti ditolak server.
+  const bahasa =
+    bahasaDipilih && bahasaTersedia.includes(bahasaDipilih) ? bahasaDipilih : bahasaUtama;
+  const bahasaKirim = bahasa && bahasa !== bahasaUtama ? bahasa : undefined;
 
   const exportTimeline = (format: "otio" | "fcpxml") => {
     setTimelineBusy(format);
     setTimelineError(null);
     setTimeline(null);
     api
-      .exportTimeline(format)
+      .exportTimeline(format, bahasaKirim)
       .then(setTimeline)
       .catch((cause: unknown) => {
         setTimelineError(cause instanceof Error ? cause.message : String(cause));
@@ -211,7 +226,7 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
     setSubtitleError(null);
     setSubtitle(null);
     api
-      .writeSubtitle(format)
+      .writeSubtitle(format, bahasaKirim)
       .then(setSubtitle)
       .catch((cause: unknown) => {
         setSubtitleError(cause instanceof Error ? cause.message : String(cause));
@@ -247,6 +262,22 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
             </button>
           ))}
         </div>
+        {bahasaTersedia.length > 1 ? (
+          <div className="field">
+            <span>Bahasa</span>
+            <Segmented
+              grow
+              options={bahasaTersedia}
+              value={bahasa}
+              label={(kode) => kode}
+              onChange={setBahasaDipilih}
+            />
+            <p className="export-hint">
+              Berlaku untuk video, subtitle, dan garis waktu di bawah. Berkasnya diberi
+              akhiran bahasa, jadi tidak menimpa yang bahasa utama.
+            </p>
+          </div>
+        ) : null}
         <div className="radio-stack">
           {EXPORT_FORMATS.map((option) => (
             <RadioCard
@@ -406,7 +437,10 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
             disabled={busy}
             onClick={() => {
               onClose();
-              void studioClient.startExportConfirmed({ format, resolution, quality });
+              void studioClient.startExportConfirmed(
+                { format, resolution, quality },
+                bahasaKirim,
+              );
             }}
           >
             Mulai ekspor

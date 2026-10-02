@@ -112,6 +112,18 @@ describe("planFromTemplate", () => {
     expect(plan.scenes).toHaveLength(pack.plan.scenes.length);
   });
 
+  it("terjemahan judul LAMA tidak ikut ke proyek baru (ADR-0040)", () => {
+    // `dubTitles` adalah judul pembuat template dalam bahasa lain. Kalau ikut,
+    // proyek baru berjudul "Video Saya" terbit dalam bahasa Inggris dengan
+    // judul milik orang lain — cacat yang membuat judul diganti sejak awal.
+    const sumber = makePlan((input) => {
+      input.meta = { ...input.meta, dubTitles: { en: "Creator's Title" } };
+    });
+    const { pack } = templateFromPlan(sumber, manifest());
+    const plan = planFromTemplate(pack, { title: "Video Saya", projectId: "video-saya" });
+    expect(plan.meta.dubTitles).toEqual({});
+  });
+
   it("judul kosong ditolak, bukan menghasilkan proyek tanpa nama", () => {
     const pack = BUILT_IN_TEMPLATES[0];
     if (!pack) throw new Error("tidak ada template bawaan");

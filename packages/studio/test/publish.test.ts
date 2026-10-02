@@ -1,4 +1,5 @@
-import { rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import type { PublishRequest, PublishTarget } from "@dalang/pipeline";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Studio } from "../src/server/index";
@@ -276,5 +277,57 @@ describe("/api/publish (ADR-0030)", () => {
     expect(failed).toMatchObject({ status: "error" });
     expect(failed?.error).toContain("kuota");
     expect(failed?.url).toBeUndefined();
+  });
+});
+
+describe("publikasi video sulih (ADR-0040)", () => {
+  it("bahasa dibaca dari nama berkas: metadata dan subtitle ikut bahasa videonya", async () => {
+    const target = fakeTarget();
+    const { studio, dir } = boot(target);
+    const sulih = await post(studio, "/api/patch", {
+      ops: [
+        {
+          op: "setDub",
+          sceneId: "sc-batu",
+          language: "en",
+          text: "A stone temple that has stood for ages.",
+        },
+      ],
+    });
+    expect(sulih.status).toBe(200);
+
+    const selesai = call(studio, "/api/events").then((response) =>
+      collectSse(response, (list) =>
+        list.some(
+          (event) => event.event === "render" && JSON.parse(event.data).status === "done",
+        ),
+      ),
+    );
+    expect(
+      (await post(studio, "/api/render", { profile: "draft", bahasa: "en" })).status,
+    ).toBe(202);
+    await selesai;
+
+    const events = publishEvents(studio);
+    const started = await post(studio, "/api/publish", {
+      file: "preview.en.mp4",
+      confirm: true,
+    });
+    expect(started.status).toBe(202);
+    expect((await events).at(-1)).toMatchObject({ status: "done" });
+
+    // Bahasa videonya sampai ke penyedia, dan teksnya bahasa itu — bukan
+    // narasi bahasa utama yang kebetulan masih ada di plan.
+    expect(target.calls[0]?.language).toBe("en");
+    expect(target.calls[0]?.description).toContain("A stone temple");
+    expect(target.calls[0]?.description).not.toContain("Candi batu berdiri");
+    expect(target.calls[0]?.subtitle?.language).toBe("en");
+    expect(target.calls[0]?.subtitle?.path.endsWith("subtitle.en.srt")).toBe(true);
+    expect(
+      readFileSync(target.calls[0]?.subtitle?.path ?? "", "utf8").includes(
+        "stone temple",
+      ),
+    ).toBe(true);
+    expect(existsSync(join(dir, ".dalang", "subtitle.en.srt"))).toBe(true);
   });
 });

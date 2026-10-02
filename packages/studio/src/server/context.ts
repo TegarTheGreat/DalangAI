@@ -32,6 +32,8 @@ export interface StudioDeps {
     settings?: Partial<ExportSettings>;
     /** Render draf dari proxy pratinjau (ADR-0028). */
     useProxies?: boolean;
+    /** Bahasa sulih yang dirender (ADR-0040); kosong = bahasa utama. */
+    language?: string;
   }) => Promise<RenderVideoResult>;
   /**
    * Baca metadata video lokal (ADR-0017): (planPath, path relatif) -> info.

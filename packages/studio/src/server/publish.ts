@@ -7,10 +7,16 @@ import {
   PUBLISH_PRIVACY_LABEL,
   PUBLISH_TITLE_MAX,
   type PublishMetadata,
+  planInLanguage,
+  renderFileLanguage,
 } from "@dalang/core";
 import { atomicWriteFile, publishRender } from "@dalang/pipeline";
 import { PUBLISH_SETUP_HINT } from "@dalang/providers";
-import { buildSubtitleCues, toSrt } from "@dalang/templates/subtitle";
+import {
+  buildSubtitleCues,
+  toSrt,
+  uploadSubtitleFileName,
+} from "@dalang/templates/subtitle";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type {
@@ -116,8 +122,13 @@ export const registerPublishRoutes = (app: Hono, ctx: StudioContext): void => {
     if (!existsSync(filePath)) {
       return c.json({ error: `Berkas render tidak ditemukan: ${name}` }, 404);
     }
-    const plan = session.plan;
-    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const asli = session.plan;
+    if (!asli) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    // Bahasa videonya dibaca dari NAMA berkas (ADR-0040). Judul, deskripsi, dan
+    // subtitle yang menyertai video harus sebahasa dengan suaranya: video
+    // berbahasa Inggris yang berangkat dengan judul dan teks Indonesia tidak
+    // ketahuan sampai ada penonton yang membukanya.
+    const plan = planInLanguage(asli, renderFileLanguage(name, asli));
 
     const { title, description, tags, privacy, force = false } = body.data;
     const metadata: PublishMetadata = {
@@ -157,7 +168,7 @@ export const registerPublishRoutes = (app: Hono, ctx: StudioContext): void => {
     let subtitle: { path: string; language: string } | undefined;
     const cues = buildSubtitleCues(plan);
     if (cues.length > 0) {
-      const subPath = join(session.paths.dalangDir, `subtitle.${plan.meta.language}.srt`);
+      const subPath = join(session.paths.dalangDir, uploadSubtitleFileName(plan));
       mkdirSync(dirname(subPath), { recursive: true });
       atomicWriteFile(subPath, toSrt(cues));
       subtitle = { path: subPath, language: plan.meta.language };

@@ -19,6 +19,7 @@ import {
   GRAPHIC_ANIMS,
   idSlug,
   isLanguageCode,
+  LANGUAGE_CODE_RE,
   LAYER_ENTRANCES,
   LAYER_SHAPES,
   MAX_LAYERS,
@@ -32,10 +33,14 @@ import {
   PUBLISH_TITLE_MAX,
   type PublishMetadata,
   patchOpSchema,
+  planInLanguage,
+  planLanguages,
   primaryClip,
   primaryClipId,
   recipeFor,
   removeMemoryEntry,
+  renderFileLanguage,
+  renderFileNameFor,
   resolveSceneDurationSec,
   type Scene,
   type ScenePlan,
@@ -81,8 +86,10 @@ import { BUNDLED_SFX, resolveSfxFile, SFX_LIBRARY_PREFIX } from "@dalang/templat
 import {
   buildSubtitleCues,
   SUBTITLE_FORMATS,
+  subtitleFileName,
   toSrt,
   toVtt,
+  uploadSubtitleFileName,
 } from "@dalang/templates/subtitle";
 import { generateText, type ToolSet, tool } from "ai";
 import { z } from "zod";
@@ -114,6 +121,14 @@ import {
  *    bisa mengoreksi arah, bukan exception yang memutus giliran.
  * Semua dependensi eksternal (TTS/stock/render/model volume) di-inject.
  */
+
+const bahasaRenderField = z
+  .string()
+  .regex(LANGUAGE_CODE_RE, "kode bahasa seperti id, en, pt-BR")
+  .optional()
+  .describe(
+    "Render dalam bahasa sulih ini (mis. en). Kosong = bahasa utama. Hanya bahasa yang sudah punya sulihan (translateNarration atau op setDub); berkasnya diberi akhiran bahasa supaya tidak menimpa render bahasa utama.",
+  );
 
 export interface AgentDeps {
   guards: Guardrails;
@@ -148,6 +163,8 @@ export interface AgentDeps {
     profile: "draft" | "final";
     /** Render dari proxy pratinjau (ADR-0028) — hanya untuk draf. */
     useProxies?: boolean;
+    /** Bahasa sulih yang dirender (ADR-0040); kosong = bahasa utama. */
+    language?: string;
   }) => Promise<RenderVideoResult>;
   /** Model tier-2 (murah/multimodal) untuk researchTopic & analyzeImage. */
   volumeModel?: ResolvedModel;
@@ -276,6 +293,26 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
       throw new Error("Belum ada scene-plan — buat draft dulu lewat writeScenePlan");
     }
     return session.plan;
+  };
+
+  /**
+   * Bahasa render yang diminta (ADR-0040): kosong atau bahasa utama = tanpa
+   * penukaran. Bahasa yang tidak ada DITOLAK dengan daftar pilihannya, bukan
+   * jatuh diam-diam ke bahasa utama — video Indonesia yang dikira Inggris
+   * baru ketahuan setelah diunggah.
+   */
+  const requireRenderLanguage = (
+    plan: ScenePlan,
+    bahasa: string | undefined,
+  ): string | undefined => {
+    if (!bahasa || bahasa === plan.meta.language) return undefined;
+    const ada = planLanguages(plan);
+    if (!ada.includes(bahasa)) {
+      throw new Error(
+        `Proyek ini belum punya sulihan "${bahasa}". Yang ada: ${ada.join(", ")}`,
+      );
+    }
+    return bahasa;
   };
 
   /**
@@ -1839,18 +1876,23 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
     renderPreview: tool({
       description:
         "Render video draft (540p, cepat) ke folder proyek untuk dicek user. Jalankan setelah perubahan berarti; sebutkan path hasilnya ke user.",
-      inputSchema: z.object({}),
+      inputSchema: z.object({ bahasa: bahasaRenderField }),
       execute: (input) =>
         run("renderPreview", input, async () => {
-          requirePlan();
+          const bahasa = requireRenderLanguage(requirePlan(), input.bahasa);
           session.persist();
-          const outputLocation = join(session.paths.dalangDir, "renders", "preview.mp4");
+          const outputLocation = join(
+            session.paths.dalangDir,
+            "renders",
+            renderFileNameFor("preview.mp4", requirePlan(), bahasa),
+          );
           const result = await deps.renderVideo({
             planPath: session.paths.planPath,
             outputLocation,
             profile: "draft",
             // ADR-0028: draf dirender dari proxy — 540p persis skala draf.
             useProxies: true,
+            ...(bahasa ? { language: bahasa } : {}),
           });
           return {
             ok: true,
@@ -2004,23 +2046,28 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
     renderFinal: tool({
       description:
         "Render final 1080p — SELALU meminta konfirmasi user (memakan waktu beberapa menit). Panggil hanya bila user sudah puas dengan draft.",
-      inputSchema: z.object({}),
+      inputSchema: z.object({ bahasa: bahasaRenderField }),
       execute: (input) =>
         run("renderFinal", input, async () => {
-          requirePlan();
+          const bahasa = requireRenderLanguage(requirePlan(), input.bahasa);
           const approved = await guards.approve({
             action: "renderFinal",
-            detail: "Render final 1080p (beberapa menit CPU/GPU)",
+            detail: `Render final 1080p${bahasa ? ` (bahasa ${bahasa})` : ""} (beberapa menit CPU/GPU)`,
           });
           if (!approved) {
             throw new Error("User belum menyetujui render final");
           }
           session.persist();
-          const outputLocation = join(session.paths.dalangDir, "renders", "final.mp4");
+          const outputLocation = join(
+            session.paths.dalangDir,
+            "renders",
+            renderFileNameFor("final.mp4", requirePlan(), bahasa),
+          );
           const result = await deps.renderVideo({
             planPath: session.paths.planPath,
             outputLocation,
             profile: "final",
+            ...(bahasa ? { language: bahasa } : {}),
           });
           return {
             ok: true,
@@ -2047,7 +2094,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
         run("writeSubtitle", input, async () => {
           const plan = requirePlan();
           const cues = buildSubtitleCues(plan);
-          const name = `${plan.projectId}.${plan.meta.language}.${input.format}`;
+          const name = subtitleFileName(plan, input.format);
           const target = join(dirname(session.paths.planPath), name);
           atomicWriteFile(target, input.format === "srt" ? toSrt(cues) : toVtt(cues));
 
@@ -2115,7 +2162,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
       }),
       execute: (input) =>
         run("publishVideo", input, async () => {
-          const plan = requirePlan();
+          const asli = requirePlan();
           const [target] = deps.publishTargets?.() ?? [];
           if (!target) return { ok: false, pesan: PUBLISH_SETUP_HINT };
           const rendersDir = join(session.paths.dalangDir, "renders");
@@ -2131,6 +2178,9 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           if (!existsSync(filePath)) {
             return { ok: false, pesan: `Berkas render tidak ditemukan: ${name}` };
           }
+          // Bahasa videonya dibaca dari NAMA berkas (ADR-0040): judul, deskripsi,
+          // dan subtitle harus sebahasa dengan suara yang diunggah.
+          const plan = planInLanguage(asli, renderFileLanguage(name, asli));
           const metadata: PublishMetadata = {
             ...defaultPublishMetadata(plan),
             ...(input.judul ? { title: input.judul } : {}),
@@ -2151,10 +2201,7 @@ export const buildAgentTools = (session: ProjectSession, deps: AgentDeps): ToolS
           if (input.tanpaSubtitle !== true) {
             const cues = buildSubtitleCues(plan);
             if (cues.length > 0) {
-              const subPath = join(
-                session.paths.dalangDir,
-                `subtitle.${plan.meta.language}.srt`,
-              );
+              const subPath = join(session.paths.dalangDir, uploadSubtitleFileName(plan));
               mkdirSync(dirname(subPath), { recursive: true });
               atomicWriteFile(subPath, toSrt(cues));
               subtitle = { path: subPath, language: plan.meta.language };

@@ -36,6 +36,8 @@ import {
   planLanguages,
   primaryClip,
   removeMemoryEntry,
+  renderFileLanguage,
+  renderFileNameFor,
   resolveSceneDurationSec,
   type ScenePlan,
   sceneAsset,
@@ -89,8 +91,10 @@ import {
   buildSubtitleCues,
   SUBTITLE_FORMATS,
   type SubtitleFormat,
+  subtitleFileName,
   toSrt,
   toVtt,
+  uploadSubtitleFileName,
 } from "@dalang/templates/subtitle";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { registerChatCommand, registerLogCommand } from "./chat";
@@ -363,7 +367,8 @@ program
       },
     ) => {
       const absPlan = planPathOf(planPath);
-      dalamBahasa(loadPlan(absPlan), options.bahasa);
+      const asli = loadPlan(absPlan);
+      dalamBahasa(asli, options.bahasa);
       const name = basename(dirname(absPlan));
       mkdirSync(resolve(options.outDir), { recursive: true });
       const times = options.time.length > 0 ? options.time : [1];
@@ -378,7 +383,10 @@ program
         disableBundleCache: !options.cache,
         ...(options.bahasa ? { language: options.bahasa } : {}),
         outputLocationFor: (frame) =>
-          join(resolve(options.outDir), `${name}-f${frame}.${extension}`),
+          join(
+            resolve(options.outDir),
+            renderFileNameFor(`${name}-f${frame}.${extension}`, asli, options.bahasa),
+          ),
         onProgress: progressPrinter(),
       });
       process.stdout.write("\n");
@@ -445,7 +453,8 @@ program
       // Plan ditukar DI SINI hanya untuk ringkasan dan pemeriksaannya; yang
       // benar-benar merender adalah renderer, yang menerima `language` dan
       // menukarnya sendiri di satu-satunya tempat plan masuk ke sana.
-      const plan = dalamBahasa(loadPlan(absPlan), options.bahasa);
+      const asli = loadPlan(absPlan);
+      const plan = dalamBahasa(asli, options.bahasa);
       printPlanSummary(plan);
       if (options.proxy && options.profile === "final") {
         console.warn(
@@ -466,7 +475,14 @@ program
         options.out ??
           join(
             "out",
-            `${name}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`,
+            // Bahasa ikut di nama (ADR-0040): dua render dari satu proyek yang
+            // berbeda bahasa tidak boleh saling menimpa, dan pengunggah
+            // membaca bahasa videonya dari sini.
+            renderFileNameFor(
+              `${name}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`,
+              asli,
+              options.bahasa,
+            ),
           ),
       );
       mkdirSync(dirname(outPath), { recursive: true });
@@ -751,7 +767,7 @@ program
     ) => {
       const absPlan = planPathOf(planPath);
       const paths = projectPaths(absPlan);
-      const plan = readPlanFile(absPlan);
+      const asli = readPlanFile(absPlan);
       const [target] = buildPublishTargets();
       if (!target) throw new Error(PUBLISH_SETUP_HINT);
 
@@ -766,6 +782,11 @@ program
       if (!existsSync(filePath))
         throw new Error(`Berkas render tidak ditemukan: ${filePath}`);
 
+      // Bahasa videonya dibaca dari NAMA berkas (ADR-0040). Judul, deskripsi,
+      // dan subtitle yang menyertai video harus sebahasa dengan suaranya:
+      // video berbahasa Inggris yang berangkat dengan judul dan teks Indonesia
+      // tidak ketahuan sampai ada penonton yang membukanya.
+      const plan = planInLanguage(asli, renderFileLanguage(name, asli));
       const metadata = {
         ...defaultPublishMetadata(plan),
         ...(options.judul ? { title: options.judul } : {}),
@@ -785,7 +806,7 @@ program
       if (!options.tanpaSubtitle) {
         const cues = buildSubtitleCues(plan);
         if (cues.length > 0) {
-          const subPath = join(paths.dalangDir, `subtitle.${plan.meta.language}.srt`);
+          const subPath = join(paths.dalangDir, uploadSubtitleFileName(plan));
           mkdirSync(dirname(subPath), { recursive: true });
           atomicWriteFile(subPath, toSrt(cues));
           subtitle = { path: subPath, language: plan.meta.language };
@@ -1135,11 +1156,7 @@ program
       const plan = dalamBahasa(readPlanFile(absPlan), options.bahasa);
       const cues = buildSubtitleCues(plan);
       const target = resolve(
-        options.out ??
-          join(
-            dirname(absPlan),
-            `${plan.projectId}.${plan.meta.language}.${options.format}`,
-          ),
+        options.out ?? join(dirname(absPlan), subtitleFileName(plan, options.format)),
       );
       mkdirSync(dirname(target), { recursive: true });
       atomicWriteFile(target, options.format === "srt" ? toSrt(cues) : toVtt(cues));
