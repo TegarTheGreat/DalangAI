@@ -283,10 +283,37 @@ describe("penempatan efek suara", () => {
   });
 
   it("cue tanpa berkas ter-resolve dilewati", () => {
+    // Id pustaka yang TIDAK dikenal: sejak ADR-0041 id pustaka yang dikenal
+    // memang tidak butuh renderState sama sekali, jadi yang menguji cabang
+    // "tidak ada berkasnya" harus memakai id yang tidak ada di pustaka.
     const plan = planWithSfx([
-      { id: "s1", assetId: "pustaka:whoosh", sceneId: "a", atSec: 0 },
+      { id: "s1", assetId: "pustaka:tidak-ada", sceneId: "a", atSec: 0 },
     ]);
     expect(placeSfxCues(plan, computeFrameLayout(plan), FPS)).toEqual([]);
+  });
+
+  it("bunyi PUSTAKA berbunyi tanpa satu pun entri renderState (ADR-0041)", () => {
+    // Ini yang membuat efek suara bekerja OFFLINE: tidak ada yang perlu
+    // diunduh, di-stage, atau dicatat sebagai aset plan.
+    const plan = planWithSfx([
+      { id: "s1", assetId: "pustaka:whoosh", sceneId: "a", atSec: 0.5 },
+    ]);
+    expect(plan.renderState.sfxAssets).toEqual({});
+    const [placed] = placeSfxCues(plan, computeFrameLayout(plan), FPS);
+    expect(placed).toMatchObject({
+      cueId: "s1",
+      file: "sfx/whoosh.wav",
+      bundled: true,
+    });
+  });
+
+  it("bunyi unduhan tetap lewat jalur aset PLAN, bukan aset situs", () => {
+    const plan = planWithSfx(
+      [{ id: "s1", assetId: "openverse:123", sceneId: "a", atSec: 0 }],
+      { s1: sfxAsset("sfx/unduhan.wav") },
+    );
+    const [placed] = placeSfxCues(plan, computeFrameLayout(plan), FPS);
+    expect(placed).toMatchObject({ file: "sfx/unduhan.wav", bundled: false });
   });
 
   it("banyak cue di scene sama tetap terurut sesuai waktunya", () => {

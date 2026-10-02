@@ -35,6 +35,7 @@ const CaptionPage: React.FC<{
     inkSoft: "rgba(245, 240, 230, 0.66)",
     accent: theme.accent,
     onAccent: theme.bg,
+    plate: "rgba(10, 11, 16, 0.8)",
   });
   const fontSize =
     metrics.captionFontSize * spec.sizeFactor * TEXT_SIZE_FACTOR[scene.caption.size];

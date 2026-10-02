@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Curated Remotion style presets — the visual language of Dalang videos",
+  "description": "Curated Remotion style presets \u2014 the visual language of Dalang videos",
   "exports": {
     ".": "./src/index.ts",
     "./video": "./src/DalangVideo.tsx",
@@ -11,11 +11,16 @@
     "./layout": "./src/layout.ts",
     "./review-frames": "./src/review-frames.ts",
     "./fonts": "./src/fonts.ts",
-    "./music": "./src/music.ts"
+    "./music": "./src/music.ts",
+    "./subtitle": "./src/subtitle.ts",
+    "./sfx": "./src/sfx.ts"
   },
   "scripts": {
-    "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",
+    "gate:pengayaan": "tsx scripts/pengayaan-gate.mts",
+    "gate:subtitle": "tsx scripts/subtitle-gate.mts",
+    "gate:sulih": "tsx scripts/sulih-gate.mts",
     "stage-demo": "node scripts/stage-demo.mjs",
+    "studio": "node scripts/stage-demo.mjs && remotion studio src/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p ."
   },
@@ -34,6 +39,7 @@
     "@remotion/cli": "4.0.518",
     "@types/node": "26.4.0",
     "@types/react": "19.2.18",
+    "tsx": "4.23.12",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }

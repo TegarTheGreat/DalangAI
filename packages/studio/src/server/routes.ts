@@ -9,11 +9,15 @@ import {
 import {
   clipAsset,
   computeClipTimings,
+  dubCoverage,
   isRefusal,
   PatchError,
   patchOpSchema,
+  planInLanguage,
+  planLanguages,
   primaryClip,
   primaryClipId,
+  renderFileNameFor,
   resolveSceneDurationSec,
   setClipAsset,
   speechSpans,
@@ -27,6 +31,7 @@ import {
   materializeCandidate,
   runAsrStage,
   runAssetStage,
+  runDubStage,
   runLoudnessStage,
   runTtsStage,
 } from "@dalang/pipeline";
@@ -38,6 +43,13 @@ import {
   VIDEO_FORMATS,
 } from "@dalang/renderer";
 import { templatesPublicDir } from "@dalang/templates/paths";
+import {
+  buildSubtitleCues,
+  SUBTITLE_FORMATS,
+  subtitleFileName,
+  toSrt,
+  toVtt,
+} from "@dalang/templates/subtitle";
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -82,8 +94,22 @@ const reviewBody = z.object({
   perhatian: z.string().optional(),
 });
 
+const subtitleBody = z.object({
+  format: z.enum(SUBTITLE_FORMATS).default("srt"),
+  /** ADR-0040: subtitle untuk bahasa sulih; kosong = bahasa utama. */
+  bahasa: z.string().min(2).max(16).optional(),
+});
+
+/** ADR-0040: TTS untuk satu bahasa sulih. */
+const dubBody = z.object({
+  bahasa: z.string().min(2).max(16),
+  sceneIds: z.array(z.string().min(1)).optional(),
+  confirm: z.boolean().optional(),
+});
 const timelineExportBody = z.object({
   format: z.enum(["otio", "fcpxml"]).default("otio"),
+  /** Bahasa sulih yang diekspor (ADR-0040); kosong = bahasa utama. */
+  bahasa: z.string().min(2).max(16).optional(),
 });
 
 const transcribeBody = z.object({
@@ -100,6 +126,8 @@ const renderBody = z.object({
   format: z.enum(VIDEO_FORMATS).optional(),
   resolution: z.union([z.literal(540), z.literal(720), z.literal(1080)]).optional(),
   quality: z.enum(ENCODE_QUALITIES).optional(),
+  /** Bahasa sulih yang dirender (ADR-0040); kosong = bahasa utama. */
+  bahasa: z.string().min(2).max(16).optional(),
   confirm: z.boolean().optional(),
 });
 const pickBody = z.object({
@@ -325,6 +353,108 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
   });
 
+  /**
+   * TTS untuk satu BAHASA SULIH (ADR-0040).
+   *
+   * Rute sendiri, bukan flag di `/api/pipeline/tts`: gerbang biayanya dihitung
+   * dari teks sulihan (bukan narasi asli), dan hasilnya mendarat di lumbung
+   * yang berbeda. Menggabungkannya berarti satu rute yang separuh badannya
+   * bercabang di setiap langkah.
+   */
+  app.post("/api/pipeline/sulih", async (c) => {
+    const body = dubBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success)
+      return c.json({ error: "Body tidak valid: butuh { bahasa }" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const bahasa = body.data.bahasa;
+    if (bahasa === plan.meta.language) {
+      return c.json(
+        { error: `"${bahasa}" bahasa utama proyek ini — pakai /api/pipeline/tts` },
+        400,
+      );
+    }
+    if (!planLanguages(plan).includes(bahasa)) {
+      return c.json({ error: `Proyek ini belum punya sulihan "${bahasa}"` }, 400);
+    }
+    const voice = plan.audio.dubVoices[bahasa] ?? plan.audio.voice;
+    if (!voice) {
+      return c.json({ error: "audio.voice belum diset — atur suara dulu" }, 400);
+    }
+
+    const cakupan = dubCoverage(plan, bahasa);
+    const targets = plan.scenes.filter(
+      (scene) =>
+        (scene.dubs[bahasa] ?? "").trim() !== "" &&
+        (!body.data.sceneIds || body.data.sceneIds.includes(scene.id)),
+    );
+    const chars = targets.reduce(
+      (sum, scene) => sum + (scene.dubs[bahasa] ?? "").length,
+      0,
+    );
+    const estimatedUsd =
+      voice.provider === "elevenlabs" ? chars * ELEVENLABS_ESTIMATED_USD_PER_CHAR : 0;
+    const gates = ctx.guards.config;
+    if (
+      !body.data.confirm &&
+      (targets.length > gates.ttsSceneGate || estimatedUsd > gates.approvalGateUsd)
+    ) {
+      const payload: NeedsConfirmation = {
+        needsConfirmation: true,
+        detail: `Sulih suara ${bahasa}: ${targets.length} scene (${chars} karakter, ${voice.provider})`,
+        estimatedUsd: estimatedUsd > 0 ? Number(estimatedUsd.toFixed(4)) : null,
+      };
+      return c.json(payload, 428);
+    }
+
+    try {
+      const startedAt = Date.now();
+      const outcome = await store.runExclusive("tts", () =>
+        runDubStage({
+          paths: session.paths,
+          plan,
+          language: bahasa,
+          providers: deps.ttsChainFor(voice.provider),
+          db: session.db,
+          ...(body.data.sceneIds ? { sceneIds: body.data.sceneIds } : {}),
+          log: { info: () => {}, warn: () => {} },
+        }),
+      );
+      store.commitStage(plan, outcome.plan);
+      const costUsd = outcome.results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
+      logUiEvent(
+        "sulihVoiceover",
+        { bahasa, sceneIds: body.data.sceneIds ?? null },
+        { scenes: outcome.results.length },
+        costUsd,
+        Date.now() - startedAt,
+      );
+      store.notifyPlan("pipeline");
+      store.bus.emit({
+        type: "stage-results",
+        stage: "tts",
+        results: outcome.results.map((r) => ({
+          sceneId: r.sceneId,
+          status: r.status,
+          detail: r.detail,
+        })),
+      });
+      return c.json({
+        ok: true,
+        bahasa,
+        results: outcome.results,
+        belumDiterjemahkan: outcome.belumDiterjemahkan,
+        // Dikatakan, bukan didiamkan: suara bahasa utama yang membaca teks
+        // bahasa lain terdengar persis seperti itu.
+        suaraSendiri: plan.audio.dubVoices[bahasa] !== undefined,
+        cakupan,
+      });
+    } catch (error) {
+      if (error instanceof StudioBusyError) return c.json(errorPayload(error), 409);
+      return c.json(errorPayload(error), 500);
+    }
+  });
+
   app.post("/api/pipeline/assets", async (c) => {
     const body = pipelineBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
@@ -464,8 +594,60 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
   });
 
-  // ADR-0022: tinjauan render dari UI, bukan hanya lewat chat agent. Memakai
-  // fungsi bersama yang sama dengan tool agent dan perintah CLI.
+  /**
+   * Berkas subtitle (ADR-0039).
+   *
+   * Ditulis DI SAMPING plan.json, bukan dikirim balik sebagai unduhan:
+   * berkas subtitle dipakai bersama berkas render, dan keduanya harus mudah
+   * ditemukan di satu folder saat orang membuka pengunggah YouTube.
+   */
+  app.post("/api/subtitle", async (c) => {
+    const body = subtitleBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
+    const plan = session.plan;
+    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+
+    const bahasa = body.data.bahasa;
+    if (bahasa && !planLanguages(plan).includes(bahasa)) {
+      return c.json({ error: `Proyek ini belum punya sulihan "${bahasa}"` }, 400);
+    }
+    // Ditukar ke bahasanya DULU: seluruh perhitungan di bawah — kartu, waktu,
+    // hitungan "masih ditaksir" — lalu berjalan atas plan satu-bahasa biasa.
+    const dipakai = bahasa ? planInLanguage(plan, bahasa) : plan;
+
+    const startedAt = Date.now();
+    const format = body.data.format;
+    const cues = buildSubtitleCues(dipakai);
+    const name = subtitleFileName(dipakai, format);
+    const target = join(dirname(session.paths.planPath), name);
+    atomicWriteFile(target, format === "srt" ? toSrt(cues) : toVtt(cues));
+
+    // Scene bernarasi yang waktunya masih DITAKSIR dilaporkan: bedanya besar,
+    // dan yang mengunggah berkas melenceng baru tahu setelah videonya tayang.
+    const bernarasi = dipakai.scenes.filter((scene) => scene.narration.trim() !== "");
+    const ditaksir = bernarasi.filter(
+      (scene) =>
+        (dipakai.renderState.narrationAudio[scene.id]?.wordTimestamps?.length ?? 0) === 0,
+    ).length;
+
+    logUiEvent(
+      "subtitleExport",
+      { format, bahasa: bahasa ?? null },
+      { berkas: name, kartu: cues.length },
+      0,
+      Date.now() - startedAt,
+    );
+    return c.json({
+      ok: true,
+      file: name,
+      cues: cues.length,
+      durationMs: cues[cues.length - 1]?.endMs ?? 0,
+      language: dipakai.meta.language,
+      estimated: ditaksir,
+      narrated: bernarasi.length,
+    });
+  });
+
   /**
    * Ekspor garis waktu ke OTIO/FCPXML (ADR-0023).
    *
@@ -477,8 +659,15 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
   app.post("/api/timeline-export", async (c) => {
     const body = timelineExportBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
-    const plan = session.plan;
-    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const asli = session.plan;
+    if (!asli) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const bahasa = body.data.bahasa;
+    if (bahasa && !planLanguages(asli).includes(bahasa)) {
+      return c.json({ error: `Proyek ini belum punya sulihan "${bahasa}"` }, 400);
+    }
+    // Ditukar ke bahasanya DULU: garis waktu yang dibawa ke editor lain lalu
+    // memuat narasi dan berkas suara bahasa itu, bukan bahasa utama.
+    const plan = bahasa ? planInLanguage(asli, bahasa) : asli;
 
     try {
       const startedAt = Date.now();
@@ -487,7 +676,11 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         siteAssetDir: templatesPublicDir,
       });
       const format = body.data.format;
-      const name = format === "otio" ? "timeline.otio" : "timeline.fcpxml";
+      const name = renderFileNameFor(
+        format === "otio" ? "timeline.otio" : "timeline.fcpxml",
+        asli,
+        bahasa,
+      );
       const target = join(dirname(session.paths.planPath), name);
       atomicWriteFile(
         target,
@@ -521,6 +714,8 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
   });
 
+  // ADR-0022: tinjauan render dari UI, bukan hanya lewat chat agent. Memakai
+  // fungsi bersama yang sama dengan tool agent dan perintah CLI.
   app.post("/api/review", async (c) => {
     const body = reviewBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "Body tidak valid" }, 400);
@@ -600,6 +795,21 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
     if (!session.plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
 
+    // Bahasa yang tidak ada DITOLAK, bukan jatuh diam-diam ke bahasa utama:
+    // video Indonesia yang dikira Inggris baru ketahuan setelah diunggah.
+    const bahasa =
+      body.data.bahasa && body.data.bahasa !== session.plan.meta.language
+        ? body.data.bahasa
+        : undefined;
+    if (bahasa && !planLanguages(session.plan).includes(bahasa)) {
+      return c.json(
+        {
+          error: `Proyek ini belum punya sulihan "${bahasa}". Yang ada: ${planLanguages(session.plan).join(", ")}`,
+        },
+        400,
+      );
+    }
+
     // ADR-0014: profil = makro default; pengaturan eksplisit menimpanya.
     const { format, resolution, quality } = body.data;
     const explicit =
@@ -609,7 +819,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
       profile,
       explicit ? { format, resolution, quality } : undefined,
     );
-    const label = `${settings.format} ${settings.resolution}p ${settings.quality}`;
+    const label = `${settings.format} ${settings.resolution}p ${settings.quality}${bahasa ? ` · ${bahasa}` : ""}`;
 
     // Konfirmasi utk pekerjaan berat (menit-menit CPU), pola 428 yang sama.
     const heavy =
@@ -632,11 +842,17 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
     }
 
     session.persist();
-    const fileName = explicit
-      ? `ekspor-${settings.format}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`
-      : profile === "final"
-        ? "final.mp4"
-        : "preview.mp4";
+    // Bahasa ikut di nama berkas (ADR-0040): render bahasa lain tidak menimpa
+    // render bahasa utama, dan pengunggah membaca bahasa videonya dari sini.
+    const fileName = renderFileNameFor(
+      explicit
+        ? `ekspor-${settings.format}-${settings.resolution}p-${settings.quality}.${extensionFor(settings.format)}`
+        : profile === "final"
+          ? "final.mp4"
+          : "preview.mp4",
+      session.plan,
+      bahasa,
+    );
     const outputLocation = join(session.paths.dalangDir, "renders", fileName);
     store.bus.emit({ type: "render", status: "started", label });
     const startedAt = Date.now();
@@ -650,6 +866,7 @@ export const registerJobRoutes = (app: Hono, ctx: StudioContext): void => {
         ...(explicit ? { settings: { format, resolution, quality } } : {}),
         // ADR-0028: draf dari proxy; ekspor final/eksplisit dari berkas asli.
         useProxies: profile === "draft" && !explicit,
+        ...(bahasa ? { language: bahasa } : {}),
       })
       .then((result) => {
         logUiEvent(

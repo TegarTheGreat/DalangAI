@@ -377,6 +377,8 @@ export interface RenderRequest {
   format?: ExportFormat;
   resolution?: ExportResolution;
   quality?: ExportQuality;
+  /** Bahasa sulih yang dirender (ADR-0040); kosong = bahasa utama. */
+  bahasa?: string;
   confirm?: boolean;
 }
 

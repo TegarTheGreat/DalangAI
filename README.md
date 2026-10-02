@@ -334,11 +334,18 @@ dan batas lainnya.
 ### Teks dan tipografi
 
 Caption karaoke tersinkron dari word timestamp asli TTS atau estimasi
-deterministik, dengan **empat gaya** (Klasik, Tegas, Chip, Halus), tipografi
-kinetik per kata atau per karakter, garis luar 0-8 piksel untuk keterbacaan di
-footage ramai, dan penekanan stabilo yang menyapu saat teks masuk. **Enam font
-variable ter-bundle** (OFL, dirender offline): Fraunces, Inter, Space Grotesk,
-Lora, Plus Jakarta Sans karya Tokotype, dan Anton.
+deterministik, dengan **enam gaya** (Klasik, Tegas, Chip, Halus, Pita,
+Karaoke), tipografi kinetik per kata atau per karakter, **enam animasi masuk**
+(Larut, Pop, Naik, Ketik, Kabur masuk, Geser masuk), garis luar 0-8 piksel
+untuk keterbacaan di footage ramai, dan penekanan stabilo yang menyapu saat
+teks masuk. **Sembilan font variable ter-bundle** (OFL, dirender offline):
+Fraunces, Inter, Space Grotesk, Lora, Plus Jakarta Sans karya Tokotype, Anton,
+Playfair Display, Manrope, dan JetBrains Mono.
+
+Gaya `Pita` menaruh seluruh baris di atas pita solid — keterbacaannya tidak
+bergantung pada gambar di belakangnya, jadi ia tetap terbaca di footage
+seramai apa pun. `Karaoke` menyisakan jejak: kata yang sudah lewat tetap
+beraksen, jadi penonton bisa mengejar kalimat yang terlewat sekilas.
 
 - **Zona aman platform**: `meta.safeArea` mengosongkan tepi bingkai yang akan
   ditimpa antarmuka platform tujuan — tepi bawah (judul, nama akun) dan tepi
@@ -351,8 +358,52 @@ Lora, Plus Jakarta Sans karya Tokotype, dan Anton.
   digambar di kanvas Studio supaya yang menyunting melihat batasnya, bukan cuma
   akibatnya; gerbang interaksi mengukur ketiga pitanya lewat pointer sungguhan.
 
+- **Berkas subtitle `.srt` dan `.vtt`** yang berjalan BERSAMA video, bukan
+  dibakar ke dalamnya: penonton bisa mematikannya, YouTube bisa
+  menerjemahkannya, dan mesin pencari membacanya — tiga hal yang tidak bisa
+  dilakukan piksel. Waktunya diambil dari tata letak RENDER, jadi ia tidak
+  melenceng tiap kali ada transisi, dan sumbernya sama dengan caption layar:
+  word timestamp TTS kalau ada, transkrip rekaman kalau itu yang dipakai,
+  taksiran kalau belum. Pengelompokan kartunya berbeda dari caption layar dan
+  itu disengaja — kartu tiga kata yang berganti tiap 700 ms adalah kedipan,
+  bukan subtitle. Lima permukaan memakai satu fungsi yang sama: `dalang
+  subtitle`, tombol SRT/WebVTT di dialog Ekspor, tool agent `writeSubtitle`,
+  tool MCP `dalang_write_subtitle` untuk agent lain, dan ikut terunggah otomatis
+  bersama video ke YouTube. Gerbang CI membuktikan berkasnya terbaca pembaca
+  RUJUKAN (`webvtt-py`, bukan pembaca kami sendiri) dan tiap kartunya jatuh di
+  scene yang benar menurut renderer — bukan diklaim, diuji.
+
 Rujukan: [ADR-0016](docs/decisions/0016-tipografi.md),
-[ADR-0034](docs/decisions/0034-zona-aman-platform.md)
+[ADR-0034](docs/decisions/0034-zona-aman-platform.md),
+[ADR-0039](docs/decisions/0039-berkas-subtitle.md)
+
+### Warna, efek, gerak, dan transisi
+
+**Sebelas preset warna** (Asli, Hangat, Sejuk, Mono, Vivid, Film, Noir, Senja,
+Malam, Pudar, Pastel) plus kecerahan/kontras/saturasi/blur yang bisa disetel
+sendiri — semuanya fungsi `filter` CSS, jadi preview Player dan render final
+satu sumber kebenaran.
+
+**Dua efek yang bukan filter**: vignette dan butiran film. Tidak ada fungsi
+filter CSS yang menggelapkan tepi saja atau menambah noise, jadi keduanya
+digambar sebagai lapisan. Butirannya **statis** — pola ber-seed tetap, sama di
+tiap bingkai — karena butiran yang berubah tiap bingkai terlihat seperti
+kompresi rusak, bukan seperti film, dan ia menghancurkan efisiensi enkode.
+
+**Sebelas gerak kamera**, tiga di antaranya punya AKSEN alih-alih laju tetap:
+`punch-in` zum cepat lalu **diam** (berhentinya itu penekanannya), `tilt`
+memiringkan pelan untuk kesan tangan, `pan-diagonal` menggeser dua sumbu.
+
+**Sepuluh transisi** keluar scene, dengan tempo 6-24 bingkai yang bisa diatur
+per batas.
+
+Gerbang CI **mengukur** efeknya di bingkai sungguhan: vignette wajib
+menggelapkan sudut tanpa menambah tekstur, butiran wajib menambah tekstur
+tanpa menggelapkan sudut. Dua tuntutan yang saling menyilang — menukar
+implementasi keduanya membuat keempat pemeriksaan merah.
+
+Rujukan: [ADR-0011](docs/decisions/0011-filter-transisi-teks.md),
+[ADR-0041](docs/decisions/0041-pengayaan.md)
 
 ### Suara
 
@@ -391,6 +442,54 @@ Rujukan: [ADR-0007](docs/decisions/0007-tts-dan-word-timestamps.md),
 [ADR-0014](docs/decisions/0014-ekspor-kaya-craft-expert.md),
 [ADR-0026](docs/decisions/0026-audio-per-klip.md)
 </details>
+
+### Sulih suara
+
+Satu scene-plan bisa memuat **banyak bahasa**. Yang berganti hanya narasi,
+suaranya, teks di layar, dan judul; gambarnya dijamin sama karena memang plan
+yang sama — bukan salinan folder yang harus dijaga tetap sinkron dengan tangan.
+
+Seluruhnya berdiri di atas satu fungsi: `planInLanguage` menukar bahasanya dan
+mengembalikan **scene-plan biasa**. Karena itu tidak ada satu pun jalur di
+hilir yang perlu tahu soal sulih suara — durasi, tata letak, caption, subtitle,
+ducking, campuran akhir, dan ekspor interop bekerja apa adanya.
+
+- **Durasi IKUT bahasanya.** Kalimat Inggris jarang sepanjang padanan
+  Indonesianya, jadi video sulihannya boleh lebih pendek atau lebih panjang.
+  Alternatifnya adalah mempercepat ucapan supaya muat di gambar yang tetap —
+  dan itu terdengar. Susunan scene-nya tidak berubah: yang belum diterjemahkan
+  tampil BISU, bukan dibuang.
+- **Teks layar dan judul ikut disulih.** Suara yang salah terdengar sekali;
+  teks yang salah terlihat di setiap bingkai.
+- **Suara sendiri per bahasa** lewat `audio.dubVoices`. Tanpa itu, suara
+  bahasa utama yang membaca teks bahasa lain — dan ketiga permukaan
+  mengatakannya, karena yang tidak diberi tahu akan mengira itu batas TTS-nya.
+- **Menerjemahkan pekerjaan agent**, bukan flag CLI: `translateNarration`
+  menerjemahkan seluruh naskah sekali jalan supaya istilahnya konsisten, dan
+  aturan pertamanya bukan makna melainkan PANJANG UCAPAN. Jawaban model yang
+  tidak bisa diurai tidak menghasilkan patch apa pun — plan yang tersulih
+  separuh lebih buruk daripada yang belum sama sekali.
+
+```bash
+pnpm dalang sulih proyekku/                        # keadaan tiap bahasa
+pnpm dalang sulih proyekku/ --bahasa en --suara    # TTS untuk bahasa itu
+pnpm dalang render proyekku/ --bahasa en              # out/proyekku-540p-cepat.en.mp4
+pnpm dalang subtitle proyekku/ --bahasa en
+pnpm dalang export proyekku/ --bahasa en              # timeline.en.otio untuk editor lain
+```
+
+Bahasa ikut di **nama berkas** (`final.en.mp4`; bahasa utama tetap tanpa
+akhiran), jadi dua render dari satu proyek tidak saling menimpa. Pengunggah
+membaca bahasa videonya dari nama itu: mengunggah `final.en.mp4` membawa judul,
+deskripsi, dan subtitle berbahasa Inggris — bukan milik bahasa utama. Pilihan
+Bahasa di dialog Ekspor Studio berlaku untuk video, subtitle, dan garis waktu
+sekaligus.
+
+Gerbang CI merender bingkai yang sama **dua kali**, sekali per bahasa, dan
+menuntut kedua PNG-nya berbeda byte: dua bingkai identik berarti bahasanya
+tidak sampai ke layar.
+
+Rujukan: [ADR-0040](docs/decisions/0040-sulih-suara.md)
 
 ### Rekaman panjang dan transkrip
 
@@ -436,6 +535,13 @@ Video dan foto stok dari **Pexels** dan **Pixabay**, GIF dan stiker dari
 **GIPHY** dan **Tenor**, ikon dari **Iconify** (237 set, tanpa kunci), efek
 suara dari **Openverse**. Setiap aset membawa metadata lisensinya, dan hak
 pakai dijaga tiga lapis.
+
+**Dua bed musik dan delapan efek suara ikut repo** (`pustaka:<id>`) — whoosh,
+pop, klik, ding, tap, swipe, impact, riser. Semuanya **disintesis** oleh skrip
+yang ikut di-commit, bukan diunduh, jadi lisensinya CC0 tanpa syarat dan
+tidak ada yang perlu dibaca satu per satu. Karena berkasnya ikut bundel
+komposisi, bunyi pustaka bekerja **tanpa jaringan sama sekali**: tidak ada
+yang diunduh, di-stage, atau dicatat di renderState.
 
 <details>
 <summary>Tiga lapis penjagaan hak pakai, dan yang sengaja tidak diintegrasikan</summary>
@@ -499,18 +605,27 @@ per kombinasi.
   per potongan 8 MiB lewat YouTube Data API v3, dengan tiga pengaman karena
   unggahan tidak bisa diurungkan — selalu lewat konfirmasi, bawaan privat, dan
   ledger yang menolak mengunggah berkas yang sama dua kali tanpa `--force`.
+- **Subtitle ikut naik bersama videonya**, ditulis SEGAR saat itu juga —
+  bukan dipungut dari berkas yang kebetulan tertinggal di folder, karena teks
+  lama yang tidak cocok dengan suaranya cuma ketahuan oleh penonton yang
+  menyalakan teksnya. Subtitle gagal BUKAN publikasi gagal: videonya sudah
+  tayang, jadi yang dikatakan adalah "video naik, subtitle tidak, ini
+  berkasnya" — bukan galat yang membuat orang mengulang dan mendapat video
+  kedua di kanalnya.
 
 Rujukan: [ADR-0014](docs/decisions/0014-ekspor-kaya-craft-expert.md),
 [ADR-0019](docs/decisions/0019-render-cloud.md),
 [ADR-0023](docs/decisions/0023-keluar-dan-masuk.md),
-[ADR-0030](docs/decisions/0030-publikasi-langsung.md)
+[ADR-0030](docs/decisions/0030-publikasi-langsung.md),
+[ADR-0039](docs/decisions/0039-berkas-subtitle.md)
 </details>
 
 ### Dalang sebagai kemampuan agent lain
 
 `dalang mcp [akar]` menyajikan garis waktu ke agent mana pun yang bicara MCP:
 baca rencana, ubah lewat patch op tervalidasi, urungkan, kritik struktur,
-ekspor. Scene terkunci ditolak persis seperti untuk agent Dalang sendiri.
+ekspor, dan tulis berkas subtitle. Scene terkunci ditolak persis seperti untuk
+agent Dalang sendiri.
 
 **Tidak ada tool yang memanggil model atau membelanjakan uang.** Kliennya sudah
 agent; yang tidak dipunyainya adalah timeline. Render hanya kalau dijalankan
@@ -558,6 +673,8 @@ pnpm dalang chat proyekku/           # chat agent di terminal
 pnpm dalang validate proyekku/       # skema + kritik sutradara
 pnpm dalang generate proyekku/       # pipeline: TTS, aset, proxy
 pnpm dalang transcribe proyekku/     # transkripsi rekaman ke renderState
+pnpm dalang sulih proyekku/          # keadaan sulih suara per bahasa
+pnpm dalang sulih proyekku/ --bahasa en --suara       # TTS untuk bahasa sulih
 pnpm dalang review proyekku/         # render frame kunci, nilai dengan model vision
 pnpm dalang log proyekku/            # garis waktu pipeline, agent, dan biaya
 pnpm dalang memori                   # preferensi lintas proyek
@@ -568,8 +685,11 @@ pnpm dalang template pakai gaya-kanalku proyeklain/   # pinjam TAMPILANNYA saja
 
 # Menghasilkan berkas
 pnpm dalang render proyekku/ --profile draft
+pnpm dalang render proyekku/ --bahasa en -o out/en.mp4  # versi bahasa lain
 pnpm dalang render proyekku/ --video-format webm --resolution 720 --quality terbaik
 pnpm dalang still  proyekku/ -t 8 -t 29 -t 44 -o out
+pnpm dalang subtitle proyekku/                    # .srt untuk diunggah bersama video
+pnpm dalang subtitle proyekku/ --format vtt       # .vtt untuk pemutar web
 pnpm dalang export proyekku/ --format otio        # ke Resolve, Premiere, Final Cut
 pnpm dalang import rough.otio -o proyekku/        # dari editor lain jadi kerangka
 pnpm dalang publish proyekku/ --privasi unlisted  # unggah render terbaru ke YouTube
@@ -620,13 +740,16 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 
 | Gerbang | Yang dijaganya |
 |---|---|
-| 1212 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
+| 1394 unit test | Kontrak lock, pin, dan undo; timing caption; snapshot timeline demo; cache, resume, dan fallback pipeline; protokol provider lewat fixture; keamanan staging path |
 | Render smoke test | Render sungguhan di CI, bukan mock |
 | Gerbang paritas migrasi | Plan v1 (dimigrasikan) dan plan v2 dirender, wajib identik byte per byte — tiap sisi dirender dua kali sebagai kontrol, jadi render yang tidak deterministik tidak bisa terbaca sebagai cacat migrasi |
 | Gerbang tata letak | Geometri UI di 18 lebar layar (380-1920), editor dan lobi: kontrol yang saling menindih, tergunting, atau membuat halaman bisa digeser ke samping — diukur setelah animasi CSS benar-benar selesai, bukan setelah jeda yang ditebak |
 | Gerbang interaksi | Seretan pointer dan papan ketik **sungguhan** lewat CDP, lalu plan **di server** yang diperiksa — seretan yang cuma menggeser kotak di layar tanpa patch adalah cacat yang tidak ditangkap unit test mana pun. Kotak diukur setelah animasi CSS selesai, jadi pointer tidak pernah mendarat di panel yang masih bergeser |
 | Gerbang paritas aset | Satu still dirender lewat dua jalur (bundel dan URL) dan wajib identik byte per byte; kalau berselisih, selisihnya dilaporkan sebagai hitungan piksel dan PNG-nya diunggah sebagai artefak CI |
 | Gerbang interop | Keluaran OTIO/FCPXML dibaca ulang dengan pustaka OpenTimelineIO dan adapter fcpx_xml resmi, atas plan apa adanya DAN varian berklip banyak |
+| Gerbang pengayaan | Bingkai yang sama dirender tiga kali — polos, ber-vignette, berbutir — lalu DIUKUR: vignette wajib menggelapkan sudut tanpa menambah tekstur, butiran wajib menambah tekstur tanpa menggelapkan sudut. Efek yang tertukar implementasinya membuat keempat pemeriksaan merah |
+| Gerbang sulih suara | Contoh dua bahasa dijalankan JALUR PENUH: TTS bahasa sulih, lalu tuntutan bahwa tiap bahasa jadi plan satu-bahasa yang utuh, susunan scene-nya tidak berubah, dan durasinya benar-benar bergeser mengikuti narasinya. Terakhir satu bingkai dirender DUA kali dan wajib berbeda byte — dua PNG identik berarti bahasanya tidak sampai ke layar |
+| Gerbang subtitle | Berkas .srt/.vtt dibaca pustaka `webvtt-py` — pembaca RUJUKAN, bukan pembaca kami sendiri — lalu tiap kartu dicocokkan ke scene asalnya lewat `activeSceneIndex` milik renderer, atas empat plan contoh. Subtitle yang melenceng tetap berkas yang sah dan lolos tiap tes format; cacatnya cuma terlihat oleh penonton yang menyalakan teksnya |
 | Eval self-check | Penilai yang rusak atau plan contoh yang melanggar kaidahnya sendiri membuat CI merah, tanpa kunci API dan tanpa biaya |
 
 Semua berjalan di CI GitHub Actions, tanpa kunci API dan tanpa jaringan
@@ -668,6 +791,28 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   mana memotong, bukan apa yang layak dipotong; untuk memilih momen ia
   diperintahkan meminta transkrip, bukan menebak.
 - **Screen recording** (deteksi klik, auto-zoom kursor) belum dibangun.
+- **Aturan pemotongan kartu subtitle adalah tebakan tipografis.** 42 karakter
+  per baris adalah angka yang lazim untuk latin, bukan hukum alam; angkanya
+  diekspor sebagai konstanta supaya bisa diubah tanpa membongkar logikanya.
+  [ADR-0039](docs/decisions/0039-berkas-subtitle.md) menulis batasnya lengkap.
+- **Sulih suara hanya mengganti NARASI.** Musik, efek suara, dan rekaman orang
+  yang bicara di kamera tetap terdengar bahasa aslinya di bawah narasi bahasa
+  lain. Tiap bahasa jadi satu berkas video sendiri, bukan satu video bertrek
+  audio banyak seperti yang didukung YouTube. Label anotasi tutorial belum
+  punya sulihan sama sekali, dan mutu terjemahannya tidak diperiksa repo ini —
+  yang dijaga hanya panjang ucapannya. Terjemahan yang basi (naskah utama
+  disunting sesudah diterjemahkan) TIDAK ditandai; subtitle bahasa tanpa spasi
+  (CJK, Thai) belum dipatahkan dengan benar; pemain pratinjau Studio memutar
+  bahasa utama (versi lain hanya lewat render). Jalur TTS sulih, YouTube
+  `captions.insert`, dan model penerjemah belum pernah dipanggil terhadap
+  layanan sungguhan dari repo ini.
+  [ADR-0040](docs/decisions/0040-sulih-suara.md) menulis batasnya lengkap.
+- **Satu advisori dependensi belum tertutup.** `pnpm audit --prod` melaporkan
+  satu temuan moderat pada `file-type` (loop tak berujung saat membaca berkas
+  ASF yang rusak), yang dibawa `jimp` untuk analisis gambar oleh agent;
+  menutupnya butuh lompatan major pada jimp. Temuan lain (undici, fast-uri,
+  ip-address, hono) sudah ditutup lewat `pnpm.overrides` ke versi tambalan
+  dalam major yang sama.
 - **Menyunting berdua tidak punya akun.** Yang punya tautan `--lan` punya
   segalanya: menyunting, merender, mengunggah. Bentrok ditolak dan tidak
   pernah digabungkan otomatis, tidak ada kursor bersama, dan semuanya berbagi
@@ -815,6 +960,9 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0036](docs/decisions/0036-keyframe-kamera-klip.md) | Kamera visual dasar scene bisa di-keyframe (zum, geser, opasitas) |
 | [0037](docs/decisions/0037-paket-template.md) | Template sebagai paket yang bisa dibagikan (kerangka + tampilan, tanpa berkas) |
 | [0038](docs/decisions/0038-beberapa-orang-satu-proyek.md) | Beberapa orang pada satu proyek: bentrok per scene, kehadiran, kunci tautan |
+| [0039](docs/decisions/0039-berkas-subtitle.md) | Berkas subtitle .srt/.vtt yang berjalan bersama video, ikut terunggah ke YouTube |
+| [0040](docs/decisions/0040-sulih-suara.md) | Sulih suara: satu plan banyak bahasa, durasi ikut narasinya |
+| [0041](docs/decisions/0041-pengayaan.md) | Pengayaan: 9 font, 11 preset warna, vignette/butiran, 10 transisi, 11 gerak, 8 bunyi bawaan |
 
 </details>
 

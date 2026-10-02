@@ -5437,3 +5437,67 @@ button.ghost.danger.confirm {
     flex-basis: 100%;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Sulih suara (ADR-0040)
+
+   Kalimat ASLI selalu terlihat di atas kotak terjemahannya. Menerjemahkan
+   sambil mengingat kalimat sumbernya dari layar lain adalah cara termudah
+   kehilangan maknanya — dan yang kehilangan itu penonton, bukan penerjemahnya.
+   --------------------------------------------------------------------------- */
+.sulih-tab .row.gap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sulih-tab .mini-input {
+  flex: 1 1 120px;
+  min-width: 0;
+  height: var(--ctl);
+  padding: 0 9px;
+  font-size: 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.sulih-stat {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  border-radius: var(--r);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+
+.sulih-stat .warn {
+  color: var(--warn);
+}
+
+.dub-source {
+  margin: 0 0 6px;
+  padding: 7px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-left: 2px solid var(--line-strong);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.sulih-tab .dub-source em {
+  color: var(--text-faint);
+}
+
+.dub-field textarea {
+  resize: vertical;
+  min-height: 58px;
+}

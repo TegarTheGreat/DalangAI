@@ -26,6 +26,15 @@ export interface RenderRequest {
    * target cloud yang mengunggah aset perlu tahu berkas mana yang diunggah.
    */
   useProxies?: boolean;
+  /**
+   * Bahasa sulih yang dirender (ADR-0040); kosong = bahasa utama plan.
+   *
+   * Bagian KONTRAK, bukan perilaku target: target cloud mengunggah aset dan
+   * membaca durasi dari plan, dan keduanya ikut berubah begitu bahasanya
+   * berganti. Target yang menebak sendiri akan mengunggah aset satu bahasa
+   * lalu merender bahasa lain.
+   */
+  language?: string | undefined;
   onProgress?: (event: RenderTargetProgress) => void;
   /** Batalkan render yang sedang berjalan. */
   signal?: AbortSignal;

@@ -1,0 +1,289 @@
+{
+  "version": 2,
+  "projectId": "pengayaan",
+  "meta": {
+    "title": "Katalog Pengayaan",
+    "aspectRatio": "9:16",
+    "language": "id",
+    "stylePreset": "documentary-01",
+    "format": "bebas"
+  },
+  "audio": {
+    "voice": {
+      "provider": "silence",
+      "voiceId": "v",
+      "speed": 1
+    },
+    "sfx": [
+      {
+        "id": "s-whoosh",
+        "assetId": "pustaka:whoosh",
+        "sceneId": "sc-0",
+        "atSec": 0.2,
+        "volume": 0.8
+      },
+      {
+        "id": "s-impact",
+        "assetId": "pustaka:impact",
+        "sceneId": "sc-2",
+        "atSec": 0.1,
+        "volume": 0.7
+      },
+      {
+        "id": "s-ding",
+        "assetId": "pustaka:ding",
+        "sceneId": "sc-4",
+        "atSec": 0.3,
+        "volume": 0.6
+      }
+    ],
+    "music": {
+      "assetId": "pustaka:tenang",
+      "volume": 0.12,
+      "ducking": true
+    }
+  },
+  "scenes": [
+    {
+      "id": "sc-0",
+      "narration": "Noir menajamkan kontras sampai hitam-putihnya keras, cocok untuk potret dan arsip.",
+      "clips": [
+        {
+          "id": "sc-0-k1",
+          "type": "solid",
+          "variant": "rays",
+          "motion": "punch-in",
+          "filter": {
+            "preset": "noir",
+            "vignette": 0.55,
+            "grain": 0
+          }
+        }
+      ],
+      "duration": "auto",
+      "caption": {
+        "enabled": true,
+        "style": "pita",
+        "size": "m",
+        "position": "bottom"
+      },
+      "texts": [
+        {
+          "id": "tx-0",
+          "content": "Noir",
+          "role": "kicker",
+          "position": "top",
+          "size": "s",
+          "uppercase": true,
+          "anim": "blur-in"
+        }
+      ],
+      "transition": {
+        "type": "wipe-right",
+        "durationFrames": 16
+      }
+    },
+    {
+      "id": "sc-1",
+      "narration": "Butiran menambah tekstur.",
+      "clips": [
+        {
+          "id": "sc-1-k1",
+          "type": "solid",
+          "variant": "topo",
+          "motion": "tilt",
+          "filter": {
+            "preset": "senja",
+            "vignette": 0,
+            "grain": 0.5
+          }
+        }
+      ],
+      "duration": "auto",
+      "caption": {
+        "enabled": true,
+        "style": "karaoke",
+        "size": "m",
+        "position": "bottom"
+      },
+      "texts": [
+        {
+          "id": "tx-1",
+          "content": "Butiran",
+          "role": "kicker",
+          "position": "top",
+          "size": "s",
+          "uppercase": true,
+          "anim": "slide-in"
+        }
+      ],
+      "transition": {
+        "type": "slide-left",
+        "durationFrames": 16
+      }
+    },
+    {
+      "id": "sc-2",
+      "narration": "Sapuan jarum jam membuka scene dari tengah, melingkar searah jarum, dan berakhir penuh.",
+      "clips": [
+        {
+          "id": "sc-2-k1",
+          "type": "solid",
+          "variant": "grid",
+          "motion": "pan-diagonal",
+          "filter": {
+            "preset": "malam",
+            "vignette": 0.55,
+            "grain": 0
+          }
+        }
+      ],
+      "duration": "auto",
+      "caption": {
+        "enabled": true,
+        "style": "klasik",
+        "size": "m",
+        "position": "bottom"
+      },
+      "texts": [
+        {
+          "id": "tx-2",
+          "content": "Sapu jarum",
+          "role": "kicker",
+          "position": "top",
+          "size": "s",
+          "uppercase": true,
+          "anim": "fade"
+        }
+      ],
+      "transition": {
+        "type": "clock-wipe",
+        "durationFrames": 16
+      }
+    },
+    {
+      "id": "sc-3",
+      "narration": "Kamera miring pelan.",
+      "clips": [
+        {
+          "id": "sc-3-k1",
+          "type": "solid",
+          "variant": "duotone",
+          "motion": "kenburns-in",
+          "filter": {
+            "preset": "pudar",
+            "vignette": 0,
+            "grain": 0.5
+          }
+        }
+      ],
+      "duration": "auto",
+      "caption": {
+        "enabled": true,
+        "style": "tegas",
+        "size": "m",
+        "position": "bottom"
+      },
+      "texts": [
+        {
+          "id": "tx-3",
+          "content": "Miring",
+          "role": "kicker",
+          "position": "top",
+          "size": "s",
+          "uppercase": true,
+          "anim": "pop"
+        }
+      ],
+      "transition": {
+        "type": "flip-left",
+        "durationFrames": 16
+      }
+    },
+    {
+      "id": "sc-4",
+      "narration": "Pastel menurunkan kontras dan menaikkan terang supaya terasa ceria tanpa menyilaukan mata.",
+      "clips": [
+        {
+          "id": "sc-4-k1",
+          "type": "solid",
+          "variant": "rays",
+          "motion": "drift",
+          "filter": {
+            "preset": "pastel",
+            "vignette": 0.55,
+            "grain": 0
+          }
+        }
+      ],
+      "duration": "auto",
+      "caption": {
+        "enabled": true,
+        "style": "chip",
+        "size": "m",
+        "position": "bottom"
+      },
+      "texts": [
+        {
+          "id": "tx-4",
+          "content": "Pastel",
+          "role": "kicker",
+          "position": "top",
+          "size": "s",
+          "uppercase": true,
+          "anim": "rise"
+        }
+      ],
+      "transition": {
+        "type": "flip-up",
+        "durationFrames": 16
+      }
+    },
+    {
+      "id": "sc-5",
+      "narration": "Delapan bunyi bawaan cukup untuk aksen sehari-hari.",
+      "clips": [
+        {
+          "id": "sc-5-k1",
+          "type": "template-anim",
+          "variant": "outro",
+          "motion": "none",
+          "filter": {
+            "preset": "film",
+            "vignette": 0,
+            "grain": 0.5
+          }
+        }
+      ],
+      "duration": "auto",
+      "caption": {
+        "enabled": true,
+        "style": "halus",
+        "size": "m",
+        "position": "bottom"
+      },
+      "texts": [
+        {
+          "id": "tx-5",
+          "content": "Bunyi bawaan",
+          "role": "kicker",
+          "position": "top",
+          "size": "s",
+          "uppercase": true,
+          "anim": "typewriter"
+        }
+      ]
+    }
+  ],
+  "renderState": {
+    "narrationAudio": {},
+    "dubAudio": {},
+    "clipAssets": {},
+    "graphicAssets": {},
+    "layerAssets": {},
+    "sfxAssets": {},
+    "trackAssets": {},
+    "transcripts": {}
+  },
+  "$schema": "../../packages/core/schema/scene-plan.v2.schema.json"
+}

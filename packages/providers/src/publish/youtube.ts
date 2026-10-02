@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import type { PublishRequest, PublishResult, PublishTarget } from "@dalang/pipeline";
 import { type FetchImpl, httpRequest } from "../http";
 
@@ -59,6 +59,70 @@ const explain = async (response: Response, label: string): Promise<Error> => {
     );
   }
   return new Error(`${label}: HTTP ${response.status}${body ? `: ${body}` : ""}`);
+};
+
+/** Base URL captions.insert; dipisah supaya tes bisa mengarahkannya. */
+export const YOUTUBE_CAPTION_BASE = "https://www.googleapis.com/upload/youtube/v3";
+
+/**
+ * Unggah satu berkas subtitle ke video yang BARU SAJA terunggah.
+ *
+ * `captions.insert` menuntut multipart/related: bagian pertama metadata JSON,
+ * bagian kedua isi berkasnya. Google tidak menerima `uploadType=media` di
+ * endpoint ini karena `videoId` hanya bisa disampaikan lewat snippet.
+ *
+ * Kembalikan pesan galat, JANGAN melempar: videonya sudah tayang saat fungsi
+ * ini dipanggil, dan melempar akan membuat unggahan yang berhasil dilaporkan
+ * sebagai gagal — lalu orangnya mengunggah ulang video yang sama.
+ */
+const uploadCaption = async (
+  auth: Record<string, string>,
+  http: { fetchImpl?: FetchImpl },
+  baseUrl: string,
+  videoId: string,
+  subtitle: { path: string; language: string; label?: string },
+): Promise<string | null> => {
+  let body: string;
+  try {
+    body = readFileSync(subtitle.path, "utf8");
+  } catch {
+    return `berkas subtitle tidak terbaca: ${subtitle.path}`;
+  }
+  if (body.trim() === "") return "berkas subtitle kosong";
+
+  const boundary = `dalang-${Math.random().toString(36).slice(2)}`;
+  const meta = JSON.stringify({
+    snippet: {
+      videoId,
+      language: subtitle.language,
+      name: subtitle.label ?? subtitle.language,
+      isDraft: false,
+    },
+  });
+  const multipart =
+    `--${boundary}\r\n` +
+    "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+    `${meta}\r\n` +
+    `--${boundary}\r\n` +
+    "Content-Type: application/octet-stream\r\n\r\n" +
+    `${body}\r\n` +
+    `--${boundary}--\r\n`;
+
+  try {
+    const response = await httpRequest(
+      `${baseUrl}/captions?uploadType=multipart&part=snippet`,
+      {
+        method: "POST",
+        headers: { ...auth, "Content-Type": `multipart/related; boundary=${boundary}` },
+        body: multipart,
+      },
+      { ...http, retries: 1, timeoutMs: 120_000 },
+    );
+    if (response.ok) return null;
+    return (await explain(response, "YouTube mengunggah subtitle")).message;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
 };
 
 export const createYoutubePublisher = ({
@@ -133,10 +197,20 @@ export const createYoutubePublisher = ({
             const video = (await response.json()) as { id?: string };
             if (!video.id) throw new Error("YouTube selesai tanpa id video");
             request.onProgress?.(1);
+            // Subtitle menyusul SESUDAH videonya jadi: `captions.insert`
+            // menuntut videoId, yang baru ada sekarang.
+            const captionError = request.subtitle
+              ? await uploadCaption(auth, http, uploadBaseUrl, video.id, request.subtitle)
+              : null;
             return {
               providerId: "youtube",
               videoId: video.id,
               url: `https://youtu.be/${video.id}`,
+              ...(request.subtitle
+                ? captionError === null
+                  ? { subtitleUploaded: true }
+                  : { subtitleUploaded: false, subtitleError: captionError }
+                : {}),
             };
           }
           throw await explain(response, "YouTube mengunggah potongan");

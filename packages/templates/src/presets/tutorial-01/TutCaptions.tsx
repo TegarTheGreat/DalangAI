@@ -35,6 +35,8 @@ const CaptionBar: React.FC<{
     inkSoft: theme.inkSoft,
     accent: theme.accent,
     onAccent: theme.paper,
+    // Preset tutorial berkertas TERANG, jadi pitanya gelap agar kontras.
+    plate: "rgba(20, 22, 28, 0.86)",
   });
   const rise = interpolate(frame, [0, 6], [14, 0], {
     extrapolateRight: "clamp",

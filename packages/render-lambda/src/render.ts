@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import {
   DIMENSIONS,
   parseScenePlan,
+  planInLanguage,
   type ScenePlan,
   substituteProxies,
 } from "@dalang/core";
@@ -109,6 +110,20 @@ const loadPlan = (planPath: string): ScenePlan => {
  * benar-benar diunggah — angka itu dipakai laporan progres, dan juga menjadi
  * bukti di test bahwa render kedua tidak mengunggah ulang apa pun.
  */
+/**
+ * Plan untuk SEBUAH permintaan render, dalam bahasa yang diminta (ADR-0040).
+ *
+ * Satu pintu untuk estimasi DAN render, bukan dua baris yang kebetulan sama:
+ * target ini pernah menerima `language` lewat kontrak tanpa menyentuhnya
+ * sama sekali, sehingga `--bahasa en --target lambda` diam-diam merender
+ * bahasa utama. Kegagalan seperti itu tidak punya pesan galat; hasilnya hanya
+ * video yang terdengar salah, setelah tagihan AWS-nya terbayar.
+ */
+const loadPlanFor = (request: RenderRequest): ScenePlan => {
+  const loaded = loadPlan(request.planPath);
+  return request.language ? planInLanguage(loaded, request.language) : loaded;
+};
+
 export const uploadPlanAssets = async (
   planPath: string,
   plan: ScenePlan,
@@ -191,13 +206,16 @@ export const createLambdaRenderTarget = (
     id: "lambda",
     label: "Remotion Lambda (AWS)",
 
+    // Biaya dihitung dari plan dalam BAHASA yang akan dirender (ADR-0040):
+    // durasi sulihan berbeda dari bahasa utama, dan taksiran dari durasi yang
+    // salah adalah gerbang anggaran yang salah.
     estimateCost: async (request: RenderRequest) =>
-      costOf(loadPlan(request.planPath), request.profile),
+      costOf(loadPlanFor(request), request.profile),
 
     render: async (request: RenderRequest): Promise<RenderVideoResult> => {
       // ADR-0028: draf dari proxy berarti yang DIUNGGAH pun proxy-nya —
       // penukarannya terjadi sebelum daftar aset disusun, bukan sesudahnya.
-      const loaded = loadPlan(request.planPath);
+      const loaded = loadPlanFor(request);
       const plan = request.useProxies ? substituteProxies(loaded) : loaded;
       const settings = resolveExportSettings(request.profile, request.settings);
       const report = request.onProgress;

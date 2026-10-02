@@ -16,6 +16,12 @@ licensed under the SIL Open Font License 1.1:
   https://github.com/tokotype/PlusJakartaSans
 - **Anton** (`Anton-Regular.ttf`) — © Vernon Adams / The Anton Project Authors,
   https://github.com/googlefonts/AntonFont
+- **Playfair Display** (`PlayfairDisplay-var.ttf`) — © Claus Eggers Sørensen,
+  https://github.com/clauseggers/Playfair-Display
+- **Manrope** (`Manrope-var.ttf`) — © Mikhail Sharanda,
+  https://github.com/sharanda/manrope
+- **JetBrains Mono** (`JetBrainsMono-var.ttf`) — © JetBrains s.r.o.,
+  https://github.com/JetBrains/JetBrainsMono
 
 The OFL permits bundling, redistribution, and commercial use. Full text:
 https://openfontlicense.org

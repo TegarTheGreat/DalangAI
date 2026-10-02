@@ -4,6 +4,7 @@ import {
   allRecipes,
   critiquePlan,
   MAX_EDITOR_NAME,
+  planLanguages,
   recipeFor,
   type SafeArea,
 } from "@dalang/core";
@@ -11,7 +12,12 @@ import { FONT_CHOICES } from "@dalang/templates/fonts";
 import { BUNDLED_MUSIC, MUSIC_LIBRARY_PREFIX } from "@dalang/templates/music";
 import { useEffect, useRef, useState } from "react";
 import type { BusyKind, ExportSettingsLite } from "../shared/api-types";
-import { api, type ReviewResult, type TimelineExportResult } from "./api";
+import {
+  api,
+  type ReviewResult,
+  type SubtitleResult,
+  type TimelineExportResult,
+} from "./api";
 import {
   RadioCard,
   Segmented,
@@ -166,34 +172,68 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const [format, setFormat] = useState<ExportSettingsLite["format"]>("mp4");
   const [resolution, setResolution] = useState<ExportSettingsLite["resolution"]>(1080);
   const [quality, setQuality] = useState<ExportSettingsLite["quality"]>("seimbang");
+  // Bahasa yang dirender DAN yang diberi subtitle (ADR-0040): satu pilihan
+  // untuk keduanya, supaya video berbahasa Inggris tidak bisa berangkat
+  // bersama subtitle Indonesia hanya karena dua pilihan yang terpisah lupa
+  // disamakan.
+  const [bahasaDipilih, setBahasaDipilih] = useState<string | null>(null);
   // Ekspor garis waktu berdiri sendiri di dialog ini: bukan render, tidak
   // memakai setelan di atasnya, dan hasilnya berkas teks — bukan video.
   const [timeline, setTimeline] = useState<TimelineExportResult | null>(null);
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [timelineBusy, setTimelineBusy] = useState<"otio" | "fcpxml" | null>(null);
+  // Subtitle juga berdiri sendiri, dan ALASANNYA berbeda dari interop: berkas
+  // ini berjalan BERSAMA video jadi, bukan menggantikannya.
+  const [subtitle, setSubtitle] = useState<SubtitleResult | null>(null);
+  const [subtitleError, setSubtitleError] = useState<string | null>(null);
+  const [subtitleBusy, setSubtitleBusy] = useState<"srt" | "vtt" | null>(null);
   useEscape(open, onClose);
 
   useEffect(() => {
     if (!open) {
       setTimeline(null);
       setTimelineError(null);
+      setSubtitle(null);
+      setSubtitleError(null);
+      setBahasaDipilih(null);
     }
   }, [open]);
 
   if (!open) return null;
+
+  const bahasaTersedia = project?.plan ? planLanguages(project.plan) : [];
+  const bahasaUtama = project?.plan?.meta.language ?? "";
+  // Pilihan yang sudah tidak ada di plan (sulihannya dihapus saat dialog
+  // terbuka) jatuh ke bahasa utama, bukan ke render yang pasti ditolak server.
+  const bahasa =
+    bahasaDipilih && bahasaTersedia.includes(bahasaDipilih) ? bahasaDipilih : bahasaUtama;
+  const bahasaKirim = bahasa && bahasa !== bahasaUtama ? bahasa : undefined;
 
   const exportTimeline = (format: "otio" | "fcpxml") => {
     setTimelineBusy(format);
     setTimelineError(null);
     setTimeline(null);
     api
-      .exportTimeline(format)
+      .exportTimeline(format, bahasaKirim)
       .then(setTimeline)
       .catch((cause: unknown) => {
         setTimelineError(cause instanceof Error ? cause.message : String(cause));
       })
       .finally(() => setTimelineBusy(null));
   };
+  const writeSubtitle = (format: "srt" | "vtt") => {
+    setSubtitleBusy(format);
+    setSubtitleError(null);
+    setSubtitle(null);
+    api
+      .writeSubtitle(format, bahasaKirim)
+      .then(setSubtitle)
+      .catch((cause: unknown) => {
+        setSubtitleError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => setSubtitleBusy(null));
+  };
+
   const busy = project?.busy.render !== null;
   return (
     <div className="dialog-backdrop">
@@ -222,6 +262,22 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
             </button>
           ))}
         </div>
+        {bahasaTersedia.length > 1 ? (
+          <div className="field">
+            <span>Bahasa</span>
+            <Segmented
+              grow
+              options={bahasaTersedia}
+              value={bahasa}
+              label={(kode) => kode}
+              onChange={setBahasaDipilih}
+            />
+            <p className="export-hint">
+              Berlaku untuk video, subtitle, dan garis waktu di bawah. Berkasnya diberi
+              akhiran bahasa, jadi tidak menimpa yang bahasa utama.
+            </p>
+          </div>
+        ) : null}
         <div className="radio-stack">
           {EXPORT_FORMATS.map((option) => (
             <RadioCard
@@ -256,6 +312,71 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
           </div>
         </div>
         <p className="export-hint">{QUALITY_HINT[format][quality]}</p>
+
+        <div className="interop-block">
+          <span className="interop-label">Subtitle untuk diunggah</span>
+          <p className="interop-desc">
+            Berkas teks berwaktu, dari narasi dan transkrip yang sudah ada. Diunggah
+            bersama video ke YouTube supaya penonton bisa menyalakan teksnya sendiri —
+            berbeda dari caption yang dibakar ke gambar, yang tidak bisa dimatikan.
+          </p>
+          <div className="interop-actions">
+            <button
+              type="button"
+              disabled={subtitleBusy !== null}
+              onClick={() => writeSubtitle("srt")}
+            >
+              {subtitleBusy === "srt" ? <IconSpinner /> : null}
+              SRT
+            </button>
+            <button
+              type="button"
+              disabled={subtitleBusy !== null}
+              onClick={() => writeSubtitle("vtt")}
+            >
+              {subtitleBusy === "vtt" ? <IconSpinner /> : null}
+              WebVTT
+            </button>
+          </div>
+          {subtitleError ? (
+            <div className="notice-warn interop-notice">
+              <strong>Subtitle gagal</strong>
+              <p>{subtitleError}</p>
+            </div>
+          ) : null}
+          {subtitle ? (
+            <div className="interop-result">
+              <p className="interop-file">
+                {subtitle.file} · {subtitle.cues} kartu ·{" "}
+                {(subtitle.durationMs / 1000).toFixed(1)} detik · bahasa{" "}
+                {subtitle.language}
+              </p>
+              {subtitle.cues === 0 ? (
+                <div className="notice-warn interop-notice">
+                  <strong>Berkasnya kosong</strong>
+                  <p>
+                    Plan ini belum punya narasi maupun transkrip, jadi tidak ada yang bisa
+                    diberi waktu.
+                  </p>
+                </div>
+              ) : null}
+              {/* Waktu yang ditaksir dan waktu dari TTS bedanya besar, dan yang
+                  mengunggah berkas melenceng baru tahu setelah videonya tayang. */}
+              {subtitle.estimated > 0 ? (
+                <div className="notice-warn interop-notice">
+                  <strong>
+                    {subtitle.estimated} dari {subtitle.narrated} scene waktunya masih
+                    ditaksir
+                  </strong>
+                  <p>
+                    Jalankan Suara dulu supaya waktunya datang dari TTS, bukan dari
+                    perkiraan panjang kata.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         <div className="interop-block">
           <span className="interop-label">Bawa ke editor lain</span>
@@ -316,7 +437,10 @@ const ExportDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
             disabled={busy}
             onClick={() => {
               onClose();
-              void studioClient.startExportConfirmed({ format, resolution, quality });
+              void studioClient.startExportConfirmed(
+                { format, resolution, quality },
+                bahasaKirim,
+              );
             }}
           >
             Mulai ekspor

@@ -27,6 +27,8 @@ describe("scene-plan schema v0", () => {
     // sendiri-sendiri.
     expect(plan.renderState).toEqual({
       narrationAudio: {},
+      // ADR-0040: audio narasi bahasa sulih punya lumbungnya sendiri.
+      dubAudio: {},
       clipAssets: {},
       layerAssets: {},
       trackAssets: {},

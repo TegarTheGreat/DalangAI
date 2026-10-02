@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   parseScenePlan,
+  planInLanguage,
   proxiedFiles,
   type ScenePlan,
   substituteProxies,
@@ -196,6 +197,16 @@ export interface RenderBehaviorOptions {
    * pernah memakainya — pemanggil yang memutuskan, bukan profil.
    */
   useProxies?: boolean;
+  /**
+   * Bahasa sulih yang dirender (ADR-0040). Kosong = bahasa utama plan.
+   *
+   * Diterapkan DI SINI, di satu-satunya tempat plan masuk ke renderer, bukan
+   * di tiap pemanggil: `planInLanguage` mengembalikan scene-plan biasa, jadi
+   * satu baris di sini membuat render lokal, render Lambda, still, dan jalur
+   * Studio ikut sadar bahasa sekaligus. Pemanggil yang menukar sendiri lalu
+   * menulis plan sementara ke disk akan menyimpang begitu ada pemanggil kelima.
+   */
+  language?: string | undefined;
 }
 
 interface PreparedRender {
@@ -214,7 +225,8 @@ const prepare = async (
   options: RenderBehaviorOptions,
 ): Promise<PreparedRender> => {
   const logLevel = options.logLevel ?? "warn";
-  const loaded = loadPlan(planPath);
+  const dibaca = loadPlan(planPath);
+  const loaded = options.language ? planInLanguage(dibaca, options.language) : dibaca;
   const plan = options.useProxies ? substituteProxies(loaded) : loaded;
   const browserExecutable = findBrowserExecutable();
 
@@ -444,6 +456,7 @@ export const localRenderTarget = (
       profile: request.profile,
       ...(request.settings ? { settings: request.settings } : {}),
       ...(request.useProxies ? { useProxies: true } : {}),
+      ...(request.language ? { language: request.language } : {}),
       ...behavior,
       ...(request.onProgress
         ? {

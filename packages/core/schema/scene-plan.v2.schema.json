@@ -46,6 +46,17 @@
           "default": "id",
           "type": "string"
         },
+        "dubTitles": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "stylePreset": {
           "default": "documentary-01",
           "type": "string"
@@ -130,7 +141,8 @@
     "audio": {
       "default": {
         "sfx": [],
-        "tracks": []
+        "tracks": [],
+        "dubVoices": {}
       },
       "type": "object",
       "properties": {
@@ -156,6 +168,37 @@
             "voiceId"
           ],
           "additionalProperties": false
+        },
+        "dubVoices": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "voiceId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "speed": {
+                "default": 1,
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "provider",
+              "voiceId"
+            ],
+            "additionalProperties": false
+          }
         },
         "music": {
           "type": "object",
@@ -333,6 +376,17 @@
             "default": "",
             "type": "string"
           },
+          "dubs": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "clips": {
             "minItems": 1,
             "maxItems": 24,
@@ -372,7 +426,10 @@
                     "pan-right",
                     "pan-up",
                     "pan-down",
-                    "drift"
+                    "drift",
+                    "punch-in",
+                    "tilt",
+                    "pan-diagonal"
                   ]
                 },
                 "pinned": {
@@ -394,7 +451,12 @@
                         "cool",
                         "mono",
                         "vivid",
-                        "film"
+                        "film",
+                        "noir",
+                        "senja",
+                        "malam",
+                        "pudar",
+                        "pastel"
                       ]
                     },
                     "brightness": {
@@ -426,6 +488,18 @@
                       "type": "number",
                       "minimum": 0,
                       "maximum": 20
+                    },
+                    "vignette": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "grain": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
                     }
                   },
                   "additionalProperties": false
@@ -578,6 +652,9 @@
                         "slide-up",
                         "wipe-right",
                         "wipe-down",
+                        "clock-wipe",
+                        "flip-left",
+                        "flip-up",
                         "none"
                       ]
                     },
@@ -665,6 +742,9 @@
                   "slide-up",
                   "wipe-right",
                   "wipe-down",
+                  "clock-wipe",
+                  "flip-left",
+                  "flip-up",
                   "none"
                 ]
               },
@@ -691,6 +771,17 @@
                 "content": {
                   "type": "string",
                   "minLength": 1
+                },
+                "dubs": {
+                  "default": {},
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
                 },
                 "role": {
                   "default": "headline",
@@ -746,7 +837,9 @@
                     "fade",
                     "pop",
                     "rise",
-                    "typewriter"
+                    "typewriter",
+                    "blur-in",
+                    "slide-in"
                   ]
                 },
                 "color": {
@@ -1151,7 +1244,10 @@
                         "pan-right",
                         "pan-up",
                         "pan-down",
-                        "drift"
+                        "drift",
+                        "punch-in",
+                        "tilt",
+                        "pan-diagonal"
                       ]
                     },
                     "pinned": {
@@ -1170,7 +1266,12 @@
                             "cool",
                             "mono",
                             "vivid",
-                            "film"
+                            "film",
+                            "noir",
+                            "senja",
+                            "malam",
+                            "pudar",
+                            "pastel"
                           ]
                         },
                         "brightness": {
@@ -1202,6 +1303,18 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 20
+                        },
+                        "vignette": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "grain": {
+                          "default": 0,
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "additionalProperties": false
@@ -1465,6 +1578,7 @@
     "renderState": {
       "default": {
         "narrationAudio": {},
+        "dubAudio": {},
         "clipAssets": {},
         "graphicAssets": {},
         "layerAssets": {},
@@ -1533,6 +1647,74 @@
               "durationSec"
             ],
             "additionalProperties": false
+          }
+        },
+        "dubAudio": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "durationSec": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "wordTimestamps": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "word": {
+                        "type": "string"
+                      },
+                      "startSec": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "endSec": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "word",
+                      "startSec",
+                      "endSec"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "fallbackQuality": {
+                  "type": "boolean"
+                },
+                "lufs": {
+                  "type": "number"
+                },
+                "channels": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                }
+              },
+              "required": [
+                "file",
+                "durationSec"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "clipAssets": {

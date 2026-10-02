@@ -79,6 +79,9 @@ export const patchTouchKeys = (ops: readonly (PatchOp | PatchOpInput)[]): TouchK
       case "lockScene":
         keys.add(sceneTouchKey(op.id));
         break;
+      case "setDub":
+        keys.add(sceneTouchKey(op.sceneId));
+        break;
       case "setClips":
       case "splitClip":
       case "trimClip":

@@ -181,6 +181,9 @@ export const TutorialPreset: React.FC<{
   debug: boolean;
 }> = ({ plan, debug }) => {
   ensureFontsLoaded();
+  // Ukuran bingkai untuk transisi yang memerlukannya (clock-wipe menggambar
+  // sapuan radial, jadi ia perlu tahu radiusnya) — ADR-0041.
+  const { width, height } = useVideoConfig();
   const theme = themeFromPlan(plan);
   const metrics = aspectMetrics(plan.meta.aspectRatio, plan.meta.safeArea);
   const layout = computeFrameLayout(plan);
@@ -207,7 +210,7 @@ export const TutorialPreset: React.FC<{
       series.push(
         <TransitionSeries.Transition
           key={`transition-${index}`}
-          presentation={presentationFor(type)}
+          presentation={presentationFor(type, { width, height })}
           timing={timingFor(frames)}
         />,
       );

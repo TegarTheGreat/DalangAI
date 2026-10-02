@@ -974,9 +974,12 @@ export class StudioClient {
   }
 
   /** Dipanggil dari dialog Ekspor — pilihan di dialog ADALAH konfirmasinya. */
-  async startExportConfirmed(settings: ExportSettingsLite): Promise<void> {
+  async startExportConfirmed(
+    settings: ExportSettingsLite,
+    bahasa?: string,
+  ): Promise<void> {
     try {
-      await api.render({ ...settings, confirm: true });
+      await api.render({ ...settings, ...(bahasa ? { bahasa } : {}), confirm: true });
     } catch (error) {
       this.failure(error);
     }

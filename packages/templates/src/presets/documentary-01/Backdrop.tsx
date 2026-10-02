@@ -11,6 +11,7 @@ import {
 import { kf } from "../../anim";
 import { useAssetSrc } from "../../asset-src";
 import { isSilent } from "../../audio-model";
+import { ClipEffects } from "../../ClipEffects";
 import { filterToCss } from "../../filters";
 import { clipCamera } from "../../motion-model";
 import type { DocTheme } from "./theme";
@@ -41,6 +42,9 @@ const AssetLayer: React.FC<{
     objectFit: "cover",
     scale: camera.scale,
     translate: camera.translate,
+    // ADR-0041: hanya gerak `tilt` yang mengisinya; sisanya undefined, jadi
+    // tidak satu pun plan lama berubah satu piksel pun.
+    rotate: camera.rotate,
     objectPosition: camera.objectPosition,
     // ADR-0011: filter/opacity scene diterapkan di lapisan media.
     ...filterToCss(clip.filter),
@@ -231,7 +235,13 @@ export const ProceduralBackdrop: React.FC<{
       }}
     >
       {camera.keyed ? (
-        <AbsoluteFill style={{ scale: camera.scale, translate: camera.translate }}>
+        <AbsoluteFill
+          style={{
+            scale: camera.scale,
+            translate: camera.translate,
+            rotate: camera.rotate,
+          }}
+        >
           {isi}
         </AbsoluteFill>
       ) : (
@@ -296,6 +306,9 @@ export const Backdrop: React.FC<{
           mixBlendMode: "soft-light",
         }}
       />
+      {/* ADR-0041: vignette dan butiran, di ATAS grade wash supaya keduanya
+          menggelapkan hasil akhirnya — bukan cuma seninya. */}
+      <ClipEffects filter={clip.filter} />
       {dim > 0 ? (
         <AbsoluteFill style={{ backgroundColor: `rgba(5, 7, 14, ${dim})` }} />
       ) : null}

@@ -118,6 +118,9 @@ export const DocumentaryPreset: React.FC<{
   debug: boolean;
 }> = ({ plan, debug }) => {
   ensureFontsLoaded();
+  // Ukuran bingkai untuk transisi yang memerlukannya (clock-wipe menggambar
+  // sapuan radial, jadi ia perlu tahu radiusnya) — ADR-0041.
+  const { width, height } = useVideoConfig();
   const theme = themeFromPlan(plan);
   const metrics = aspectMetrics(plan.meta.aspectRatio, plan.meta.safeArea);
   const layout = computeFrameLayout(plan);
@@ -144,7 +147,7 @@ export const DocumentaryPreset: React.FC<{
       series.push(
         <TransitionSeries.Transition
           key={`transition-${index}`}
-          presentation={presentationFor(type)}
+          presentation={presentationFor(type, { width, height })}
           timing={timingFor(frames)}
         />,
       );
@@ -191,7 +194,10 @@ export const DocumentaryPreset: React.FC<{
       {placeSfxCues(plan, layout, FPS).map((cue) => (
         <Audio
           key={cue.cueId}
-          src={assetSrc(cue.file)}
+          // Bunyi PUSTAKA adalah aset SITUS (ADR-0019): ia ikut bundel
+          // komposisi, jadi staticFile menemukannya di mana pun render
+          // berjalan — termasuk di Lambda, yang situsnya dipasang sekali.
+          src={cue.bundled ? staticFile(cue.file) : assetSrc(cue.file)}
           from={cue.fromFrame}
           volume={cue.volume}
         />

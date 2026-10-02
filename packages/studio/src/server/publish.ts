@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { basename, join } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import {
   defaultPublishMetadata,
   PUBLISH_DESCRIPTION_MAX,
@@ -7,9 +7,16 @@ import {
   PUBLISH_PRIVACY_LABEL,
   PUBLISH_TITLE_MAX,
   type PublishMetadata,
+  planInLanguage,
+  renderFileLanguage,
 } from "@dalang/core";
-import { publishRender } from "@dalang/pipeline";
+import { atomicWriteFile, publishRender } from "@dalang/pipeline";
 import { PUBLISH_SETUP_HINT } from "@dalang/providers";
+import {
+  buildSubtitleCues,
+  toSrt,
+  uploadSubtitleFileName,
+} from "@dalang/templates/subtitle";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type {
@@ -115,8 +122,13 @@ export const registerPublishRoutes = (app: Hono, ctx: StudioContext): void => {
     if (!existsSync(filePath)) {
       return c.json({ error: `Berkas render tidak ditemukan: ${name}` }, 404);
     }
-    const plan = session.plan;
-    if (!plan) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    const asli = session.plan;
+    if (!asli) return c.json({ error: "Proyek belum punya scene-plan" }, 400);
+    // Bahasa videonya dibaca dari NAMA berkas (ADR-0040). Judul, deskripsi, dan
+    // subtitle yang menyertai video harus sebahasa dengan suaranya: video
+    // berbahasa Inggris yang berangkat dengan judul dan teks Indonesia tidak
+    // ketahuan sampai ada penonton yang membukanya.
+    const plan = planInLanguage(asli, renderFileLanguage(name, asli));
 
     const { title, description, tags, privacy, force = false } = body.data;
     const metadata: PublishMetadata = {
@@ -150,6 +162,18 @@ export const registerPublishRoutes = (app: Hono, ctx: StudioContext): void => {
       store.bus.emit({ type: "publish", file: name, target: target.id, ...event });
     emit({ status: "started", fraction: 0 });
 
+    // Subtitle ditulis SEGAR (ADR-0039), bukan diambil dari berkas yang
+    // kebetulan tertinggal di folder: teks lama yang tidak cocok dengan
+    // suaranya cuma ketahuan oleh penonton yang menyalakan teksnya.
+    let subtitle: { path: string; language: string } | undefined;
+    const cues = buildSubtitleCues(plan);
+    if (cues.length > 0) {
+      const subPath = join(session.paths.dalangDir, uploadSubtitleFileName(plan));
+      mkdirSync(dirname(subPath), { recursive: true });
+      atomicWriteFile(subPath, toSrt(cues));
+      subtitle = { path: subPath, language: plan.meta.language };
+    }
+
     let lastFraction = 0;
     const startedAt = Date.now();
     void publishRender({
@@ -159,6 +183,7 @@ export const registerPublishRoutes = (app: Hono, ctx: StudioContext): void => {
       target,
       filePath,
       metadata,
+      ...(subtitle ? { subtitle } : {}),
       force,
       signal: controller.signal,
       onProgress: (fraction) => {

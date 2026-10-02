@@ -257,7 +257,10 @@ export const planFromTemplate = (
   return parseScenePlan({
     ...pack.plan,
     projectId,
-    meta: { ...pack.plan.meta, title },
+    // `dubTitles` ikut dikosongkan (ADR-0040): itu terjemahan JUDUL LAMA. Dibawa
+    // terus, proyek baru berjudul "X" akan terbit dalam bahasa Inggris dengan
+    // judul milik pembuat template — persis cacat yang membuat judul diganti.
+    meta: { ...pack.plan.meta, title, dubTitles: {} },
     renderState: emptyRenderState(),
   });
 };

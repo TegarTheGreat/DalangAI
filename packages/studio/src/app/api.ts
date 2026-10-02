@@ -128,6 +128,29 @@ export type ReviewResult = {
   costUsd?: number;
 };
 
+/** Hasil penulisan berkas subtitle (ADR-0039). */
+export type SubtitleResult = {
+  ok: true;
+  file: string;
+  cues: number;
+  durationMs: number;
+  language: string;
+  /** Scene bernarasi yang waktunya masih ditaksir (belum ada TTS). */
+  estimated: number;
+  narrated: number;
+};
+
+/** Hasil TTS satu bahasa sulih (ADR-0040). */
+export type DubResult = {
+  ok: true;
+  bahasa: string;
+  results: Array<{ sceneId: string; status: string; detail?: string }>;
+  /** Scene bernarasi yang belum punya teks sulihan — akan tampil BISU. */
+  belumDiterjemahkan: string[];
+  /** False = memakai suara bahasa utama, yang terdengar persis seperti itu. */
+  suaraSendiri: boolean;
+};
+
 /** Hasil ekspor garis waktu ke format interchange (ADR-0023). */
 export type TimelineExportResult = {
   ok: true;
@@ -342,10 +365,23 @@ export const api = {
       body: JSON.stringify({ maxFrames, ...(perhatian ? { perhatian } : {}) }),
     }),
 
-  exportTimeline: (format: "otio" | "fcpxml") =>
+  writeSubtitle: (format: "srt" | "vtt", bahasa?: string) =>
+    request<SubtitleResult>("/api/subtitle", {
+      method: "POST",
+      body: JSON.stringify({ format, ...(bahasa ? { bahasa } : {}) }),
+    }),
+
+  /** ADR-0040: TTS untuk satu bahasa sulih. */
+  runDub: (bahasa: string) =>
+    request<DubResult>("/api/pipeline/sulih", {
+      method: "POST",
+      body: JSON.stringify({ bahasa, confirm: true }),
+    }),
+
+  exportTimeline: (format: "otio" | "fcpxml", bahasa?: string) =>
     request<TimelineExportResult>("/api/timeline-export", {
       method: "POST",
-      body: JSON.stringify({ format }),
+      body: JSON.stringify({ format, ...(bahasa ? { bahasa } : {}) }),
     }),
 
   runTts: (sceneIds: string[] | undefined, confirm: boolean) =>

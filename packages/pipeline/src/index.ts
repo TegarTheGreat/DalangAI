@@ -1,6 +1,7 @@
 export * from "./asr-stage";
 export * from "./asset-stage";
 export * from "./db";
+export * from "./dub-stage";
 export * from "./fs-utils";
 export * from "./generate";
 export * from "./hash";

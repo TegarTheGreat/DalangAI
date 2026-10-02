@@ -44,6 +44,7 @@ import { KeyframeControls } from "./KeyframeControls";
 import { LapisanTab } from "./LayersTab";
 import { GrafisTab, SfxSection } from "./MediaLibrary";
 import { SourceSection } from "./SourcePanel";
+import { SulihTab } from "./SulihTab";
 import { TranscriptTab } from "./TranscriptTab";
 
 /**
@@ -64,7 +65,8 @@ type Tab =
   | "lapisan"
   | "audio"
   | "transisi"
-  | "anotasi";
+  | "anotasi"
+  | "sulih";
 
 const ANNOTATION_TYPES = ["zoom", "highlight", "arrow", "blur"] as const;
 const ANNOTATION_LABEL: Record<(typeof ANNOTATION_TYPES)[number], string> = {
@@ -81,6 +83,10 @@ const TRANSITION_LABEL: Record<TransitionType, string> = {
   "slide-up": "Geser naik",
   "wipe-right": "Sapu kanan",
   "wipe-down": "Sapu turun",
+  // ADR-0041
+  "clock-wipe": "Sapu jarum",
+  "flip-left": "Balik kiri",
+  "flip-up": "Balik naik",
   none: "Potong",
 };
 
@@ -91,6 +97,12 @@ const FILTER_LABEL: Record<string, string> = {
   mono: "Mono",
   vivid: "Vivid",
   film: "Film",
+  // ADR-0041
+  noir: "Noir",
+  senja: "Senja",
+  malam: "Malam",
+  pudar: "Pudar",
+  pastel: "Pastel",
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -125,12 +137,18 @@ const ANIM_LABEL: Record<string, string> = {
   pop: "Pop",
   rise: "Naik",
   typewriter: "Ketik",
+  // ADR-0041
+  "blur-in": "Kabur masuk",
+  "slide-in": "Geser masuk",
 };
 const CAPTION_STYLE_LABEL: Record<string, string> = {
   klasik: "Klasik",
   tegas: "Tegas",
   chip: "Chip",
   halus: "Halus",
+  // ADR-0041
+  pita: "Pita",
+  karaoke: "Karaoke",
 };
 const CAPTION_POSITION_LABEL: Record<string, string> = {
   bottom: "Bawah",
@@ -146,6 +164,10 @@ const MOTION_LABEL: Record<string, string> = {
   "pan-up": "Pan atas",
   "pan-down": "Pan bawah",
   drift: "Melayang",
+  // ADR-0041
+  "punch-in": "Zum hentak",
+  tilt: "Miring",
+  "pan-diagonal": "Pan diagonal",
 };
 
 /** Varian seni prosedural (ADR-0013) untuk scene solid/stock belum ter-resolve. */
@@ -1190,6 +1212,28 @@ const VisualTab: React.FC<{ scene: Scene }> = ({ scene }) => {
           format={(v) => `${v}px`}
           onCommit={(blur) => commitFilter({ blur })}
         />
+        {/* ADR-0041: bukan preset warna, jadi berdiri sendiri dan bisa
+            dipasang bersama preset apa pun. */}
+        <SliderRow
+          label="Vinyet"
+          min={0}
+          max={1}
+          step={0.05}
+          neutral={0}
+          value={filter.vignette}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(vignette) => commitFilter({ vignette })}
+        />
+        <SliderRow
+          label="Butiran"
+          min={0}
+          max={1}
+          step={0.05}
+          neutral={0}
+          value={filter.grain}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(grain) => commitFilter({ grain })}
+        />
       </section>
     </>
   );
@@ -1294,6 +1338,8 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                   {
                     id: `tx-${Date.now().toString(36)}`,
                     content: "Teks baru",
+                    // ADR-0040: teks baru belum punya sulihan apa pun.
+                    dubs: {},
                     role: "headline",
                     position: "center",
                     align: "center",
@@ -1653,6 +1699,7 @@ export const InspectorPanel: React.FC = () => {
                 ["audio", "Audio"],
                 ["transisi", "Transisi"],
                 ["anotasi", "Anotasi"],
+                ["sulih", "Sulih"],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -1696,6 +1743,7 @@ export const InspectorPanel: React.FC = () => {
             {tab === "anotasi" ? (
               <AnotasiTab scene={scene} stylePreset={plan.meta.stylePreset} />
             ) : null}
+            {tab === "sulih" ? <SulihTab plan={plan} scene={scene} /> : null}
           </div>
         </>
       ) : (
