@@ -1,7 +1,7 @@
 import type { Clip, ResolvedAsset, Scene, ScenePlan } from "@dalang/core";
 import { TransitionSeries } from "@remotion/transitions";
 import type { ReactNode } from "react";
-import { Sequence } from "remotion";
+import { Sequence, useVideoConfig } from "remotion";
 import { type ClipSpan, clipFrameSpans } from "./layout";
 import { presentationFor, timingFor } from "./transitions";
 
@@ -44,6 +44,12 @@ export const ClipStrip: React.FC<{
   durationInFrames: number;
   children: (args: ClipRenderArgs) => ReactNode;
 }> = ({ scene, plan, durationInFrames, children }) => {
+  // Ukuran bingkai untuk transisi yang memerlukannya (clock-wipe menggambar
+  // sapuan radial, jadi ia perlu tahu radiusnya) — ADR-0041. Dulu dilewatkan,
+  // dan transisi antar klip memakai ukuran bawaan POTRET: di 16:9 sapuannya
+  // berhenti sebelum menutup bingkai, dan baji gelap menetap di sisi kanan
+  // sepanjang klip kedua. Hook dipanggil sebelum percabangan klip-tunggal.
+  const { width, height } = useVideoConfig();
   const spans = clipFrameSpans(scene, durationInFrames);
   const first = spans[0] as ClipSpan;
 
@@ -109,7 +115,10 @@ export const ClipStrip: React.FC<{
       nodes.push(
         <TransitionSeries.Transition
           key={`larut-${span.id}`}
-          presentation={presentationFor(previous.transitionType ?? "cross-fade")}
+          presentation={presentationFor(previous.transitionType ?? "cross-fade", {
+            width,
+            height,
+          })}
           timing={timingFor(previous.transitionFrames)}
         />,
       );

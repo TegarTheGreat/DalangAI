@@ -20,6 +20,12 @@
  * Dua tuntutan itu sengaja saling menyilang: efek yang tertukar
  * implementasinya akan lulus salah satunya dan gagal yang lain.
  *
+ * Bagian kedua mengukur TRANSISI ANTAR KLIP di tiga rasio: setelah clock-wipe
+ * selesai, seluruh bingkai harus sudah milik klip kedua. Transisi itu jalur
+ * render yang berbeda dari transisi antar scene (ClipStrip, bukan preset), dan
+ * pernah lupa menerima ukuran bingkai — di 16:9 sapuannya berhenti sebelum
+ * menutup, dan baji gelap menetap di sisi kanan sepanjang klip kedua.
+ *
  * Jalankan: pnpm --filter @dalang/templates gate:pengayaan
  */
 
@@ -282,6 +288,164 @@ if (!lapPolos || !lapVignette) {
   }
 }
 
+// --- Transisi antar KLIP: setelah clock-wipe selesai, bingkai utuh milik klip kedua ---
+const RASIO_KLIP = ["16:9", "9:16", "1:1"] as const;
+const planKlip = (aspek: string) => ({
+  version: 2,
+  projectId: `klip-${aspek.replace(":", "x")}`,
+  meta: {
+    title: "Uji Transisi Klip",
+    aspectRatio: aspek,
+    language: "id",
+    stylePreset: "klip-01",
+    format: "bebas",
+  },
+  audio: {},
+  scenes: [
+    {
+      id: "sc-a",
+      narration: "",
+      caption: { enabled: false },
+      clips: [
+        {
+          id: "sc-a-k1",
+          type: "image",
+          assetId: "assets/gelap.png",
+          pinned: true,
+          durationSec: 2,
+          transition: { type: "clock-wipe", durationFrames: 15 },
+        },
+        {
+          id: "sc-a-k2",
+          type: "image",
+          assetId: "assets/terang.png",
+          pinned: true,
+          durationSec: 2,
+        },
+      ],
+    },
+  ],
+  renderState: {
+    narrationAudio: {},
+    dubAudio: {},
+    clipAssets: {
+      "sc-a-k1": { file: "assets/gelap.png", kind: "image", source: "local" },
+      "sc-a-k2": { file: "assets/terang.png", kind: "image", source: "local" },
+    },
+    graphicAssets: {},
+    layerAssets: {},
+    sfxAssets: {},
+    trackAssets: {},
+    transcripts: {},
+  },
+});
+
+const dirKlip = (aspek: string) => join(out, `klip-${aspek.replace(":", "x")}`);
+for (const aspek of RASIO_KLIP) {
+  const dir = dirKlip(aspek);
+  mkdirSync(join(dir, "assets"), { recursive: true });
+  writeFileSync(join(dir, "plan.json"), `${JSON.stringify(planKlip(aspek), null, 2)}\n`);
+  writeFileSync(join(dir, "assets", "gelap.png"), pngAbuAbu(30));
+  writeFileSync(join(dir, "assets", "terang.png"), pngAbuAbu(220));
+  // t=1,0 dtk: hanya klip pertama. t=3,2 dtk: transisi (1,9-2,1 dtk) sudah lama selesai.
+  execFileSync(
+    "pnpm",
+    [
+      "dalang",
+      "still",
+      join(dir, "plan.json"),
+      "-t",
+      "1.0",
+      "3.2",
+      "-s",
+      "0.4",
+      "-o",
+      dir,
+    ],
+    { cwd: repoRoot, stdio: "inherit" },
+  );
+}
+
+const probeKlip = `
+import json, sys
+from pathlib import Path
+from PIL import Image
+
+def blok(path):
+    # Rata-rata kecerahan per petak 12x8, di bawah garis retensi (12% teratas).
+    im = Image.open(path).convert("L")
+    w, h = im.size
+    d = im.load()
+    y0 = int(h * 0.12)
+    tinggi = (h - y0) // 8
+    lebar = w // 12
+    hasil = []
+    for by in range(8):
+        for bx in range(12):
+            tot = n = 0
+            for y in range(y0 + by * tinggi + 2, y0 + (by + 1) * tinggi - 2, 3):
+                for x in range(bx * lebar + 2, (bx + 1) * lebar - 2, 3):
+                    tot += d[x, y]
+                    n += 1
+            hasil.append(tot / max(n, 1))
+    return hasil
+
+keluar = {}
+for nama in sys.argv[1:]:
+    png = sorted(Path(nama).glob("*.png"), key=lambda p: int(p.stem.rsplit("-f", 1)[1]))
+    if len(png) < 2:
+        keluar[Path(nama).name] = None
+        continue
+    awal, akhir = blok(png[0]), blok(png[-1])
+    keluar[Path(nama).name] = {
+        "awalMaks": max(awal),
+        "akhirMin": min(akhir),
+        "akhirIndeks": akhir.index(min(akhir)),
+    }
+print(json.dumps(keluar))
+`;
+
+let klipUkur: Record<
+  string,
+  { awalMaks: number; akhirMin: number; akhirIndeks: number } | null
+>;
+try {
+  klipUkur = JSON.parse(
+    execFileSync("python3", ["-c", probeKlip, ...RASIO_KLIP.map(dirKlip)], {
+      encoding: "utf8",
+    }),
+  );
+} catch (error) {
+  console.error(
+    `GERBANG PENGAYAAN GAGAL: pengukur transisi klip tidak bisa dijalankan.\n  ${error instanceof Error ? error.message : String(error)}`,
+  );
+  process.exit(1);
+}
+console.log("\nTransisi antar klip (clock-wipe), petak kecerahan 12x8:");
+for (const aspek of RASIO_KLIP) {
+  const nama = `klip-${aspek.replace(":", "x")}`;
+  const nilai = klipUkur[nama];
+  if (!nilai) {
+    problems.push(`transisi klip ${aspek}: bingkai tidak ter-render`);
+    continue;
+  }
+  console.log(
+    `  ${aspek.padEnd(5)} sebelum: terang maks ${nilai.awalMaks.toFixed(0)}  sesudah: gelap min ${nilai.akhirMin.toFixed(0)} (petak ${nilai.akhirIndeks})`,
+  );
+  // Sebelum transisi hanya klip gelap (30): tidak boleh ada petak terang.
+  if (nilai.awalMaks > 80) {
+    problems.push(
+      `transisi klip ${aspek}: sebelum transisi sudah ada petak terang (${nilai.awalMaks.toFixed(0)}) — klip kedua bocor lebih awal`,
+    );
+  }
+  // Sesudah transisi seluruh bingkai klip terang (220): petak tergelap pun harus terang.
+  if (nilai.akhirMin < 190) {
+    problems.push(
+      `transisi klip ${aspek}: setelah clock-wipe selesai masih ada petak gelap (${nilai.akhirMin.toFixed(0)}, petak ${nilai.akhirIndeks}) — sapuan tidak menutup bingkai; ukuran bingkai tidak sampai ke transisi antar klip`,
+    );
+  }
+}
+
 if (problems.length > 0) {
   console.error("\nGERBANG PENGAYAAN GAGAL:");
   for (const problem of problems) console.error(`  - ${problem}`);
@@ -289,5 +453,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  "\nLulus: vignette menggelapkan tepi tanpa menambah tekstur, butiran menambah tekstur tanpa menggelapkan tepi, dan vignette lapisan terkurung di kotak lapisannya.",
+  "\nLulus: vignette menggelapkan tepi tanpa menambah tekstur, butiran menambah tekstur tanpa menggelapkan tepi, vignette lapisan terkurung di kotak lapisannya, dan clock-wipe antar klip menutup bingkai di 16:9, 9:16, dan 1:1.",
 );

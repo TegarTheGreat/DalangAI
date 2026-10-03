@@ -28,6 +28,12 @@ export type AnyPresentation = TransitionPresentation<Record<string, unknown>>;
  * itu pemetaannya menerima ukuran — bukan karena semua butuh, melainkan karena
  * satu fungsi yang kadang butuh argumen lebih mudah dipakai benar daripada dua
  * fungsi yang pemanggilnya harus memilih.
+ *
+ * Ukurannya WAJIB, tanpa nilai bawaan. Dulu ada bawaan potret (1080x1920), dan
+ * ia menyembunyikan satu panggilan yang lupa mengirim ukuran — transisi antar
+ * KLIP — sampai sapuan clock-wipe di 16:9 berhenti sebelum menutup bingkai dan
+ * menyisakan baji gelap di klip kedua. Argumen yang bisa dilupakan tanpa galat
+ * tipe adalah argumen yang akan dilupakan.
  */
 export interface FrameSize {
   width: number;
@@ -36,7 +42,7 @@ export interface FrameSize {
 
 export const presentationFor = (
   type: TransitionType,
-  size: FrameSize = { width: 1080, height: 1920 },
+  size: FrameSize,
 ): AnyPresentation => {
   switch (type) {
     case "slide-left":
