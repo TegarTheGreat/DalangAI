@@ -525,6 +525,23 @@ export const buildEditTimeline = (
       detail: `${sentence(bagian.join(" dan "))} tidak ikut — digambar preset Dalang saat render, bukan disimpan sebagai berkas.`,
     });
   }
+  // Bunyi ketik (ADR-0043) disusun saat render dari teksnya sendiri — satu
+  // ketukan per huruf — bukan disimpan sebagai cue, jadi tidak ada yang bisa
+  // diseberangkan. Dikatakan, karena video jadinya berbunyi dan hasil ekspor
+  // ini tidak.
+  const ketik = plan.scenes.reduce(
+    (sum, scene) =>
+      sum +
+      scene.texts.filter((text) => text.sound === "ketik" && text.anim === "typewriter")
+        .length,
+    0,
+  );
+  if (ketik > 0) {
+    notes.push({
+      code: "bunyi-ketik",
+      detail: `Bunyi ketik ${ketik} teks tidak ikut — ketukan tuts disusun saat render dari teksnya (satu per huruf), bukan disimpan sebagai berkas atau cue.`,
+    });
+  }
   /**
    * Hitungan kehilangan dihitung per KLIP, bukan per scene (ADR-0033).
    *

@@ -4,6 +4,7 @@ import {
   MOTIONS,
   TEXT_ANIMS,
   TEXT_EMPHASES,
+  TEXT_SOUNDS,
   TRANSITION_TYPES,
 } from "@dalang/core";
 import { FONT_CHOICES } from "@dalang/templates/fonts";
@@ -36,6 +37,7 @@ describe("system prompt menyebut seluruh kosakata yang tersedia", () => {
     harusAda("TEXT_ANIMS", TEXT_ANIMS);
     harusAda("CAPTION_STYLES", CAPTION_STYLES);
     harusAda("TEXT_EMPHASES", TEXT_EMPHASES);
+    harusAda("TEXT_SOUNDS", TEXT_SOUNDS);
   });
 
   it("setiap keluarga font ter-bundle", () => {

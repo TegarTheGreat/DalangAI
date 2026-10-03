@@ -239,3 +239,38 @@ describe("ekspor garis waktu per bahasa (ADR-0040)", () => {
     expect(existsSync(join(dir, "timeline.jv.otio"))).toBe(false);
   });
 });
+
+describe("bunyi ketik lewat rute patch (ADR-0043)", () => {
+  it("sound dan soundVolume tersimpan, ikut undo, dan nilai di luar enum ditolak 400", async () => {
+    const { studio } = boot();
+    const teks = {
+      id: "tx-ketik",
+      content: "Kebebasan finansial",
+      anim: "typewriter",
+      sound: "ketik",
+      soundVolume: 0.4,
+    };
+    const dipasang = await post(studio, "/api/patch", {
+      ops: [{ op: "updateScene", id: "sc-batu", patch: { texts: [teks] } }],
+    });
+    expect(dipasang.status).toBe(200);
+    const sesudah = await project(studio);
+    const tersimpan = sesudah.plan?.scenes[1]?.texts[0];
+    expect(tersimpan?.sound).toBe("ketik");
+    expect(tersimpan?.soundVolume).toBeCloseTo(0.4, 5);
+
+    expect((await post(studio, "/api/undo", {})).status).toBe(200);
+    expect((await project(studio)).plan?.scenes[1]?.texts).toEqual([]);
+
+    const ditolak = await post<{ error: string }>(studio, "/api/patch", {
+      ops: [
+        {
+          op: "updateScene",
+          id: "sc-batu",
+          patch: { texts: [{ ...teks, sound: "bruh" }] },
+        },
+      ],
+    });
+    expect(ditolak.status).toBe(400);
+  });
+});

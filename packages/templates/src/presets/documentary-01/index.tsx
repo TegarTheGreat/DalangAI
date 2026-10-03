@@ -24,7 +24,7 @@ import {
   TRANSITION_FRAMES,
 } from "../../layout";
 import { buildMusicVolume, type ResolvedMusic, resolveMusicFile } from "../../music";
-import { placeSfxCues } from "../../sfx";
+import { SfxLayer } from "../../SfxLayer";
 import { presentationFor, timingFor } from "../../transitions";
 import { Backdrop } from "./Backdrop";
 import { BodyScene } from "./BodyScene";
@@ -191,17 +191,7 @@ export const DocumentaryPreset: React.FC<{
       <AudioTracks plan={plan} layout={layout} fps={FPS} ducks={ducks} />
       {/* Efek suara (ADR-0018): posisinya diturunkan dari scene, jadi ikut
           bergeser saat susunan berubah. */}
-      {placeSfxCues(plan, layout, FPS).map((cue) => (
-        <Audio
-          key={cue.cueId}
-          // Bunyi PUSTAKA adalah aset SITUS (ADR-0019): ia ikut bundel
-          // komposisi, jadi staticFile menemukannya di mana pun render
-          // berjalan — termasuk di Lambda, yang situsnya dipasang sekali.
-          src={cue.bundled ? staticFile(cue.file) : assetSrc(cue.file)}
-          from={cue.fromFrame}
-          volume={cue.volume}
-        />
-      ))}
+      <SfxLayer plan={plan} layout={layout} fps={FPS} />
     </AbsoluteFill>
   );
 };

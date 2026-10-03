@@ -218,6 +218,31 @@ export const TEXT_ANIMS = [
   "slide-in",
 ] as const;
 export const textAnimSchema = z.enum(TEXT_ANIMS);
+
+/**
+ * Bunyi yang mengiringi sebuah teks (ADR-0043).
+ *
+ * `ketik` adalah bunyi tuts keyboard mekanik, SATU ketukan per karakter yang
+ * muncul pada animasi `typewriter` — jatuh tepat di bingkai huruf itu tampil,
+ * bukan satu rekaman panjang yang ditempel kira-kira. Hanya berbunyi bila
+ * `anim` adalah `typewriter`; kritik sutradara menyebutnya bila tidak.
+ *
+ * Daftarnya enum, bukan boolean, karena bunyi iringan teks yang lain (mesin
+ * ketik, notifikasi) akan datang sebagai nilai baru tanpa mengubah bentuk
+ * data.
+ */
+export const TEXT_SOUNDS = ["none", "ketik"] as const;
+
+/**
+ * Berapa bingkai antara dua huruf pada animasi `typewriter`.
+ *
+ * Satu angka untuk TIGA pemakai yang harus sepakat: animasinya (kapan huruf
+ * tampil), penempatan bunyi ketik (kapan ketukan berbunyi), dan kritik
+ * sutradara (apakah teksnya sempat selesai diketik). Tiga salinan angka ini
+ * akan menyimpang pada perubahan pertama.
+ */
+export const TYPEWRITER_FRAMES_PER_CHAR = 3;
+export const textSoundSchema = z.enum(TEXT_SOUNDS);
 /** Warna CSS heksadesimal (#rgb / #rrggbb); null = warna peran dari theme. */
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{3,8}$/);
 
@@ -434,6 +459,10 @@ export const textOverlaySchema = z.strictObject({
   emphasis: textEmphasisSchema.default("none"),
   /** Animasi masuk (ADR-0016): fade blok, atau pop/rise per KATA, ketik per karakter. */
   anim: textAnimSchema.default("fade"),
+  /** Bunyi pengiring (ADR-0043); `ketik` berpasangan dengan anim `typewriter`. */
+  sound: textSoundSchema.default("none"),
+  /** Volume bunyi pengiring, 0-1; tidak berpengaruh bila `sound` adalah `none`. */
+  soundVolume: normalized01.default(0.6),
   /** Warna teks; null = warna bawaan peran di theme preset. */
   color: hexColorSchema.nullable().default(null),
   /** Garis luar (outline) px pada basis 1080 — keterbacaan di footage ramai. */

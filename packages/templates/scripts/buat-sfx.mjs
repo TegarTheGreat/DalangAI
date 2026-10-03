@@ -73,6 +73,74 @@ const DURASI = {
   swipe: 0.32,
   impact: 1.1,
   riser: 1.6,
+  // Ketukan tuts (ADR-0043): bukan bagian pustaka yang dipilih orang,
+  // melainkan bahan yang disusun otomatis di bawah teks bergaya `typewriter`.
+  "ketik-1": 0.11,
+  "ketik-2": 0.11,
+  "ketik-3": 0.11,
+  "ketik-4": 0.11,
+  "ketik-spasi": 0.14,
+};
+
+/**
+ * Satu ketukan tuts keyboard mekanik (ADR-0043).
+ *
+ * Tiga bagian yang memang terdengar pada keyboard sungguhan, bukan satu klik:
+ *  1. KLIK saklar — letupan lebar 1-2 ms, terang (3-6 kHz), plus dering pendek;
+ *  2. THOCK — resonansi badan 150-450 Hz yang meluruh dalam ~45 ms;
+ *  3. LEPAS tuts — klik kecil sekitar 65 ms kemudian.
+ *
+ * Empat varian untuk huruf (nada dan kecerahan sedikit berbeda) dan satu untuk
+ * spasi (lebih dalam, lebih panjang, ada gemeretak penstabil). Varian itulah
+ * yang mencegah rentetan sepuluh ketukan per detik terdengar seperti satu
+ * sampel yang diulang — telinga langsung menangkap pengulangan persis.
+ */
+const tuts = ({
+  seed,
+  thockHz,
+  clickHz,
+  terang,
+  thockGain,
+  klikGain = 2.4,
+  rattle = 0,
+  peluruh = 55,
+}) => {
+  const noiseKlik = makeNoise(seed);
+  const noiseBadan = makeNoise(seed + 101);
+  const noiseLepas = makeNoise(seed + 202);
+  const noiseGemeretak = makeNoise(seed + 303);
+  const hpKlik = highpass(terang);
+  const lpKlik = lowpass(5400);
+  const lpBadan = lowpass(thockHz * 3.2);
+  const hpLepas = highpass(terang + 600);
+  const bpGemeretak = lowpass(2400);
+  const LEPAS = 0.066;
+  return (t) => {
+    const klik =
+      (lpKlik(hpKlik(noiseKlik())) * 0.8 + sine(t, clickHz) * 0.55) *
+      Math.exp(-t / 0.0024) *
+      adsr(t, 0.03, 0.0002, 0.006) *
+      klikGain;
+    const nadaThock = thockHz * (1 + 0.1 * Math.exp(-t * 140));
+    const thock =
+      (sine(t, nadaThock) * 0.9 + lpBadan(noiseBadan()) * 0.25) *
+      Math.exp(-t * peluruh) *
+      adsr(t, 0.12, 0.0006, 0.04) *
+      thockGain;
+    const tl = t - LEPAS;
+    const lepas =
+      tl >= 0
+        ? hpLepas(noiseLepas()) *
+          Math.exp(-tl / 0.0014) *
+          adsr(tl, 0.02, 0.0002, 0.005) *
+          0.5
+        : 0;
+    const gemeretak =
+      rattle > 0 && t > 0.012
+        ? bpGemeretak(noiseGemeretak()) * Math.exp(-(t - 0.012) * 38) * rattle
+        : 0;
+    return klik + thock + lepas + gemeretak;
+  };
 };
 
 const RESEP = {
@@ -143,6 +211,27 @@ const RESEP = {
       return (sub * 0.85 + badan * 0.5) * adsr(t, len, 0.002, 0.4) * 0.8;
     };
   },
+  // Ketukan tuts huruf: empat varian nada dan kecerahan.
+  "ketik-1": () =>
+    tuts({ seed: 5101, thockHz: 330, clickHz: 4100, terang: 2600, thockGain: 0.5 }),
+  "ketik-2": () =>
+    tuts({ seed: 5202, thockHz: 285, clickHz: 3700, terang: 2300, thockGain: 0.56 }),
+  "ketik-3": () =>
+    tuts({ seed: 5303, thockHz: 365, clickHz: 4500, terang: 2900, thockGain: 0.45 }),
+  "ketik-4": () =>
+    tuts({ seed: 5404, thockHz: 310, clickHz: 3900, terang: 2450, thockGain: 0.52 }),
+  // Spasi: lebih dalam dan lebih panjang, dengan gemeretak penstabil.
+  "ketik-spasi": () =>
+    tuts({
+      seed: 5505,
+      thockHz: 165,
+      clickHz: 2600,
+      terang: 1700,
+      thockGain: 0.55,
+      klikGain: 1.5,
+      rattle: 0.22,
+      peluruh: 36,
+    }),
   // Naikan tegangan sebelum reveal.
   riser: (len = DURASI.riser) => {
     const noise = makeNoise(31337);

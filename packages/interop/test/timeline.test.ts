@@ -230,6 +230,35 @@ describe("garis waktu interop", () => {
     );
   });
 
+  it("bunyi ketik dilaporkan tidak ikut, dan hanya bila ada teks yang benar-benar berbunyi", () => {
+    // Video jadi berbunyi ketukan tuts; hasil ekspor ini tidak. Menyembunyikannya
+    // membuat orang mengira Resolve yang kehilangan suaranya.
+    const bersuara = makePlan((input) => {
+      input.scenes[1]!.texts = [
+        { id: "t-ketik", content: "Halo", anim: "typewriter", sound: "ketik" },
+      ] as never;
+    });
+    const tanpaBunyi = makePlan((input) => {
+      input.scenes[1]!.texts = [
+        { id: "t-ketik", content: "Halo", anim: "typewriter", sound: "none" },
+      ] as never;
+    });
+    const animLain = makePlan((input) => {
+      input.scenes[1]!.texts = [
+        { id: "t-ketik", content: "Halo", anim: "pop", sound: "ketik" },
+      ] as never;
+    });
+    const kode = (plan: typeof bersuara) =>
+      buildEditTimeline(plan, { planPath: tempProject(plan).planPath }).notes.map(
+        (note) => note.code,
+      );
+    expect(kode(bersuara)).toContain("bunyi-ketik");
+    expect(kode(tanpaBunyi)).not.toContain("bunyi-ketik");
+    // Animasinya bukan typewriter: bunyinya memang tidak ada di video, jadi
+    // tidak ada yang perlu dilaporkan hilang.
+    expect(kode(animLain)).not.toContain("bunyi-ketik");
+  });
+
   it("URL aset absolut dan dihitung dari folder plan", () => {
     const plan = makePlan();
     const project = tempProject(plan);

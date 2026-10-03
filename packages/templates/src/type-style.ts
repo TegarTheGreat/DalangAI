@@ -1,6 +1,12 @@
 import type { Scene, TextOverlay } from "@dalang/core";
 import { CAPTION_STYLES } from "@dalang/core";
 import { easeSettle, kf } from "./anim";
+import {
+  isSpacer,
+  STAGGER_FRAMES,
+  splitForAnim,
+  typewriterRevealFrame,
+} from "./typewriter";
 
 /**
  * ADR-0016: tipografi bergerak — semantik yang SAMA lintas preset.
@@ -195,22 +201,12 @@ export const captionStyleSpec = (
 // Animasi masuk teks overlay (per kata / per karakter)
 // ---------------------------------------------------------------------------
 
-/** Jeda antar potongan (frame) untuk animasi berjenjang. */
-export const STAGGER_FRAMES = 3;
 const PIECE_FRAMES = 12;
 
-/**
- * Pecah konten sesuai jenis animasi: `typewriter` per karakter, `pop`/`rise`
- * per kata, `fade` tidak dipecah (satu blok).
- */
-export const splitForAnim = (content: string, anim: TextOverlay["anim"]): string[] => {
-  if (anim === "fade") return [content];
-  if (anim === "typewriter") return Array.from(content);
-  return content.split(/(\s+)/).filter((piece) => piece !== "");
-};
-
-/** Potongan yang hanya spasi dirender polos (di luar kotak inline-block). */
-export const isSpacer = (piece: string): boolean => /^\s+$/.test(piece);
+// Jadwal berjenjang hidup di `typewriter.ts` (murni) — dipakai juga oleh
+// penempatan bunyi ketik (ADR-0043). Diekspor ulang di sini supaya semua
+// pemanggil yang sudah ada tidak berubah.
+export { isSpacer, STAGGER_FRAMES, splitForAnim, typewriterRevealFrame };
 
 /**
  * Gaya potongan ke-`index` pada `frame` relatif mulainya teks.
@@ -247,7 +243,10 @@ export const animPieceStyle = (
       };
     case "typewriter":
       // Karakter muncul utuh saat gilirannya tiba (tanpa fade) — mesin ketik.
-      return frame >= start ? {} : null;
+      // Jadwalnya dari `typewriterRevealFrame`, fungsi yang SAMA dengan yang
+      // dipakai penempatan bunyi ketik (ADR-0043): satu sumber, tak bisa
+      // menyimpang.
+      return frame >= typewriterRevealFrame(index) ? {} : null;
     case "blur-in":
       // Kabur ke tajam (ADR-0041): pintu masuk yang TENANG untuk teks panjang,
       // sementara pop dan rise selalu terasa energik. Blur dipatok 0 saat

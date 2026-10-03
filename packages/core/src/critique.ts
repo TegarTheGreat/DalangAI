@@ -2,6 +2,7 @@ import {
   computeTimeline,
   estimateNarrationSeconds,
   NARRATION_LEAD_IN_SEC,
+  resolveSceneDurationSec,
   sumClipDurationsSec,
 } from "./durations";
 import { type FormatRecipe, isBodyScene, recipeFor } from "./format-recipe";
@@ -15,7 +16,13 @@ import {
   phrasesFound,
   proseStatsOf,
 } from "./prose";
-import { clipAsset, primaryClip, type Scene, type ScenePlan } from "./scene-plan";
+import {
+  clipAsset,
+  primaryClip,
+  type Scene,
+  type ScenePlan,
+  TYPEWRITER_FRAMES_PER_CHAR,
+} from "./scene-plan";
 import {
   DUB_DRIFT_LIMIT,
   dubCoverage,
@@ -203,6 +210,7 @@ export const critiquePlan = (plan: ScenePlan): DirectorNote[] => {
 
   notes.push(...critiqueFormat(plan, recipe));
   notes.push(...critiqueSulih(plan));
+  notes.push(...critiqueTeksKetik(plan));
   notes.push(...critiqueProse(plan, recipe));
   return notes;
 };
@@ -624,6 +632,64 @@ const critiqueSceneLevel = (
     }
   }
 
+  return notes;
+};
+
+/**
+ * Laju bingkai render (sama dengan `FPS` di `@dalang/templates/layout`, tetap 30
+ * di seluruh proyek). Dipakai hanya untuk mengubah jadwal ketik jadi detik.
+ */
+const RENDER_FPS = 30;
+
+/**
+ * Teks `typewriter` dan bunyi ketiknya (ADR-0043) — dua cacat yang lolos skema
+ * dan hanya terlihat/terdengar di video jadi:
+ *
+ *  1. `sound: "ketik"` pada animasi lain. Skemanya sah, tapi bunyi ketik hanya
+ *     berbunyi pada `typewriter`, jadi video jadi SENYAP tanpa pesan apa pun.
+ *  2. Teks ketik yang tidak sempat selesai. Huruf muncul tiap 3 bingkai
+ *     (10 per detik); teks 60 huruf butuh 6 detik, dan jendela tampil yang
+ *     lebih pendek memotongnya di tengah kalimat — dengan atau tanpa bunyi.
+ */
+const critiqueTeksKetik = (plan: ScenePlan): DirectorNote[] => {
+  const notes: DirectorNote[] = [];
+  for (const scene of plan.scenes) {
+    const sceneSec = resolveSceneDurationSec(scene, plan);
+    for (const text of scene.texts) {
+      if (text.sound === "ketik" && text.anim !== "typewriter") {
+        notes.push({
+          code: "ketik-tanpa-typewriter",
+          level: "perhatian",
+          sceneId: scene.id,
+          message:
+            `Teks "${text.id}" di scene ${scene.id} diberi bunyi ketik tetapi animasinya "${text.anim}". ` +
+            'Bunyi ketik hanya berbunyi pada animasi "typewriter", jadi sekarang SENYAP — ' +
+            "ganti anim ke typewriter, atau matikan sound.",
+        });
+      }
+      if (text.anim !== "typewriter") continue;
+      const chars = Array.from(text.content).length;
+      const windowSec = Math.max(0, (text.endFrac - text.startFrac) * sceneSec);
+      const needSec = ((chars - 1) * TYPEWRITER_FRAMES_PER_CHAR) / RENDER_FPS;
+      // Toleransi 0,15 dtk: durasi scene "auto" hanya ditaksir sebelum TTS,
+      // dan teks yang kurang satu-dua huruf bukan alasan untuk berteriak.
+      if (needSec <= windowSec + 0.15) continue;
+      const shown = Math.min(
+        chars,
+        Math.floor((windowSec * RENDER_FPS) / TYPEWRITER_FRAMES_PER_CHAR) + 1,
+      );
+      notes.push({
+        code: "ketik-terpotong",
+        level: "perhatian",
+        sceneId: scene.id,
+        message:
+          `Teks "${text.id}" di scene ${scene.id} butuh ${needSec.toFixed(1)} dtk untuk selesai diketik, ` +
+          `tetapi jendela tampilnya ${windowSec.toFixed(1)} dtk: baru ${shown} dari ${chars} huruf ` +
+          "yang sempat tampil sebelum teksnya hilang. Perpendek teksnya, lebarkan startFrac/endFrac, " +
+          "atau panjangkan scene.",
+      });
+    }
+  }
   return notes;
 };
 
