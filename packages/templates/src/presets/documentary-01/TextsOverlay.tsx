@@ -132,9 +132,16 @@ export const TextsOverlay: React.FC<{
               );
               if (frame < start || frame > end) return null;
               // ADR-0015: kurva settle bersama utk masuk/keluar (anim.ts).
+              // Teks `typewriter` TIDAK memudar masuk (ADR-0043): tiap huruf sudah
+              // muncul utuh pada gilirannya, dan blok yang sekaligus memudar
+              // 14 bingkai membuat empat-lima huruf pertama setengah
+              // transparan saat ketukannya sudah berbunyi. Awal rampa digeser
+              // mundur sebesar rampanya, jadi pada bingkai pertama teks sudah
+              // penuh; keluarnya tetap memudar.
+              const enterFrom = text.anim === "typewriter" ? start - ENTER_FRAMES : start;
               const { progress, opacity } = enterExit(
                 frame,
-                start,
+                enterFrom,
                 end,
                 ENTER_FRAMES,
                 EXIT_FRAMES,

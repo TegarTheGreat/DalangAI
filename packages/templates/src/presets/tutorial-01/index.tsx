@@ -30,6 +30,7 @@ import {
   TRANSITION_FRAMES,
 } from "../../layout";
 import { buildMusicVolume, type ResolvedMusic, resolveMusicFile } from "../../music";
+import { SfxLayer } from "../../SfxLayer";
 import { presentationFor, timingFor } from "../../transitions";
 import { type StepInfo, stepNumbers } from "./annotate";
 import { OutroScene, StepScene, TitleScene } from "./Scenes";
@@ -244,6 +245,9 @@ export const TutorialPreset: React.FC<{
       {musicFile ? <Audio src={musicSrc(musicFile)} loop volume={musicVolume} /> : null}
       {/* Trek audio tambahan (ADR-0026) — di akar komposisi, seperti musik. */}
       <AudioTracks plan={plan} layout={layout} fps={FPS} ducks={ducks} />
+      {/* Efek suara dan bunyi ketik (ADR-0018, ADR-0043). Preset ini tidak
+          memutarnya sama sekali sampai ADR-0043 menemukannya senyap. */}
+      <SfxLayer plan={plan} layout={layout} fps={FPS} />
     </AbsoluteFill>
   );
 };

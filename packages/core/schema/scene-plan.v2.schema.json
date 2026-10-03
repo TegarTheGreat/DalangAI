@@ -842,6 +842,20 @@
                     "slide-in"
                   ]
                 },
+                "sound": {
+                  "default": "none",
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "ketik"
+                  ]
+                },
+                "soundVolume": {
+                  "default": 0.6,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
                 "color": {
                   "default": null,
                   "anyOf": [

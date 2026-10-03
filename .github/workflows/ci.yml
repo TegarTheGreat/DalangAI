@@ -214,6 +214,21 @@ jobs:
           python3 -m pip install --quiet --disable-pip-version-check pillow
           pnpm --filter @dalang/renderer gate:footage
 
+      # ADR-0043: bunyi ketik harus jatuh BERSAMA hurufnya. Bunyi yang terpasang
+      # tetapi meleset tiga bingkai tidak menghasilkan galat atau tes merah;
+      # ia baru terdengar sebagai keyboard yang tertinggal. Gerbang ini merender
+      # VIDEO sungguhan di ketiga preset lalu mengukur dua hal dari file-nya:
+      # kapan huruf tampil (dari bingkai) dan kapan ketukan berbunyi (dari
+      # audio). Ia juga menangkap kelas cacat yang ditemukan bersamanya:
+      # tutorial-01 dulu tidak memutar efek suara APA PUN. Kontrolnya plan yang
+      # sama tanpa sound, yang harus senyap.
+      - name: Gerbang bunyi ketik (ketukan jatuh bersama hurufnya)
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check pillow
+          pnpm --filter @dalang/renderer gate:ketik
+
       # ADR-0040: sulih suara. Gerbang ini menjalankan JALUR PENUH atas contoh
       # bersulihan: TTS bahasa sulih (provider silence, offline dan gratis),
       # lalu pemeriksaan bahwa tiap bahasa jadi plan satu-bahasa yang utuh dan

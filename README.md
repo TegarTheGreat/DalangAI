@@ -543,6 +543,17 @@ tidak ada yang perlu dibaca satu per satu. Karena berkasnya ikut bundel
 komposisi, bunyi pustaka bekerja **tanpa jaringan sama sekali**: tidak ada
 yang diunduh, di-stage, atau dicatat di renderState.
 
+**Bunyi ketik** ([ADR-0043](docs/decisions/0043-bunyi-ketik.md)): `sound: "ketik"`
+pada teks `typewriter` menjatuhkan SATU ketukan tuts keyboard mekanik per huruf,
+tepat di bingkai huruf itu tampil — gaya kalimat kunci yang diketikkan di layar
+pada video kreator bisnis dan keuangan. Bunyinya diturunkan dari teksnya, bukan
+disimpan sebagai cue, jadi ikut bergeser saat teks atau scene berubah.
+Empat ketukan huruf dan satu spasi disintesis dan dipakai bergantian. Gerbang CI
+merender video di ketiga preset dan mengukur dari file-nya: 45 dari 45 ketukan,
+selisih konstan 43 ms, simpangan 0 ms. **Bunyinya belum pernah didengar
+manusia** — yang terukur bentuk gelombang dan spektrumnya, bukan kemiripannya
+dengan keyboard yang Anda suka; parameternya ada di `buat-sfx.mjs`.
+
 <details>
 <summary>Tiga lapis penjagaan hak pakai, dan yang sengaja tidak diintegrasikan</summary>
 
@@ -749,6 +760,7 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 | Gerbang interop | Keluaran OTIO/FCPXML dibaca ulang dengan pustaka OpenTimelineIO dan adapter fcpx_xml resmi, atas plan apa adanya DAN varian berklip banyak |
 | Gerbang pengayaan | Bingkai yang sama dirender tiga kali — polos, ber-vignette, berbutir — lalu DIUKUR: vignette wajib menggelapkan sudut tanpa menambah tekstur, butiran wajib menambah tekstur tanpa menggelapkan sudut. Efek yang tertukar implementasinya membuat keempat pemeriksaan merah |
 | Gerbang rekaman | Dua rekaman polos 16:9 (merah, hijau) dirender di bingkai 9:16 pada kedua preset, lalu piksel DIUKUR: sudut bingkai harus berwarna rekaman, bukan warna latar, dan bagian atas kotak lapisan harus berwarna rekaman lapisan. Ditulis setelah uji promo menemukan rekaman landscape tampil sebagai pita kecil di tengah bingkai vertikal — tanpa galat apa pun |
+| Gerbang bunyi ketik | Video sungguhan dirender di ketiga preset dengan teks `typewriter` ber-`sound`, lalu DARI FILE-nya diukur kapan huruf tampil (bingkai) dan kapan ketukan berbunyi (audio): jumlahnya harus sama, selisihnya konstan, dan huruf hanya tampil di kisi jadwal. Kontrol tanpa `sound` harus senyap. Ia juga menangkap `tutorial-01` yang dulu tidak memutar efek suara apa pun |
 | Gerbang sulih suara | Contoh dua bahasa dijalankan JALUR PENUH: TTS bahasa sulih, lalu tuntutan bahwa tiap bahasa jadi plan satu-bahasa yang utuh, susunan scene-nya tidak berubah, dan durasinya benar-benar bergeser mengikuti narasinya. Terakhir satu bingkai dirender DUA kali dan wajib berbeda byte — dua PNG identik berarti bahasanya tidak sampai ke layar |
 | Gerbang subtitle | Berkas .srt/.vtt dibaca pustaka `webvtt-py` — pembaca RUJUKAN, bukan pembaca kami sendiri — lalu tiap kartu dicocokkan ke scene asalnya lewat `activeSceneIndex` milik renderer, atas empat plan contoh. Subtitle yang melenceng tetap berkas yang sah dan lolos tiap tes format; cacatnya cuma terlihat oleh penonton yang menyalakan teksnya |
 | Eval self-check | Penilai yang rusak atau plan contoh yang melanggar kaidahnya sendiri membuat CI merah, tanpa kunci API dan tanpa biaya |
@@ -816,6 +828,10 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   4:5, 4K, atau 60 fps; kartu penutup memakai narasi sebagai teks CTA; keluaran
   H.264 bertanda BT.601 rentang penuh. Peta lengkap dengan buktinya ada di
   [roadmap §3.12](docs/roadmap.md).
+- **Semua audio keluaran terlambat sekitar 43 ms terhadap videonya** (terukur
+  pada tiap cue, penyandian AAC yang tidak diimbangi). Di bawah ambang kepekaan
+  dan sama untuk narasi, musik, dan efek, jadi keselarasan relatif terjaga, tetapi
+  belum diperbaiki ([ADR-0043](docs/decisions/0043-bunyi-ketik.md)).
 - **Satu advisori dependensi belum tertutup.** `pnpm audit --prod` melaporkan
   satu temuan moderat pada `file-type` (loop tak berujung saat membaca berkas
   ASF yang rusak), yang dibawa `jimp` untuk analisis gambar oleh agent;
@@ -973,6 +989,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0040](docs/decisions/0040-sulih-suara.md) | Sulih suara: satu plan banyak bahasa, durasi ikut narasinya |
 | [0041](docs/decisions/0041-pengayaan.md) | Pengayaan: 9 font, 11 preset warna, vignette/butiran, 10 transisi, 11 gerak, 8 bunyi bawaan |
 | [0042](docs/decisions/0042-rekaman-memenuhi-bingkai.md) | Rekaman memenuhi bingkai: `objectFit` lewat prop, uji promo sungguhan, dan percobaan warna yang ditolak |
+| [0043](docs/decisions/0043-bunyi-ketik.md) | Bunyi ketik: satu ketukan tuts per huruf, tepat di bingkainya; `tutorial-01` tidak lagi senyap |
 
 </details>
 

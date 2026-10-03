@@ -1,5 +1,6 @@
-import type { ScenePlan } from "@dalang/core";
+import type { ScenePlan, TextOverlay } from "@dalang/core";
 import type { FrameLayout } from "./layout";
+import { isSpacer, splitForAnim, typewriterRevealFrame } from "./typewriter";
 
 /**
  * Pustaka efek suara BAWAAN (ADR-0041).
@@ -151,6 +152,13 @@ export interface PlacedSfx {
    * jalur aset plan (ADR-0019).
    */
   bundled: boolean;
+  /**
+   * Batas hidup elemen audio, frame. Diisi untuk bunyi yang SANGAT pendek
+   * (ketukan tuts): tanpa batas, tiap ketukan tetap terpasang sampai video
+   * habis, dan teks 40 huruf berarti 40 elemen audio hidup sepanjang sisa
+   * video. Kosong = tidak dibatasi (perilaku cue biasa).
+   */
+  durationInFrames?: number;
 }
 
 export const placeSfxCues = (
@@ -193,5 +201,99 @@ export const placeSfxCues = (
       bundled: false,
     });
   }
+  // Bunyi ketik diturunkan dari teksnya, bukan dari `plan.audio.sfx` (batas 24
+  // cue tidak berlaku, dan tak ada cue yatim): ia ikut daftar yang sama supaya
+  // SEMUA preset yang memutar efek suara otomatis memutarnya juga.
+  return [...placed, ...placeTypingSounds(plan, layout, fps)];
+};
+
+/**
+ * Bunyi ketik (ADR-0043): satu ketukan tuts per karakter pada teks `typewriter`.
+ *
+ * Bahan bunyinya BUKAN bagian pustaka yang dipilih orang (tidak muncul di
+ * `BUNDLED_SFX`): empat ketukan huruf dan satu ketukan spasi, disintesis oleh
+ * `scripts/buat-sfx.mjs`. Empat varian dipakai bergantian supaya rentetan
+ * ketukan tidak terdengar seperti satu sampel yang diulang.
+ */
+export const TYPING_KEYS = {
+  huruf: [
+    { file: "sfx/ketik-1.wav", durationSec: 0.11 },
+    { file: "sfx/ketik-2.wav", durationSec: 0.11 },
+    { file: "sfx/ketik-3.wav", durationSec: 0.11 },
+    { file: "sfx/ketik-4.wav", durationSec: 0.11 },
+  ],
+  spasi: { file: "sfx/ketik-spasi.wav", durationSec: 0.14 },
+} as const;
+
+/** Varian ketukan huruf ke-`index`: deterministik, dan tak pernah sama dengan sebelumnya. */
+export const keyVariant = (index: number, char: string, previous: number): number => {
+  const raw = (index * 5 + (char.codePointAt(0) ?? 0)) % TYPING_KEYS.huruf.length;
+  return raw === previous ? (raw + 1) % TYPING_KEYS.huruf.length : raw;
+};
+
+/**
+ * Variasi volume per ketukan, 0,82-1,0: deterministik, jadi render yang sama
+ * menghasilkan bunyi yang sama byte per byte.
+ */
+export const keyGain = (index: number): number =>
+  0.82 + 0.18 * (((index * 37) % 11) / 10);
+
+/**
+ * Menempatkan ketukan tuts untuk semua teks `typewriter` ber-`sound`.
+ *
+ * Posisinya dihitung dari jadwal animasi yang SAMA dengan yang menampilkan
+ * hurufnya (`typewriterRevealFrame`): ketukan ke-i jatuh tepat di bingkai
+ * huruf ke-i tampil. Karena diturunkan dari teksnya sendiri — bukan disimpan
+ * sebagai cue — memindahkan teks, menyunting isinya, atau memanjangkan scene
+ * membuat bunyinya ikut tanpa satu angka pun perlu disunting ulang, dan tidak
+ * ada bunyi usang yang tertinggal.
+ *
+ * Huruf yang baru akan tampil SETELAH teksnya hilang (jendela terlalu pendek)
+ * tidak berbunyi: bunyi tanpa huruf yang bisa dilihat adalah cacat yang lebih
+ * mencolok daripada huruf yang terpotong.
+ */
+export const placeTypingSounds = (
+  plan: ScenePlan,
+  layout: FrameLayout,
+  fps: number,
+): PlacedSfx[] => {
+  const placed: PlacedSfx[] = [];
+  plan.scenes.forEach((scene, sceneIndex) => {
+    const sceneStart = layout.sceneStarts[sceneIndex] ?? 0;
+    const sceneFrames = layout.sceneFrames[sceneIndex] ?? 0;
+    for (const text of scene.texts) {
+      if (!bersuaraKetik(text)) continue;
+      // Persis rumus jendela di TextsOverlay: awal dibulatkan, akhir minimal
+      // satu bingkai setelah awal.
+      const start = Math.round(text.startFrac * sceneFrames);
+      const end = Math.max(start + 1, Math.round(text.endFrac * sceneFrames));
+      let previous = -1;
+      splitForAnim(text.content, "typewriter").forEach((piece, index) => {
+        const frame = start + typewriterRevealFrame(index);
+        if (frame > end || frame >= sceneFrames) return;
+        const spasi = isSpacer(piece);
+        let file: string;
+        let durationSec: number;
+        if (spasi) {
+          ({ file, durationSec } = TYPING_KEYS.spasi);
+        } else {
+          previous = keyVariant(index, piece, previous);
+          ({ file, durationSec } = TYPING_KEYS.huruf[previous] ?? TYPING_KEYS.huruf[0]);
+        }
+        placed.push({
+          cueId: `ketik:${scene.id}:${text.id}:${index}`,
+          file,
+          fromFrame: sceneStart + frame,
+          volume: Math.min(1, text.soundVolume * keyGain(index)),
+          bundled: true,
+          durationInFrames: Math.ceil(durationSec * fps) + 1,
+        });
+      });
+    }
+  });
   return placed;
 };
+
+/** Teks ini harus berbunyi ketik: `sound` menyala DAN animasinya `typewriter`. */
+export const bersuaraKetik = (text: Pick<TextOverlay, "sound" | "anim">): boolean =>
+  text.sound === "ketik" && text.anim === "typewriter";

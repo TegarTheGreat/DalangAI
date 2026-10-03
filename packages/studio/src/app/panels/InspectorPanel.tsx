@@ -1346,6 +1346,8 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                     size: "m",
                     emphasis: "none",
                     anim: "fade",
+                    sound: "none",
+                    soundVolume: 0.6,
                     color: null,
                     stroke: 0,
                     uppercase: false,
@@ -1471,6 +1473,49 @@ const TeksTab: React.FC<{ scene: Scene }> = ({ scene }) => {
                   )
                 }
               />
+              {/* ADR-0043: bunyi ketik — satu ketukan tuts per huruf, tepat di
+                  bingkai huruf itu tampil. Hanya bermakna pada animasi Ketik. */}
+              {text.anim === "typewriter" ? (
+                <>
+                  <Switch
+                    checked={text.sound === "ketik"}
+                    disabled={busy}
+                    label="Bunyi ketik"
+                    onChange={(nyala) =>
+                      patchTexts(
+                        scene.texts.map((entry, i) =>
+                          i === index
+                            ? { ...entry, sound: nyala ? "ketik" : "none" }
+                            : entry,
+                        ),
+                        nyala ? "Bunyi ketik dinyalakan" : "Bunyi ketik dimatikan",
+                      )
+                    }
+                  />
+                  {text.sound === "ketik" ? (
+                    <SliderRow
+                      label="Volume ketik"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      neutral={0.6}
+                      value={text.soundVolume}
+                      format={(v) => `${Math.round(v * 100)}%`}
+                      onCommit={(soundVolume) =>
+                        patchTexts(
+                          scene.texts.map((entry, i) =>
+                            i === index ? { ...entry, soundVolume } : entry,
+                          ),
+                        )
+                      }
+                    />
+                  ) : null}
+                </>
+              ) : text.sound === "ketik" ? (
+                <p className="export-hint">
+                  Bunyi ketik tidak berbunyi: animasinya bukan Ketik.
+                </p>
+              ) : null}
               <div className="text-item-row">
                 <input
                   type="color"

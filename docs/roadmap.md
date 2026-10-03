@@ -182,6 +182,7 @@ alur campuran dengan footage generatif.
 | Hook 1–3 detik: teks tebal + gerak + bunyi | **Ada** | Kicker terlihat di still 0,2 dtk, headline di 0,7 dtk, gerak `punch-in`, dan bunyi `impact` memuncak di 0,1 dtk (diukur di bentuk gelombang file akhir) |
 | Caption karaoke yang menekankan kata | **Ada** | 6 gaya; waktu dari TTS/ASR (di uji ini: perkiraan penyedia `silence`). Nit visual: saat kata aktif menyala ia tampak menempel ke kata berikutnya ("Lebihdari") |
 | Bunyi sebagai desain, selaras dengan adegan | **Ada** | 7 cue SFX; puncak energi di file akhir jatuh dalam ±0,3 dtk dari waktu cue (whoosh dan riser memuncak setelah awal bunyinya) |
+| Bunyi ketik (tuts per huruf, ala kreator YouTube bisnis) | **Ada** (ADR-0043) | 45 dari 45 ketukan jatuh di kisi huruf pada ketiga preset, selisih konstan 43 ms, simpangan 0 ms; disintesis dan BELUM didengar manusia |
 | Loudness untuk sosial | **Ada** | -14,1 LUFS terukur (sasaran -14) |
 | Satu plan jadi beberapa rasio | **Sebagian** | 9:16, 16:9, 1:1 menata ulang otomatis. Tidak ada 4:5; maksimum 1080p; 30 fps tetap |
 | Varian kreatif massal (uji A/B hook) | **Ada** | Tiga varian hook dari satu plan lewat skrip; masing-masing still terender dalam hitungan detik (video penuh per varian tidak dirender) |
