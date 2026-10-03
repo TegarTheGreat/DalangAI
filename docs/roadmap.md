@@ -206,6 +206,55 @@ tepat, tetapi pemutar yang mengira 709 menggesernya (kuning #FFD60A terukur
 (ADR-0042). Perbaikan sebenarnya butuh konversi eksplisit lewat `ffmpegOverride`
 dan belum dikerjakan.
 
+**Uji lanjutan: promo 2 menit untuk Dalang sendiri (Oktober 2026).** Satu video
+16:9, 1080p, 120,0 dtk, 21 scene, preset `klip-01`, dibuat seluruhnya dari satu
+`plan.json` (yang ditulis oleh skrip pembangkit, bukan oleh agent: tidak ada
+kunci model di lingkungan ini). Isinya: teks kinetik dengan bunyi ketik,
+tangkapan layar Studio yang SUNGGUHAN (diambil lewat CDP, bukan mockup), kartu
+kode dan terminal yang dibuat dari data nyata (potongan plan video itu sendiri,
+op patch beserta inversnya dari `applyPatch`, keluaran `dalang validate`, ringkasan
+18 langkah CI), cuplikan Big Buck Bunny dan Sintel (CC BY 3.0, dikreditkan di
+kartu penutup), musik 100 BPM dan semua efek bunyi yang disintesis. Awal tiap scene
+jatuh tepat di ketukan (200 ketukan = 3600 bingkai, diperiksa kode saat plan
+disusun).
+
+Terukur di berkas akhir: 1920x1080 30 fps, -16,1 LUFS (sasaran -16), LRA 4,4 LU,
+puncak sejati -1,3 dBTP tanpa satu sampel pun di batas penuh; 39 dari 39 huruf di
+scene pembuka punya ketukan yang jatuh +43 ms setelah bingkainya (jeda kodek AAC
+yang sudah tercatat, simpangan 0 ms); render 320 dtk di kontainer ini.
+
+Dua cacat nyata ditemukan SAAT membuatnya, dan keduanya lolos dari semua gerbang
+karena tak satu pun gerbang menyentuh keadaannya:
+
+1. Menutup panel Chat di editor membuat preview menyusut jadi 0 px dan Properti
+   melebar jadi seluruh panggung (grid tanpa penempatan kolom eksplisit). Gerbang
+   tata letak sekarang menutup/membuka panel di tiap lebar layar.
+2. Clock-wipe di antara dua KLIP dalam satu scene menyisakan baji gelap di
+   sisi kanan 16:9 sepanjang klip kedua (`ClipStrip` tidak meneruskan ukuran
+   bingkai; ADR-0041 mencatatnya). Gerbang pengayaan sekarang mengukurnya di
+   tiga rasio.
+
+Keterbatasan yang terasa saat memakainya untuk video panjang, dicatat sebagai
+celah, bukan bug:
+
+- Teks judul paling besar sekitar 106 px di 1080p (ukuran `l`); kinetik
+  bertipe sangat besar tidak bisa dinyatakan. Dua baris yang muncul bergantian
+  harus ditempatkan di kolom berbeda (atas/tengah/bawah) dengan geseran, karena
+  baris kedua yang masuk menggeser baris pertama di kolom yang sama.
+- Maksimum 3 teks per scene dan teks adalah milik SCENE: label yang berganti
+  per potongan harus dibuat dengan jendela waktu (`startFrac`/`endFrac`), dan
+  sederet kata berturut-turut butuh banyak scene.
+- Font Anton merapatkan titik akhir ke huruf sebelumnya ("SINI." terbaca
+  "SINL"); judul kapital sebaiknya tanpa titik akhir. Lapisan gambar selalu
+  berbayangan kotak, jadi logo transparan dipasang sebagai lencana bulat.
+- Tidak ada alat selaras ketukan: durasi tiap scene dihitung tangan dari BPM
+  (satu ketukan = 18 bingkai). Batas 24 cue efek suara cukup, karena ketukan ketik
+  diturunkan dari teksnya dan tidak dihitung.
+- Yang BELUM terbukti: suara narator (tidak ada penyedia TTS yang terjangkau di
+  sini; video ini bisu), chat agent (klaim tentang agent di video bersumber dari
+  README dan desain, bukan dari sesi yang dijalankan), dan musik serta ketukan
+  tuts yang disintesis belum pernah didengar manusia.
+
 **Kesimpulan jujur.** Untuk konten promosi pendek berbasis rekaman + teks +
 caption + bunyi (iklan sosial, pengumuman, promo toko, tutorial singkat),
 Dalang sudah bisa menghasilkan keluaran yang layak, dengan satu syarat: orang
