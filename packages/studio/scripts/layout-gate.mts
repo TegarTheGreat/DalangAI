@@ -217,6 +217,72 @@ const INSPECTOR_CLIPPED = `(() => {
   return out.slice(0, 3);
 })()`;
 
+/**
+ * Menutup dan membuka panel samping, lalu memastikan PREVIEW tetap berada di
+ * antara keduanya.
+ *
+ * Panel yang ditutup memakai `display: none`, jadi ia keluar dari aliran grid;
+ * tanpa penempatan kolom yang eksplisit, panel di sebelahnya naik mengisi
+ * kolom 0px yang ditinggalkannya. Hasilnya: menutup Chat membuat preview
+ * menyusut jadi nol piksel dan Properti melebar jadi seluruh panggung. Semua
+ * pengukuran lain di gerbang ini dijalankan dengan kedua panel TERBUKA, dan
+ * itulah sebabnya cacat itu lolos sampai tangkapan layar untuk video promo
+ * yang menemukannya.
+ *
+ * Yang diperiksa adalah geometri, bukan keberadaan: tepi kiri preview harus
+ * jatuh tepat di tepi kanan Chat (atau 0 kalau Chat tertutup), tepi kanannya
+ * di tepi kiri Properti (atau lebar layar). Di layar sempit kedua panel jadi
+ * laci tetap, dan preview harus memenuhi seluruh lebar.
+ */
+const PANEL_STATE = `(() => {
+  const tool = (label) => Array.from(document.querySelectorAll(".topbar-actions button"))
+    .find((b) => (b.textContent || "").trim().startsWith(label));
+  const visible = (sel) => {
+    const el = document.querySelector(sel);
+    return !!el && getComputedStyle(el).display !== "none";
+  };
+  return { chat: visible(".chat-panel"), inspector: visible(".inspector-panel"),
+    hasTools: !!tool("Chat") && !!tool("Properti") };
+})()`;
+
+const togglePanel = (label: "Chat" | "Properti"): string =>
+  `(() => {
+    const b = Array.from(document.querySelectorAll(".topbar-actions button"))
+      .find((x) => (x.textContent || "").trim().startsWith("${label}"));
+    if (b) b.click();
+  })()`;
+
+const PREVIEW_BETWEEN = `(() => {
+  const visible = (sel) => {
+    const el = document.querySelector(sel);
+    return !!el && getComputedStyle(el).display !== "none";
+  };
+  const prev = document.querySelector(".preview-panel");
+  if (!prev) return "panel preview tidak ada";
+  const box = prev.getBoundingClientRect();
+  const drawer = [".chat-panel", ".inspector-panel"].some((sel) => {
+    const el = document.querySelector(sel);
+    return !!el && getComputedStyle(el).position === "fixed";
+  });
+  let kiri = 0;
+  let kanan = window.innerWidth;
+  if (!drawer) {
+    if (visible(".chat-panel")) kiri = document.querySelector(".chat-panel").getBoundingClientRect().right;
+    if (visible(".inspector-panel")) kanan = document.querySelector(".inspector-panel").getBoundingClientRect().left;
+  }
+  if (box.width < 200 || Math.abs(box.left - kiri) > 2 || Math.abs(box.right - kanan) > 2) {
+    const letak = (sel, nama) => {
+      if (!visible(sel)) return "";
+      const r = document.querySelector(sel).getBoundingClientRect();
+      return "; " + nama + " di " + Math.round(r.left) + "-" + Math.round(r.right) + "px";
+    };
+    return "preview di " + Math.round(box.left) + "-" + Math.round(box.right)
+      + "px (lebar " + Math.round(box.width) + "), seharusnya " + Math.round(kiri) + "-" + Math.round(kanan)
+      + letak(".chat-panel", "Chat") + letak(".inspector-panel", "Properti");
+  }
+  return null;
+})()`;
+
 interface Report {
   overlaps: string[];
   clippedTools: string[];
@@ -358,6 +424,44 @@ const main = async (): Promise<void> => {
         }
       }
       await page.evaluate(tabProbe("Scene"));
+
+      // Panel samping ditutup/dibuka dalam empat kombinasi; keadaan awal
+      // dipulihkan di akhir supaya pemeriksaan sesudahnya tidak terpengaruh.
+      const awal = (await page.evaluate(PANEL_STATE)) as {
+        chat: boolean;
+        inspector: boolean;
+        hasTools: boolean;
+      };
+      if (!awal.hasTools) {
+        problems.push("tombol Chat/Properti tidak ada di header");
+      } else {
+        const setPanel = async (label: "Chat" | "Properti", terbuka: boolean) => {
+          const now = (await page.evaluate(PANEL_STATE)) as {
+            chat: boolean;
+            inspector: boolean;
+          };
+          const sekarang = label === "Chat" ? now.chat : now.inspector;
+          if (sekarang !== terbuka) {
+            await page.evaluate(togglePanel(label));
+            await sleep(140);
+          }
+        };
+        for (const chat of [true, false]) {
+          for (const inspector of [true, false]) {
+            await setPanel("Chat", chat);
+            await setPanel("Properti", inspector);
+            await page.evaluate(SETTLE_ANIMATIONS);
+            const salah = (await page.evaluate(PREVIEW_BETWEEN)) as string | null;
+            if (salah) {
+              problems.push(
+                `panel (chat ${chat ? "buka" : "tutup"}, properti ${inspector ? "buka" : "tutup"}): ${salah}`,
+              );
+            }
+          }
+        }
+        await setPanel("Chat", awal.chat);
+        await setPanel("Properti", awal.inspector);
+      }
 
       if (problems.length === 0) {
         console.log(`  ${String(width).padStart(4)}px  ok`);
