@@ -202,7 +202,8 @@ export const registerChatCommand = (program: Command): void => {
 
         console.log(
           `Dalang chat · proyek: ${session.paths.planPath}\n` +
-            `model: ${orchestrator.key}${volumeModel ? ` · volume: ${volumeModel.key}` : ""}` +
+            `model: ${orchestrator.key}${orchestrator.host ? ` (${orchestrator.host})` : ""}` +
+            `${volumeModel ? ` · volume: ${volumeModel.key}${volumeModel.host ? ` (${volumeModel.host})` : ""}` : ""}` +
             ` · registry: ${registry.source}\n` +
             (session.isEmpty
               ? "Proyek kosong — ceritakan brief videomu.\n"

@@ -100,6 +100,7 @@ export const runAgentTurn = async ({
 
   const result = await generateText({
     model: model.model,
+    ...(model.maxOutputTokens ? { maxOutputTokens: model.maxOutputTokens } : {}),
     system: SYSTEM_PROMPT,
     messages: [...session.history, userMessage],
     tools: buildAgentTools(session, deps),
