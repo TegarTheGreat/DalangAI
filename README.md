@@ -748,6 +748,7 @@ Rujukan: [ADR-0032](docs/decisions/0032-konfigurasi-yang-bisa-ditemukan.md)
 | Gerbang paritas aset | Satu still dirender lewat dua jalur (bundel dan URL) dan wajib identik byte per byte; kalau berselisih, selisihnya dilaporkan sebagai hitungan piksel dan PNG-nya diunggah sebagai artefak CI |
 | Gerbang interop | Keluaran OTIO/FCPXML dibaca ulang dengan pustaka OpenTimelineIO dan adapter fcpx_xml resmi, atas plan apa adanya DAN varian berklip banyak |
 | Gerbang pengayaan | Bingkai yang sama dirender tiga kali — polos, ber-vignette, berbutir — lalu DIUKUR: vignette wajib menggelapkan sudut tanpa menambah tekstur, butiran wajib menambah tekstur tanpa menggelapkan sudut. Efek yang tertukar implementasinya membuat keempat pemeriksaan merah |
+| Gerbang rekaman | Dua rekaman polos 16:9 (merah, hijau) dirender di bingkai 9:16 pada kedua preset, lalu piksel DIUKUR: sudut bingkai harus berwarna rekaman, bukan warna latar, dan bagian atas kotak lapisan harus berwarna rekaman lapisan. Ditulis setelah uji promo menemukan rekaman landscape tampil sebagai pita kecil di tengah bingkai vertikal — tanpa galat apa pun |
 | Gerbang sulih suara | Contoh dua bahasa dijalankan JALUR PENUH: TTS bahasa sulih, lalu tuntutan bahwa tiap bahasa jadi plan satu-bahasa yang utuh, susunan scene-nya tidak berubah, dan durasinya benar-benar bergeser mengikuti narasinya. Terakhir satu bingkai dirender DUA kali dan wajib berbeda byte — dua PNG identik berarti bahasanya tidak sampai ke layar |
 | Gerbang subtitle | Berkas .srt/.vtt dibaca pustaka `webvtt-py` — pembaca RUJUKAN, bukan pembaca kami sendiri — lalu tiap kartu dicocokkan ke scene asalnya lewat `activeSceneIndex` milik renderer, atas empat plan contoh. Subtitle yang melenceng tetap berkas yang sah dan lolos tiap tes format; cacatnya cuma terlihat oleh penonton yang menyalakan teksnya |
 | Eval self-check | Penilai yang rusak atau plan contoh yang melanggar kaidahnya sendiri membuat CI merah, tanpa kunci API dan tanpa biaya |
@@ -807,6 +808,14 @@ dijalankan terhadap layanan sungguhan, dikatakan begitu.
   `captions.insert`, dan model penerjemah belum pernah dipanggil terhadap
   layanan sungguhan dari repo ini.
   [ADR-0040](docs/decisions/0040-sulih-suara.md) menulis batasnya lengkap.
+- **Belum cocok untuk film merek atau sistem identitas ketat.** Uji promo
+  sungguhan (Oktober 2026) menemukan satu cacat berat yang sudah ditutup
+  ([ADR-0042](docs/decisions/0042-rekaman-memenuhi-bingkai.md)) dan daftar celah
+  yang belum: tidak ada konsep logo/tanda air (logo jadi lapisan per scene,
+  berbayangan kartu), tidak ada edit selaras ketukan musik, speed ramp, masker,
+  4:5, 4K, atau 60 fps; kartu penutup memakai narasi sebagai teks CTA; keluaran
+  H.264 bertanda BT.601 rentang penuh. Peta lengkap dengan buktinya ada di
+  [roadmap §3.12](docs/roadmap.md).
 - **Satu advisori dependensi belum tertutup.** `pnpm audit --prod` melaporkan
   satu temuan moderat pada `file-type` (loop tak berujung saat membaca berkas
   ASF yang rusak), yang dibawa `jimp` untuk analisis gambar oleh agent;
@@ -963,6 +972,7 @@ batasnya. Perubahan skema §5.1 hanya boleh lewat ADR.
 | [0039](docs/decisions/0039-berkas-subtitle.md) | Berkas subtitle .srt/.vtt yang berjalan bersama video, ikut terunggah ke YouTube |
 | [0040](docs/decisions/0040-sulih-suara.md) | Sulih suara: satu plan banyak bahasa, durasi ikut narasinya |
 | [0041](docs/decisions/0041-pengayaan.md) | Pengayaan: 9 font, 11 preset warna, vignette/butiran, 10 transisi, 11 gerak, 8 bunyi bawaan |
+| [0042](docs/decisions/0042-rekaman-memenuhi-bingkai.md) | Rekaman memenuhi bingkai: `objectFit` lewat prop, uji promo sungguhan, dan percobaan warna yang ditolak |
 
 </details>
 

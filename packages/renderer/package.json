@@ -11,6 +11,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
     "asset-url-parity": "tsx scripts/asset-url-parity.mts",
+    "gate:footage": "tsx scripts/footage-gate.mts",
     "migrasi-paritas": "tsx scripts/migrasi-paritas.mts"
   },
   "dependencies": {

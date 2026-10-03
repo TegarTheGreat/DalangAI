@@ -199,6 +199,21 @@ jobs:
           test -s /tmp/kaya/pengayaan-f420.png
           pnpm --filter @dalang/templates gate:pengayaan
 
+      # ADR-0042: rekaman WAJIB memenuhi bingkai. <Video> dari @remotion/media
+      # menimpa `style.objectFit` dengan prop-nya dan, saat render, jatuh ke
+      # "contain": rekaman landscape di bingkai 9:16 jadi pita kecil di tengah
+      # dengan warna latar di atas-bawahnya. Tidak ada galat, dan tak satu pun
+      # gerbang lain merender VIDEO sungguhan pada rasio yang berbeda dari
+      # rekamannya. Gerbang ini membuat dua rekaman polos (merah, hijau),
+      # merender bingkai 9:16 di kedua preset, lalu mengukur piksel sudut
+      # bingkai dan bagian atas kotak lapisan.
+      - name: Gerbang rekaman (video memenuhi bingkai, bukan jadi pita)
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check pillow
+          pnpm --filter @dalang/renderer gate:footage
+
       # ADR-0040: sulih suara. Gerbang ini menjalankan JALUR PENUH atas contoh
       # bersulihan: TTS bahasa sulih (provider silence, offline dan gratis),
       # lalu pemeriksaan bahwa tiap bahasa jadi plan satu-bahasa yang utuh dan

@@ -119,6 +119,8 @@ const LayerItem: React.FC<{
     ...filterToCss(layer.visual.filter),
   };
 
+  const { objectFit: _gambar, ...videoStyle } = mediaStyle;
+
   return (
     <div
       // Penanda untuk lapisan manipulasi langsung Studio (ADR-0024/0025).
@@ -127,12 +129,15 @@ const LayerItem: React.FC<{
     >
       {asset.kind === "video" ? (
         <Video
+          // Lewat prop, bukan `style`: lihat catatan di Backdrop. Tanpa ini
+          // `layer.fit` ("cover" bawaan) diam-diam diabaikan untuk video.
+          objectFit={layer.fit}
           src={assetSrc(asset.file)}
           muted={isSilent(layer.visual.audio)}
           volume={volume}
           playbackRate={layer.visual.speed}
           trimBefore={Math.round(layer.visual.trimStartSec * fps)}
-          style={mediaStyle}
+          style={videoStyle}
         />
       ) : (
         <Img src={assetSrc(asset.file)} style={mediaStyle} />

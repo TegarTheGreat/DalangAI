@@ -57,8 +57,17 @@ const AssetLayer: React.FC<{
   };
 
   if (asset.kind === "video") {
+    // `objectFit` HARUS lewat prop, bukan `style`: <Video> dari @remotion/media
+    // menimpa `style.objectFit` dengan prop-nya, dan saat render prop yang
+    // kosong jatuh ke "contain". Akibatnya rekaman landscape di bingkai 9:16
+    // tampil sebagai pita kecil di tengah dengan warna latar di atas-bawahnya
+    // — ditemukan saat mencoba membuat promo vertikal dari rekaman landscape,
+    // dan tak pernah tertangkap karena tak ada gerbang yang merender video
+    // sungguhan pada rasio yang berbeda dari rekamannya.
+    const { objectFit: _gambar, ...videoStyle } = style;
     return (
       <Video
+        objectFit="cover"
         src={assetSrc(asset.file)}
         // ADR-0025/0026: bawaan bisu, persis perilaku sebelum keduanya.
         // `muted` dipasang saat tidak berbunyi supaya Remotion tidak
@@ -69,7 +78,7 @@ const AssetLayer: React.FC<{
         // ADR-0017: titik masuk di rekaman sumber — satu video panjang bisa
         // dipakai berkali-kali dengan potongan berbeda per scene.
         trimBefore={Math.round(clip.trimStartSec * fps)}
-        style={style}
+        style={videoStyle}
       />
     );
   }
