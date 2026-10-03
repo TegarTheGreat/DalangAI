@@ -506,10 +506,17 @@ input[type="color"]::-webkit-color-swatch {
   min-width: 0;
   background: var(--panel);
 }
+/* Tiap panel menempati kolomnya SENDIRI. Panel yang ditutup memakai
+   `display: none`, jadi ia keluar dari aliran grid — dan tanpa penempatan
+   eksplisit, panel di sebelahnya naik mengisi kolom 0px yang ditinggalkannya:
+   menutup Chat membuat preview menyusut jadi nol dan Properti melebar jadi
+   seluruh panggung. Pernah terjadi, dan tak satu pun gerbang menutup panel. */
 .chat-panel {
+  grid-column: 1;
   border-right: 1px solid var(--line);
 }
 .inspector-panel {
+  grid-column: 3;
   border-left: 1px solid var(--line);
 }
 
@@ -767,6 +774,7 @@ input[type="color"]::-webkit-color-swatch {
 /* -- panggung preview ------------------------------------------------------ */
 
 .preview-panel {
+  grid-column: 2;
   background: var(--bg-deep);
 }
 .stage {
@@ -4314,6 +4322,11 @@ button.ghost.danger.confirm {
   .shell.inspector-closed .workspace,
   .shell.chat-closed.inspector-closed .workspace {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* Satu kolom saja: chat dan properti jadi laci tetap (fixed), jadi hanya
+     preview yang tinggal di dalam grid. */
+  .workspace .preview-panel {
+    grid-column: 1;
   }
   .workspace .chat-panel,
   .workspace .inspector-panel {
