@@ -121,6 +121,17 @@ export const CAPABILITIES: readonly Capability[] = [
         example: "AIza...",
       },
       {
+        key: "GEMINI_API_KEY",
+        label: "Kunci API Gemini (nama lain)",
+        kind: "rahasia",
+        required: true,
+        effect:
+          "Nama lain untuk kunci Google AI di atas — nama yang dipakai Gemini CLI, jadi kunci yang sudah ada langsung terpakai. Cukup isi salah satu.",
+        fallback:
+          "GOOGLE_API_KEY juga diterima, tetapi hanya bila kamu memilih google/... eksplisit lewat DALANG_MODEL (nama itu dipakai layanan Google lain).",
+        example: "AIza...",
+      },
+      {
         key: "OPENAI_API_KEY",
         label: "Kunci API OpenAI",
         kind: "rahasia",
@@ -134,16 +145,32 @@ export const CAPABILITIES: readonly Capability[] = [
         example: "sk-...",
       },
       {
+        key: "OPENROUTER_API_KEY",
+        label: "Kunci API OpenRouter",
+        kind: "rahasia",
+        required: true,
+        effect:
+          "Satu kunci untuk ratusan model dari banyak vendor lewat OpenRouter. Karena ia agregator, Dalang tidak memilihkan modelnya: set DALANG_MODEL=openrouter/<vendor>/<model>.",
+        howTo: [
+          "Buka openrouter.ai lalu masuk atau daftar.",
+          "Di menu Keys, buat kunci baru dan salin.",
+          "Isi saldo; pemakaian dibayar per token sesuai harga model yang kamu pilih.",
+          "Cari model dan harganya: dalang models cari --provider openrouter",
+        ],
+        example: "sk-or-...",
+      },
+      {
         key: "DALANG_OPENAI_COMPAT_BASE_URL",
         label: "Alamat gateway OpenAI-compatible",
         kind: "url",
         required: true,
         effect:
-          "Memakai model dari Ollama, LM Studio, OpenRouter, vLLM, atau gateway lain yang bicara protokol OpenAI. Bisa sepenuhnya lokal dan gratis.",
+          "Memakai server yang bicara protokol OpenAI tetapi tidak ada di daftar models.dev: vLLM, LiteLLM, gateway kantor. Bisa sepenuhnya lokal dan gratis.",
         howTo: [
-          "Ollama: pasang dari ollama.com, jalankan ollama serve, alamatnya http://localhost:11434/v1.",
-          "LM Studio: nyalakan server lokalnya, alamatnya http://localhost:1234/v1.",
-          "OpenRouter dan sejenisnya: pakai alamat yang tertulis di dokumentasinya, lalu isi juga kunci di bawah.",
+          "Ollama di mesin ini tidak perlu ini: pasang dari ollama.com, jalankan ollama serve, lalu DALANG_MODEL=ollama/<nama-model> (tanpa kunci; lihat OLLAMA_HOST untuk mesin lain).",
+          "LM Studio: nyalakan server lokalnya (http://localhost:1234/v1), lalu DALANG_MODEL=lmstudio/<model>.",
+          "Server lain: isi alamat /v1-nya di sini, lalu DALANG_MODEL=openai-compatible/<model>.",
+          "OpenRouter, DeepSeek, Groq, Mistral dan ratusan lainnya sudah dikenal lewat kunci masing-masing: lihat dalang models provider.",
         ],
         example: "http://localhost:11434/v1",
       },
@@ -156,15 +183,25 @@ export const CAPABILITIES: readonly Capability[] = [
         fallback: "Kosongkan untuk server lokal seperti Ollama yang tidak memakai kunci.",
       },
       {
+        key: "OLLAMA_HOST",
+        label: "Alamat server Ollama",
+        kind: "teks",
+        required: false,
+        effect:
+          "Memberi tahu Dalang di mana Ollama berjalan bila bukan di mesin ini (dipakai bila kamu memilih ollama/<model>). Bentuknya sama dengan yang dipakai Ollama sendiri: host:port.",
+        example: "192.168.1.20:11434",
+        fallback: "http://127.0.0.1:11434 — Ollama di mesin yang sama.",
+      },
+      {
         key: "DALANG_MODEL",
         label: "Model orkestrator pilihanmu",
         kind: "teks",
         required: false,
         effect:
-          "Memilih model tertentu alih-alih membiarkan Dalang memilihkan. Isi kalau kamu memasang lebih dari satu kunci, atau mau model yang spesifik.",
+          "Memilih model tertentu alih-alih membiarkan Dalang memilihkan, dalam bentuk provider/model-id. Provider mana pun dari dalang models provider boleh, termasuk ollama lokal. Wajib bila kamu memasang lebih dari satu kunci atau memakai agregator seperti OpenRouter.",
         example: "anthropic/claude-sonnet-4-5",
         fallback:
-          "Dipilih otomatis dari registry models.dev sesuai kunci yang terpasang.",
+          "Dipilih otomatis dari registry models.dev bila tepat SATU provider terdeteksi dari kunci *_API_KEY yang terpasang; bila lebih, Dalang menolak memihak.",
       },
       {
         key: "DALANG_MODEL_VOLUME",

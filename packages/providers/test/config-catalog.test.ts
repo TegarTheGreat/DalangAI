@@ -29,6 +29,8 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..")
  */
 const BUKAN_SETELAN: Record<string, string> = {
   PATH: "milik sistem operasi; dibaca untuk mencari program, bukan untuk diatur",
+  PATHEXT:
+    "milik Windows, pasangan PATH: daftar ekstensi program yang dicoba saat `dalang agen` mencari klien di PATH",
   DALANG_STUDIO_PORT:
     "hanya untuk server dev Vite saat mengembangkan Dalang, bukan setelan pemakai",
 };
@@ -77,6 +79,14 @@ describe("katalog menutup seluruh konfigurasi yang dibaca program", () => {
     expect(undocumented, "tambahkan ke config-catalog.ts atau ke BUKAN_SETELAN").toEqual(
       [],
     );
+  });
+
+  it("README memuat setiap variabel konfigurasi (referensi tidak boleh tertinggal)", () => {
+    const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
+    const missing = ALL_SETTINGS.map((setting) => setting.key).filter(
+      (key) => !readme.includes(`\`${key}\``),
+    );
+    expect(missing, "tambahkan ke referensi variabel di README.md").toEqual([]);
   });
 
   it(".env.example di repo sama persis dengan yang dibangkitkan katalog", () => {

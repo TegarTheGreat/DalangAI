@@ -1,6 +1,11 @@
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { createDalangMcpServer, type RenderStillPort } from "@dalang/mcp";
+import { defaultTemplateDir, findTemplate, listTemplates } from "@dalang/agent";
+import {
+  createDalangMcpServer,
+  type RenderStillPort,
+  type TemplateSource,
+} from "@dalang/mcp";
 import { renderPlanStills } from "@dalang/renderer";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Command } from "commander";
@@ -45,8 +50,24 @@ export const registerMcpCommand = (program: Command): void => {
           return frames.map((frame) => join(outDir, `mcp-${frame}.png`));
         };
 
+        // Template terpasang pengguna ikut terlihat oleh agent lain; paket MCP
+        // sendiri tidak mengimpor paket agent, jadi sumbernya disuntikkan di sini.
+        const templateDir = defaultTemplateDir();
+        const templates: TemplateSource = {
+          list: () =>
+            listTemplates(templateDir).templates.map(({ pack, builtIn }) => ({
+              pack,
+              builtIn,
+            })),
+          find: (id) => {
+            const item = findTemplate(templateDir, id);
+            return item ? { pack: item.pack, builtIn: item.builtIn } : undefined;
+          },
+        };
+
         const server = createDalangMcpServer({
           workspace: { root, readOnly: options.hanyaBaca === true },
+          templates,
           ...(options.izinkanRender ? { renderStill } : {}),
         });
 

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { chatReadiness, loadModelRegistry } from "@dalang/agent";
 import {
   CAPABILITIES,
   type Capability,
@@ -50,22 +51,36 @@ interface Scan {
   fromFile: Record<string, string>;
   whisper: { binPath: string; modelPath: string } | null;
   browser: string | null;
+  /** Chat hidup lewat provider registry yang tak tercantum di katalog statis (ADR-0044). */
+  chatViaRegistry: boolean;
 }
 
-const scan = (envPath: string): Scan => {
+const scan = async (envPath: string): Promise<Scan> => {
   const envText = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
+  // Tanpa jaringan (doctor memang tidak menghubungi siapa pun tanpa --uji):
+  // cache lokal atau snapshot. Bila cache belum ada, provider selain Anthropic
+  // belum dikenal — `dalang models` sekali akan mengisinya.
+  const registry = await loadModelRegistry({ offline: true });
+  const chatKeys = (
+    CAPABILITIES.find((capability) => capability.id === "chat")?.settings ?? []
+  )
+    .filter((setting) => setting.required)
+    .map((setting) => setting.key);
+  const catalogKeyFilled = chatKeys.some((key) => isFilled(process.env[key]));
   return {
     envPath,
     envText,
     fromFile: parseEnv(envText),
     whisper: findWhisperCpp(process.env),
     browser: findBrowserExecutable() ?? null,
+    chatViaRegistry: !catalogKeyFilled && chatReadiness(process.env, registry).ready,
   };
 };
 
 /** Kemampuan yang hidup karena hal di luar variabel lingkungan. */
 const detectedFrom = (scanned: Scan): Record<string, boolean> => ({
   transkrip: scanned.whisper !== null,
+  chat: scanned.chatViaRegistry,
 });
 
 const printMachine = (scanned: Scan): void => {
@@ -147,7 +162,7 @@ export const registerSetupCommands = (program: Command): void => {
     .option("--tanpa-uji", "jangan menghubungi layanan untuk menguji kunci")
     .action(async (options: { env: string; tanpaUji?: boolean }) => {
       const envPath = resolve(options.env);
-      const scanned = scan(envPath);
+      const scanned = await scan(envPath);
 
       console.log("\n  Dalang setup");
       console.log(
@@ -302,7 +317,7 @@ export const registerSetupCommands = (program: Command): void => {
     .option("--env <path>", "berkas .env yang dibaca sebagai rujukan", ".env")
     .option("--uji", "hubungi tiap layanan untuk menguji kunci yang terisi")
     .action(async (options: { env: string; uji?: boolean }) => {
-      const scanned = scan(resolve(options.env));
+      const scanned = await scan(resolve(options.env));
       console.log("\n  Dalang doctor");
       printMachine(scanned);
       const statuses = capabilityStatuses(

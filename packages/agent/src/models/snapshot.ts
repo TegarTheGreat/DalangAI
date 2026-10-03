@@ -31,7 +31,9 @@ export const MODELS_SNAPSHOT: Record<string, unknown> = {
   anthropic: {
     id: "anthropic",
     name: "Anthropic",
+    npm: "@ai-sdk/anthropic",
     env: ["ANTHROPIC_API_KEY"],
+    doc: "https://docs.anthropic.com/en/docs/about-claude/models",
     models: {
       "claude-opus-5": anthropicModel("claude-opus-5", "Claude Opus 5", 5, 25, 1_000_000),
       "claude-sonnet-5": anthropicModel(

@@ -4,17 +4,25 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
+import { type ReadyRoute, routeHost, routeProvider } from "./providers";
 import type { ModelInfo, ModelRegistry } from "./registry";
+import { SYNTHETIC_PROVIDERS } from "./synthetic-providers";
 
 /**
  * "provider/model-id" → LanguageModel AI SDK (PRD prinsip #5: model-agnostic).
- * Provider eksekusi terkurasi: anthropic, openai, google, openai-compatible
- * (baseURL kustom — pintu ke banyak provider lain), plus "mock/echo" untuk
- * smoke test tanpa jaringan. Registry models.dev tetap sumber metadata;
- * peta ini hanya soal SIAPA yang bisa kita panggil.
+ *
+ * Tiga jalur:
+ *  1. SDK bawaan — anthropic, openai, google.
+ *  2. Provider mana pun di registry models.dev yang bisa dipanggil lewat
+ *     endpoint OpenAI-compatible / Anthropic-compatible / OpenAI: cara
+ *     memanggilnya dibaca dari metadata registry (providers.ts, ADR-0044),
+ *     bukan dikodekan per provider. Plus ollama lokal.
+ *  3. "openai-compatible" — gateway kustom lewat DALANG_OPENAI_COMPAT_BASE_URL,
+ *     untuk server yang tidak ada di registry mana pun.
+ * Ditambah "mock/echo" untuk smoke test tanpa jaringan.
  */
 
-export interface ResolveEnv {
+export interface ResolveEnv extends Record<string, string | undefined> {
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   GOOGLE_GENERATIVE_AI_API_KEY?: string;
@@ -27,7 +35,18 @@ export interface ResolvedModel {
   model: LanguageModel;
   /** Metadata registry bila ada — dipakai untuk cek kapabilitas & biaya. */
   info?: ModelInfo;
+  /** Host tujuan permintaan (tanpa kunci) bila bukan endpoint bawaan SDK. */
+  host?: string;
+  /**
+   * Batas token keluaran yang HARUS dikirim eksplisit. SDK Anthropic membatasi
+   * model yang tak dikenalnya (id kustom di endpoint bergaya Anthropic) hanya
+   * 4096 token per langkah — cukup untuk memotong patch besar di tengah JSON.
+   */
+  maxOutputTokens?: number;
 }
+
+/** Plafon aman untuk permintaan non-streaming; batas registry yang lebih kecil tetap dihormati. */
+const COMPAT_MAX_OUTPUT_TOKENS = 16_384;
 
 export const EXECUTABLE_PROVIDERS = [
   "anthropic",
@@ -36,19 +55,6 @@ export const EXECUTABLE_PROVIDERS = [
   "openai-compatible",
   "mock",
 ] as const;
-
-const requireKey = (
-  value: string | undefined,
-  envVar: string,
-  provider: string,
-): string => {
-  if (!value) {
-    throw new Error(
-      `Provider model "${provider}" membutuhkan env ${envVar} (belum diset)`,
-    );
-  }
-  return value;
-};
 
 /** Model mock deterministik untuk smoke test CLI (tanpa tools, tanpa jaringan). */
 const createEchoModel = (): LanguageModel =>
@@ -88,6 +94,29 @@ const createEchoModel = (): LanguageModel =>
     },
   });
 
+const buildFromRoute = (route: ReadyRoute, modelId: string): LanguageModel => {
+  switch (route.sdk) {
+    case "anthropic":
+      return createAnthropic({
+        ...(route.apiKey ? { apiKey: route.apiKey } : {}),
+        ...(route.baseURL ? { baseURL: route.baseURL } : {}),
+      })(modelId);
+    case "openai":
+      return createOpenAI({
+        ...(route.apiKey ? { apiKey: route.apiKey } : {}),
+        ...(route.baseURL ? { baseURL: route.baseURL } : {}),
+      })(modelId);
+    case "google":
+      return createGoogle({ ...(route.apiKey ? { apiKey: route.apiKey } : {}) })(modelId);
+    case "openai-compatible":
+      return createOpenAICompatible({
+        name: route.providerId,
+        baseURL: route.baseURL as string,
+        ...(route.apiKey ? { apiKey: route.apiKey } : {}),
+      })(modelId);
+  }
+};
+
 export const resolveModel = (
   key: string,
   {
@@ -105,48 +134,51 @@ export const resolveModel = (
   const modelId = key.slice(slash + 1);
   const info = registry?.find(key);
 
-  switch (provider) {
-    case "anthropic": {
-      const factory = createAnthropic({
-        apiKey: requireKey(env.ANTHROPIC_API_KEY, "ANTHROPIC_API_KEY", provider),
-      });
-      return { key, model: factory(modelId), info };
-    }
-    case "openai": {
-      const factory = createOpenAI({
-        apiKey: requireKey(env.OPENAI_API_KEY, "OPENAI_API_KEY", provider),
-      });
-      return { key, model: factory(modelId), info };
-    }
-    case "google": {
-      const factory = createGoogle({
-        apiKey: requireKey(
-          env.GOOGLE_GENERATIVE_AI_API_KEY,
-          "GOOGLE_GENERATIVE_AI_API_KEY",
-          provider,
-        ),
-      });
-      return { key, model: factory(modelId), info };
-    }
-    case "openai-compatible": {
-      const factory = createOpenAICompatible({
-        name: "openai-compatible",
-        baseURL: requireKey(
-          env.DALANG_OPENAI_COMPAT_BASE_URL,
-          "DALANG_OPENAI_COMPAT_BASE_URL",
-          provider,
-        ),
-        apiKey: env.DALANG_OPENAI_COMPAT_API_KEY,
-      });
-      return { key, model: factory(modelId), info };
-    }
-    case "mock":
-      return { key, model: createEchoModel(), info };
-    default:
+  if (provider === "mock") return { key, model: createEchoModel(), info };
+
+  if (provider === "openai-compatible") {
+    const baseURL = env.DALANG_OPENAI_COMPAT_BASE_URL;
+    if (!baseURL) {
       throw new Error(
-        `Provider model "${provider}" tidak dikenal — tersedia: ${EXECUTABLE_PROVIDERS.join(", ")}`,
+        `Provider model "${provider}" membutuhkan env DALANG_OPENAI_COMPAT_BASE_URL (belum diset)`,
       );
+    }
+    const factory = createOpenAICompatible({
+      name: "openai-compatible",
+      baseURL,
+      apiKey: env.DALANG_OPENAI_COMPAT_API_KEY,
+    });
+    return { key, model: factory(modelId), info };
   }
+
+  // Registry dulu (datanya yang terbaru); yang selalu dikenal sebagai cadangan
+  // — anthropic/openai/google tetap jalan saat registry belum terambil.
+  const providerInfo = registry?.provider(provider) ?? SYNTHETIC_PROVIDERS[provider];
+  if (!providerInfo) {
+    throw new Error(
+      `Provider model "${provider}" tidak dikenal — tersedia: ${EXECUTABLE_PROVIDERS.join(", ")}` +
+        ", ollama, serta provider registry models.dev yang bisa dipanggil (dalang models provider)",
+    );
+  }
+
+  const route = routeProvider(providerInfo, env);
+  if (!route.ok) throw new Error(route.reason);
+  const host = routeHost(route);
+  const needsExplicitCap = route.sdk === "anthropic" && route.via !== "bawaan";
+  return {
+    key,
+    model: buildFromRoute(route, modelId),
+    info,
+    ...(host ? { host } : {}),
+    ...(needsExplicitCap
+      ? {
+          maxOutputTokens: Math.min(
+            info?.outputTokens ?? COMPAT_MAX_OUTPUT_TOKENS,
+            COMPAT_MAX_OUTPUT_TOKENS,
+          ),
+        }
+      : {}),
+  };
 };
 
 // Default dua tingkat (PRD §6.4) dipilih netral-vendor — lihat defaults.ts.

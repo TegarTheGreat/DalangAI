@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseScenePlan, type ScenePlan } from "@dalang/core";
 import { atomicWriteFile } from "@dalang/pipeline";
@@ -163,3 +171,57 @@ export const listProjects = (workspace: Workspace): ProjectEntry[] => {
 /** Path relatif root untuk ditampilkan ke klien; tidak pernah path absolut. */
 export const displayPath = (workspace: Workspace, absolute: string): string =>
   relative(resolve(workspace.root), absolute).split(sep).join("/") || ".";
+
+/**
+ * Satu nama folder: huruf, angka, '-' dan '_', diawali huruf/angka. Tidak ada
+ * '/', tidak ada '..', tidak ada titik di depan — nama itu SATU langkah di
+ * bawah akar, bukan path. Sempit dengan sengaja: membuat folder di mana pun
+ * yang diminta klien adalah persis yang dijaga pagar ini.
+ */
+const NEW_PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/;
+
+export interface NewProjectTarget {
+  dir: string;
+  planPath: string;
+}
+
+/**
+ * Menyiapkan folder untuk proyek BARU di bawah akar, dan menolak menimpa.
+ *
+ * Yang dijaga di sini berlawanan dengan `resolvePlanPath`: itu memastikan
+ * berkas yang dibuka sudah ada di dalam akar, ini memastikan yang akan dibuat
+ * BELUM ada. Keberadaan diperiksa dengan `lstat`, bukan `existsSync` — yang
+ * kedua mengikuti symlink, jadi symlink menggantung ke luar akar terbaca
+ * "tidak ada" lalu ditulisi lewat tautannya.
+ */
+export const prepareNewProject = (
+  workspace: Workspace,
+  nama: string,
+): NewProjectTarget => {
+  if (workspace.readOnly) {
+    throw new WorkspaceError(
+      "Server MCP ini dijalankan hanya-baca. Jalankan ulang tanpa --hanya-baca untuk mengizinkan pembuatan proyek.",
+    );
+  }
+  if (!NEW_PROJECT_NAME.test(nama)) {
+    throw new WorkspaceError(
+      `Nama proyek "${nama}" tidak sah: pakai SATU nama folder — huruf, angka, '-' dan '_', maksimal 63 karakter, tanpa '/' atau '..'.`,
+    );
+  }
+  const root = resolve(workspace.root);
+  // Akar yang belum ada dibuat di sini: `dalang mcp ./video-saya` pada folder
+  // kosong yang baru dibuat adalah pemakaian yang wajar. Akarnya pilihan
+  // pemilik server; yang dijaga adalah apa yang ditulis DI BAWAHnya.
+  mkdirSync(root, { recursive: true });
+  const dir = join(realpathSync(root), nama);
+  try {
+    lstatSync(dir);
+    throw new WorkspaceError(
+      `"${nama}" sudah ada di ruang kerja — pilih nama lain. Proyek yang sudah ada tidak pernah ditimpa.`,
+    );
+  } catch (error) {
+    if (error instanceof WorkspaceError) throw error;
+    // lstat gagal = tidak ada apa pun di sana (ENOENT); itulah yang dibutuhkan.
+  }
+  return { dir, planPath: join(dir, "plan.json") };
+};
