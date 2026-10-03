@@ -212,3 +212,25 @@ bisa disebut dalam satu kalimat.
 **Memasukkan transisi shader dan mendokumentasikan "butuh Chrome baru".**
 Transisi yang menggagalkan render bukan fitur dengan syarat, melainkan jebakan
 dengan catatan kaki.
+
+## Catatan susulan: transisi antar klip
+
+Clock-wipe di dalam SATU scene (potongan, ADR-0033) tidak ikut diuji ketika
+ADR ini ditulis, dan di situlah ia rusak. `ClipStrip` memanggil
+`presentationFor` tanpa ukuran bingkai, jadi sapuan radialnya memakai bawaan
+potret (1080x1920): di 16:9 sapuan berhenti sebelum menutup bingkai, dan
+sebuah baji gelap menetap di sisi kanan sepanjang klip kedua. Yang
+menemukannya pemeriksaan bingkai video promo 2 menit, bukan gerbang mana pun.
+Transisi antar SCENE tidak terkena, karena ketiga preset sudah mengirim ukuran.
+
+Perbaikannya dua lapis. Ukuran kini diambil dari `useVideoConfig` di
+`ClipStrip`; dan ukuran menjadi argumen WAJIB `presentationFor` — bawaannya
+dibuang, supaya panggilan yang lupa mengirimnya menjadi galat tipe, bukan baji
+gelap yang baru terlihat di video. Gerbang pengayaan sekarang merender dua
+klip (gelap, lalu terang) yang disambung clock-wipe di 16:9, 9:16, dan 1:1,
+lalu mengukur 12x8 petak kecerahan setelah transisi selesai: tak satu petak
+pun boleh masih gelap.
+
+Dibuktikan dengan sabotase: dengan ukuran potret dipaksakan kembali, gerbang
+gagal di 16:9 (petak tergelap 8 dari 220) sementara 9:16 dan 1:1 tetap lulus —
+persis pola cacatnya, dan alasan ia lolos selama ini.
