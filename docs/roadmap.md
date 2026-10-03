@@ -159,6 +159,60 @@ untuk potongannya: satu scene, banyak klip, dengan ripple di core.)*
 Tidak ada integrasi Veo/Kling/Runway. Ini **bukan** celah mendesak (lihat
 §6), tapi perlu dicatat sebagai pilihan sadar, bukan kelalaian.
 
+### 3.12 Uji video promosi profesional (Oktober 2026)
+
+Pertanyaannya: apakah Dalang handal untuk orang yang membuat video promosi
+sebagai pekerjaan? Dijawab dengan membuat satu promo vertikal 9:16 (18 detik,
+lima scene, rekaman 24/30/60 fps, logo, efek suara bawaan, caption karaoke),
+merendernya 1080x1920, lalu memeriksa FILE-nya. Cacat paling berat yang
+ditemukan — rekaman landscape jadi pita kecil di bingkai vertikal — sudah
+ditutup (ADR-0042). Sisanya di bawah ini, dengan bukti dan bedanya antara
+**bug** (harus diperbaiki) dan **fitur yang belum ada** (keputusan produk).
+
+Pola promo masa kini dibaca dari ulasan pemasaran dan studi kasus (bukan dari
+menonton videonya), jadi angka statistik di sumber-sumber itu adalah klaim
+vendor, bukan temuan. Yang konsisten di hampir semua sumber: hook dalam 1–3
+detik, caption sebagai pembawa pesan (banyak video ditonton tanpa suara),
+tipografi kinetik yang diselaraskan dengan musik, bunyi sebagai bagian dari
+desain, satu pesan per klip, pengiriman multi-format, dan semakin sering
+alur campuran dengan footage generatif.
+
+| Pola promo masa kini | Keadaan di Dalang | Bukti |
+| --- | --- | --- |
+| Hook 1–3 detik: teks tebal + gerak + bunyi | **Ada** | Kicker terlihat di still 0,2 dtk, headline di 0,7 dtk, gerak `punch-in`, dan bunyi `impact` memuncak di 0,1 dtk (diukur di bentuk gelombang file akhir) |
+| Caption karaoke yang menekankan kata | **Ada** | 6 gaya; waktu dari TTS/ASR (di uji ini: perkiraan penyedia `silence`). Nit visual: saat kata aktif menyala ia tampak menempel ke kata berikutnya ("Lebihdari") |
+| Bunyi sebagai desain, selaras dengan adegan | **Ada** | 7 cue SFX; puncak energi di file akhir jatuh dalam ±0,3 dtk dari waktu cue (whoosh dan riser memuncak setelah awal bunyinya) |
+| Loudness untuk sosial | **Ada** | -14,1 LUFS terukur (sasaran -14) |
+| Satu plan jadi beberapa rasio | **Sebagian** | 9:16, 16:9, 1:1 menata ulang otomatis. Tidak ada 4:5; maksimum 1080p; 30 fps tetap |
+| Varian kreatif massal (uji A/B hook) | **Ada** | Tiga varian hook dari satu plan lewat skrip; masing-masing still terender dalam hitungan detik (video penuh per varian tidak dirender) |
+| Sulih/subtitle multi-bahasa | **Ada** | ADR-0039/0040 |
+| Tipografi kinetik | **Sebagian** | Animasi per kata (pop/rise/blur/slide/ketik); keyframe teks hanya offset dan opasitas; tidak ada skala/rotasi/per-huruf/di-jalur/angka berhitung |
+| Identitas merek konsisten (logo, bumper, lower-third) | **Belum ada** | Tidak ada konsep logo atau tanda air. Logo harus dipasang sebagai lapisan per scene; kotaknya selalu berbayangan sehingga logo tampak seperti kartu, dan kritik sutradara menyarankan mempersempitnya ("lapisan menyala sepanjang scene") |
+| Kartu penutup dengan URL/CTA | **Sebagian** | Kartu `outro` memakai NARASI sebagai teks CTA, jadi yang tampil "samuderapark titik id". Jalan keluarnya scene biasa + teks. Dalam uji, dua teks yang saling menimpa (judul melipat dua baris, URL di bawahnya) TIDAK ditangkap `critiquePlan`; hanya mata atau `reviewRender` (model vision) yang bisa melihatnya |
+| Edit selaras ketukan musik | **Belum ada** | Musik bawaan hanya dua pad ambient tanpa ritme; tidak ada deteksi ketukan atau potong-ke-ketukan |
+| Speed ramp / time remap | **Belum ada** | Kecepatan klip konstan 0,25–4x |
+| Masker, matte, green screen | **Belum ada** | Lapisan hanya persegi atau bulat |
+| Grading warna | **Sebagian, sengaja** | 11 preset + slider + vignette/butiran; tidak ada LUT/kurva (lihat §6) |
+| Footage generatif / alur campuran AI | **Belum ada, sengaja** | §3.11 dan §6 |
+| Gaya kreator/UGC (talking head, potong jeda, caption) | **Ada di desain, belum terbukti** | ASR + `cutByWords` + karaoke ada; jalur whisper.cpp/API belum pernah dijalankan terhadap suara sungguhan di lingkungan ini |
+| Kualitas suara narator | **Tidak bisa dinilai** | ElevenLabs dan Edge TTS belum pernah dipanggil; di lingkungan uji Edge diblokir proxy (ADR-0007). Uji ini memakai penyedia `silence` |
+
+**Berkas keluaran.** H.264 1080x1920, 8,9 Mbps, AAC 192 kbps, 18,3 dtk; render
+114 dtk di kontainer uji (sekitar 6x lebih lama dari durasi videonya, mutu "seimbang").
+Ditandai `yuvj420p`, rentang penuh, BT.601: dibaca menurut tandanya warna merek
+tepat, tetapi pemutar yang mengira 709 menggesernya (kuning #FFD60A terukur
+(255,205,0)). Percobaan bendera `colorSpace: "bt709"` terukur MEMPERBURUK
+(ADR-0042). Perbaikan sebenarnya butuh konversi eksplisit lewat `ffmpegOverride`
+dan belum dikerjakan.
+
+**Kesimpulan jujur.** Untuk konten promosi pendek berbasis rekaman + teks +
+caption + bunyi (iklan sosial, pengumuman, promo toko, tutorial singkat),
+Dalang sudah bisa menghasilkan keluaran yang layak, dengan satu syarat: orang
+harus memeriksa hasilnya dengan mata (gerbang kini mengukur hal-hal yang dulu
+tidak diukur, tetapi tata letak teks tetap butuh peninjauan). Untuk film merek,
+iklan produk bersinematografi, atau kampanye dengan sistem identitas ketat,
+Dalang bukan alatnya — dan roadmap ini memang tidak menjanjikan itu (§6).
+
 ---
 
 ## 4. Roadmap
