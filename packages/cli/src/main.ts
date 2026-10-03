@@ -97,6 +97,7 @@ import {
   uploadSubtitleFileName,
 } from "@dalang/templates/subtitle";
 import { Command, InvalidArgumentError, Option } from "commander";
+import { registerAgenCommand } from "./agen";
 import { registerChatCommand, registerLogCommand } from "./chat";
 import { buildLambdaTarget, readCloudConfig, registerCloudCommands } from "./cloud";
 import { registerInteropCommands } from "./interop";
@@ -1443,6 +1444,7 @@ program
 
 registerInteropCommands(program);
 registerMcpCommand(program);
+registerAgenCommand(program);
 registerModelsCommand(program);
 registerReviewCommand(program);
 registerChatCommand(program);

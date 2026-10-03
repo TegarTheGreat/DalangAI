@@ -1,17 +1,22 @@
+import { mkdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   applyPatch,
+  BUILT_IN_TEMPLATES,
   clipAsset,
   computeTimeline,
   critiquePlan,
+  describeTemplate,
   type PatchOp,
   type PatchOpInput,
+  planFromTemplate,
   planInLanguage,
   planLanguages,
   primaryClip,
   renderFileNameFor,
   resolveSceneDurationSec,
   type ScenePlan,
+  type TemplatePack,
 } from "@dalang/core";
 import { buildEditTimeline, otioToJson, toFcpxml } from "@dalang/interop";
 import { atomicWriteFile } from "@dalang/pipeline";
@@ -25,11 +30,14 @@ import {
 } from "@dalang/templates/subtitle";
 import {
   displayPath,
+  isInside,
   listProjects,
+  prepareNewProject,
   readPlan,
   readPlanWithHash,
   resolvePlanPath,
   type Workspace,
+  WorkspaceError,
   writePlanIfUnchanged,
 } from "./workspace";
 
@@ -48,8 +56,29 @@ export type RenderStillPort = (options: {
   scale: number;
 }) => Promise<string[]>;
 
+/**
+ * Sumber template untuk `dalang_new_project`. Bawaannya hanya template yang
+ * ikut dikirim bersama Dalang (inti, tanpa I/O); CLI menyuntikkan sumber yang
+ * juga membaca template terpasang pengguna, supaya paket ini tidak perlu
+ * mengimpor paket agent dan seluruh pohon SDK model di belakangnya.
+ */
+export interface TemplateSource {
+  list(): Array<{ pack: TemplatePack; builtIn: boolean }>;
+  find(id: string): { pack: TemplatePack; builtIn: boolean } | undefined;
+}
+
+export const builtInTemplateSource: TemplateSource = {
+  list: () => BUILT_IN_TEMPLATES.map((pack) => ({ pack, builtIn: true })),
+  find: (id) => {
+    const pack = BUILT_IN_TEMPLATES.find((item) => item.manifest.id === id);
+    return pack ? { pack, builtIn: true } : undefined;
+  },
+};
+
 export interface ToolContext {
   workspace: Workspace;
+  /** Sumber template; bawaan: template yang ikut Dalang. */
+  templates?: TemplateSource;
   /**
    * Port render still. Sengaja DISUNTIKKAN, bukan diimpor: tanpa ini paket
    * server MCP menyeret Remotion dan Chromium ke dalam pohon dependensinya,
@@ -416,5 +445,65 @@ export const toolRenderStill = async (
   return {
     ok: true as const,
     berkas: files.map((file) => displayPath(context.workspace, file)),
+  };
+};
+
+export const toolListTemplates = (context: ToolContext) => {
+  const source = context.templates ?? builtInTemplateSource;
+  return {
+    template: source.list().map(({ pack, builtIn }) => ({
+      id: pack.manifest.id,
+      nama: pack.manifest.name,
+      deskripsi: pack.manifest.description,
+      ringkas: describeTemplate(pack),
+      bawaan: builtIn,
+    })),
+  };
+};
+
+/**
+ * Proyek BARU dari sebuah template, di bawah akar ruang kerja.
+ *
+ * Ini bukan "otak kedua" dan tidak membelanjakan apa pun: hanya menulis satu
+ * plan.json kerangka. Tanpa tool ini agent lain yang dihadapkan folder kosong
+ * tak punya jalan selain menulis plan.json dengan tangannya — satu-satunya hal
+ * yang dilarang `dalang_apply_patch` dan diperingatkan keras oleh panduannya.
+ * Yang ditolak keras: menimpa proyek yang sudah ada, dan nama yang bukan satu
+ * nama folder.
+ */
+export const toolNewProject = (
+  context: ToolContext,
+  { nama, template, judul }: { nama: string; template?: string; judul?: string },
+) => {
+  const source = context.templates ?? builtInTemplateSource;
+  const chosen = template
+    ? source.find(template)
+    : (source.find("esai-video") ?? source.list()[0]);
+  if (!chosen) {
+    throw new WorkspaceError(
+      `Template "${template}" tidak ada. Lihat dalang_list_templates: ${source
+        .list()
+        .map((item) => item.pack.manifest.id)
+        .join(", ")}.`,
+    );
+  }
+  const target = prepareNewProject(context.workspace, nama);
+  const title =
+    (judul ?? "").trim() === "" ? chosen.pack.manifest.name : (judul as string).trim();
+  const plan = planFromTemplate(chosen.pack, { title, projectId: nama.toLowerCase() });
+
+  mkdirSync(target.dir);
+  // Setelah dibuat, pastikan memang mendarat di dalam akar (jaga-jaga atas
+  // perlombaan dengan proses lain yang menukar folder dengan symlink).
+  if (!isInside(realpathSync(context.workspace.root), realpathSync(target.dir))) {
+    throw new WorkspaceError(`Folder ${nama} mendarat di luar ruang kerja server.`);
+  }
+  atomicWriteFile(target.planPath, `${JSON.stringify(plan, null, 2)}\n`);
+  return {
+    proyek: displayPath(context.workspace, target.dir),
+    template: chosen.pack.manifest.id,
+    ringkasan: summarizePlan(context.workspace, target.planPath),
+    langkahBerikut:
+      "Plan ini baru kerangka. Isi naskahnya lewat dalang_apply_patch, lalu siapkan aset dan suara dengan perintah CLI `dalang generate`.",
   };
 };

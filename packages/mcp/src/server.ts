@@ -10,6 +10,8 @@ import {
   toolExportTimeline,
   toolGetPlan,
   toolListProjects,
+  toolListTemplates,
+  toolNewProject,
   toolRenderStill,
   toolUndo,
   toolWriteSubtitle,
@@ -34,6 +36,11 @@ import { WorkspaceError } from "./workspace";
  *    di CLI). Tanpa itu tool-nya tidak didaftarkan sama sekali — bukan
  *    didaftarkan lalu menolak, supaya klien tidak merencanakan langkah yang
  *    tidak akan pernah bisa dijalankan.
+ *
+ * Membuat proyek BARU dari template diizinkan: itu hanya menulis satu
+ * plan.json kerangka di bawah akar — tanpa model, tanpa biaya, dan tak pernah
+ * menimpa (ADR-0045). Tanpa itu agent yang dihadapkan folder kosong tak punya
+ * jalan selain menulis plan.json dengan tangannya, hal yang justru dilarang.
  *
  * Semua path lewat pagar ruang kerja (lihat workspace.ts).
  */
@@ -82,8 +89,10 @@ export const createDalangMcpServer = (context: ToolContext): McpServer => {
       instructions:
         "Dalang adalah editor video ber-scene-plan. Satu-satunya sumber kebenaran adalah plan.json, " +
         "dan ia HANYA boleh diubah lewat dalang_apply_patch — jangan pernah menulis berkasnya langsung. " +
-        "Mulailah dengan dalang_list_projects, lalu dalang_get_plan untuk melihat garis waktunya. " +
-        "Server ini tidak memanggil model, tidak mengunduh aset, dan tidak menyintesis suara.",
+        "Mulailah dengan dalang_list_projects, lalu dalang_get_plan untuk melihat garis waktunya; " +
+        "kalau belum ada proyek, lihat dalang_list_templates dan buat satu dengan dalang_new_project. " +
+        "Server ini tidak memanggil model, tidak mengunduh aset, dan tidak menyintesis suara — " +
+        "untuk itu dan untuk render penuh, pakai perintah CLI `dalang generate` / `dalang render` lewat shell-mu.",
     },
   );
 
@@ -97,6 +106,49 @@ export const createDalangMcpServer = (context: ToolContext): McpServer => {
       annotations: { readOnlyHint: true },
     },
     async () => guard(() => toolListProjects(context)),
+  );
+
+  server.registerTool(
+    "dalang_list_templates",
+    {
+      title: "Daftar template proyek",
+      description:
+        "Template yang bisa dipakai untuk memulai proyek baru: id, nama, dan ringkasnya (jumlah scene, rasio, preset, format).",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => guard(() => toolListTemplates(context)),
+  );
+
+  server.registerTool(
+    "dalang_new_project",
+    {
+      title: "Buat proyek baru dari template",
+      description:
+        "Membuat folder proyek baru di bawah akar server dengan plan.json kerangka dari sebuah template. " +
+        "Menolak menimpa proyek yang sudah ada. Hasilnya plan kerangka — isi naskahnya lewat dalang_apply_patch.",
+      inputSchema: {
+        nama: z
+          .string()
+          .describe(
+            "Nama folder proyek (satu nama: huruf, angka, '-', '_'; maksimal 63 karakter).",
+          ),
+        template: z
+          .string()
+          .optional()
+          .describe("Id template dari dalang_list_templates; bawaan: esai-video."),
+        judul: z.string().optional().describe("Judul video; bawaan: nama template."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ nama, template, judul }) =>
+      guard(() =>
+        toolNewProject(context, {
+          nama,
+          ...(template ? { template } : {}),
+          ...(judul ? { judul } : {}),
+        }),
+      ),
   );
 
   server.registerTool(

@@ -263,6 +263,35 @@ tidak diukur, tetapi tata letak teks tetap butuh peninjauan). Untuk film merek,
 iklan produk bersinematografi, atau kampanye dengan sistem identitas ketat,
 Dalang bukan alatnya — dan roadmap ini memang tidak menjanjikan itu (§6).
 
+### 3.13 Model dan agent tanpa kunci API (Oktober 2026)
+
+Dua pertanyaan pengguna, dijawab dengan pengukuran (ADR-0044, ADR-0045):
+
+**Apakah models.dev sudah diadopsi?** Setengahnya. Sebagai metadata (harga,
+konteks, kapabilitas, pemilihan default) sudah sejak PRD; untuk MEMANGGIL model
+Dalang hanya mengenal `anthropic`, `openai`, `google`, dan satu gateway yang harus
+diisi tangan. Dari 226 provider di registry (8.383 model), 185 adalah endpoint
+OpenAI-compatible dengan alamatnya tertulis di registry. Kini 211 dari 226 bisa
+dipanggil langsung dengan kunci masing-masing (199 dari metadata registry, 9
+dari tabel kurasi, 3 bawaan); 15 butuh SDK khusus (Bedrock, Vertex, Azure, ...)
+dan ditolak dengan alasan. Ollama lokal dikenal tanpa kunci. Registry kedua
+(OpenRouter `/models`, LiteLLM) sengaja tidak ditambah: models.dev sudah
+mengagregasinya.
+
+**Bisakah dipakai lewat Claude Code atau Codex tanpa API?** Bisa, lewat
+server MCP — agent luar yang berpikir dan membayar dengan langganannya sendiri.
+Yang kurang: pemasangan satu perintah, panduan kerja bagi agent, dan cara memulai
+proyek dari folder kosong. Kini ada `dalang agen siapkan` (Claude Code, Codex,
+Gemini CLI, Cursor, VS Code, opencode), panduan yang dibangkitkan dari katalog
+tool dan dicocokkan dengan server sungguhan, serta `dalang_new_project`. Hanya
+Claude Code yang diperiksa dengan binernya; lima klien lain ditulis menurut
+dokumentasinya. Yang TIDAK dibangun: menjadikan biner agent sebagai "model" di
+`dalang chat` — loop Dalang butuh tool-calling terstruktur dan persetujuan biaya
+interaktif yang tidak dimiliki biner non-interaktif (ADR-0045).
+
+Yang belum: panggilan ke provider sungguhan (butuh kunci berbayar), SDK khusus
+cloud besar, dan panel Pengaturan Studio yang mengenali provider registry.
+
 ---
 
 ## 4. Roadmap

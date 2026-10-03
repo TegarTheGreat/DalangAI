@@ -147,6 +147,15 @@ jobs:
           test -s /tmp/tpl/esai-video/esai-video-f30.png
           test -s /tmp/tpl/tutorial-langkah/tutorial-langkah-f30.png
 
+      # ADR-0045: `dalang agen siapkan` menulis perintah yang akan dijalankan
+      # agent lain (Claude Code, Codex, ...). Tes unit membuktikan perintahnya
+      # BERBENTUK benar; gerbang ini menjalankannya dari nol lewat klien MCP,
+      # lalu memakai server itu untuk satu alur kerja agent utuh dan tiga
+      # penolakan pagar. Tanpa jaringan, model, maupun peramban.
+      - name: Gerbang agen luar (server MCP hidup dari konfigurasi yang ditulis)
+        timeout-minutes: 5
+        run: pnpm --filter @dalang/cli gate:agen
+
       # ADR-0019: aset plan boleh diambil dari public dir bundle (render lokal)
       # ATAU dari URL (render cloud). Gerbang ini merender kedua jalur dan
       # menuntut hasilnya identik byte per byte. Satu pemanggil staticFile()

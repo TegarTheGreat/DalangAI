@@ -29,6 +29,8 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..")
  */
 const BUKAN_SETELAN: Record<string, string> = {
   PATH: "milik sistem operasi; dibaca untuk mencari program, bukan untuk diatur",
+  PATHEXT:
+    "milik Windows, pasangan PATH: daftar ekstensi program yang dicoba saat `dalang agen` mencari klien di PATH",
   DALANG_STUDIO_PORT:
     "hanya untuk server dev Vite saat mengembangkan Dalang, bukan setelan pemakai",
 };

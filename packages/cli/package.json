@@ -8,7 +8,8 @@
     ".": "./src/main.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "gate:agen": "tsx scripts/agen-gate.mts"
   },
   "dependencies": {
     "@dalang/agent": "workspace:*",
